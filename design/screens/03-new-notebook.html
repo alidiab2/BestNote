@@ -1,0 +1,497 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BestNote · New notebook &amp; import</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Sans+Arabic:wght@400;500;600&family=Caveat:wght@500;700&family=Material+Symbols+Rounded:opsz,wght,FILL@24,400,0..1&family=Fraunces:opsz,wght@9..144,500;9..144,600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../tokens.css">
+<link rel="stylesheet" href="../board.css">
+<script src="../shell.js"></script>
+<style>
+  /* dimmed library backdrop */
+  .bg-lib { position: absolute; inset: 0; display: flex; }
+  .bg-lib .rail .rail-logo { background: var(--accent); color: var(--on-accent); }
+  .bg-lib .shelf { padding: 22px 30px; }
+  .bg-lib .covers { grid-template-columns: repeat(7, 1fr); }
+
+  .create { width: 1010px; height: 640px; display: grid; grid-template-columns: 370px 1fr; overflow: hidden; }
+  .pvw { background: radial-gradient(80% 60% at 50% 40%, var(--accent-soft), transparent 75%), var(--surface); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; position: relative; padding: 24px; }
+  [data-look="studio"] .pvw { background: radial-gradient(70% 50% at 50% 40%, color-mix(in srgb, var(--accent) 28%, transparent), transparent 75%), var(--surface-2); }
+  .book { position: relative; width: 210px; height: 280px; transition: width var(--dur-medium) var(--spring-gentle), height var(--dur-medium) var(--spring-gentle); }
+  .book.land { width: 270px; height: 200px; }
+  .book .pg2 { position: absolute; inset: 6px -34px -6px 34px; border-radius: 3px 8px 8px 3px; box-shadow: var(--shadow-2); transition: inherit; }
+  .book .cover { position: absolute; inset: 0; aspect-ratio: auto; box-shadow: var(--shadow-3), inset 7px 0 0 rgba(0,0,0,.2); }
+  .book .cover .ttl { font-size: 20px; }
+  .pvw .spec { font-size: 12px; color: var(--ink-3); text-align: center; }
+  .pvw .spec b { color: var(--ink); font-weight: 600; }
+  .form { padding: 22px 26px 0; display: flex; flex-direction: column; min-width: 0; }
+  .form .top { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+  .form .top h3 { font: 600 22px var(--font-display); flex: 1; }
+  [data-look="galaxy"] .form .top h3 { font-weight: 700; }
+  .lbl { font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); margin: 16px 0 8px; display: flex; align-items: center; gap: 8px; }
+  .lbl .tabs-s { margin-inline-start: auto; display: flex; gap: 2px; background: var(--surface); border-radius: 999px; padding: 3px; text-transform: none; letter-spacing: 0; }
+  .lbl .tabs-s span { padding: 4px 12px; border-radius: 999px; font-size: 12px; font-weight: 500; color: var(--ink-2); cursor: pointer; }
+  .lbl .tabs-s span.on { background: var(--chrome-solid); color: var(--ink); box-shadow: var(--shadow-1); }
+  .swatches-c { display: flex; gap: 9px; flex-wrap: wrap; }
+  .swatches-c b { width: 38px; height: 50px; border-radius: 3px 7px 7px 3px; background: var(--cv); box-shadow: inset 4px 0 0 rgba(0,0,0,.2), var(--shadow-1); cursor: pointer; position: relative; transition: transform var(--dur-short) var(--spring-snappy); }
+  .swatches-c b:hover { transform: translateY(-3px); }
+  .swatches-c b.on { box-shadow: inset 4px 0 0 rgba(0,0,0,.2), 0 0 0 2px var(--chrome-solid), 0 0 0 4px var(--accent); }
+  .swatches-c b.add { background: var(--surface); box-shadow: none; border: 1.5px dashed var(--outline); display: grid; place-items: center; color: var(--ink-3); }
+  .tx-linen { background: repeating-linear-gradient(0deg, rgba(255,255,255,.07) 0 1px, transparent 1px 3px), repeating-linear-gradient(90deg, rgba(0,0,0,.08) 0 1px, transparent 1px 3px), var(--cv) !important; }
+  .tx-leather { background: radial-gradient(circle at 30% 30%, rgba(255,255,255,.12), transparent 50%), radial-gradient(rgba(0,0,0,.18) 1px, transparent 1.6px) 0 0 / 5px 5px, var(--cv) !important; }
+  .tx-kraft { background: radial-gradient(rgba(60,40,10,.25) 1px, transparent 1.5px) 0 0 / 7px 7px, linear-gradient(135deg, #b88a55, #a5784a) !important; }
+  .tx-marble { background: radial-gradient(120% 60% at 20% 10%, rgba(255,255,255,.5), transparent 40%), linear-gradient(115deg, transparent 40%, rgba(120,120,140,.35) 42%, transparent 46%), linear-gradient(160deg, #e9e6e1, #cfcbc4) !important; }
+  .tx-marble .ttl { color: #2b2b30 !important; }
+  .tx-stripe { background: repeating-linear-gradient(90deg, rgba(255,255,255,.14) 0 6px, transparent 6px 14px), var(--cv) !important; }
+  .tx-grad { background: linear-gradient(160deg, #ff8a65, #7b3fe4 70%) !important; }
+  .tpls { display: grid; grid-template-columns: repeat(8, 1fr); gap: 10px; }
+  .tpls .tpl .pg { width: 100%; height: auto; aspect-ratio: 3 / 4; }
+  .tpls .tpl { font-size: 11.5px; }
+  .tpls .tpl.on { color: var(--accent); font-weight: 600; }
+  .sizes { display: flex; gap: 8px; flex-wrap: wrap; }
+  .orient { display: inline-flex; gap: 6px; }
+  .orient span { width: 46px; height: 38px; border-radius: 10px; border: 1.5px solid var(--outline); display: grid; place-items: center; cursor: pointer; color: var(--ink-3); }
+  .orient span.on { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+  .row2 { display: grid; grid-template-columns: 1fr auto; gap: 18px; }
+  .foot { margin-top: auto; display: flex; align-items: center; gap: 10px; padding: 14px 0 18px; border-top: 1px solid var(--outline); }
+  .foot .muted { flex: 1; }
+
+  /* cover image cropper */
+  .img-cover { background: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 300 400'><defs><linearGradient id='s' x1='0' y1='0' x2='0' y2='1'><stop offset='0' stop-color='%23f6b48f'/><stop offset='.55' stop-color='%23e57c73'/><stop offset='1' stop-color='%23593a6e'/></linearGradient></defs><rect width='300' height='400' fill='url(%23s)'/><circle cx='200' cy='150' r='42' fill='%23fff3c4' opacity='.9'/><path d='M0 300 L70 220 L120 270 L190 190 L300 300 L300 400 L0 400Z' fill='%233a2a4f'/><path d='M0 340 L90 280 L170 330 L240 290 L300 320 L300 400 L0 400Z' fill='%23271c38'/></svg>") center / cover !important; }
+  .cropper { position: relative; height: 210px; border-radius: 12px; overflow: hidden; background: #111; }
+  .cropper .imgfull { position: absolute; inset: 0; background-size: cover !important; opacity: .45; }
+  .cropper .win { position: absolute; top: 14px; bottom: 14px; left: 50%; width: 136px; transform: translateX(-50%); outline: 2px solid #fff; box-shadow: 0 0 0 999px rgba(0,0,0,.35); background-size: 300px 400px !important; background-position: -60px -40px !important; }
+  .cropper .win::before, .cropper .win::after { content: ""; position: absolute; inset: 0; background: linear-gradient(90deg, transparent 33%, rgba(255,255,255,.4) 33% calc(33% + 1px), transparent 0 66%, rgba(255,255,255,.4) 66% calc(66% + 1px), transparent 0), linear-gradient(transparent 33%, rgba(255,255,255,.4) 33% calc(33% + 1px), transparent 0 66%, rgba(255,255,255,.4) 66% calc(66% + 1px), transparent 0); }
+  .cropper .hint { position: absolute; bottom: 8px; left: 10px; font-size: 11px; color: #fff; opacity: .85; }
+  .tex-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px; }
+  .tex-grid div { aspect-ratio: 3/4; border-radius: 3px 8px 8px 3px; box-shadow: inset 4px 0 0 rgba(0,0,0,.2), var(--shadow-1); cursor: pointer; position: relative; }
+  .tex-grid div.on { box-shadow: inset 4px 0 0 rgba(0,0,0,.2), 0 0 0 2px var(--chrome-solid), 0 0 0 4px var(--accent); }
+  .tex-grid small { position: absolute; bottom: -18px; left: 0; right: 0; text-align: center; font-size: 11px; color: var(--ink-3); }
+
+  /* full gallery */
+  .gal { display: flex; flex-direction: column; background: var(--surface); }
+  .gal-head { display: flex; align-items: center; gap: 12px; padding: 14px 22px; background: var(--chrome-solid); border-bottom: 1px solid var(--outline); }
+  .gal-body { flex: 1; display: grid; grid-template-columns: 1fr 340px; min-height: 0; }
+  .gal-grid { padding: 18px 24px; overflow: hidden; }
+  .gal-grid .cats { display: flex; gap: 6px; margin-bottom: 16px; flex-wrap: wrap; }
+  .gal-grid .tg { display: grid; grid-template-columns: repeat(6, 84px); gap: 12px 26px; }
+  .gal-grid .tg .tpl .pg { width: 100%; height: auto; aspect-ratio: 3 / 4; border-radius: 6px; position: relative; }
+  .gal-grid .tg .tpl.on .pg::after { content: "check"; font: 700 16px/1 "Material Symbols Rounded"; font-feature-settings: "liga"; position: absolute; top: 6px; inset-inline-end: 6px; width: 22px; height: 22px; border-radius: 50%; background: var(--accent); color: var(--on-accent); display: grid; place-items: center; }
+  .gal-grid .tg .tpl b { display: block; font-size: 12.5px; color: var(--ink); font-weight: 500; margin-top: 4px; }
+  .gal-grid .tg .tpl small { font-size: 11px; color: var(--ink-3); }
+  .gal-grid h4 { margin: 14px 0 8px; }
+  .gal-side { background: var(--chrome-solid); border-inline-start: 1px solid var(--outline); padding: 18px 20px; display: flex; flex-direction: column; gap: 12px; }
+  .gal-side .big { width: 210px; align-self: center; aspect-ratio: 3/4; border-radius: 6px; box-shadow: var(--shadow-2); position: relative; overflow: hidden; }
+  .gal-side .big svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .pcolors { display: flex; gap: 8px; }
+  .pcolors span { display: flex; flex-direction: column; align-items: center; gap: 4px; font-size: 11px; color: var(--ink-3); cursor: pointer; }
+  .pcolors b { width: 30px; height: 30px; border-radius: 50%; background: var(--c); border: 1px solid var(--outline); }
+  .pcolors span.on b { box-shadow: 0 0 0 2px var(--chrome-solid), 0 0 0 4px var(--accent); }
+  .srow { display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--ink-2); }
+  .srow > span:first-child { width: 92px; }
+  .cornell-big { background: linear-gradient(90deg, transparent 28%, #f2b8b5 28% calc(28% + 1.5px), transparent 0), linear-gradient(transparent 80%, #f2b8b5 80% calc(80% + 1.5px), transparent 0), linear-gradient(#f2b8b5 0 0) 0 12% / 100% 1.5px no-repeat, repeating-linear-gradient(transparent 0 17px, var(--paper-line) 17px 18px) 0 14% / 100% 66% no-repeat !important; background-color: var(--paper) !important; }
+
+  /* sizes state */
+  .size-cmp { display: flex; align-items: flex-end; gap: 26px; justify-content: center; height: 300px; padding-bottom: 10px; }
+  .sz { display: flex; flex-direction: column; align-items: center; gap: 10px; cursor: pointer; }
+  .sz .r { background: var(--paper); box-shadow: var(--shadow-1); border-radius: 3px; border: 1.5px solid transparent; transition: transform var(--dur-short) var(--spring-snappy); background-image: repeating-linear-gradient(transparent 0 9px, var(--paper-line) 9px 10px); }
+  .sz:hover .r { transform: translateY(-4px); }
+  .sz.on .r { border-color: var(--accent); box-shadow: 0 0 0 4px var(--accent-soft), var(--shadow-2); }
+  .sz b { font-size: 14px; }
+  .sz small { color: var(--ink-3); font-size: 12px; margin-top: -8px; }
+  .sz.on b { color: var(--accent); }
+  .orient-big { display: flex; gap: 14px; justify-content: center; }
+  .ob { width: 200px; border: 2px solid var(--outline); border-radius: var(--r-card); padding: 16px; display: flex; align-items: center; gap: 14px; cursor: pointer; background: var(--chrome-solid); }
+  .ob.on { border-color: var(--accent); background: color-mix(in srgb, var(--accent-soft) 55%, var(--chrome-solid)); }
+  .ob i.r { background: var(--paper); box-shadow: var(--shadow-1); border-radius: 2px; flex: none; }
+  .ob b { font-size: 14px; display: block; }
+  .ob small { font-size: 12px; color: var(--ink-3); }
+
+  /* import */
+  .imp { width: 760px; padding: 6px 26px 24px; }
+  .imp h3 { font: 600 22px var(--font-display); margin: 6px 0 2px; }
+  .srcs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 18px; }
+  .src { border: 1px solid var(--outline); border-radius: var(--r-card); padding: 16px; display: flex; flex-direction: column; gap: 8px; cursor: pointer; transition: transform var(--dur-short) var(--spring-snappy), border-color var(--dur-short); background: var(--chrome-solid); }
+  .src:hover { transform: translateY(-3px); border-color: var(--accent); }
+  .src b { font-size: 14.5px; }
+  .src small { color: var(--ink-3); font-size: 12px; line-height: 1.4; }
+  .apps { display: flex; gap: 8px; align-items: center; margin-top: 16px; padding: 12px 14px; border-radius: var(--r-card); background: var(--surface); font-size: 12.5px; color: var(--ink-2); }
+  .apps .ai { width: 30px; height: 30px; border-radius: 9px; display: grid; place-items: center; color: #fff; font-weight: 700; font-size: 13px; flex: none; }
+
+  .pdfimp { width: 1020px; height: 620px; display: grid; grid-template-columns: 1fr 380px; overflow: hidden; }
+  .pdfimp .pages { background: var(--surface); padding: 20px 24px; overflow: hidden; }
+  .pdfimp .pages .grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 14px; margin-top: 12px; }
+  .slide { aspect-ratio: 3/4; border-radius: 4px; background: #fff; box-shadow: var(--shadow-1); position: relative; overflow: hidden; }
+  .slide svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .slide.off { opacity: .35; }
+  .slide.loading { background: linear-gradient(100deg, var(--surface-2) 30%, var(--chrome-solid) 50%, var(--surface-2) 70%) 0 0 / 300% 100%; animation: shimmer 1.4s linear infinite; box-shadow: none; }
+  @keyframes shimmer { to { background-position: -150% 0; } }
+  .slide .n { position: absolute; bottom: 4px; inset-inline-end: 6px; font-size: 10px; color: #666; }
+  .slide .chk { position: absolute; top: 5px; inset-inline-start: 5px; width: 18px; height: 18px; }
+  .pdfimp .opts { padding: 22px; display: flex; flex-direction: column; gap: 4px; background: var(--chrome-solid); }
+  .pdfimp .opts .choice { display: flex; gap: 12px; align-items: flex-start; padding: 12px; border-radius: var(--r-card); border: 1.5px solid var(--outline); cursor: pointer; margin-bottom: 8px; }
+  .pdfimp .opts .choice.on { border-color: var(--accent); background: color-mix(in srgb, var(--accent-soft) 50%, var(--chrome-solid)); }
+  .pdfimp .opts .choice b { font-size: 14px; display: block; }
+  .pdfimp .opts .choice small { color: var(--ink-3); font-size: 12px; }
+  .pdfimp .opts .ui-row { padding: 10px 0; min-height: 0; }
+  .prog-card { margin-top: auto; padding: 12px 14px; border-radius: var(--r-card); background: var(--surface); font-size: 12.5px; }
+  .prog-card .l { display: flex; justify-content: space-between; margin-bottom: 8px; }
+
+  .photos { display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px; margin-top: 14px; }
+  .ph { aspect-ratio: 1; border-radius: 10px; position: relative; overflow: hidden; }
+  .ph svg { width: 100%; height: 100%; display: block; }
+  .ph .ui-check { position: absolute; top: 6px; inset-inline-end: 6px; }
+  .ph .ord { position: absolute; top: 6px; inset-inline-end: 6px; width: 22px; height: 22px; border-radius: 50%; background: var(--accent); color: var(--on-accent); font-size: 12px; font-weight: 700; display: grid; place-items: center; box-shadow: 0 0 0 2px #fff; }
+  .ph.sel { box-shadow: 0 0 0 3px var(--accent); }
+
+  /* share sheet (system UI) */
+  .files-app { position: absolute; inset: 0; background: var(--chrome-solid); display: flex; flex-direction: column; }
+  .files-app .bar { display: flex; align-items: center; gap: 12px; padding: 14px 22px; border-bottom: 1px solid var(--outline); }
+  .files-app .rows { padding: 8px 22px; }
+  .files-app .frow { display: flex; align-items: center; gap: 14px; padding: 12px 6px; border-bottom: 1px solid var(--outline); font-size: 14px; }
+  .files-app .frow .ms { color: var(--danger); font-size: 28px; }
+  .files-app .frow.sel { background: var(--accent-soft); border-radius: 10px; }
+  .sys-share { width: 620px; padding: 6px 22px 22px; }
+  .sys-share .file { display: flex; gap: 12px; align-items: center; padding: 12px 0 16px; border-bottom: 1px solid var(--outline); }
+  .sys-share .file .ic { width: 44px; height: 54px; border-radius: 6px; background: #fff; border: 1px solid var(--outline); display: grid; place-items: center; color: var(--danger); }
+  .targets { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; margin-top: 16px; }
+  .targets span { display: flex; flex-direction: column; align-items: center; gap: 6px; font-size: 11.5px; color: var(--ink-2); text-align: center; padding: 8px 2px; border-radius: 14px; }
+  .targets span.hot { background: var(--accent-soft); color: var(--ink); font-weight: 600; }
+  .targets .app { width: 52px; height: 52px; border-radius: 16px; display: grid; place-items: center; color: #fff; font-weight: 700; font-size: 20px; box-shadow: var(--shadow-1); }
+  .after-share { position: absolute; top: 40px; inset-inline-end: 40px; width: 330px; padding: 16px; z-index: 22; }
+  .after-share h5 { font-size: 15px; margin-bottom: 4px; }
+  .after-share .ui-mi { padding: 10px; }
+  .flow-arrow { display: flex; align-items: center; justify-content: center; gap: 10px; color: var(--ink-3); font-size: 13px; }
+</style>
+</head>
+<body>
+<div class="page-wrap">
+  <h1>New notebook &amp; import</h1>
+  <p class="lead muted">One sheet to make a notebook: cover, paper, size, orientation, with a live preview. In state 1 everything is clickable and the preview updates. Import brings in PDFs, photos, and files shared from other apps.</p>
+  <div class="variants">
+
+    <div>
+      <div class="variant-label">1 · Create sheet · cover colors, paper, size, orientation (interactive)</div>
+      <div class="device tablet">
+        <div class="status"><span>9:41</span><span><i class="ms">wifi</i><i class="ms">battery_full</i></span></div>
+        <div class="scr">
+          <div class="bg-lib" data-bg></div>
+          <div class="ui-scrim"></div>
+          <div class="ui-sheet center create" id="create">
+            <div class="pvw">
+              <div class="book" id="book"><div class="pg2 page ruled-s" id="bookPage"></div><div class="cover" id="bookCover" style="--cv:#29324a"><span class="ttl" id="bookTtl">Thermodynamics</span><span class="sub">Fall 2026</span></div></div>
+              <div class="spec" id="spec"><b>Ruled</b> · A4 · Portrait<br>Saved on this device</div>
+            </div>
+            <div class="form">
+              <div class="top"><h3>New notebook</h3><span class="ui-ib"><i class="ms">close</i></span></div>
+              <div class="ui-field focus"><i class="ms">edit</i><span>Thermodynamics<span class="ui-caret"></span></span><span class="grow"></span><span class="ui-badge neutral">Physics 201</span></div>
+              <div class="lbl">Cover<div class="tabs-s"><span class="on">Colors</span><span>Textures</span><span>Image</span></div></div>
+              <div class="swatches-c" id="cvs">
+                <b style="--cv:#29324a" class="on"></b><b style="--cv:#7a2d2d"></b><b style="--cv:#2f5d50"></b><b style="--cv:#5b3f8f"></b><b style="--cv:#c9a227"></b><b style="--cv:#8a5a2b"></b><b style="--cv:#26535f"></b><b style="--cv:#6b2d4f"></b><b style="--cv:#44543a"></b><b style="--cv:#a23b3b"></b><b style="--cv:#2b5b84"></b><b style="--cv:#1d1d1f"></b><b style="--cv:#d9d4c7"></b><b class="add"><i class="ms">colorize</i></b>
+              </div>
+              <div class="lbl">Paper <span class="grow"></span><a class="muted" style="text-transform:none; letter-spacing:0; color:var(--accent); font-weight:600; cursor:pointer">See all 32</a></div>
+              <div class="tpls" id="tpls">
+                <div class="tpl" data-t="blank-s" data-n="Blank"><div class="pg blank-s"></div>Blank</div>
+                <div class="tpl on" data-t="ruled-s" data-n="Ruled"><div class="pg ruled-s"></div>Ruled</div>
+                <div class="tpl" data-t="grid-s" data-n="Grid"><div class="pg grid-s"></div>Grid</div>
+                <div class="tpl" data-t="dots-s" data-n="Dotted"><div class="pg dots-s"></div>Dotted</div>
+                <div class="tpl" data-t="cornell-s" data-n="Cornell"><div class="pg cornell-s"></div>Cornell</div>
+                <div class="tpl" data-t="music-s" data-n="Music"><div class="pg music-s"></div>Music</div>
+                <div class="tpl" data-t="planner-s" data-n="Planner"><div class="pg planner-s"></div>Planner</div>
+                <div class="tpl" data-t="dark-s" data-n="Dark paper"><div class="pg dark-s"></div>Dark</div>
+              </div>
+              <div class="row2">
+                <div><div class="lbl">Size</div><div class="sizes" id="sizes"><span class="chip on">A4</span><span class="chip">Letter</span><span class="chip">A5</span><span class="chip"><i class="ms">fit_screen</i>Fit to screen</span></div></div>
+                <div><div class="lbl">Orientation</div><div class="orient" id="orient"><span class="on" data-o="p"><i class="ms">crop_portrait</i></span><span data-o="l"><i class="ms">crop_landscape</i></span></div></div>
+              </div>
+              <div class="foot"><span class="muted">Tip: long-press <b>Create</b> to save these as your default.</span><button class="btn ghost">Cancel</button><button class="btn primary">Create</button></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div class="variant-label">2 · Cover: textures and a custom image (crop to fit the spine)</div>
+      <div class="device tablet">
+        <div class="status"><span>9:41</span><span><i class="ms">wifi</i><i class="ms">battery_full</i></span></div>
+        <div class="scr">
+          <div class="bg-lib" data-bg></div>
+          <div class="ui-scrim"></div>
+          <div class="ui-sheet center create">
+            <div class="pvw">
+              <div class="book"><div class="pg2 page dots-s"></div><div class="cover img-cover"><span class="ttl">Travel Journal</span><span class="sub">Lisbon · 2026</span></div></div>
+              <div class="spec"><b>Custom image</b> · Dotted · A5<br>Title color picked from the image</div>
+            </div>
+            <div class="form">
+              <div class="top"><h3>Cover</h3><span class="ui-ib"><i class="ms">close</i></span></div>
+              <div class="lbl" style="margin-top:0">Textures<div class="tabs-s"><span>Colors</span><span>Textures</span><span class="on">Image</span></div></div>
+              <div class="tex-grid" style="margin-bottom:26px">
+                <div class="tx-linen" style="--cv:#29324a"><small>Linen</small></div>
+                <div class="tx-leather" style="--cv:#7a2d2d"><small>Leather</small></div>
+                <div class="tx-kraft"><small>Kraft</small></div>
+                <div class="tx-marble"><small>Marble</small></div>
+                <div class="tx-stripe" style="--cv:#2f5d50"><small>Stripes</small></div>
+                <div class="tx-grad"><small>Sunset</small></div>
+              </div>
+              <div class="lbl">Your image</div>
+              <div style="display:grid; grid-template-columns:1fr 200px; gap:14px">
+                <div class="cropper"><div class="imgfull img-cover"></div><div class="win img-cover"></div><span class="hint">Pinch and drag to frame</span></div>
+                <div style="display:flex; flex-direction:column; gap:8px">
+                  <button class="btn tonal"><i class="ms">photo_library</i>Choose photo</button>
+                  <button class="btn ghost"><i class="ms">photo_camera</i>Take photo</button>
+                  <button class="btn ghost"><i class="ms">folder_open</i>From files</button>
+                  <div class="ui-row" style="padding:6px 0; min-height:0"><div class="t"><b style="font-size:13px">Show title</b></div><div class="switch on tog"><i></i></div></div>
+                </div>
+              </div>
+              <div class="foot"><span class="muted">Images stay inside the notebook file.</span><button class="btn ghost">Back</button><button class="btn primary">Use cover</button></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div class="variant-label">3 · Paper template gallery (“See all”): categories, paper color, line spacing</div>
+      <div class="device tablet">
+        <div class="status"><span>9:41</span><span><i class="ms">wifi</i><i class="ms">battery_full</i></span></div>
+        <div class="scr gal col">
+          <div class="gal-head"><span class="ui-ib"><i class="ms flip">arrow_back</i></span><b style="font-size:17px">Paper templates</b><span class="grow"></span><div class="search" style="width:240px"><i class="ms">search</i><span>Search templates</span></div><button class="btn ghost sm"><i class="ms">upload_file</i>Import template (PDF)</button></div>
+          <div class="gal-body">
+            <div class="gal-grid">
+              <div class="cats"><span class="chip on">All</span><span class="chip">Basic</span><span class="chip">Study</span><span class="chip">Music</span><span class="chip">Planner</span><span class="chip">Dark</span><span class="chip"><i class="ms">person</i>My templates</span></div>
+              <h4 style="margin-top:0">Basic</h4>
+              <div class="tg">
+                <div class="tpl"><div class="pg blank-s"></div><b>Blank</b><small>Plain</small></div>
+                <div class="tpl"><div class="pg ruled-s"></div><b>College ruled</b><small>7 mm</small></div>
+                <div class="tpl"><div class="pg" style="background:repeating-linear-gradient(transparent 0 13px, var(--paper-line) 13px 14px); background-color:var(--paper)"></div><b>Wide ruled</b><small>9 mm</small></div>
+                <div class="tpl"><div class="pg grid-s"></div><b>Grid</b><small>5 mm</small></div>
+                <div class="tpl"><div class="pg dots-s"></div><b>Dotted</b><small>5 mm</small></div>
+                <div class="tpl"><div class="pg" style="background-image:linear-gradient(60deg, transparent 49%, var(--paper-line) 49% 51%, transparent 51%), linear-gradient(-60deg, transparent 49%, var(--paper-line) 49% 51%, transparent 51%); background-size:12px 20px; background-color:var(--paper)"></div><b>Isometric</b><small>3D sketches</small></div>
+              </div>
+              <h4>Study &amp; music</h4>
+              <div class="tg">
+                <div class="tpl on"><div class="pg cornell-s"></div><b>Cornell</b><small>Cue · summary</small></div>
+                <div class="tpl"><div class="pg" style="background:linear-gradient(90deg, transparent 49.8%, #f2b8b5 50%, transparent 50.2%), repeating-linear-gradient(transparent 0 9px, var(--paper-line) 9px 10px); background-color:var(--paper)"></div><b>Two-column</b><small>Compare</small></div>
+                <div class="tpl"><div class="pg" style="background:linear-gradient(var(--paper-line) 1px, transparent 1px) 0 0 / 100% 10px, linear-gradient(90deg, var(--paper-line) 1px, transparent 1px) 0 0 / 10px 100%, linear-gradient(90deg, transparent 0 calc(50% - 1px), #9aa calc(50% - 1px) calc(50% + 1px), transparent 0), linear-gradient(transparent 0 calc(50% - 1px), #9aa calc(50% - 1px) calc(50% + 1px), transparent 0); background-color:var(--paper)"></div><b>Math graph</b><small>Axes</small></div>
+                <div class="tpl"><div class="pg music-s"></div><b>Music staff</b><small>12 staves</small></div>
+                <div class="tpl"><div class="pg" style="background-image:repeating-linear-gradient(transparent 0 16px, #9aa 16px 17px, transparent 17px 19px, #9aa 19px 20px, transparent 20px 22px, #9aa 22px 23px, transparent 23px 25px, #9aa 25px 26px, transparent 26px 28px, #9aa 28px 29px, transparent 29px 31px, #9aa 31px 32px, transparent 32px 46px); background-color:var(--paper)"></div><b>Guitar tab</b><small>6 lines</small></div>
+                <div class="tpl"><div class="pg" style="background:linear-gradient(90deg, transparent 0 18%, var(--paper-margin) 18% calc(18% + 1px), transparent 0), repeating-linear-gradient(transparent 0 13px, var(--paper-line) 13px 14px); background-color:var(--paper)"></div><b>Vocabulary</b><small>Word · meaning</small></div>
+              </div>
+              <h4>Planner &amp; dark</h4>
+              <div class="tg">
+                <div class="tpl"><div class="pg planner-s"></div><b>Weekly</b><small>Mon–Sun</small></div>
+                <div class="tpl"><div class="pg" style="background:linear-gradient(var(--paper-margin) 0 0) 0 14% / 100% 1px no-repeat, repeating-linear-gradient(transparent 0 11px, var(--paper-line) 11px 12px) 0 20% / 100% 80% no-repeat; background-color:var(--paper)"></div><b>Daily</b><small>Hour by hour</small></div>
+                <div class="tpl"><div class="pg" style="background:radial-gradient(circle at 12% 50%, transparent 3px, var(--paper-line) 3.5px 4.5px, transparent 5px) 0 0 / 100% 14px, var(--paper)"></div><b>To-do</b><small>Checkboxes</small></div>
+                <div class="tpl"><div class="pg dark-s"></div><b>Dark ruled</b><small>Ink auto-inverts</small></div>
+                <div class="tpl"><div class="pg" style="background:#1f2329; background-image:linear-gradient(#39404a 1px, transparent 1px), linear-gradient(90deg, #39404a 1px, transparent 1px); background-size:10px 10px"></div><b>Dark grid</b><small>OLED friendly</small></div>
+                <div class="tpl"><div class="pg" style="background:#1f2329 radial-gradient(#4a5260 1px, transparent 1.4px) 0 0 / 10px 10px"></div><b>Dark dotted</b><small>Night study</small></div>
+              </div>
+            </div>
+            <div class="gal-side">
+              <div class="big page cornell-big"><svg viewBox="0 0 300 400"><text x="14" y="34" class="hand" style="font-size:22px; fill:#1d3c8a">Thermo · Lecture 3</text><text x="10" y="84" class="hand" style="font-size:15px; fill:#c62828">1st law?</text><text x="94" y="84" class="hand" style="font-size:16px">ΔU = Q − W</text><text x="94" y="120" class="hand" style="font-size:16px">closed system, no mass flow</text><text x="10" y="350" class="hand" style="font-size:15px; fill:#2e7d32">Summary: energy is conserved.</text></svg></div>
+              <div><b>Cornell</b> <span class="muted">· Study</span></div>
+              <div class="srow"><span>Paper</span><div class="pcolors"><span class="on"><b style="--c:#FBF9F4"></b>Ivory</span><span><b style="--c:#ffffff"></b>White</span><span><b style="--c:#F3EBDD"></b>Sepia</span><span><b style="--c:#1F2329"></b>Dark</span></div></div>
+              <div class="srow"><span>Line spacing</span><div class="ui-slider" style="--v:40%"><i></i></div><span class="num" style="width:auto">7 mm</span></div>
+              <div class="srow"><span>Margin</span><div class="seg" style="flex:1; margin:0"><span>None</span><span class="on">Left</span><span>Both</span></div></div>
+              <button class="btn primary full" style="margin-top:auto">Use Cornell</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div class="variant-label">4 · Size and orientation, drawn to scale (Fit to screen = the tablet’s own 16:10)</div>
+      <div class="device tablet">
+        <div class="status"><span>9:41</span><span><i class="ms">wifi</i><i class="ms">battery_full</i></span></div>
+        <div class="scr">
+          <div class="bg-lib" data-bg></div>
+          <div class="ui-scrim"></div>
+          <div class="ui-sheet bottom" style="width:860px; padding:6px 30px 26px">
+            <div class="ui-grab"></div>
+            <div class="form" style="padding:6px 0 0">
+              <div class="top"><h3>Page size</h3><span class="muted">Applies to new pages. Imported PDFs keep their size.</span></div>
+              <div class="size-cmp" id="szc">
+                <div class="sz on"><div class="r" style="width:126px; height:178px"></div><b>A4</b><small>210 × 297 mm</small></div>
+                <div class="sz"><div class="r" style="width:130px; height:168px"></div><b>Letter</b><small>8.5 × 11 in</small></div>
+                <div class="sz"><div class="r" style="width:89px; height:126px"></div><b>A5</b><small>148 × 210 mm</small></div>
+                <div class="sz"><div class="r" style="width:150px; height:240px"></div><b>Fit to screen</b><small>Tab S10 · 16:10</small></div>
+                <div class="sz"><div class="r" style="width:110px; height:150px; background:var(--surface); background-image:none; border:1.5px dashed var(--outline); display:grid; place-items:center"><i class="ms" style="color:var(--ink-3)">add</i></div><b>Custom</b><small>Any size</small></div>
+              </div>
+              <div class="orient-big" id="ob">
+                <div class="ob on"><i class="r" style="width:30px; height:40px"></i><div><b>Portrait</b><small>Best for notes</small></div></div>
+                <div class="ob"><i class="r" style="width:40px; height:30px"></i><div><b>Landscape</b><small>Slides, two-page view</small></div></div>
+                <div class="ob"><i class="r" style="width:40px; height:40px; background:radial-gradient(var(--paper-line) 1px, transparent 1.4px) 0 0 / 6px 6px, var(--paper)"></i><div><b>Infinite</b><small>Endless canvas</small></div></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div class="variant-label">5 · Import: choose a source</div>
+      <div class="device tablet">
+        <div class="status"><span>9:41</span><span><i class="ms">wifi</i><i class="ms">battery_full</i></span></div>
+        <div class="scr">
+          <div class="bg-lib" data-bg></div>
+          <div class="ui-scrim"></div>
+          <div class="ui-sheet bottom imp">
+            <div class="ui-grab"></div>
+            <h3>Import</h3>
+            <p class="muted">Files are copied into BestNote. The original stays where it is.</p>
+            <div class="srcs">
+              <div class="src"><span class="ui-tile lg"><i class="ms">picture_as_pdf</i></span><b>PDF</b><small>Slides, readings, worksheets. Text stays searchable and highlights snap to it.</small></div>
+              <div class="src"><span class="ui-tile lg"><i class="ms">photo_library</i></span><b>Images</b><small>Photos and screenshots, one page each. Auto-crop for paper.</small></div>
+              <div class="src"><span class="ui-tile lg"><i class="ms">document_scanner</i></span><b>Scan pages</b><small>Use the camera to scan handouts, edges straightened.</small></div>
+              <div class="src"><span class="ui-tile lg"><i class="ms">folder_zip</i></span><b>BestNote file</b><small>.bnote notebooks from another device or a friend.</small></div>
+              <div class="src"><span class="ui-tile lg"><i class="ms">description</i></span><b>Other documents</b><small>Word, PowerPoint, Keynote exported as PDF.</small></div>
+              <div class="src"><span class="ui-tile lg"><i class="ms">content_paste</i></span><b>Paste</b><small>Image or PDF on the clipboard.</small></div>
+            </div>
+            <div class="apps">
+              <span class="ai" style="background:#f2a33a">G</span><span class="ai" style="background:#3b7ddd">N</span><span class="ai" style="background:#e8564f">S</span><span class="ai" style="background:#5f6368">X</span>
+              <span><b>Moving from Goodnotes, Notability, Samsung Notes or Xodo?</b> Export as PDF there and share it to BestNote. Pages and annotations come through.</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div class="variant-label">6 · Import a PDF: choose where and which pages, then pages appear as they’re ready</div>
+      <div class="device tablet">
+        <div class="status"><span>9:41</span><span><i class="ms">wifi</i><i class="ms">battery_full</i></span></div>
+        <div class="scr">
+          <div class="bg-lib" data-bg></div>
+          <div class="ui-scrim"></div>
+          <div class="ui-sheet center pdfimp">
+            <div class="pages">
+              <div style="display:flex; align-items:center; gap:10px"><i class="ms" style="color:var(--danger); font-size:30px">picture_as_pdf</i><div><b>PHYS201_Lecture08_Momentum.pdf</b><div class="muted">48 pages · 12.4 MB · from Downloads</div></div><span class="grow"></span><button class="btn ghost sm">Select range</button></div>
+              <div class="grid" id="slides"></div>
+            </div>
+            <div class="opts">
+              <h3 style="font: 600 20px var(--font-display); margin-bottom:12px">Import PDF</h3>
+              <div class="choice on"><span class="ui-radio on"></span><div><b>New notebook</b><small>“Lecture 8: Momentum” in Physics 201 › Lectures</small></div></div>
+              <div class="choice"><span class="ui-radio"></span><div><b>Add to a notebook</b><small>Physics 201, after page 14</small></div></div>
+              <div class="ui-row"><div class="t"><b style="font-size:14px">Blank page after each slide</b><small>Room for your own notes</small></div><div class="switch tog"><i></i></div></div>
+              <div class="ui-row"><div class="t"><b style="font-size:14px">Keep text searchable</b><small>Highlighter snaps to lines</small></div><div class="switch on tog"><i></i></div></div>
+              <div class="prog-card"><div class="l"><span>Importing… 31 of 48 pages</span><b>65%</b></div><div class="ui-prog"><i style="--v:65%"></i></div><div class="muted" style="margin-top:8px">You can start writing on page 1 now.</div></div>
+              <div style="display:flex; gap:8px; margin-top:12px"><button class="btn ghost" style="flex:1">Cancel</button><button class="btn primary" style="flex:2">Open notebook</button></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div class="variant-label">7 · Import images: pick photos in order, one page each</div>
+      <div class="device tablet">
+        <div class="status"><span>9:41</span><span><i class="ms">wifi</i><i class="ms">battery_full</i></span></div>
+        <div class="scr">
+          <div class="bg-lib" data-bg></div>
+          <div class="ui-scrim"></div>
+          <div class="ui-sheet bottom" style="width:900px; padding:6px 26px 22px">
+            <div class="ui-grab"></div>
+            <div style="display:flex; align-items:center; gap:10px; margin-top:6px"><h3 style="font: 600 22px var(--font-display); flex:1">Import images</h3><span class="chip on">Recent</span><span class="chip">Screenshots</span><span class="chip">Camera</span><span class="chip"><i class="ms">folder</i>Browse</span></div>
+            <div class="photos" id="photos"></div>
+            <div style="display:flex; align-items:center; gap:14px; margin-top:16px; padding-top:14px; border-top:1px solid var(--outline)">
+              <span class="chip on"><i class="ms">crop</i>Auto-crop paper</span><span class="chip on"><i class="ms">auto_fix_high</i>Enhance</span><span class="chip">Fit image to page</span>
+              <span class="grow"></span><span class="muted">4 selected · tap order = page order</span><button class="btn primary">Add 4 pages</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div class="variant-label">8 · From another app: Android share sheet → BestNote → where should it go?</div>
+      <div class="device tablet">
+        <div class="status"><span>9:41</span><span><i class="ms">wifi</i><i class="ms">battery_full</i></span></div>
+        <div class="scr">
+          <div class="files-app">
+            <div class="bar"><i class="ms">menu</i><b style="font-size:18px">Downloads</b><span class="grow"></span><i class="ms">search</i><i class="ms">more_vert</i></div>
+            <div class="rows">
+              <div class="frow sel"><i class="ms">picture_as_pdf</i><div class="grow"><b>Goodnotes export · Organic Chem.pdf</b><div class="muted">84 pages · 22 MB · 2 min ago</div></div></div>
+              <div class="frow"><i class="ms">picture_as_pdf</i><div class="grow">PHYS201_Lecture08_Momentum.pdf<div class="muted">12 MB · Today</div></div></div>
+              <div class="frow"><i class="ms" style="color:#2e7d32">image</i><div class="grow">whiteboard_0932.jpg<div class="muted">3 MB · Today</div></div></div>
+            </div>
+          </div>
+          <div class="ui-scrim"></div>
+          <div class="ui-sheet bottom sys-share">
+            <div class="ui-grab"></div>
+            <div class="file"><div class="ic"><i class="ms">picture_as_pdf</i></div><div><b>Goodnotes export · Organic Chem.pdf</b><div class="muted">84 pages · 22 MB</div></div><span class="grow"></span><span class="ui-ib"><i class="ms">content_copy</i></span></div>
+            <div class="targets">
+              <span class="hot"><span class="app" style="background:var(--accent); color:var(--on-accent); font-family:var(--font-display)">B</span>BestNote</span>
+              <span><span class="app" style="background:#1fa463"><i class="ms">add_to_drive</i></span>Drive</span>
+              <span><span class="app" style="background:#3c7bf4"><i class="ms">share</i></span>Quick Share</span>
+              <span><span class="app" style="background:#ea4335"><i class="ms">mail</i></span>Gmail</span>
+              <span><span class="app" style="background:#f5a623"><i class="ms">edit_note</i></span>Samsung Notes</span>
+              <span><span class="app" style="background:#6b6b73"><i class="ms">more_horiz</i></span>More</span>
+            </div>
+          </div>
+          <div class="ui-menu after-share">
+            <h5>Add to BestNote</h5>
+            <p class="muted" style="margin-bottom:8px">Organic Chem.pdf · 84 pages</p>
+            <div class="ui-mi hot"><i class="ms">note_stack_add</i>New notebook<span class="end">Library</span></div>
+            <div class="ui-mi"><i class="ms">playlist_add</i>Add to “Organic Chem”<span class="end">at the end</span></div>
+            <div class="ui-mi"><i class="ms">bolt</i>Open as Quicknote</div>
+            <div class="ui-msep"></div>
+            <div class="ui-mi"><i class="ms">sell</i>Tag after import…</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+  <p class="note">Motion: the create sheet rises with Spring.Gentle; picking a cover or paper updates the preview with Duration.Short color fades, orientation morphs the page with a spring. Import never blocks: pages render progressively and the notebook opens on page 1 right away.</p>
+</div>
+<script>
+(function () {
+  const h = document.documentElement;
+  // Dimmed library backdrops
+  const cv = ['#29324a', '#7a2d2d', '#2f5d50', '#c9a227', '#5b3f8f', '#3b4a6b', '#8a5a2b', '#26535f', '#6b2d4f', '#44543a', '#30304a', '#a23b3b', '#2b5b84', '#9a3f6a'];
+  const tt = ['Physics 201', 'Calculus II', 'Lab Journal', 'Planner', 'أدب عربي', 'Linear Algebra', 'History', 'Sketchbook', 'Organic Chem', 'Biology', 'Quicknotes', 'Exam prep', 'Statistics', 'Spanish B1'];
+  document.querySelectorAll('[data-bg]').forEach(b => b.innerHTML = `<aside class="rail"><div class="rail-logo">B</div><a class="on"><i class="ms">auto_stories</i><small>Library</small></a><a><i class="ms">star</i><small>Favorites</small></a><a><i class="ms">search</i><small>Search</small></a></aside><div class="shelf"><div class="shelf-head"><div><h2>Physics 201</h2><p class="muted">8 notebooks</p></div></div><h4>All</h4><div class="covers">${cv.map((c, i) => `<div class="nb" style="--cv:${c}"><div class="cover"><span class="ttl${i === 4 ? ' ar' : ''}">${tt[i]}</span></div><b>${tt[i]}</b></div>`).join('')}</div></div>`);
+
+  // Create sheet interactions
+  const cover = document.getElementById('bookCover'), page = document.getElementById('bookPage'), spec = document.getElementById('spec'), book = document.getElementById('book');
+  let tName = 'Ruled', size = 'A4', ori = 'Portrait';
+  const upd = () => spec.innerHTML = `<b>${tName}</b> · ${size} · ${ori}<br>Saved on this device`;
+  document.querySelectorAll('#cvs b:not(.add)').forEach(b => b.onclick = () => { document.querySelectorAll('#cvs b').forEach(x => x.classList.toggle('on', x === b)); cover.style.setProperty('--cv', b.style.getPropertyValue('--cv')); cover.querySelector('.ttl').style.color = b.style.getPropertyValue('--cv').trim() === '#d9d4c7' ? '#2b2b30' : ''; });
+  document.querySelectorAll('#tpls .tpl').forEach(t => t.onclick = () => { document.querySelectorAll('#tpls .tpl').forEach(x => x.classList.toggle('on', x === t)); page.className = 'pg2 page ' + t.dataset.t; tName = t.dataset.n; upd(); });
+  document.querySelectorAll('#sizes .chip').forEach(c => c.onclick = () => { document.querySelectorAll('#sizes .chip').forEach(x => x.classList.toggle('on', x === c)); size = c.textContent.replace('fit_screen', ''); upd(); });
+  document.querySelectorAll('#orient span').forEach(o => o.onclick = () => { document.querySelectorAll('#orient span').forEach(x => x.classList.toggle('on', x === o)); book.classList.toggle('land', o.dataset.o === 'l'); ori = o.dataset.o === 'l' ? 'Landscape' : 'Portrait'; upd(); });
+  document.querySelectorAll('.tabs-s').forEach(g => g.querySelectorAll('span').forEach(s => s.onclick = () => g.querySelectorAll('span').forEach(x => x.classList.toggle('on', x === s))));
+  document.querySelectorAll('.cats .chip').forEach(c => c.onclick = () => c.parentElement.querySelectorAll('.chip').forEach(x => x.classList.toggle('on', x === c)));
+  document.querySelectorAll('.pcolors span').forEach(c => c.onclick = () => c.parentElement.querySelectorAll('span').forEach(x => x.classList.toggle('on', x === c)));
+  document.querySelectorAll('.gal-grid .tpl').forEach(t => t.onclick = () => document.querySelectorAll('.gal-grid .tpl').forEach(x => x.classList.toggle('on', x === t)));
+  document.querySelectorAll('#szc .sz').forEach(s => s.onclick = () => document.querySelectorAll('#szc .sz').forEach(x => x.classList.toggle('on', x === s)));
+  document.querySelectorAll('#ob .ob').forEach(s => s.onclick = () => document.querySelectorAll('#ob .ob').forEach(x => x.classList.toggle('on', x === s)));
+  document.querySelectorAll('.tog').forEach(s => s.onclick = () => s.classList.toggle('on'));
+  document.querySelectorAll('.pdfimp .choice').forEach(c => c.onclick = () => document.querySelectorAll('.pdfimp .choice').forEach(x => { x.classList.toggle('on', x === c); x.querySelector('.ui-radio').classList.toggle('on', x === c); }));
+
+  // PDF slide thumbnails
+  const titles = ['Lecture 8', 'Momentum', 'p = m·v', 'Impulse', 'Collisions', 'Elastic', 'Inelastic', 'Example 1', 'Center of mass', 'Rockets', 'Summary', 'Problems', 'Q&A', 'Extra', 'Lab'];
+  document.getElementById('slides').innerHTML = titles.map((t, i) => i < 11
+    ? `<div class="slide${i === 12 ? ' off' : ''}"><svg viewBox="0 0 90 120"><rect width="90" height="20" fill="#1d3c8a"/><text x="6" y="14" font-size="8" fill="#fff" font-family="Inter" font-weight="600">${t}</text>${i % 3 === 1 ? '<path d="M14 90 L 76 90 L 76 50 Z" fill="none" stroke="#333" stroke-width="1.2"/>' : '<rect x="8" y="30" width="60" height="3" fill="#ccc"/><rect x="8" y="38" width="70" height="3" fill="#ddd"/><rect x="8" y="46" width="50" height="3" fill="#ddd"/>'}${i === 2 ? '<rect x="20" y="62" width="50" height="18" fill="none" stroke="#c62828" stroke-width="1.2"/><text x="26" y="75" font-size="10" font-family="serif" font-style="italic">p = m v</text>' : ''}</svg><span class="ui-check on chk"></span><span class="n">${i + 1}</span></div>`
+    : `<div class="slide loading"></div>`).join('');
+
+  // Photos for image import
+  const scenes = [
+    ['#ececE6', '#1d3c8a', 'F = ma'], ['#2c3b33', '#e8e8e0', '∫ x dx'], ['#f4f1ea', '#c62828', 'Mitosis'], ['#e9eef4', '#333', 'TODO'], ['#ddd6c8', '#2e7d32', 'H₂O'], ['#1f2329', '#ffd54f', 'λ = c/f'],
+    ['#f2efe9', '#7b3fe4', 'قصيدة'], ['#e4e9ef', '#1d1d1f', 'Week 8'], ['#efe7da', '#8a5a2b', '1914'], ['#26353a', '#cfe', 'sin²+cos²'], ['#f6f6f2', '#2a4bd7', 'Graph'], ['#ebe3d5', '#c62828', 'Quiz']
+  ];
+  const order = { 0: 1, 1: 2, 5: 3, 9: 4 };
+  document.getElementById('photos').innerHTML = scenes.map(([bg, ink, txt], i) => `<div class="ph${order[i] ? ' sel' : ''}"><svg viewBox="0 0 100 100"><rect width="100" height="100" fill="${bg}"/><rect x="8" y="14" width="84" height="64" rx="2" fill="none" stroke="${ink}" stroke-opacity=".25"/><text x="16" y="52" font-family="Caveat" font-weight="700" font-size="20" fill="${ink}">${txt}</text><path d="M16 64 C 30 58, 50 70, 80 60" fill="none" stroke="${ink}" stroke-width="2" stroke-linecap="round" opacity=".7"/></svg>${order[i] ? `<span class="ord">${order[i]}</span>` : '<span class="ui-check"></span>'}</div>`).join('');
+
+  document.querySelectorAll('.ui-slider').forEach(sl => {
+    const set = e => { const r = sl.getBoundingClientRect(); let v = (e.clientX - r.left) / r.width; if (h.dir === 'rtl') v = 1 - v; sl.style.setProperty('--v', Math.max(0, Math.min(100, v * 100)).toFixed(0) + '%'); };
+    sl.addEventListener('pointerdown', e => { sl.setPointerCapture(e.pointerId); set(e); sl.onpointermove = set; });
+    sl.addEventListener('pointerup', () => sl.onpointermove = null);
+  });
+})();
+</script>
+</body>
+</html>

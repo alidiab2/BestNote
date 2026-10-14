@@ -1,0 +1,405 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BestNote · Phone, Fold, DeX</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Sans+Arabic:wght@400;500;600&family=Caveat:wght@500;700&family=Material+Symbols+Rounded:opsz,wght,FILL@24,400,0..1&family=Fraunces:opsz,wght@9..144,500;9..144,600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../tokens.css">
+<link rel="stylesheet" href="../board.css">
+<script src="../shell.js"></script>
+<style>
+  .ui-flow { gap: 34px; }
+  .ui-flow .variant-label { max-width: 360px; margin: 0 0 8px; }
+  .paperbg { background: #E9E6DF !important; }
+  [data-theme="dark"] .paperbg, [data-look="studio"] .paperbg { background: #121214 !important; }
+
+  /* phone library */
+  .pl { flex-direction: column; padding: 6px 16px 0; }
+  .pl .hd { display: flex; align-items: center; gap: 6px; margin: 6px 0 10px; }
+  .pl .hd h2 { font: 600 30px var(--font-display); flex: 1; }
+  [data-look="galaxy"] .pl .hd h2 { font-weight: 700; font-size: 34px; letter-spacing: -.03em; }
+  .pl .search { width: 100%; margin-bottom: 12px; padding: 10px 14px; }
+  .pl .chips { display: flex; gap: 6px; overflow: hidden; margin-bottom: 14px; }
+  .pl .frow { display: flex; gap: 8px; overflow: hidden; margin-bottom: 14px; }
+  .pl .frow span { display: flex; align-items: center; gap: 6px; padding: 8px 12px; border-radius: 12px; background: var(--chrome-solid); border: 1px solid var(--outline); font-size: 13px; white-space: nowrap; }
+  [data-look="galaxy"] .pl .frow span { border-color: transparent; border-radius: 16px; }
+  .pl .frow .ms { font-size: 18px; color: var(--c); font-variation-settings: "FILL" 1; }
+  .pl h4 { margin: 0 0 8px; }
+  .pl .covers.two { gap: 14px 16px; }
+  .pl .nb small { display: block; }
+  .bnav { position: absolute; left: 0; right: 0; bottom: 0; height: 72px; background: var(--chrome-solid); border-top: 1px solid var(--outline); display: flex; justify-content: space-around; align-items: center; padding-bottom: 6px; }
+  .bnav span { display: flex; flex-direction: column; align-items: center; gap: 3px; font-size: 11px; color: var(--ink-3); }
+  .bnav span i { padding: 3px 18px; border-radius: 999px; }
+  .bnav span.on { color: var(--ink); font-weight: 600; }
+  .bnav span.on i { background: var(--accent-soft); color: var(--accent); font-variation-settings: "FILL" 1; }
+  .pl .fab { bottom: 88px; display: grid; place-items: center; }
+  [data-look="galaxy"] .pl .fab { border-radius: 50%; }
+
+  /* phone editor */
+  .pe { flex-direction: column; }
+  .pe-top { height: 52px; display: flex; align-items: center; gap: 4px; padding: 0 6px; background: var(--chrome-solid); border-bottom: 1px solid var(--outline); }
+  .pe-top .tt { flex: 1; min-width: 0; }
+  .pe-top .tt b { display: block; font-size: 15px; line-height: 1.1; }
+  .pe-top .tt small { font-size: 11px; color: var(--ink-3); }
+  .pe-top .ui-ib { width: 36px; height: 36px; }
+  .pe-cv { flex: 1; position: relative; overflow: hidden; padding: 12px 10px; }
+  .pe-cv .page { width: 100%; height: 440px; border-radius: 2px; }
+  .pe-cv .page svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .pe-cv .page-chip { bottom: 96px; font-size: 11px; }
+  .ptb { position: absolute; left: 10px; right: 10px; bottom: 14px; height: 60px; background: var(--chrome); border: 1px solid var(--outline); border-radius: 22px; box-shadow: var(--shadow-2); display: flex; align-items: center; justify-content: space-between; padding: 0 6px; }
+  [data-look="studio"] .ptb { backdrop-filter: var(--glass); }
+  [data-look="galaxy"] .ptb { border-radius: 30px; }
+  [data-look="paper"] .ptb { border-radius: 999px; }
+  .ptb .tool { width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; color: var(--ink-2); position: relative; }
+  .ptb .tool.on { background: var(--accent-soft); color: var(--accent); }
+  .ptb .tool.on .ms { font-variation-settings: "FILL" 1; }
+  .ptb .tool .dot { position: absolute; bottom: 3px; width: 6px; height: 6px; border-radius: 50%; background: var(--c); }
+  .ptb .sw { width: 22px; height: 22px; border-radius: 50%; background: var(--c); box-shadow: inset 0 0 0 1px rgba(0,0,0,.15); }
+  .ptb .sw.on { box-shadow: 0 0 0 2px var(--chrome-solid), 0 0 0 4px var(--accent); }
+  .ptb .sep { width: 1px; height: 26px; background: var(--outline); }
+  .psheet { left: 0 !important; right: 0; transform: none !important; padding: 2px 18px 18px; border-radius: var(--r-sheet) var(--r-sheet) 30px 30px !important; }
+  .psheet .seg { margin: 10px 0; }
+  .psheet .preview-stroke { height: 64px; }
+  .psheet .row { display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--ink-2); margin: 10px 0; }
+  .psheet .row span:first-child { width: 80px; }
+  .psheet .pens-row b { width: 30px; height: 30px; }
+
+  /* Fold flex mode */
+  .device.flexdev { width: 600px; height: 680px; background: transparent; box-shadow: none; padding: 0; border-radius: 0; }
+  .device.flexdev > * { border-radius: 0; }
+  .fx-top { height: 390px; background: #0e0e10; border-radius: 30px 30px 8px 8px !important; padding: 12px 12px 6px; display: flex; flex-direction: column; box-shadow: var(--shadow-3); }
+  .fx-top .scr, .fx-bot .scr { flex: 1; border-radius: 20px 20px 4px 4px; overflow: hidden; }
+  .fx-hinge { height: 14px; margin: 0 18px; background: linear-gradient(#1a1a1d, #3a3a40 50%, #1a1a1d); border-radius: 6px !important; }
+  .fx-botwrap { perspective: 2400px; padding: 0 30px; }
+  .fx-bot { height: 340px; background: #0e0e10; border-radius: 8px 8px 30px 30px !important; padding: 6px 12px 12px; display: flex; flex-direction: column; transform: rotateX(58deg); transform-origin: top center; box-shadow: 0 40px 50px -20px rgba(0,0,0,.45); }
+  .fx-bot .scr { border-radius: 4px 4px 20px 20px; background: var(--chrome-solid) !important; flex-direction: column; padding: 14px 16px; gap: 12px; }
+  .fx-cv { flex-direction: column; }
+  .fx-cv .bar { display: flex; align-items: center; gap: 8px; padding: 6px 10px; background: var(--chrome-solid); font-size: 13px; border-bottom: 1px solid var(--outline); }
+  .fx-cv .page { margin: 10px auto 0; width: 92%; flex: 1; border-radius: 3px 3px 0 0; }
+  .fx-cv .page svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .fx-tools { display: flex; justify-content: space-between; align-items: center; }
+  .fx-tools .tool { width: 50px; height: 50px; border-radius: 16px; display: grid; place-items: center; color: var(--ink-2); background: var(--surface); }
+  .fx-tools .tool .ms { font-size: 26px; }
+  .fx-tools .tool.on { background: var(--accent); color: var(--on-accent); }
+  .fx-colors { display: flex; justify-content: space-between; }
+  .fx-colors b { width: 34px; height: 34px; border-radius: 50%; background: var(--c); box-shadow: inset 0 0 0 1px rgba(0,0,0,.15); }
+  .fx-colors b.on { box-shadow: 0 0 0 3px var(--chrome-solid), 0 0 0 5px var(--accent); }
+  .fx-pages { display: flex; gap: 10px; }
+  .fx-pages .pg { width: 52px; height: 68px; border-radius: 4px; box-shadow: var(--shadow-1); flex: none; }
+  .fx-pages .pg.on { box-shadow: 0 0 0 2px var(--accent); }
+  .fx-cap { text-align: center; font-size: 12px; color: var(--ink-3); margin-top: -110px; }
+
+  /* Fold unfolded */
+  .device.foldin { width: 860px; height: 740px; border-radius: 30px; display: flex; flex-direction: column; }
+  .device.foldin > .scr { flex: 1; overflow: hidden; border-radius: 0 0 22px 22px; background: var(--surface); }
+  .foldin .crease { position: absolute; top: 0; bottom: 0; left: 50%; width: 1px; background: linear-gradient(transparent, rgba(0,0,0,.08), transparent); pointer-events: none; z-index: 5; }
+  .two { display: grid !important; grid-template-columns: 1fr 1fr; }
+  .two .left { display: flex; border-inline-end: 1px solid var(--outline); min-width: 0; }
+  .two .left .rail { width: 64px; }
+  .two .left .rail a { width: 52px; }
+  .two .left .shelf { padding: 16px; }
+  .two .left .covers { grid-template-columns: repeat(3, 1fr); gap: 14px; }
+  .two .right { display: flex; flex-direction: column; position: relative; }
+  .two .right .ed-top { gap: 6px; padding: 0 10px; }
+  .two .right .canvas { cursor: default; padding-top: 50px; }
+  .two .right .canvas .page { width: 340px; height: 470px; }
+  .two .right .toolbar-pill { position: absolute; top: 60px; left: 50%; transform: translateX(-50%); z-index: 3; }
+
+  /* DeX */
+  .dex { background: radial-gradient(60% 80% at 20% 20%, #2d4a8a, transparent 60%), radial-gradient(60% 80% at 90% 80%, #5a3a7a, transparent 60%), #141828 !important; position: relative; }
+  .dex-task { position: absolute; left: 0; right: 0; bottom: 0; height: 46px; background: rgba(20, 20, 26, .85); backdrop-filter: blur(10px); display: flex; align-items: center; gap: 14px; padding: 0 14px; color: #fff; font-size: 12px; }
+  .dex-task .ic { width: 32px; height: 32px; border-radius: 10px; display: grid; place-items: center; }
+  .dex-task .ic.bn { background: var(--accent); color: var(--on-accent); font: 600 18px var(--font-display); box-shadow: 0 0 0 2px rgba(255,255,255,.3); }
+  .dex-task .ic .ms { font-size: 20px; color: #fff; }
+  .win { position: absolute; left: 70px; top: 30px; width: 1100px; height: 660px; border-radius: 12px; overflow: hidden; box-shadow: 0 30px 80px rgba(0,0,0,.5); display: flex; flex-direction: column; background: var(--surface); border: 1px solid rgba(255,255,255,.08); }
+  .win-t { height: 38px; flex: none; display: flex; align-items: center; gap: 10px; padding: 0 8px 0 12px; background: var(--chrome-solid); border-bottom: 1px solid var(--outline); font-size: 13px; }
+  .win-t .lg { width: 20px; height: 20px; border-radius: 6px; background: var(--accent); color: var(--on-accent); display: grid; place-items: center; font: 600 12px var(--font-display); }
+  .win-t .ctl { display: flex; margin-inline-start: auto; }
+  .win-t .ctl span { width: 40px; height: 30px; display: grid; place-items: center; color: var(--ink-2); border-radius: 6px; }
+  .win-t .ctl span:last-child:hover { background: var(--danger); color: #fff; }
+  .win-t .ctl .ms { font-size: 18px; }
+  .win-b { flex: 1; display: flex; min-height: 0; }
+  .side-th { width: 118px; background: var(--chrome-solid); border-inline-end: 1px solid var(--outline); padding: 12px; display: flex; flex-direction: column; gap: 10px; overflow: hidden; }
+  .side-th .thumb .pg { width: 100%; height: auto; }
+  .side-th .thumb { font-size: 11px; }
+  .win .editor { flex: 1; position: relative; display: flex; flex-direction: column; }
+  .win .canvas { cursor: default; padding-top: 64px; }
+  .win .canvas .page { width: 520px; height: 680px; }
+  .win .toolbar-pill { position: absolute; top: 58px; left: 50%; transform: translateX(-50%); z-index: 5; }
+  .sel-box { position: absolute; border: 1.5px dashed var(--accent); border-radius: 4px; background: color-mix(in srgb, var(--accent) 6%, transparent); }
+  .sel-box i { position: absolute; width: 10px; height: 10px; border-radius: 50%; background: var(--chrome-solid); border: 2px solid var(--accent); }
+  .tip { position: absolute; z-index: 8; background: var(--ink); color: var(--surface); font-size: 12px; padding: 5px 9px; border-radius: 7px; white-space: nowrap; display: flex; gap: 6px; align-items: center; }
+  .tip .ui-kbd { height: 18px; min-width: 18px; font-size: 10.5px; padding: 0 5px; background: transparent; color: inherit; border-color: color-mix(in srgb, var(--surface) 40%, transparent); box-shadow: none; }
+  .mouse { position: absolute; z-index: 30; width: 22px; height: 30px; pointer-events: none; filter: drop-shadow(0 2px 2px rgba(0,0,0,.35)); }
+  .ctx { min-width: 270px; font-size: 13.5px; }
+  .ctx .ui-mi { padding: 7px 10px; }
+  .ctx .sub { position: absolute; inset-inline-start: 100%; top: 120px; margin-inline-start: 4px; min-width: 190px; }
+  .ctx .sub .sw { width: 18px; height: 18px; border-radius: 50%; background: var(--c); }
+
+  /* shortcuts overlay */
+  .kb { width: 900px; padding: 20px 24px; z-index: 20; }
+  .kb-h { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
+  .kb-h h3 { font: 600 22px var(--font-display); flex: 1; }
+  .kb-h .ui-field { width: 260px; padding: 8px 12px; font-size: 13.5px; }
+  .kb-g { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px 26px; }
+  .kb-g h5 { font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); margin: 12px 0 4px; }
+  .kb-g .k { display: flex; align-items: center; gap: 6px; padding: 5px 0; font-size: 13px; border-bottom: 1px dashed var(--outline); }
+  .kb-g .k span:first-child { flex: 1; color: var(--ink-2); }
+  .kb-g .k .ui-kbd { height: 22px; min-width: 22px; font-size: 11px; }
+  .kb-g .k.hl span:first-child { color: var(--accent); font-weight: 600; }
+  .kb-foot { margin-top: 14px; font-size: 12px; color: var(--ink-3); display: flex; gap: 6px; align-items: center; }
+</style>
+</head>
+<body>
+<div class="page-wrap">
+  <h1>Phone, Fold, DeX</h1>
+  <p class="lead muted">The same app across sizes. Phones get a 2-column library and a compact toolbar at the bottom, within thumb reach. Galaxy Fold in Flex mode puts the page on top and tools on the bottom half. In DeX, BestNote becomes a desktop window with right-click menus and keyboard shortcuts.</p>
+  <div class="variants">
+
+    <div>
+      <div class="variant-label">1 · Phone: library, editor with bottom toolbar, pen settings as a sheet</div>
+      <div class="ui-flow">
+        <div>
+          <div class="variant-label">Library · 2 columns</div>
+          <div class="device phone">
+            <div class="status"><span>9:41</span><span><i class="ms">signal_cellular_alt</i><i class="ms">battery_full</i></span></div>
+            <div class="scr pl">
+              <div class="hd"><h2>Library</h2><span class="ui-ib"><i class="ms">sort</i></span><span class="ui-ib"><i class="ms">more_vert</i></span></div>
+              <div class="search"><i class="ms">search</i><span>Search notes &amp; handwriting</span></div>
+              <div class="frow"><span style="--c:#2a4bd7"><i class="ms">folder</i>Physics 201</span><span style="--c:#2e7d32"><i class="ms">folder</i>Calculus II</span><span style="--c:#7b3fe4"><i class="ms">folder</i>أدب عربي</span></div>
+              <h4>Recent</h4>
+              <div class="covers two">
+                <div class="nb" style="--cv:#29324a"><div class="cover"><span class="ttl">Physics 201</span><span class="sub">Mechanics</span></div><b>Physics 201</b><small class="muted">Today · p.14</small></div>
+                <div class="nb" style="--cv:#7a2d2d"><div class="cover lined"><span class="ttl">Calculus II</span></div><b>Calculus II</b><small class="muted">Yesterday</small></div>
+                <div class="nb"><div class="cover pdfc"><span>PDF</span><div class="lines"></div></div><b>Lecture 7 slides</b><small class="muted">48 pages</small></div>
+                <div class="nb" style="--cv:#5b3f8f"><div class="cover"><span class="ttl ar">أدب عربي</span></div><b>أدب عربي</b><small class="muted">Oct 10</small></div>
+              </div>
+              <button class="fab"><i class="ms">add</i></button>
+              <div class="bnav"><span class="on"><i class="ms">auto_stories</i>Library</span><span><i class="ms">star</i>Favorites</span><span><i class="ms">search</i>Search</span><span><i class="ms">document_scanner</i>Board</span></div>
+            </div>
+          </div>
+        </div>
+        <div>
+          <div class="variant-label">Editor · compact toolbar at the bottom</div>
+          <div class="device phone">
+            <div class="status"><span>9:41</span><span><i class="ms">signal_cellular_alt</i><i class="ms">battery_full</i></span></div>
+            <div class="scr pe paperbg">
+              <div class="pe-top"><span class="ui-ib"><i class="ms flip">arrow_back</i></span><div class="tt"><b>Physics 201</b><small>Page 14 of 22</small></div><span class="ui-ib"><i class="ms">undo</i></span><span class="ui-ib"><i class="ms">grid_view</i></span><span class="ui-ib"><i class="ms">more_vert</i></span></div>
+              <div class="pe-cv">
+                <div class="page ruled"><div class="margin-line" style="left:30px"></div>
+                  <svg viewBox="0 0 340 440"><text x="40" y="58" class="hand" style="font-size:26px; fill:#1d3c8a">Lecture 7 · Momentum</text><text x="40" y="100" class="hand sm">p = m · v</text><path d="M34 76 H 140 V 110 H 34 Z" fill="none" stroke="#c62828" stroke-width="2"/><text x="40" y="142" class="hand sm">impulse J = Δp</text><text x="40" y="184" class="hand sm" style="fill:#2e7d32">conserved if isolated</text><path d="M60 330 L 280 330 L 280 230 Z" fill="none" stroke="#1d2a4a" stroke-width="2.4" stroke-linejoin="round"/><path d="M200 270 V 312 M 194 304 L 200 314 L 206 304" fill="none" stroke="#c62828" stroke-width="2.4"/></svg>
+                </div>
+                <div class="page-chip">14 / 22</div>
+                <div class="ptb">
+                  <span class="tool on"><i class="ms">ink_pen</i><i class="dot" style="--c:#1d1d1f"></i></span><span class="tool"><i class="ms">ink_highlighter</i></span><span class="tool"><i class="ms">ink_eraser</i></span><span class="tool"><i class="ms">lasso_select</i></span><span class="sep"></span><span class="sw on" style="--c:#1d1d1f"></span><span class="sw" style="--c:#2a4bd7"></span><span class="sw" style="--c:#c62828"></span><span class="tool"><i class="ms">add_circle</i></span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div>
+          <div class="variant-label">Tap the pen again · settings sheet</div>
+          <div class="device phone">
+            <div class="status"><span>9:41</span><span><i class="ms">signal_cellular_alt</i><i class="ms">battery_full</i></span></div>
+            <div class="scr pe paperbg">
+              <div class="pe-top"><span class="ui-ib"><i class="ms flip">arrow_back</i></span><div class="tt"><b>Physics 201</b><small>Page 14 of 22</small></div><span class="ui-ib"><i class="ms">undo</i></span><span class="ui-ib"><i class="ms">more_vert</i></span></div>
+              <div class="pe-cv"><div class="page ruled"><svg viewBox="0 0 340 440"><text x="40" y="58" class="hand" style="font-size:26px; fill:#1d3c8a">Lecture 7 · Momentum</text><text x="40" y="100" class="hand sm">p = m · v</text></svg></div></div>
+              <div class="ui-scrim" style="background:rgba(10,10,18,.2)"></div>
+              <div class="ui-sheet bottom psheet">
+                <div class="ui-grab"></div>
+                <div style="display:flex; justify-content:space-between; align-items:baseline"><b>Fountain pen</b><span class="muted">0.5 mm</span></div>
+                <div class="seg"><span class="on">Fountain</span><span>Ball</span><span>Brush</span><span>Pencil</span></div>
+                <div class="preview-stroke"><svg viewBox="0 0 300 64"><path d="M14 44 C 60 10, 100 56, 150 28 S 240 16, 286 38"/></svg></div>
+                <div class="row"><span>Thickness</span><div class="ui-slider" style="--v:42%"><i></i></div></div>
+                <div class="row"><span>Pressure</span><div class="ui-slider" style="--v:70%"><i></i></div></div>
+                <div class="pens-row" style="justify-content:space-between"><b style="--c:#1d1d1f" class="on"></b><b style="--c:#2a4bd7"></b><b style="--c:#c62828"></b><b style="--c:#2e7d32"></b><b style="--c:#7b3fe4"></b><b style="--c:#ef6c00"></b><b class="add">＋</b></div>
+                <button class="btn ghost full"><i class="ms">star</i>Save as favorite</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div class="variant-label">2 · Galaxy Fold: Flex mode (half-folded) and unfolded two-pane</div>
+      <div class="ui-flow">
+        <div>
+          <div class="variant-label">Flex mode · page on top, tools below</div>
+          <div class="device flexdev">
+            <div class="fx-top">
+              <div class="scr fx-cv paperbg">
+                <div class="bar"><i class="ms flip" style="font-size:20px">arrow_back</i><b>Organic Chem</b><span class="muted">· p.6</span><span class="grow"></span><i class="ms" style="font-size:20px">zoom_in</i><span class="muted">140%</span></div>
+                <div class="page ruled"><svg viewBox="0 0 480 300"><text x="30" y="46" class="hand" style="fill:#1d3c8a">SN2 mechanism</text><text x="30" y="92" class="hand sm">Nu⁻ attacks from the back side</text><path d="M60 170 C 120 120, 180 210, 250 160" fill="none" stroke="#c62828" stroke-width="2.4"/><path d="M244 152 l 8 8 l -10 4" fill="none" stroke="#c62828" stroke-width="2.4"/><text x="280" y="176" class="hand sm">inversion!</text><circle cx="120" cy="230" r="18" fill="none" stroke="#1d2a4a" stroke-width="2"/><text x="112" y="237" class="hand sm" style="font-size:18px">C</text></svg></div>
+              </div>
+            </div>
+            <div class="fx-hinge"></div>
+            <div class="fx-botwrap"><div class="fx-bot">
+              <div class="scr">
+                <div class="fx-tools"><span class="tool on"><i class="ms">ink_pen</i></span><span class="tool"><i class="ms">edit</i></span><span class="tool"><i class="ms">ink_highlighter</i></span><span class="tool"><i class="ms">ink_eraser</i></span><span class="tool"><i class="ms">lasso_select</i></span><span class="tool"><i class="ms">undo</i></span></div>
+                <div class="fx-colors"><b style="--c:#1d1d1f"></b><b style="--c:#2a4bd7"></b><b class="on" style="--c:#c62828"></b><b style="--c:#2e7d32"></b><b style="--c:#7b3fe4"></b><b style="--c:#ef6c00"></b><b style="--c:#ffd54f"></b></div>
+                <div class="fx-pages"><div class="pg ruled-s"></div><div class="pg grid-s"></div><div class="pg ruled-s"></div><div class="pg ruled-s on"></div><div class="pg dots-s"></div><div class="pg ruled-s"></div></div>
+              </div>
+            </div></div>
+            <div class="fx-cap">Prop it on a desk: the bottom half becomes a big tool tray.</div>
+          </div>
+        </div>
+        <div>
+          <div class="variant-label">Unfolded · library and notebook side by side</div>
+          <div class="device foldin">
+            <div class="status"><span>9:41</span><span><i class="ms">wifi</i><i class="ms">battery_full</i></span></div>
+            <div class="scr two">
+              <div class="crease"></div>
+              <div class="left">
+                <aside class="rail"><div class="rail-logo" style="background:var(--accent); color:var(--on-accent)">B</div><a class="on"><i class="ms">auto_stories</i><small>Library</small></a><a><i class="ms">star</i><small>Favorites</small></a><a><i class="ms">search</i><small>Search</small></a></aside>
+                <div class="shelf">
+                  <div class="shelf-head"><div><h2 style="font-size:22px">Library</h2></div><span class="ui-ib"><i class="ms">add</i></span></div>
+                  <h4>Recent</h4>
+                  <div class="covers">
+                    <div class="nb" style="--cv:#29324a"><div class="cover"><span class="ttl">Physics</span></div><b>Physics 201</b></div>
+                    <div class="nb" style="--cv:#6b2d4f"><div class="cover" style="box-shadow:0 0 0 3px var(--accent)"><span class="ttl">Organic Chem</span></div><b>Organic Chem</b></div>
+                    <div class="nb" style="--cv:#7a2d2d"><div class="cover lined"><span class="ttl">Calc II</span></div><b>Calculus II</b></div>
+                    <div class="nb" style="--cv:#2f5d50"><div class="cover dots"><span class="ttl">Lab</span></div><b>Lab Journal</b></div>
+                    <div class="nb" style="--cv:#5b3f8f"><div class="cover"><span class="ttl ar">أدب</span></div><b>أدب عربي</b></div>
+                    <div class="nb" style="--cv:#c9a227"><div class="cover"><span class="ttl">Planner</span></div><b>Planner</b></div>
+                  </div>
+                </div>
+              </div>
+              <div class="right paperbg">
+                <div class="ed-top"><b style="font-size:14px">Organic Chem</b><span class="muted">p.6</span><span class="grow"></span><span class="icon"><i class="ms">open_in_full</i></span></div>
+                <div class="toolbar-pill mini"><span class="tool on"><i class="ms">ink_pen</i></span><span class="tool"><i class="ms">ink_highlighter</i></span><span class="tool"><i class="ms">ink_eraser</i></span><span class="tool"><i class="ms">lasso_select</i></span><span class="sep"></span><span class="tool"><i class="ms">undo</i></span></div>
+                <div class="canvas"><div class="page ruled"><svg class="ink" viewBox="0 0 340 470"><text x="24" y="50" class="hand" style="fill:#1d3c8a; font-size:26px">SN2 mechanism</text><text x="24" y="92" class="hand sm">back-side attack</text><text x="24" y="130" class="hand sm" style="fill:#c62828">→ inversion</text></svg></div></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div class="variant-label">3 · Samsung DeX: desktop window, right-click on a lasso selection, hover tooltips with shortcuts</div>
+      <div class="device desktop">
+        <div class="scr dex">
+          <div class="win">
+            <div class="win-t"><span class="lg">B</span><b>BestNote</b><span class="muted">· Physics 201 · page 14</span><div class="ctl"><span><i class="ms">minimize</i></span><span><i class="ms">crop_square</i></span><span><i class="ms">close</i></span></div></div>
+            <div class="win-b">
+              <div class="side-th">
+                <div class="thumb"><div class="pg ruled-s w"></div>12</div>
+                <div class="thumb"><div class="pg ruled-s"></div>13</div>
+                <div class="thumb sel"><div class="pg ruled-s w"></div>14</div>
+                <div class="thumb"><div class="pg grid-s"></div>15</div>
+              </div>
+              <div class="editor paperbg">
+                <div class="ed-top"><div class="doc-tabs"><span class="on">Physics 201</span><span>Lecture 7 slides</span><span class="plus">＋</span></div><span class="grow"></span><span class="icon"><i class="ms">search</i></span><span class="icon"><i class="ms">vertical_split</i></span><span class="icon"><i class="ms">more_horiz</i></span></div>
+                <div class="toolbar-pill">
+                  <span class="tool"><i class="ms">ink_pen</i><i class="dot" style="--c:#1d1d1f"></i></span><span class="tool"><i class="ms">ink_highlighter</i></span><span class="tool"><i class="ms">ink_eraser</i></span><span class="tool on"><i class="ms">lasso_select</i></span><span class="tool"><i class="ms">category</i></span><span class="tool"><i class="ms">text_fields</i></span><span class="tool"><i class="ms">add_photo_alternate</i></span><span class="sep"></span><span class="tool"><i class="ms">undo</i></span><span class="tool"><i class="ms">redo</i></span>
+                </div>
+                <div class="tip" style="left:calc(50% - 120px); top:108px">Highlighter <span class="ui-kbd">H</span></div>
+                <div class="canvas">
+                  <div class="page ruled"><div class="margin-line"></div>
+                    <svg class="ink" viewBox="0 0 520 680">
+                      <text x="70" y="70" class="hand" style="fill:#1d3c8a; font-size:34px">Lecture 7 · Oct 14</text>
+                      <text x="70" y="154" class="hand">Linear momentum p = m·v</text>
+                      <text x="70" y="196" class="hand" style="fill:#c62828">(vector!)</text>
+                      <text x="70" y="280" class="hand">J = Δp = F·Δt</text>
+                      <g class="sketch"><path d="M90 520 L 400 520 L 400 380 Z"/><rect x="240" y="420" width="46" height="32" transform="rotate(-24 263 436)"/><path class="red" d="M263 440 L 263 506"/><path class="red" d="M256 498 L 263 508 L 270 498"/></g>
+                    </svg>
+                    <div class="sel-box" style="left:60px; top:240px; width:330px; height:300px"><i style="left:-6px; top:-6px"></i><i style="right:-6px; top:-6px"></i><i style="left:-6px; bottom:-6px"></i><i style="right:-6px; bottom:-6px"></i></div>
+                  </div>
+                </div>
+                <div class="ui-menu ctx" style="left:440px; top:236px">
+                  <div class="ui-mi"><i class="ms">content_cut</i>Cut<span class="end"><span class="ui-kbd">Ctrl</span><span class="ui-kbd">X</span></span></div>
+                  <div class="ui-mi"><i class="ms">content_copy</i>Copy<span class="end"><span class="ui-kbd">Ctrl</span><span class="ui-kbd">C</span></span></div>
+                  <div class="ui-mi"><i class="ms">library_add</i>Duplicate<span class="end"><span class="ui-kbd">Ctrl</span><span class="ui-kbd">D</span></span></div>
+                  <div class="ui-msep"></div>
+                  <div class="ui-mi hot"><i class="ms">palette</i>Change color<span class="end"><i class="ms flip" style="font-size:18px">chevron_right</i></span></div>
+                  <div class="ui-mi"><i class="ms">match_case</i>Convert to text</div>
+                  <div class="ui-mi"><i class="ms">auto_fix_high</i>Beautify handwriting</div>
+                  <div class="ui-mi"><i class="ms">flip_to_front</i>Bring to front<span class="end"><span class="ui-kbd">Ctrl</span><span class="ui-kbd">]</span></span></div>
+                  <div class="ui-msep"></div>
+                  <div class="ui-mi danger"><i class="ms">delete</i>Delete<span class="end"><span class="ui-kbd">Del</span></span></div>
+                  <div class="ui-menu sub">
+                    <div class="ui-mi"><span class="sw" style="--c:#1d1d1f"></span>Black</div>
+                    <div class="ui-mi"><span class="sw" style="--c:#2a4bd7"></span>Blue</div>
+                    <div class="ui-mi hot"><span class="sw" style="--c:#c62828"></span>Red</div>
+                    <div class="ui-mi"><span class="sw" style="--c:#2e7d32"></span>Green</div>
+                    <div class="ui-msep"></div>
+                    <div class="ui-mi"><i class="ms">colorize</i>More colors…</div>
+                  </div>
+                </div>
+                <svg class="mouse" style="left:432px; top:228px" viewBox="0 0 22 30"><path d="M2 2 L 2 24 L 8 18 L 12 28 L 16 26 L 12 17 L 20 17 Z" fill="#fff" stroke="#111" stroke-width="1.5" stroke-linejoin="round"/></svg>
+              </div>
+            </div>
+          </div>
+          <div class="dex-task"><span class="ic"><i class="ms">apps</i></span><span class="ic bn">B</span><span class="ic" style="background:#1a73e8"><i class="ms">public</i></span><span class="ic" style="background:#f5a623"><i class="ms">folder</i></span><span class="grow"></span><i class="ms" style="font-size:18px">wifi</i><i class="ms" style="font-size:18px">volume_up</i><span>9:41</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div class="variant-label">4 · DeX: keyboard shortcut overlay (Ctrl + /), searchable</div>
+      <div class="device desktop">
+        <div class="scr dex">
+          <div class="win">
+            <div class="win-t"><span class="lg">B</span><b>BestNote</b><span class="muted">· Physics 201</span><div class="ctl"><span><i class="ms">minimize</i></span><span><i class="ms">crop_square</i></span><span><i class="ms">close</i></span></div></div>
+            <div class="win-b" style="position:relative">
+              <div class="side-th"><div class="thumb"><div class="pg ruled-s w"></div>13</div><div class="thumb sel"><div class="pg ruled-s w"></div>14</div><div class="thumb"><div class="pg grid-s"></div>15</div></div>
+              <div class="editor paperbg"><div class="ed-top"><div class="doc-tabs"><span class="on">Physics 201</span></div></div><div class="canvas"><div class="page ruled"></div></div></div>
+              <div class="ui-scrim"></div>
+              <div class="ui-sheet center kb">
+                <div class="kb-h"><h3>Keyboard shortcuts</h3><div class="ui-field focus"><i class="ms">search</i><span>page<span class="ui-caret"></span></span></div><span class="ui-ib"><i class="ms">close</i></span></div>
+                <div class="kb-g">
+                  <div>
+                    <h5>Tools</h5>
+                    <div class="k"><span>Pen</span><span class="ui-kbd">P</span></div>
+                    <div class="k"><span>Highlighter</span><span class="ui-kbd">H</span></div>
+                    <div class="k"><span>Eraser</span><span class="ui-kbd">E</span></div>
+                    <div class="k"><span>Lasso</span><span class="ui-kbd">L</span></div>
+                    <div class="k"><span>Text box</span><span class="ui-kbd">T</span></div>
+                    <div class="k"><span>Shapes</span><span class="ui-kbd">S</span></div>
+                    <div class="k"><span>Temporary eraser</span><span class="ui-kbd">Hold Shift</span></div>
+                  </div>
+                  <div>
+                    <h5>Edit</h5>
+                    <div class="k"><span>Undo</span><span class="ui-kbd">Ctrl</span><span class="ui-kbd">Z</span></div>
+                    <div class="k"><span>Redo</span><span class="ui-kbd">Ctrl</span><span class="ui-kbd">Shift</span><span class="ui-kbd">Z</span></div>
+                    <div class="k"><span>Copy / Paste</span><span class="ui-kbd">Ctrl</span><span class="ui-kbd">C</span><span class="ui-kbd">V</span></div>
+                    <div class="k"><span>Select all on page</span><span class="ui-kbd">Ctrl</span><span class="ui-kbd">A</span></div>
+                    <h5>View</h5>
+                    <div class="k"><span>Zoom in / out</span><span class="ui-kbd">Ctrl</span><span class="ui-kbd">+</span><span class="ui-kbd">−</span></div>
+                    <div class="k"><span>Fit page</span><span class="ui-kbd">Ctrl</span><span class="ui-kbd">0</span></div>
+                    <div class="k"><span>Split view</span><span class="ui-kbd">Ctrl</span><span class="ui-kbd">\</span></div>
+                  </div>
+                  <div>
+                    <h5>Pages · matches “page”</h5>
+                    <div class="k hl"><span>New page after this one</span><span class="ui-kbd">Ctrl</span><span class="ui-kbd">Enter</span></div>
+                    <div class="k hl"><span>Next / previous page</span><span class="ui-kbd">PgDn</span><span class="ui-kbd">PgUp</span></div>
+                    <div class="k hl"><span>Go to page…</span><span class="ui-kbd">Ctrl</span><span class="ui-kbd">G</span></div>
+                    <div class="k hl"><span>Page manager</span><span class="ui-kbd">Ctrl</span><span class="ui-kbd">Shift</span><span class="ui-kbd">M</span></div>
+                    <h5>App</h5>
+                    <div class="k"><span>Search everywhere</span><span class="ui-kbd">Ctrl</span><span class="ui-kbd">F</span></div>
+                    <div class="k"><span>Next notebook tab</span><span class="ui-kbd">Ctrl</span><span class="ui-kbd">Tab</span></div>
+                    <div class="k"><span>Present</span><span class="ui-kbd">F5</span></div>
+                  </div>
+                </div>
+                <div class="kb-foot"><i class="ms" style="font-size:16px">mouse</i>Mouse: right-click for menus · Ctrl + scroll to zoom · middle-drag to pan · hold <span class="ui-kbd">Ctrl</span> <span class="ui-kbd">/</span> any time to see this</div>
+              </div>
+            </div>
+          </div>
+          <div class="dex-task"><span class="ic"><i class="ms">apps</i></span><span class="ic bn">B</span><span class="ic" style="background:#1a73e8"><i class="ms">public</i></span><span class="grow"></span><span>9:41</span></div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+  <p class="note">Layout follows width classes: compact (phone) gets the bottom toolbar and bottom navigation; medium (Fold, small tablets) a nav rail; expanded (Tab S, DeX) the folder pane and two-page views. In Flex mode the hinge is never part of the canvas.</p>
+</div>
+<script>
+document.querySelectorAll('.ptb .tool').forEach(t => t.onclick = () => { t.parentElement.querySelectorAll('.tool').forEach(x => x.classList.toggle('on', x === t)); });
+document.querySelectorAll('.fx-tools .tool').forEach(t => t.onclick = () => { t.parentElement.querySelectorAll('.tool').forEach(x => x.classList.toggle('on', x === t)); });
+document.querySelectorAll('.fx-colors b').forEach(t => t.onclick = () => { t.parentElement.querySelectorAll('b').forEach(x => x.classList.toggle('on', x === t)); });
+document.querySelectorAll('.seg').forEach(g => g.querySelectorAll('span').forEach(s => s.onclick = () => g.querySelectorAll('span').forEach(x => x.classList.toggle('on', x === s))));
+</script>
+</body>
+</html>

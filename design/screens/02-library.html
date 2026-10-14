@@ -1,0 +1,441 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BestNote · Library</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Sans+Arabic:wght@400;500;600&family=Caveat:wght@500;700&family=Material+Symbols+Rounded:opsz,wght,FILL@24,400,0..1&family=Fraunces:opsz,wght@9..144,500;9..144,600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../tokens.css">
+<link rel="stylesheet" href="../board.css">
+<script src="../shell.js"></script>
+<style>
+  .lib { position: relative; }
+  .rail .rail-logo { background: var(--accent); color: var(--on-accent); }
+  .folders { width: 248px; padding: 14px 12px; gap: 2px; overflow: hidden; }
+  .folders h4 { margin: 14px 8px 6px; display: flex; align-items: center; }
+  .folders h4 .ms { margin-inline-start: auto; font-size: 18px; color: var(--ink-3); cursor: pointer; }
+  .folders h4:first-child { margin-top: 2px; }
+  .folders .tags { padding: 0 6px; }
+  .storage { display: flex; flex-direction: column; gap: 6px; padding: 10px 8px 2px; }
+  .storage .ui-prog { height: 4px; }
+  .shelf { padding: 18px 26px 90px; position: relative; }
+  .shelf-head { gap: 8px; margin-bottom: 4px; }
+  .crumbs { display: flex; align-items: center; gap: 2px; font-size: 13px; color: var(--ink-3); margin-bottom: 2px; }
+  .crumbs .ms { font-size: 16px; }
+  .crumbs a { color: var(--ink-3); cursor: pointer; }
+  .search { width: 230px; }
+  .vt { display: inline-flex; background: var(--surface-2); border-radius: 999px; padding: 3px; }
+  .vt span { width: 34px; height: 30px; border-radius: 999px; display: grid; place-items: center; color: var(--ink-3); cursor: pointer; }
+  .vt span .ms { font-size: 19px; }
+  .vt span.on { background: var(--chrome-solid); color: var(--ink); box-shadow: var(--shadow-1); }
+  [data-look="galaxy"] .vt, [data-look="galaxy"] .vt span { border-radius: 12px; }
+  .filters { display: flex; gap: 6px; align-items: center; margin: 12px 0 2px; flex-wrap: wrap; }
+  .covers { gap: 22px 20px; }
+  .nb { position: relative; }
+  .nb .star { position: absolute; top: 6px; inset-inline-end: 6px; z-index: 2; font-size: 16px; color: #FFD54F; font-variation-settings: "FILL" 1; text-shadow: 0 1px 2px rgba(0,0,0,.3); }
+  .nb .meta { display: flex; align-items: center; gap: 4px; }
+  .nb .meta .ms { font-size: 14px; color: var(--ink-3); }
+  .nb .ui-check { position: absolute; top: 8px; inset-inline-start: 12px; z-index: 3; box-shadow: var(--shadow-1); }
+  [dir="rtl"] .nb .ui-check { inset-inline-start: 8px; }
+  .selmode .nb .cover { transform: scale(.94); transition: transform var(--dur-medium) var(--spring-snappy), box-shadow var(--dur-short); }
+  .selmode .nb.sel .cover { box-shadow: 0 0 0 3px var(--accent), var(--shadow-2); }
+  .selmode .nb:not(.sel) .cover { opacity: .78; }
+  .selbar { display: flex; align-items: center; gap: 10px; padding: 4px 0 6px; }
+  .selbar .ttl { font: 600 22px var(--font-display); }
+  .fcards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin: 10px 0 6px; }
+  .fcard { display: flex; align-items: center; gap: 12px; padding: 12px 14px; background: var(--chrome-solid); border: 1px solid var(--outline); border-radius: var(--r-card); cursor: pointer; }
+  [data-look="galaxy"] .fcard { border-color: transparent; }
+  .fcard > .ms { font-size: 30px; color: var(--c); font-variation-settings: "FILL" 1; }
+  .fcard b { display: block; font-size: 14px; }
+  .fcard small { color: var(--ink-3); font-size: 12px; }
+  .fcard .stack { margin-inline-start: auto; display: flex; }
+  .fcard .stack i { width: 18px; height: 24px; border-radius: 2px 4px 4px 2px; background: var(--c); margin-inline-start: -6px; box-shadow: var(--shadow-1); }
+
+  /* list view */
+  .ltable { background: var(--chrome-solid); border: 1px solid var(--outline); border-radius: var(--r-card); overflow: hidden; margin-top: 12px; }
+  [data-look="galaxy"] .ltable { border-color: transparent; }
+  .lrow { display: grid; grid-template-columns: 44px minmax(0, 2.4fr) 1.2fr 1.4fr 60px 110px 70px 64px; gap: 12px; align-items: center; padding: 9px 16px; font-size: 13px; color: var(--ink-2); }
+  .lrow + .lrow { border-top: 1px solid var(--outline); }
+  .lrow.head { font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-3); padding: 10px 16px; background: var(--surface); }
+  .lrow.head .sorted { color: var(--accent); display: flex; align-items: center; gap: 2px; }
+  .lrow.head .sorted .ms { font-size: 15px; }
+  .lrow .th { width: 34px; height: 44px; border-radius: 2px 5px 5px 2px; background: var(--cv); box-shadow: var(--shadow-1), inset 3px 0 0 rgba(0,0,0,.2); }
+  .lrow .th.pdf { background: #fff; border: 1px solid var(--outline); position: relative; }
+  .lrow .th.pdf::after { content: "PDF"; position: absolute; top: 4px; left: 3px; font-size: 7px; font-weight: 700; color: #fff; background: var(--danger); padding: 1px 3px; border-radius: 2px; }
+  .lrow .nm b { display: block; color: var(--ink); font-size: 14px; font-weight: 600; }
+  .lrow .nm small { color: var(--ink-3); font-size: 12px; }
+  .lrow .fd { display: flex; align-items: center; gap: 6px; }
+  .lrow .fd .ms { font-size: 18px; color: var(--c); font-variation-settings: "FILL" 1; }
+  .lrow .tg { display: flex; gap: 4px; flex-wrap: nowrap; overflow: hidden; }
+  .lrow .tg .ui-tag { padding: 2px 8px; font-size: 11px; }
+  .lrow .end { display: flex; justify-content: flex-end; gap: 2px; color: var(--ink-3); }
+  .lrow .end .ms { font-size: 20px; }
+  .lrow .end .ms.f { color: #e0a800; font-variation-settings: "FILL" 1; }
+  .lrow.folderrow .th { background: none; box-shadow: none; display: grid; place-items: center; }
+  .lrow.folderrow .th .ms { font-size: 30px; color: var(--c); font-variation-settings: "FILL" 1; }
+  .lrow.hot { background: var(--accent-soft); }
+  .num { font-variant-numeric: tabular-nums; }
+
+  /* drag */
+  .ghost-wrap { position: absolute; z-index: 30; pointer-events: none; }
+  .ghost-wrap .cover { width: 112px; transform: rotate(-6deg) scale(1.05); box-shadow: var(--shadow-3), inset 6px 0 0 rgba(0,0,0,.18); }
+  .ghost-wrap .cover.back { position: absolute; top: 6px; left: 8px; transform: rotate(4deg); opacity: .9; }
+  .ghost-wrap .count { position: absolute; top: -10px; inset-inline-end: -12px; z-index: 2; width: 28px; height: 28px; border-radius: 50%; background: var(--accent); color: var(--on-accent); display: grid; place-items: center; font-weight: 700; font-size: 13px; box-shadow: var(--shadow-2); }
+  .ghost-wrap .tip { position: absolute; top: 44px; inset-inline-start: 120px; white-space: nowrap; background: var(--ink); color: var(--surface); font-size: 12px; padding: 6px 10px; border-radius: 10px; box-shadow: var(--shadow-2); display: flex; align-items: center; gap: 6px; }
+  .ghost-wrap .tip .ms { font-size: 16px; }
+  .placeholder .cover { background: transparent !important; box-shadow: none !important; border: 2px dashed var(--outline); }
+  .placeholder .cover::after { display: none; }
+  .placeholder b, .placeholder small { opacity: .35; }
+  .nudge-l { transform: translateX(-6px); } .nudge-r { transform: translateX(6px); }
+  .cursor-hand { position: absolute; z-index: 31; font-size: 30px; color: var(--ink); pointer-events: none; filter: drop-shadow(0 2px 2px rgba(0,0,0,.25)); }
+
+  /* sort menu */
+  .sort-menu { top: 76px; inset-inline-end: 26px; display: grid; grid-template-columns: 240px 230px; padding: 8px; }
+  .sort-menu > div + div { border-inline-start: 1px solid var(--outline); padding-inline-start: 8px; margin-inline-start: 8px; }
+  .sort-menu .seg { margin: 4px 6px 6px; }
+  .sort-menu .ui-mi .ui-check { width: 20px; height: 20px; }
+  .sort-menu .foot { grid-column: 1 / -1; border-top: 1px solid var(--outline); margin-top: 6px; padding: 8px 6px 2px; display: flex; gap: 8px; justify-content: flex-end; }
+  .sort-btn.open { background: var(--accent-soft); color: var(--accent); border-color: transparent; }
+
+  /* tags */
+  .tag-list a { display: flex; align-items: center; gap: 10px; padding: 6px 10px; border-radius: 10px; font-size: 13.5px; cursor: pointer; }
+  .tag-list a::before { content: ""; width: 9px; height: 9px; border-radius: 50%; background: var(--c); }
+  .tag-list a em { margin-inline-start: auto; font-style: normal; font-size: 12px; color: var(--ink-3); }
+  .tag-list a.on { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+  .tag-pop { width: 300px; padding: 14px; z-index: 26; }
+  .tag-pop .ui-field { padding: 9px 12px; font-size: 14px; }
+  .tag-pop .tags-wrap { display: flex; flex-wrap: wrap; gap: 6px; margin: 12px 0 10px; }
+  .tag-pop .new { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 10px; background: var(--surface); font-size: 13px; }
+  .tag-pop .new .ms { color: var(--accent); }
+  .tag-pop .colors { display: flex; gap: 8px; margin-top: 10px; }
+  .tag-pop .colors b { width: 20px; height: 20px; border-radius: 50%; background: var(--c); cursor: pointer; }
+  .tag-pop .colors b.on { box-shadow: 0 0 0 2px var(--chrome-solid), 0 0 0 4px var(--c); }
+  .nb.editing .cover { box-shadow: 0 0 0 3px var(--accent), var(--shadow-2); }
+
+  /* empty */
+  .empty-main { display: flex; flex-direction: column; }
+  .empty-main .ui-empty { margin-top: 70px; }
+  .empty-ill { width: 260px; height: 190px; }
+  .empty-ill .s { fill: none; stroke: var(--ink-3); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .empty-ill .a { fill: none; stroke: var(--accent); stroke-width: 2.6; stroke-linecap: round; }
+  .empty-ill .pg { fill: var(--paper); stroke: var(--outline); stroke-width: 1.5; }
+  .empty-ill .sh { fill: var(--accent-soft); }
+  .start-cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 18px; width: 640px; }
+  .start-cards div { background: var(--chrome-solid); border: 1px solid var(--outline); border-radius: var(--r-card); padding: 16px; text-align: start; cursor: pointer; transition: transform var(--dur-short) var(--spring-snappy); }
+  .start-cards div:hover { transform: translateY(-3px); }
+  [data-look="galaxy"] .start-cards div { border-color: transparent; }
+  .start-cards b { display: block; margin-top: 10px; font-size: 14px; }
+  .start-cards small { color: var(--ink-3); font-size: 12px; }
+</style>
+</head>
+<body>
+<div class="page-wrap">
+  <h1>Library</h1>
+  <p class="lead muted">Where notebooks live. Nested folders on the side, physical covers on the shelf. Try: switch grid/list in state 1, tap covers in state 3 to select them, and the tag chips in state 6.</p>
+  <div class="variants">
+
+    <div>
+      <div class="variant-label">1 · Shelf grid · folder tree with nested folders</div>
+      <div class="device tablet">
+        <div class="status"><span>9:41</span><span><i class="ms">signal_cellular_alt</i><i class="ms">wifi</i><i class="ms">battery_full</i></span></div>
+        <div class="lib scr" id="s1">
+          <aside class="rail" data-rail="lib"></aside>
+          <aside class="folders" data-tree="all"></aside>
+          <div class="shelf">
+            <div class="shelf-head">
+              <div><h2>All notebooks</h2><p class="muted">24 notebooks · 3 PDFs · on this device</p></div>
+              <div class="search"><i class="ms">search</i><span>Search titles &amp; handwriting</span></div>
+              <button class="btn ghost sm sort-btn"><i class="ms">sort</i>Last opened</button>
+              <div class="vt" id="vt1"><span class="on" data-v="grid"><i class="ms">grid_view</i></span><span data-v="list"><i class="ms">view_list</i></span></div>
+              <button class="btn primary"><i class="ms">add</i>New</button>
+            </div>
+            <div id="s1grid">
+              <h4>Continue</h4>
+              <div class="covers" data-covers="0,1,2,3,4,5"></div>
+              <div class="grid-head"><h4>All notebooks</h4></div>
+              <div class="covers" data-covers="6,7,8,9,10,11,12,13,14,15,16,17"></div>
+            </div>
+            <div id="s1list" hidden></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div class="variant-label">2 · List view inside a nested folder (Physics 201 › Lectures), sorted by date modified</div>
+      <div class="device tablet">
+        <div class="status"><span>9:41</span><span><i class="ms">signal_cellular_alt</i><i class="ms">wifi</i><i class="ms">battery_full</i></span></div>
+        <div class="lib scr">
+          <aside class="rail" data-rail="lib"></aside>
+          <aside class="folders" data-tree="lectures"></aside>
+          <div class="shelf">
+            <div class="crumbs"><a>All notebooks</a><i class="ms flip">chevron_right</i><a>Physics 201</a><i class="ms flip">chevron_right</i></div>
+            <div class="shelf-head">
+              <div><h2>Lectures</h2><p class="muted">2 folders · 5 notebooks · 186 MB</p></div>
+              <div class="search"><i class="ms">search</i><span>Search in Lectures</span></div>
+              <button class="btn ghost sm sort-btn"><i class="ms">sort</i>Date modified</button>
+              <div class="vt"><span><i class="ms">grid_view</i></span><span class="on"><i class="ms">view_list</i></span></div>
+              <button class="btn primary"><i class="ms">add</i>New</button>
+            </div>
+            <div data-list="lectures"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div class="variant-label">3 · Multi-select with action bar (tap covers to toggle)</div>
+      <div class="device tablet">
+        <div class="status"><span>9:41</span><span><i class="ms">signal_cellular_alt</i><i class="ms">wifi</i><i class="ms">battery_full</i></span></div>
+        <div class="lib scr">
+          <aside class="rail" data-rail="lib"></aside>
+          <aside class="folders" data-tree="all"></aside>
+          <div class="shelf selmode" id="sel">
+            <div class="selbar">
+              <span class="ui-ib"><i class="ms">close</i></span>
+              <span class="ttl"><span id="selN">3</span> selected</span>
+              <span class="grow"></span>
+              <button class="btn ghost sm"><i class="ms">select_all</i>Select all</button>
+            </div>
+            <p class="muted" style="margin-bottom:14px">Long-press a cover to start selecting. Drag a selection onto a folder to move it.</p>
+            <div class="covers" data-covers="0,1,2,3,4,5,6,7,8,9,10,11" data-sel="0,3,5"></div>
+            <div class="ui-actionbar">
+              <span class="act"><i class="ms">drive_file_move</i>Move</span>
+              <span class="act"><i class="ms">sell</i>Tag</span>
+              <span class="act"><i class="ms">star</i>Favorite</span>
+              <span class="act"><i class="ms">content_copy</i>Duplicate</span>
+              <span class="act"><i class="ms">ios_share</i>Export</span>
+              <span class="act"><i class="ms">merge</i>Merge</span>
+              <span class="act danger"><i class="ms">delete</i>Trash</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div class="variant-label">4 · Dragging two notebooks onto a nested folder (spring-loaded: “Physics 201” opened on hover)</div>
+      <div class="device tablet">
+        <div class="status"><span>9:41</span><span><i class="ms">signal_cellular_alt</i><i class="ms">wifi</i><i class="ms">battery_full</i></span></div>
+        <div class="lib scr">
+          <aside class="rail" data-rail="lib"></aside>
+          <aside class="folders" data-tree="drop"></aside>
+          <div class="shelf selmode">
+            <div class="selbar"><span class="ui-ib"><i class="ms">close</i></span><span class="ttl">2 selected</span><span class="grow"></span></div>
+            <p class="muted" style="margin-bottom:14px">Moving 2 notebooks…</p>
+            <div class="covers" data-covers="0,1,2,3,4,5,6,7,8,9,10,11" data-ph="3,5"></div>
+          </div>
+          <div class="ghost-wrap" style="inset-inline-start:300px; top:258px">
+            <div class="cover back" style="--cv:#5b3f8f"><span class="ttl ar">أدب عربي</span></div>
+            <div class="cover dots" style="--cv:#2f5d50"><span class="ttl">Lab Journal</span></div>
+            <span class="count">2</span>
+            <div class="tip"><i class="ms">drive_file_move</i>Move to Physics 201 › Labs</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div class="variant-label">5 · Sort &amp; filter menu, with active filter chips</div>
+      <div class="device tablet">
+        <div class="status"><span>9:41</span><span><i class="ms">signal_cellular_alt</i><i class="ms">wifi</i><i class="ms">battery_full</i></span></div>
+        <div class="lib scr">
+          <aside class="rail" data-rail="lib"></aside>
+          <aside class="folders" data-tree="all"></aside>
+          <div class="shelf">
+            <div class="shelf-head">
+              <div><h2>All notebooks</h2><p class="muted">11 of 24 match filters</p></div>
+              <div class="search"><i class="ms">search</i><span>Search titles &amp; handwriting</span></div>
+              <button class="btn ghost sm sort-btn open"><i class="ms">sort</i>Title A–Z</button>
+              <div class="vt"><span class="on"><i class="ms">grid_view</i></span><span><i class="ms">view_list</i></span></div>
+              <button class="btn primary"><i class="ms">add</i>New</button>
+            </div>
+            <div class="filters"><span class="chip on"><i class="ms">menu_book</i>Notebooks<i class="ms">close</i></span><span class="chip on"><i class="ms">picture_as_pdf</i>PDFs<i class="ms">close</i></span><span class="chip on"><i class="ms">mic</i>Has audio<i class="ms">close</i></span><span class="chip"><i class="ms">add</i>Add filter</span><button class="btn sm danger">Clear all</button></div>
+            <h4>A – Z</h4>
+            <div class="covers" data-covers="1,14,13,7,2,3,0,4,10,5,6"></div>
+          </div>
+          <div class="ui-menu sort-menu">
+            <div>
+              <div class="ui-mlabel">Sort by</div>
+              <div class="ui-mi"><i class="ms">history</i>Last opened</div>
+              <div class="ui-mi"><i class="ms">edit_calendar</i>Date modified</div>
+              <div class="ui-mi"><i class="ms">calendar_add_on</i>Date created</div>
+              <div class="ui-mi on"><i class="ms">sort_by_alpha</i>Title<span class="end"><i class="ms">check</i></span></div>
+              <div class="ui-mi"><i class="ms">hard_drive</i>Size</div>
+              <div class="ui-mi"><i class="ms">tune</i>Custom (drag to arrange)</div>
+              <div class="seg"><span class="on">A → Z</span><span>Z → A</span></div>
+            </div>
+            <div>
+              <div class="ui-mlabel">Show</div>
+              <div class="ui-mi"><span class="ui-check sq on"></span>Notebooks<span class="end">21</span></div>
+              <div class="ui-mi"><span class="ui-check sq on"></span>PDFs<span class="end">3</span></div>
+              <div class="ui-mi"><span class="ui-check sq"></span>Quicknotes<span class="end">9</span></div>
+              <div class="ui-msep"></div>
+              <div class="ui-mlabel">Only</div>
+              <div class="ui-mi"><span class="ui-check sq on"></span>With audio</div>
+              <div class="ui-mi"><span class="ui-check sq"></span>Favorites</div>
+              <div class="ui-mi"><span class="ui-check sq"></span>Edited this week</div>
+            </div>
+            <div class="foot"><button class="btn ghost sm">Reset</button><button class="btn primary sm">Done</button></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div class="variant-label">6 · Tags: filter by tag, and edit a notebook’s tags in a popover</div>
+      <div class="device tablet">
+        <div class="status"><span>9:41</span><span><i class="ms">signal_cellular_alt</i><i class="ms">wifi</i><i class="ms">battery_full</i></span></div>
+        <div class="lib scr">
+          <aside class="rail" data-rail="lib"></aside>
+          <aside class="folders" data-tree="tags"></aside>
+          <div class="shelf">
+            <div class="shelf-head">
+              <div><h2>Tagged “exam”</h2><p class="muted">6 notebooks across 3 folders</p></div>
+              <div class="search"><i class="ms">search</i><span>Search</span></div>
+              <div class="vt"><span class="on"><i class="ms">grid_view</i></span><span><i class="ms">view_list</i></span></div>
+            </div>
+            <div class="filters" id="tagChips">
+              <span class="ui-tag on" style="--c:#c62828">exam</span><span class="ui-tag" style="--c:#2a4bd7">lecture</span><span class="ui-tag" style="--c:#2e7d32">lab</span><span class="ui-tag" style="--c:#ef6c00">homework</span><span class="ui-tag" style="--c:#7b3fe4">مراجعة</span><span class="ui-tag" style="--c:#26535f">ideas</span>
+              <span class="muted" style="margin-inline-start:6px">Tap to combine tags</span>
+            </div>
+            <h4>6 notebooks</h4>
+            <div class="covers" data-covers="0,1,2,5,9,13" data-edit="1"></div>
+          </div>
+          <div class="ui-menu tag-pop" style="top:380px; inset-inline-start:430px">
+            <div class="pop-head" style="display:flex; justify-content:space-between; margin-bottom:10px"><b>Tags · Calculus II</b><span class="ui-ib" style="width:28px; height:28px"><i class="ms" style="font-size:18px">close</i></span></div>
+            <div class="ui-field focus"><i class="ms">sell</i><span>midt<span class="ui-caret"></span></span></div>
+            <div class="tags-wrap"><span class="ui-tag on" style="--c:#c62828">exam</span><span class="ui-tag on" style="--c:#ef6c00">homework</span><span class="ui-tag" style="--c:#2a4bd7">lecture</span><span class="ui-tag" style="--c:#26535f">ideas</span></div>
+            <div class="new"><i class="ms">add_circle</i>Create tag “<b>midterm</b>”</div>
+            <div class="colors"><b style="--c:#c62828"></b><b style="--c:#ef6c00"></b><b style="--c:#e0a800" class="on"></b><b style="--c:#2e7d32"></b><b style="--c:#2a4bd7"></b><b style="--c:#7b3fe4"></b><b style="--c:#6b6b73"></b></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div class="variant-label">7 · Empty state (first launch, before anything exists)</div>
+      <div class="device tablet">
+        <div class="status"><span>9:41</span><span><i class="ms">signal_cellular_alt</i><i class="ms">wifi</i><i class="ms">battery_full</i></span></div>
+        <div class="lib scr">
+          <aside class="rail" data-rail="lib"></aside>
+          <aside class="folders" data-tree="empty"></aside>
+          <div class="shelf empty-main">
+            <div class="shelf-head"><div><h2>All notebooks</h2><p class="muted">Nothing here yet</p></div><button class="btn primary"><i class="ms">add</i>New</button></div>
+            <div class="ui-empty">
+              <svg class="empty-ill" viewBox="0 0 260 190">
+                <ellipse class="sh" cx="130" cy="170" rx="110" ry="14"/>
+                <path class="pg" d="M40 40 L 128 52 L 128 168 L 40 156 Z"/><path class="pg" d="M128 52 L 216 40 L 216 156 L 128 168 Z"/>
+                <path class="s" d="M56 70 L 112 77 M56 88 L 104 94 M56 106 L 110 113"/>
+                <path class="a" d="M144 84 C 160 70, 172 98, 186 82 S 200 74, 204 84"/>
+                <path class="s" d="M150 122 L 190 116"/>
+                <g transform="rotate(38 210 60)"><rect x="203" y="0" width="12" height="96" rx="6" fill="var(--ink)"/><path d="M203 94 L209 112 L215 94 Z" fill="var(--ink)"/></g>
+              </svg>
+              <h3>A fresh shelf.</h3>
+              <p class="muted" style="font-size:14px">Start a notebook, bring in a PDF, or photograph a lecture board and get clean notes in your own handwriting.</p>
+              <div class="start-cards">
+                <div><span class="ui-tile"><i class="ms">add_notes</i></span><b>New notebook</b><small>Pick a cover and paper</small></div>
+                <div><span class="ui-tile"><i class="ms">upload_file</i></span><b>Import PDF or images</b><small>Slides, readings, worksheets</small></div>
+                <div><span class="ui-tile"><i class="ms">document_scanner</i></span><b>Smart Board</b><small>Board photo → neat notes</small></div>
+              </div>
+              <button class="btn ghost sm" style="margin-top:8px"><i class="ms">settings_backup_restore</i>Restore from a backup</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+  <p class="note">Motion: covers lift on press (Spring.Snappy); selection scales covers to 94%; a dragged stack follows the finger with a velocity-aware spring and folders spring open after 600 ms of hover. Opening a notebook zooms from its cover (Duration.Long).</p>
+</div>
+<script>
+(function () {
+  const N = [
+    { t: 'Physics 201', s: 'Mechanics', cv: '#29324a', w: 'Today · p.14', f: 'Lectures', fc: '#2a4bd7', p: 22, sz: '38 MB', m: 'Today, 10:12', tg: ['lecture', 'exam'], fav: 1, au: 1 },
+    { t: 'Calculus II', cv: '#7a2d2d', x: 'lined', w: 'Yesterday · p.32', f: 'Calculus II', fc: '#2e7d32', p: 32, sz: '21 MB', m: 'Yesterday', tg: ['exam', 'homework'] },
+    { t: 'Lecture 7 slides', pdf: 1, w: 'Mon · 48 pages', f: 'Lectures', fc: '#2a4bd7', p: 48, sz: '64 MB', m: 'Mon', tg: ['lecture'] },
+    { t: 'Lab Journal', cv: '#2f5d50', x: 'dots', w: 'Sun · p.6', f: 'Labs', fc: '#2a4bd7', p: 6, sz: '9 MB', m: 'Sun', tg: ['lab'] },
+    { t: 'Planner 2026', s: 'Oct', cv: '#c9a227', w: 'Oct 12', f: 'Planner', fc: '#ef6c00', p: 120, sz: '12 MB', m: 'Oct 12', tg: [] , fav: 1},
+    { t: 'أدب عربي', ar: 1, cv: '#5b3f8f', w: 'Oct 10 · p.9', f: 'أدب عربي', fc: '#7b3fe4', p: 9, sz: '7 MB', m: 'Oct 10', tg: ['مراجعة', 'exam'] },
+    { t: 'Linear Algebra', cv: '#3b4a6b', w: 'Oct 9', p: 18 },
+    { t: 'World History', cv: '#8a5a2b', x: 'lined', w: 'Oct 8', p: 40 },
+    { t: 'Sketchbook', cv: '#26535f', x: 'dots', w: 'Oct 6', p: 15, fav: 1 },
+    { t: 'Organic Chem', cv: '#6b2d4f', w: 'Oct 5', p: 27 },
+    { t: 'Biology 110', cv: '#44543a', x: 'lined', w: 'Oct 3', p: 31 },
+    { t: 'Quicknotes', cv: '#30304a', w: 'Oct 2', p: 9 },
+    { t: 'الفيزياء الحديثة', ar: 1, cv: '#1f4e5f', w: 'Sep 30', p: 12 },
+    { t: 'Exam prep', s: 'Finals', cv: '#a23b3b', x: 'lined', w: 'Sep 28', p: 8 },
+    { t: 'Thesis ideas', cv: '#7a5c3a', w: 'Sep 25', p: 5 },
+    { t: 'Reading: Sapiens', pdf: 1, w: 'Sep 20 · 312 pages', p: 312 },
+    { t: 'Statistics', cv: '#2b5b84', x: 'dots', w: 'Sep 18', p: 22 },
+    { t: 'Spanish B1', cv: '#9a3f6a', x: 'lined', w: 'Sep 15', p: 19 }
+  ];
+  const cover = (n, i, o = {}) => {
+    const c = n.pdf ? `<div class="cover pdfc"><span>PDF</span><div class="lines"></div></div>`
+      : `<div class="cover ${n.x || ''}"><span class="ttl${n.ar ? ' ar' : ''}">${n.t}</span>${n.s ? `<span class="sub">${n.s}</span>` : ''}</div>`;
+    return `<div class="nb${o.sel ? ' sel' : ''}${o.ph ? ' placeholder' : ''}${o.edit ? ' editing' : ''}" style="--cv:${n.cv || '#fff'}" data-i="${i}">${o.check ? `<span class="ui-check${o.sel ? ' on' : ''}"></span>` : ''}${n.fav && !o.check ? '<i class="ms star">star</i>' : ''}${c}<b>${n.t}</b><small class="meta">${n.au ? '<i class="ms">mic</i>' : ''}${n.w}</small></div>`;
+  };
+  document.querySelectorAll('[data-covers]').forEach(el => {
+    const sel = (el.dataset.sel || '').split(',').filter(Boolean).map(Number);
+    const ph = (el.dataset.ph || '').split(',').filter(Boolean).map(Number);
+    const check = !!el.closest('.selmode');
+    el.innerHTML = el.dataset.covers.split(',').map(Number).map(i => cover(N[i], i, { sel: sel.includes(i) || (ph.includes(i) && false), check, ph: ph.includes(i), edit: +el.dataset.edit === i })).join('');
+  });
+
+  const rail = a => `<div class="rail-logo">B</div>
+    <a class="${a === 'lib' ? 'on' : ''}"><i class="ms">auto_stories</i><small>Library</small></a>
+    <a class="${a === 'fav' ? 'on' : ''}"><i class="ms">star</i><small>Favorites</small></a>
+    <a><i class="ms">search</i><small>Search</small></a>
+    <a><i class="ms">document_scanner</i><small>Board</small></a>
+    <span class="grow"></span><a><i class="ms">delete</i><small>Trash</small></a><a><i class="ms">settings</i><small>Settings</small></a>`;
+  document.querySelectorAll('[data-rail]').forEach(r => r.innerHTML = rail(r.dataset.rail));
+
+  const fi = (name, n, c, o = {}) => `<a class="${o.on ? 'on' : ''}${o.drop ? ' drop' : ''}"><i class="ms chev flip${o.kids === undefined ? ' none' : ''}">${o.kids ? 'expand_more' : 'chevron_right'}</i><i class="ms" style="--c:${c}">${o.drop ? 'folder_open' : o.icon || 'folder'}</i>${name}<em>${n}</em></a>`;
+  const tree = mode => {
+    const empty = mode === 'empty';
+    let h = `<h4>Library</h4><div class="ui-tree">
+      <a class="${mode === 'all' || mode === 'drop' || empty ? 'on' : ''}"><i class="ms chev none">x</i><i class="ms" style="--c:var(--accent)">auto_stories</i>All notebooks<em>${empty ? 0 : 24}</em></a>
+      <a><i class="ms chev none">x</i><i class="ms" style="--c:#e0a800">star</i>Favorites<em>${empty ? 0 : 4}</em></a>
+      <a><i class="ms chev none">x</i><i class="ms" style="--c:var(--ink-3)">bolt</i>Quicknotes<em>${empty ? 0 : 9}</em></a></div>`;
+    h += `<h4>Folders <i class="ms">create_new_folder</i></h4><div class="ui-tree">`;
+    if (empty) h += `<p class="muted" style="padding:4px 10px 0">Folders you make show up here. Folders can hold folders.</p>`;
+    else {
+      const open = mode === 'lectures' || mode === 'drop';
+      h += fi('Physics 201', 8, '#2a4bd7', { kids: open });
+      if (open) h += `<div class="kids">${fi('Lectures', 5, '#2a4bd7', { on: mode === 'lectures', kids: mode === 'lectures' })}${mode === 'lectures' ? `<div class="kids">${fi('Week 1–6', 3, '#2a4bd7')}${fi('Week 7–12', 2, '#2a4bd7')}</div>` : ''}${fi('Labs', 2, '#2a4bd7', { drop: mode === 'drop' })}${fi('Exam prep', 1, '#2a4bd7')}</div>`;
+      h += fi('Calculus II', 6, '#2e7d32', { kids: false }) + fi('أدب عربي', 4, '#7b3fe4', { kids: false }) + fi('Planner', 2, '#ef6c00') + fi('Personal', 3, '#8e8e96', { kids: false });
+    }
+    h += `</div>`;
+    if (mode === 'tags') h += `<h4>Tags <i class="ms">edit</i></h4><div class="tag-list"><a class="on" style="--c:#c62828">exam<em>6</em></a><a style="--c:#2a4bd7">lecture<em>11</em></a><a style="--c:#2e7d32">lab<em>3</em></a><a style="--c:#ef6c00">homework<em>7</em></a><a style="--c:#7b3fe4">مراجعة<em>4</em></a><a style="--c:#26535f">ideas<em>2</em></a></div>`;
+    else if (!empty) h += `<h4>Tags</h4><div class="tags"><span class="ui-tag" style="--c:#c62828">exam</span><span class="ui-tag" style="--c:#2a4bd7">lecture</span><span class="ui-tag" style="--c:#2e7d32">lab</span><span class="ui-tag" style="--c:#7b3fe4">مراجعة</span></div>`;
+    h += `<div class="storage"><span>On this device · ${empty ? '0 MB' : '312 MB'}</span><div class="ui-prog"><i style="--v:${empty ? 1 : 18}%"></i></div></div>`;
+    return h;
+  };
+  document.querySelectorAll('[data-tree]').forEach(t => t.innerHTML = tree(t.dataset.tree));
+
+  const lrow = (n, o = {}) => `<div class="lrow${o.hot ? ' hot' : ''}"><div class="th${n.pdf ? ' pdf' : ''}" style="--cv:${n.cv}"></div><div class="nm"><b${n.ar ? ' style="font-family:IBM Plex Sans Arabic"' : ''}>${n.t}</b><small>${n.p} pages${n.au ? ' · audio' : ''}</small></div><div class="fd"><i class="ms" style="--c:${n.fc || '#8e8e96'}">folder</i>${n.f || 'Lectures'}</div><div class="tg">${(n.tg || []).map(t => `<span class="ui-tag" style="--c:${{ exam: '#c62828', lecture: '#2a4bd7', lab: '#2e7d32', homework: '#ef6c00' }[t] || '#7b3fe4'}">${t}</span>`).join('')}</div><div class="num">${n.p}</div><div>${n.m || n.w}</div><div class="num">${n.sz || '8 MB'}</div><div class="end">${n.fav ? '<i class="ms f">star</i>' : '<i class="ms">star</i>'}<i class="ms">more_vert</i></div></div>`;
+  const head = sortCol => `<div class="lrow head"><div></div><div>Name</div><div>Folder</div><div>Tags</div><div>Pages</div><div class="${sortCol === 'm' ? 'sorted' : ''}">Modified${sortCol === 'm' ? '<i class="ms">arrow_downward</i>' : ''}</div><div>Size</div><div></div></div>`;
+  const frow = (name, sub, c) => `<div class="lrow folderrow"><div class="th"><i class="ms" style="--c:${c}">folder</i></div><div class="nm"><b>${name}</b><small>${sub}</small></div><div class="fd">Lectures</div><div></div><div class="num">–</div><div>Today</div><div class="num">–</div><div class="end"><i class="ms flip">chevron_right</i></div></div>`;
+  const lec = [N[0], N[2], { t: 'Lecture 6: Energy', cv: '#29324a', p: 14, m: 'Oct 7', sz: '18 MB', tg: ['lecture'], au: 1, f: 'Lectures', fc: '#2a4bd7' }, { t: 'Problem set 4', pdf: 1, p: 6, m: 'Oct 4', sz: '3 MB', tg: ['homework'], f: 'Lectures', fc: '#2a4bd7' }, { t: 'Midterm review', cv: '#a23b3b', p: 11, m: 'Oct 1', sz: '14 MB', tg: ['exam', 'lecture'], f: 'Lectures', fc: '#2a4bd7', fav: 1 }];
+  document.querySelector('[data-list="lectures"]').innerHTML = `<div class="ltable">${head('m')}${frow('Week 1–6', '3 notebooks', '#2a4bd7')}${frow('Week 7–12', '2 notebooks', '#2a4bd7')}${lec.map((n, i) => lrow(n, { hot: i === 1 })).join('')}</div>`;
+  document.getElementById('s1list').innerHTML = `<div class="ltable">${head('')}${N.slice(0, 10).map(n => lrow(n)).join('')}</div>`;
+
+  // State 1: grid/list toggle
+  document.querySelectorAll('#vt1 span').forEach(s => s.onclick = () => {
+    document.querySelectorAll('#vt1 span').forEach(x => x.classList.toggle('on', x === s));
+    document.getElementById('s1grid').hidden = s.dataset.v !== 'grid';
+    document.getElementById('s1list').hidden = s.dataset.v !== 'list';
+  });
+  // State 3: tap to select
+  const sel = document.getElementById('sel');
+  sel.querySelectorAll('.nb').forEach(nb => nb.onclick = () => {
+    nb.classList.toggle('sel'); nb.querySelector('.ui-check').classList.toggle('on', nb.classList.contains('sel'));
+    document.getElementById('selN').textContent = sel.querySelectorAll('.nb.sel').length;
+  });
+  // State 6: tag chips
+  document.querySelectorAll('#tagChips .ui-tag').forEach(t => t.onclick = () => t.classList.toggle('on'));
+  document.querySelectorAll('.tag-pop .colors b').forEach(b => b.onclick = () => b.parentElement.querySelectorAll('b').forEach(x => x.classList.toggle('on', x === b)));
+})();
+</script>
+</body>
+</html>

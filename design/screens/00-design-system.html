@@ -1,0 +1,466 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BestNote · Design system</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Sans+Arabic:wght@400;500;600&family=Caveat:wght@500;700&family=Aref+Ruqaa:wght@400;700&family=Material+Symbols+Rounded:opsz,wght,FILL@24,400,0..1&family=Fraunces:opsz,wght@9..144,500;9..144,600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../tokens.css">
+<link rel="stylesheet" href="../board.css">
+<script src="../shell.js"></script>
+<style>
+  .ds-hero { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); gap: 18px; align-items: stretch; margin-bottom: 18px; }
+  .ds-look { background: var(--chrome-solid); border: 1px solid var(--outline); border-radius: var(--r-sheet); padding: 26px; position: relative; overflow: hidden; }
+  [data-look="studio"] .ds-look { background: radial-gradient(120% 90% at 100% 0%, var(--accent-soft), transparent 60%), var(--chrome-solid); }
+  [data-look="galaxy"] .ds-look { border-color: transparent; }
+  .ds-look .eyebrow { font-size: 12px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--accent); }
+  .ds-look h2 { font: 600 40px/1.05 var(--font-display); margin: 8px 0 10px; letter-spacing: -.02em; }
+  [data-look="galaxy"] .ds-look h2 { font-weight: 700; letter-spacing: -.035em; }
+  .ds-look h2::after { content: "Calm paper, sharp ink."; }
+  [data-look="studio"] .ds-look h2::after { content: "Midnight studio, glowing tools."; }
+  [data-look="galaxy"] .ds-look h2::after { content: "At home on One UI."; }
+  .ds-look .eyebrow::after { content: "A · Calm Paper"; }
+  [data-look="studio"] .ds-look .eyebrow::after { content: "B · Midnight Studio"; }
+  [data-look="galaxy"] .ds-look .eyebrow::after { content: "C · Galaxy Native"; }
+  .ds-look p { color: var(--ink-2); max-width: 520px; }
+  .ds-look .row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 18px; }
+  .ds-look svg { position: absolute; inset-inline-end: -10px; bottom: -14px; width: 220px; opacity: .9; pointer-events: none; }
+  .ds-look svg path { fill: none; stroke: var(--accent); stroke-width: 3; stroke-linecap: round; }
+  .ds-principles { display: grid; gap: 10px; }
+  .ds-principles div { background: var(--chrome-solid); border: 1px solid var(--outline); border-radius: var(--r-card); padding: 14px 16px; display: flex; gap: 12px; align-items: flex-start; }
+  [data-look="galaxy"] .ds-principles div { border-color: transparent; }
+  .ds-principles b { display: block; font-size: 14px; }
+  .ds-principles small { color: var(--ink-3); font-size: 12.5px; }
+
+  .ds-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); gap: 16px; }
+  .ds-card { background: var(--chrome-solid); border: 1px solid var(--outline); border-radius: var(--r-card); padding: 20px; min-width: 0; }
+  [data-look="galaxy"] .ds-card { border-color: transparent; box-shadow: var(--shadow-1); }
+  [data-look="studio"] .ds-card { background: var(--chrome); }
+  .ds-card.wide { grid-column: 1 / -1; }
+  .ds-card > h3 { font: 600 18px var(--font-display); display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+  [data-look="galaxy"] .ds-card > h3 { font-weight: 700; }
+  .ds-card > h3 .ms { color: var(--accent); }
+  .ds-card > p.muted { margin-bottom: 14px; }
+  .ds-sec { font-size: 12px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); margin: 30px 2px 10px; }
+
+  .roles { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 8px; }
+  .role { border-radius: 12px; overflow: hidden; border: 1px solid var(--outline); background: var(--chrome-solid); }
+  .role i { display: block; height: 58px; background: var(--c); }
+  .role div { padding: 7px 9px; }
+  .role b { display: block; font-size: 12px; }
+  .role code { font: 11px ui-monospace, Menlo, monospace; color: var(--ink-3); direction: ltr; unicode-bidi: isolate; }
+  .pal { display: flex; gap: 8px; flex-wrap: wrap; }
+  .pal span { display: flex; flex-direction: column; align-items: center; gap: 4px; font-size: 11px; color: var(--ink-3); }
+  .pal b { width: 34px; height: 34px; border-radius: 50%; background: var(--c); box-shadow: inset 0 0 0 1px rgba(0,0,0,.12); }
+
+  .tscale > div { display: grid; grid-template-columns: 112px 1fr; gap: 12px; align-items: baseline; padding: 9px 0; border-bottom: 1px dashed var(--outline); }
+  .tscale > div:last-child { border: 0; }
+  .tscale code { font: 11px ui-monospace, Menlo, monospace; color: var(--ink-3); }
+  .ts-display { font: 600 36px/1.1 var(--font-display); letter-spacing: -.02em; }
+  .ts-head { font: 600 26px/1.2 var(--font-display); }
+  [data-look="galaxy"] .ts-display, [data-look="galaxy"] .ts-head { font-weight: 700; letter-spacing: -.03em; }
+  .ts-title { font-size: 20px; font-weight: 600; }
+  .ts-body { font-size: 15px; }
+  .ts-label { font-size: 12px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-2); }
+  .ts-cap { font-size: 11px; color: var(--ink-3); }
+  .ts-ar-d { font: 600 30px/1.3 "IBM Plex Sans Arabic", sans-serif; }
+  .ts-ar { font: 400 16px/1.7 "IBM Plex Sans Arabic", sans-serif; }
+  .ts-hand { font: 600 30px var(--font-hand); color: #1d2a4a; background: var(--paper); border-radius: 8px; padding: 2px 10px; }
+  .ts-ruqaa { font: 400 26px/1.6 "Aref Ruqaa", serif; color: #1d2a4a; background: var(--paper); border-radius: 8px; padding: 0 10px; }
+  .bidi { direction: rtl; text-align: start; }
+
+  .shape-row { display: flex; gap: 12px; flex-wrap: wrap; }
+  .shape-row div { flex: 1; min-width: 90px; height: 78px; background: var(--surface); border: 1px solid var(--outline); display: grid; place-items: center; font-size: 12px; color: var(--ink-2); text-align: center; }
+  .elev-row { display: flex; gap: 14px; flex-wrap: wrap; margin-top: 14px; }
+  .elev-row div { flex: 1; min-width: 90px; height: 64px; border-radius: var(--r-card); background: var(--chrome-solid); display: grid; place-items: center; font-size: 12px; color: var(--ink-2); }
+
+  .icons { display: grid; grid-template-columns: repeat(auto-fill, minmax(86px, 1fr)); gap: 6px; }
+  .icons span { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 12px 4px 8px; border-radius: 12px; font-size: 10.5px; color: var(--ink-3); text-align: center; word-break: break-word; cursor: pointer; transition: background var(--dur-short); }
+  .icons span:hover { background: var(--surface); color: var(--ink); }
+  .icons .ms { font-size: 26px; color: var(--ink); }
+  .icons.filled .ms { font-variation-settings: "FILL" 1; }
+  [data-look="studio"] .icons .ms { color: var(--accent); }
+  .icons-group { font-size: 11px; font-weight: 600; color: var(--ink-3); letter-spacing: .06em; text-transform: uppercase; margin: 14px 2px 6px; }
+
+  /* motion */
+  .mrow { display: grid; grid-template-columns: minmax(0, 210px) 1fr auto; gap: 14px; align-items: center; padding: 12px 0; border-bottom: 1px dashed var(--outline); }
+  .mrow:last-of-type { border: 0; }
+  .mrow b { display: block; font-size: 13.5px; }
+  .mrow small { color: var(--ink-3); font-size: 12px; }
+  .mstage { position: relative; height: 56px; background: var(--surface); border-radius: 12px; overflow: hidden; }
+  .mball { position: absolute; top: 16px; inset-inline-start: 12px; width: 24px; height: 24px; border-radius: 50%; background: var(--accent); }
+  .go .mball { inset-inline-start: calc(100% - 36px); }
+  .m-snappy .mball { transition: inset-inline-start 450ms var(--spring-snappy); }
+  .m-gentle .mball { transition: inset-inline-start 650ms var(--spring-gentle); }
+  .m-short .mfade { position: absolute; inset: 10px 12px; border-radius: 8px; background: var(--accent-soft); transition: background var(--dur-short) var(--ease-standard); display: grid; place-items: center; font-size: 12px; color: var(--ink-2); }
+  .m-short.go .mfade { background: var(--accent); color: var(--on-accent); }
+  .m-medium .mbox { position: absolute; top: 12px; inset-inline-start: 12px; width: 44px; height: 32px; border-radius: 8px; background: var(--chrome-solid); box-shadow: var(--shadow-1); transition: width var(--dur-medium) var(--ease-standard), height var(--dur-medium) var(--ease-standard), top var(--dur-medium) var(--ease-standard); }
+  .m-medium.go .mbox { width: calc(100% - 24px); top: 6px; height: 44px; }
+  .m-long .mcover { position: absolute; top: 9px; inset-inline-start: 14px; width: 28px; height: 38px; border-radius: 3px 7px 7px 3px; background: #29324a; transition: all var(--dur-long) var(--ease-standard); }
+  .m-long.go .mcover { top: 0; inset-inline-start: 0; width: 100%; height: 100%; border-radius: 12px; background: var(--paper); }
+  .m-sheet .msheet { position: absolute; left: 10%; right: 10%; bottom: -46px; height: 42px; border-radius: 14px 14px 0 0; background: var(--chrome-solid); box-shadow: var(--shadow-2); transition: bottom 650ms var(--spring-gentle); }
+  .m-sheet.go .msheet { bottom: 0; }
+  .reduced .mball, .reduced .mbox, .reduced .mcover, .reduced .msheet { transition: opacity var(--dur-short) linear !important; }
+  .reduced.go .mball, .reduced.go .mcover, .reduced.go .msheet { opacity: .25; }
+  .reduced .go .mball { opacity: .25; }
+  .mcode { font: 11px ui-monospace, Menlo, monospace; color: var(--ink-3); }
+
+  /* component stages */
+  .comp { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-bottom: 14px; }
+  .comp-l { font-size: 11px; font-weight: 600; color: var(--ink-3); letter-spacing: .06em; text-transform: uppercase; margin: 16px 0 8px; }
+  .comp-l:first-of-type { margin-top: 4px; }
+  .stage { position: relative; height: 290px; background: var(--surface); border-radius: var(--r-card); overflow: hidden; border: 1px solid var(--outline); }
+  .stage .ui-sheet.bottom { width: min(92%, 420px); padding: 4px 18px 18px; transition: transform 650ms var(--spring-gentle); }
+  .stage .ui-sheet.bottom.hide { transform: translate(-50%, 110%); }
+  .stage .ui-scrim { transition: opacity var(--dur-medium); }
+  .stage .ui-scrim.hide { opacity: 0; pointer-events: none; }
+  .stage .center-btn { position: absolute; top: 16px; inset-inline-start: 16px; z-index: 1; }
+  .stage .ui-snack { left: 50%; bottom: 18px; transform: translate(-50%, 0); transition: transform 450ms var(--spring-snappy), opacity var(--dur-short); }
+  .stage .ui-snack.hide { transform: translate(-50%, 90px); opacity: 0; }
+  .sheet-opts { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 10px; }
+  .sheet-opts span { display: flex; flex-direction: column; align-items: center; gap: 6px; font-size: 11.5px; color: var(--ink-2); padding: 10px 2px; border-radius: 12px; background: var(--surface); }
+  .sheet-opts .ms { color: var(--accent); }
+  .stage .popover { position: absolute; top: 74px; left: 16px; right: auto; width: 290px; max-width: calc(100% - 32px); opacity: 1; transform: none; pointer-events: auto; }
+  [dir="rtl"] .stage .popover { left: auto; right: 16px; }
+  .stage .anchor { position: absolute; top: 16px; left: 16px; }
+  [dir="rtl"] .stage .anchor { left: auto; right: 16px; }
+  .scroll-x { overflow-x: auto; padding: 6px 2px 14px; }
+  .tb-v { display: inline-flex; flex-direction: column; gap: 2px; padding: 5px; background: var(--chrome); border-radius: 999px; box-shadow: var(--shadow-2); border: 1px solid var(--outline); }
+  [data-look="studio"] .tb-v { backdrop-filter: var(--glass); }
+  [data-look="galaxy"] .tb-v { border-radius: 26px; }
+  .tb-v .tool { width: 38px; height: 38px; border-radius: 50%; display: grid; place-items: center; color: var(--ink-2); }
+  .tb-v .tool.on { background: var(--accent-soft); color: var(--accent); }
+  .tb-v .tool.on .ms { font-variation-settings: "FILL" 1; }
+  .slider-row { display: flex; gap: 12px; align-items: center; margin-bottom: 12px; font-size: 13px; color: var(--ink-2); }
+  .slider-row span:first-child { width: 110px; flex: none; }
+  .slider-row output { width: 40px; text-align: end; font-variant-numeric: tabular-nums; color: var(--ink); font-size: 13px; }
+  .static-menu { position: static; display: inline-block; }
+  .static-snack { position: static; display: inline-flex; }
+  .list-demo { max-width: 460px; }
+  .mini-ab { position: static; transform: none; display: inline-flex; }
+  [data-look="galaxy"] .mini-ab { border-radius: 26px; }
+  .pill-disabled { opacity: .4; pointer-events: none; }
+  @media (max-width: 760px) { .ds-look svg { display: none; } .ds-hero { grid-template-columns: 1fr; } .mrow { grid-template-columns: 1fr auto; } .mrow .mstage { grid-column: 1 / -1; grid-row: 2; } .tscale > div { grid-template-columns: 1fr; gap: 2px; } }
+</style>
+</head>
+<body>
+<div class="page-wrap">
+  <h1>Design system</h1>
+  <p class="lead muted">The building blocks every screen uses. Switch A / B / C, ◐ and ع at the top: every swatch, font, radius, shadow and component below re-renders from tokens. Hex values are read live from the CSS.</p>
+
+  <div class="ds-hero">
+    <div class="ds-look">
+      <div class="eyebrow">Current direction · </div>
+      <h2></h2>
+      <p>The page is the hero. Chrome stays quiet and out of the way. Motion is physical, interruptible, and never runs under the pen.</p>
+      <div class="row"><button class="btn primary"><i class="ms">add</i>New notebook</button><button class="btn tonal"><i class="ms">upload_file</i>Import PDF</button><button class="btn ghost">Settings</button></div>
+      <svg viewBox="0 0 220 120"><path d="M10 90 C 40 30, 70 30, 80 70 S 120 110, 140 60 S 190 20, 210 50"/><path d="M30 108 C 80 100, 140 104, 200 98" style="stroke-width:2;opacity:.5"/></svg>
+    </div>
+    <div class="ds-principles">
+      <div><span class="ui-tile"><i class="ms">draw</i></span><span><b>The page is the hero</b><small>Chrome takes at most 8% of the editor. Feedback lives at the screen edges.</small></span></div>
+      <div><span class="ui-tile"><i class="ms">touch_app</i></span><span><b>Tools are one gesture away</b><small>Tap to select, tap again for settings. The S Pen button gives a temporary tool.</small></span></div>
+      <div><span class="ui-tile"><i class="ms">animation</i></span><span><b>Motion explains space</b><small>Springs for anything you drive. Ink never animates in. Zero latency wins.</small></span></div>
+    </div>
+  </div>
+
+  <div class="ds-sec">Color</div>
+  <div class="ds-grid">
+    <div class="ds-card wide">
+      <h3><i class="ms">palette</i>Color roles</h3>
+      <p class="muted">UI roles only. Paper and ink colors are content: they never follow the look or dynamic color.</p>
+      <div class="roles" id="roles"></div>
+    </div>
+    <div class="ds-card">
+      <h3><i class="ms">ink_highlighter</i>Semantic ink</h3>
+      <p class="muted">Smart Board and callouts give colors a meaning.</p>
+      <div class="roles" id="semroles"></div>
+    </div>
+    <div class="ds-card">
+      <h3><i class="ms">colors</i>Pen palette (content)</h3>
+      <p class="muted">Default pens. Identical in every look; on dark paper they swap black ↔ white and keep their hue.</p>
+      <div class="pal">
+        <span><b style="--c:#1d1d1f"></b>Ink</span><span><b style="--c:#2a4bd7"></b>Blue</span><span><b style="--c:#c62828"></b>Red</span><span><b style="--c:#2e7d32"></b>Green</span><span><b style="--c:#7b3fe4"></b>Violet</span><span><b style="--c:#ef6c00"></b>Orange</span><span><b style="--c:#ffd54f"></b>Marker</span><span><b style="--c:#80deea"></b>Aqua</span>
+      </div>
+      <div class="comp-l" style="margin-top:18px">Paper</div>
+      <div class="pal">
+        <span><b style="--c:#FBF9F4"></b>Ivory</span><span><b style="--c:#FFFFFF"></b>White</span><span><b style="--c:#F3EBDD"></b>Sepia</span><span><b style="--c:#1F2329"></b>Dark</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="ds-sec">Type</div>
+  <div class="ds-grid">
+    <div class="ds-card">
+      <h3><i class="ms">text_fields</i>Type scale</h3>
+      <p class="muted">Display font: <b id="dispFont">…</b> · UI: Inter</p>
+      <div class="tscale">
+        <div><code>display · 36</code><span class="ts-display">Physics 201</span></div>
+        <div><code>headline · 26</code><span class="ts-head">All notebooks</span></div>
+        <div><code>title · 20/600</code><span class="ts-title">Mechanics, week 7</span></div>
+        <div><code>body · 15</code><span class="ts-body">Edited 2 hours ago · 22 pages · on this device</span></div>
+        <div><code>label · 12/600</code><span class="ts-label">Recent searches</span></div>
+        <div><code>caption · 11</code><span class="ts-cap">Stored on this device · 312 MB</span></div>
+      </div>
+    </div>
+    <div class="ds-card">
+      <h3><i class="ms">translate</i>Arabic &amp; handwriting</h3>
+      <p class="muted">IBM Plex Sans Arabic for UI. Caveat stands in for Latin ink, Aref Ruqaa for Arabic ink.</p>
+      <div class="tscale">
+        <div><code>display · ar</code><span class="ts-ar-d bidi">دفتر الأدب العربي</span></div>
+        <div><code>body · ar</code><span class="ts-ar bidi">آخر تعديل منذ ساعتين · ٢٢ صفحة · على هذا الجهاز</span></div>
+        <div><code>mixed</code><span class="ts-ar bidi">ابحث عن <b>momentum</b> في «فيزياء 201»</span></div>
+        <div><code>ink · latin</code><span class="ts-hand">p = m·v, momentum is conserved</span></div>
+        <div><code>ink · arabic</code><span class="ts-ruqaa bidi">المعلّقات السبع - زهير بن أبي سلمى</span></div>
+      </div>
+    </div>
+    <div class="ds-card">
+      <h3><i class="ms">rounded_corner</i>Shape &amp; elevation</h3>
+      <p class="muted">Radii and shadows come from the look.</p>
+      <div class="shape-row">
+        <div style="border-radius:var(--r-card)">--r-card<br><b id="rCard"></b></div>
+        <div style="border-radius:var(--r-sheet)">--r-sheet<br><b id="rSheet"></b></div>
+        <div style="border-radius:999px">pill<br><b>toolbar</b></div>
+      </div>
+      <div class="elev-row">
+        <div style="box-shadow:var(--shadow-1)">shadow-1</div>
+        <div style="box-shadow:var(--shadow-2)">shadow-2</div>
+        <div style="box-shadow:var(--shadow-3)">shadow-3</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="ds-sec">Icons</div>
+  <div class="ds-card">
+    <h3><i class="ms">interests</i>Material Symbols Rounded <span class="grow"></span><span class="muted" style="font: 500 12px var(--font-ui)">Filled</span><div class="switch" id="fillSw"><i></i></div></h3>
+    <p class="muted">Outlined by default, filled when selected. Directional icons mirror in RTL (try ع). Tool icons in the editor are custom; this set covers everything else.</p>
+    <div id="iconSets"></div>
+  </div>
+
+  <div class="ds-sec">Motion</div>
+  <div class="ds-card" id="motion">
+    <h3><i class="ms">animation</i>Motion tokens <span class="grow"></span><span class="muted" style="font: 500 12px var(--font-ui)">Reduced motion</span><div class="switch" id="redSw"><i></i></div></h3>
+    <p class="muted">Press Play, or tap any demo. With reduced motion, transforms become fades (system "Remove animations").</p>
+    <div class="mrow"><div><b>Spring.Snappy</b><small>tools, toggles, popovers</small><div class="mcode">damping 0.8 · stiffness medium-high</div></div><div class="mstage m-snappy"><i class="mball"></i></div><button class="btn tonal sm play"><i class="ms">play_arrow</i>Play</button></div>
+    <div class="mrow"><div><b>Spring.Gentle</b><small>sheets, panels, page manager</small><div class="mcode">damping 0.9 · stiffness low</div></div><div class="mstage m-gentle"><i class="mball"></i></div><button class="btn tonal sm play"><i class="ms">play_arrow</i>Play</button></div>
+    <div class="mrow"><div><b>Spring.Gentle · sheet</b><small>bottom sheet entering</small><div class="mcode">interruptible, velocity-aware</div></div><div class="mstage m-sheet"><i class="msheet"></i></div><button class="btn tonal sm play"><i class="ms">play_arrow</i>Play</button></div>
+    <div class="mrow"><div><b>Duration.Short · 120 ms</b><small>fades, color changes</small><div class="mcode">ease-standard</div></div><div class="mstage m-short"><div class="mfade">selected</div></div><button class="btn tonal sm play"><i class="ms">play_arrow</i>Play</button></div>
+    <div class="mrow"><div><b>Duration.Medium · 250 ms</b><small>container transforms</small><div class="mcode">chip → search field</div></div><div class="mstage m-medium"><i class="mbox"></i></div><button class="btn tonal sm play"><i class="ms">play_arrow</i>Play</button></div>
+    <div class="mrow"><div><b>Duration.Long · 400 ms</b><small>open notebook (shared element)</small><div class="mcode">cover → page</div></div><div class="mstage m-long"><i class="mcover"></i></div><button class="btn tonal sm play"><i class="ms">play_arrow</i>Play</button></div>
+    <div class="rule">Rule: ink never animates in. Nothing moves under an active pen.</div>
+  </div>
+
+  <div class="ds-sec">Components</div>
+  <div class="ds-grid">
+    <div class="ds-card">
+      <h3><i class="ms">smart_button</i>Buttons</h3>
+      <div class="comp-l">Emphasis</div>
+      <div class="comp"><button class="btn primary">Create</button><button class="btn tonal">Import</button><button class="btn ghost">Cancel</button><button class="btn danger">Delete forever</button></div>
+      <div class="comp-l">With icon · sizes</div>
+      <div class="comp"><button class="btn primary lg"><i class="ms">add</i>New notebook</button><button class="btn tonal"><i class="ms">ios_share</i>Export</button><button class="btn ghost sm"><i class="ms">tune</i>Filter</button></div>
+      <div class="comp-l">Icon buttons</div>
+      <div class="comp"><span class="ui-ib"><i class="ms">search</i></span><span class="ui-ib on"><i class="ms">star</i></span><span class="ui-ib"><i class="ms">grid_view</i></span><span class="ui-ib"><i class="ms">more_vert</i></span><span class="ui-ib"><i class="ms flip">arrow_back</i></span></div>
+      <div class="comp-l">Disabled</div>
+      <div class="comp pill-disabled"><button class="btn primary">Restore</button><button class="btn ghost">Skip</button></div>
+    </div>
+
+    <div class="ds-card">
+      <h3><i class="ms">label</i>Chips, tags, badges</h3>
+      <div class="comp-l">Filter chips (tap)</div>
+      <div class="comp" id="chips"><span class="chip on"><i class="ms">gesture</i>Handwriting</span><span class="chip"><i class="ms">picture_as_pdf</i>PDF text</span><span class="chip"><i class="ms">title</i>Titles</span><span class="chip"><i class="ms">mic</i>Audio</span></div>
+      <div class="comp-l">Tags</div>
+      <div class="comp"><span class="ui-tag" style="--c:#c62828">exam</span><span class="ui-tag on" style="--c:#2a4bd7">lecture</span><span class="ui-tag" style="--c:#2e7d32">lab</span><span class="ui-tag" style="--c:#7b3fe4">مراجعة</span></div>
+      <div class="comp-l">Badges · keys</div>
+      <div class="comp"><span class="ui-badge">3 new</span><span class="ui-badge neutral"><i class="ms">schedule</i>27 days left</span><span class="ui-badge"><i class="ms">check</i>Backed up</span><span class="ui-kbd">Ctrl</span><span class="ui-kbd">Z</span></div>
+    </div>
+
+    <div class="ds-card">
+      <h3><i class="ms">toggle_on</i>Switches, choices, fields</h3>
+      <div class="ui-group list-demo">
+        <div class="ui-row"><i class="ms">stylus</i><div class="t"><b>Stylus-only mode</b><small>Fingers scroll and zoom, the S Pen writes</small></div><div class="switch on tog"><i></i></div></div>
+        <div class="ui-row"><i class="ms">ads_click</i><div class="t"><b>Hover cursor</b><small>Shows brush size before you touch</small></div><div class="switch tog"><i></i></div></div>
+        <div class="ui-row"><span class="ui-radio on"></span><div class="t"><b>Eraser</b></div><span class="ui-radio"></span><div class="t"><b>Lasso</b></div><span class="ui-check on"></span><div class="t"><b>Haptics</b></div></div>
+      </div>
+      <div class="comp-l">Text field</div>
+      <div class="ui-field" style="margin-bottom:8px"><i class="ms">edit</i><span class="ph">Notebook title</span></div>
+      <div class="ui-field focus"><i class="ms">edit</i><span>Thermodynamics<span class="ui-caret"></span></span></div>
+    </div>
+
+    <div class="ds-card">
+      <h3><i class="ms">linear_scale</i>Sliders &amp; segmented</h3>
+      <p class="muted">Drag the sliders.</p>
+      <div class="slider-row"><span>Thickness</span><div class="ui-slider" style="--v:38%"><i></i></div><output>0.38</output></div>
+      <div class="slider-row"><span>Pressure</span><div class="ui-slider" style="--v:70%"><i></i></div><output>0.70</output></div>
+      <div class="slider-row"><span>Palm rejection</span><div class="ui-slider" style="--v:55%"><i></i></div><output>0.55</output></div>
+      <div class="comp-l">Segmented</div>
+      <div class="seg" id="seg1"><span class="on">Light</span><span>Dark</span><span>System</span></div>
+      <div class="seg" id="seg2"><span>Fountain</span><span class="on">Ball</span><span>Brush</span><span>Pencil</span></div>
+    </div>
+
+    <div class="ds-card">
+      <h3><i class="ms">call_to_action</i>Bottom sheet</h3>
+      <p class="muted">Spring.Gentle in, drag-to-dismiss. Tap the scrim to close.</p>
+      <div class="stage" id="sheetStage">
+        <button class="btn primary sm center-btn" id="openSheet"><i class="ms">add</i>New</button>
+        <div class="ui-scrim hide"></div>
+        <div class="ui-sheet bottom hide">
+          <div class="ui-grab"></div>
+          <b>Create</b>
+          <div class="sheet-opts">
+            <span><i class="ms">menu_book</i>Notebook</span><span><i class="ms">bolt</i>Quicknote</span><span><i class="ms">picture_as_pdf</i>Import PDF</span><span><i class="ms">document_scanner</i>Smart Board</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="ds-card">
+      <h3><i class="ms">ink_pen</i>Popover</h3>
+      <p class="muted">Anchored to its tool. Never a full-screen dialog.</p>
+      <div class="stage">
+        <div class="anchor toolbar-pill mini"><span class="tool on"><i class="ms">ink_pen</i></span><span class="tool"><i class="ms">ink_highlighter</i></span><span class="tool"><i class="ms">ink_eraser</i></span></div>
+        <div class="popover">
+          <div class="pop-head"><b>Fountain pen</b><span class="muted">0.38 mm</span></div>
+          <div class="preview-stroke"><svg viewBox="0 0 260 50"><path d="M10 34 C 60 5, 100 45, 150 20 S 230 12, 250 30"/></svg></div>
+          <div class="slider-row" style="margin:0 0 8px"><span style="width:80px">Thickness</span><div class="ui-slider" style="--v:38%"><i></i></div></div>
+          <div class="pens-row"><b style="--c:#1d1d1f" class="on"></b><b style="--c:#2a4bd7"></b><b style="--c:#c62828"></b><b style="--c:#2e7d32"></b><b style="--c:#7b3fe4"></b><b class="add">＋</b></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="ds-card">
+      <h3><i class="ms">menu</i>Menu</h3>
+      <p class="muted">Long-press or right-click. Shortcuts shown on DeX.</p>
+      <div class="ui-menu static-menu">
+        <div class="ui-mi"><i class="ms">open_in_new</i>Open<span class="end">Enter</span></div>
+        <div class="ui-mi hot"><i class="ms">drive_file_move</i>Move to…</div>
+        <div class="ui-mi"><i class="ms">star</i>Add to favorites</div>
+        <div class="ui-mi"><i class="ms">ios_share</i>Export</div>
+        <div class="ui-msep"></div>
+        <div class="ui-mi danger"><i class="ms">delete</i>Move to trash<span class="end">Del</span></div>
+      </div>
+    </div>
+
+    <div class="ds-card">
+      <h3><i class="ms">chat_info</i>Snackbar</h3>
+      <p class="muted">Edge-of-screen feedback with one action. Never over the page while writing.</p>
+      <div class="stage" style="height:180px">
+        <button class="btn tonal sm center-btn" id="snackBtn"><i class="ms">delete</i>Delete notebook</button>
+        <div class="ui-snack hide" id="snack"><i class="ms">delete</i>“Calculus II” moved to trash<u>Undo</u></div>
+      </div>
+      <div class="comp-l">Static</div>
+      <div class="ui-snack static-snack"><i class="ms">check_circle</i>Backup complete · 412 MB<u>Open</u></div>
+    </div>
+
+    <div class="ds-card wide">
+      <h3><i class="ms">construction</i>Toolbar &amp; action bar</h3>
+      <p class="muted">The floating pill docks top, left, right or bottom. Tap a tool to select it. The multi-select action bar floats (A, B) or docks to the bottom edge (C).</p>
+      <div class="scroll-x">
+        <div class="toolbar-pill" id="tbDemo">
+          <span class="tool on"><i class="ms">ink_pen</i><i class="dot" style="--c:#1d1d1f"></i></span>
+          <span class="tool"><i class="ms">edit</i></span>
+          <span class="tool"><i class="ms">ink_highlighter</i><i class="dot" style="--c:#ffd54f"></i></span>
+          <span class="tool"><i class="ms">ink_eraser</i></span>
+          <span class="tool"><i class="ms">lasso_select</i></span>
+          <span class="tool"><i class="ms">category</i></span>
+          <span class="tool"><i class="ms">text_fields</i></span>
+          <span class="tool"><i class="ms">add_photo_alternate</i></span>
+          <span class="sep"></span>
+          <span class="fav" style="--c:#1d1d1f"><svg viewBox="0 0 40 16"><path d="M3 12 C 12 2, 22 14, 37 4"/></svg></span>
+          <span class="fav" style="--c:#2a4bd7"><svg viewBox="0 0 40 16"><path d="M3 12 C 12 2, 22 14, 37 4"/></svg></span>
+          <span class="fav" style="--c:#c62828"><svg viewBox="0 0 40 16"><path d="M3 12 C 12 2, 22 14, 37 4"/></svg></span>
+          <span class="sep"></span>
+          <span class="tool"><i class="ms">undo</i></span><span class="tool dim"><i class="ms">redo</i></span>
+        </div>
+      </div>
+      <div class="comp" style="align-items:flex-start; gap:22px">
+        <div class="tb-v"><span class="tool on"><i class="ms">ink_pen</i></span><span class="tool"><i class="ms">ink_highlighter</i></span><span class="tool"><i class="ms">ink_eraser</i></span><span class="tool"><i class="ms">lasso_select</i></span><span class="tool"><i class="ms">undo</i></span></div>
+        <div style="display:flex; flex-direction:column; gap:14px; min-width:0">
+          <div class="toolbar-pill mini"><span class="tool on"><i class="ms">ink_pen</i></span><span class="tool"><i class="ms">ink_eraser</i></span><span class="tool"><i class="ms">lasso_select</i></span><span class="sep"></span><span class="tool"><i class="ms">undo</i></span></div>
+          <div class="toolbar-pill quiet"><span class="tool on"><i class="ms">ink_pen</i></span><span class="tool"><i class="ms">ink_eraser</i></span><span class="tool"><i class="ms">lasso_select</i></span><span class="muted" style="padding:0 10px 0 4px">quiet: pen is down</span></div>
+          <div class="scroll-x" style="padding:0">
+            <div class="ui-actionbar mini-ab">
+              <span class="act"><i class="ms">drive_file_move</i>Move</span><span class="act"><i class="ms">sell</i>Tag</span><span class="act"><i class="ms">star</i>Favorite</span><span class="act"><i class="ms">ios_share</i>Export</span><span class="act danger"><i class="ms">delete</i>Delete</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="ds-card wide">
+      <h3><i class="ms">auto_stories</i>Covers &amp; page thumbnails</h3>
+      <p class="muted">Physical objects: spine, paper grain, 1 dp shadow. Corner radius follows the look.</p>
+      <div class="covers" style="grid-template-columns:repeat(auto-fill,minmax(110px,1fr))">
+        <div class="nb" style="--cv:#29324a"><div class="cover"><span class="ttl">Physics 201</span><span class="sub">Mechanics</span></div><b>Physics 201</b><small>Today · p.14</small></div>
+        <div class="nb" style="--cv:#7a2d2d"><div class="cover lined"><span class="ttl">Calculus II</span></div><b>Calculus II</b><small>Yesterday</small></div>
+        <div class="nb"><div class="cover pdfc"><span>PDF</span><div class="lines"></div></div><b>Lecture 7 slides</b><small>48 pages</small></div>
+        <div class="nb" style="--cv:#5b3f8f"><div class="cover"><span class="ttl ar">أدب عربي</span></div><b>أدب عربي</b><small>Oct 10</small></div>
+        <div class="thumb"><div class="pg ruled-s w"></div><small>Ruled</small></div>
+        <div class="thumb sel"><div class="pg grid-s"></div><small>Grid · selected</small></div>
+        <div class="thumb"><div class="pg cornell-s"></div><small>Cornell</small></div>
+        <div class="thumb"><div class="pg dark-s"></div><small>Dark paper</small></div>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+(function () {
+  const h = document.documentElement;
+  const roles = [['--paper','Paper'],['--surface','Surface'],['--surface-2','Surface 2'],['--chrome-solid','Chrome'],['--ink','Ink'],['--ink-2','Ink 2'],['--ink-3','Ink 3'],['--outline','Outline'],['--accent','Accent'],['--accent-soft','Accent soft'],['--on-accent','On accent'],['--danger','Danger']];
+  const sem = [['--sem-essential','Essential'],['--sem-annotation','Annotation'],['--sem-emphasis','Emphasis']];
+  const fill = (el, list) => { el.innerHTML = list.map(([v, n]) => `<div class="role"><i style="--c:var(${v})"></i><div><b>${n}</b><code data-v="${v}">${v}</code></div></div>`).join(''); };
+  fill(document.getElementById('roles'), roles);
+  fill(document.getElementById('semroles'), sem);
+  function refresh() {
+    const cs = getComputedStyle(h);
+    document.querySelectorAll('code[data-v]').forEach(c => { c.textContent = cs.getPropertyValue(c.dataset.v).trim().toUpperCase().replace(/\s+/g, ' ') || c.dataset.v; });
+    document.getElementById('dispFont').textContent = cs.getPropertyValue('--font-display').split(',')[0].replace(/"/g, '').trim();
+    document.getElementById('rCard').textContent = cs.getPropertyValue('--r-card').trim();
+    document.getElementById('rSheet').textContent = cs.getPropertyValue('--r-sheet').trim();
+  }
+  refresh();
+  new MutationObserver(refresh).observe(h, { attributes: true });
+
+  const sets = {
+    'Library & organization': ['auto_stories','folder','folder_open','create_new_folder','star','bolt','sell','sort','filter_list','grid_view','view_list','search','history','delete','restore_from_trash','drive_file_move'],
+    'Editor & tools': ['ink_pen','edit','ink_highlighter','ink_eraser','lasso_select','category','text_fields','add_photo_alternate','mic','layers','zoom_in','undo','redo','gesture','stylus','draw'],
+    'Files & sharing': ['upload_file','picture_as_pdf','image','ios_share','download','backup','settings_backup_restore','cloud_off','lock','shield','folder_zip','print'],
+    'System & navigation': ['settings','palette','dark_mode','translate','keyboard','mouse','devices','tablet_android','smartphone','desktop_windows','arrow_back','chevron_right','more_vert','close','check','info']
+  };
+  document.getElementById('iconSets').innerHTML = Object.entries(sets).map(([g, list]) =>
+    `<div class="icons-group">${g}</div><div class="icons">${list.map(n => `<span><i class="ms${/arrow_back|chevron_right/.test(n) ? ' flip' : ''}">${n}</i>${n}</span>`).join('')}</div>`).join('');
+  const fillSw = document.getElementById('fillSw');
+  fillSw.onclick = () => { fillSw.classList.toggle('on'); document.querySelectorAll('.icons').forEach(i => i.classList.toggle('filled', fillSw.classList.contains('on'))); };
+
+  // Motion demos
+  const motion = document.getElementById('motion');
+  motion.querySelectorAll('.mrow').forEach(r => {
+    const st = r.querySelector('.mstage');
+    const play = () => { st.classList.remove('go'); void st.offsetWidth; st.classList.add('go'); clearTimeout(st._t); st._t = setTimeout(() => st.classList.remove('go'), 1400); };
+    r.querySelector('.play').onclick = play; st.onclick = play;
+  });
+  const red = document.getElementById('redSw');
+  red.onclick = () => { red.classList.toggle('on'); motion.querySelectorAll('.mstage').forEach(s => s.classList.toggle('reduced', red.classList.contains('on'))); };
+
+  // Generic interactions
+  document.querySelectorAll('.tog').forEach(s => s.onclick = () => s.classList.toggle('on'));
+  document.querySelectorAll('#chips .chip').forEach(c => c.onclick = () => c.classList.toggle('on'));
+  document.querySelectorAll('.seg').forEach(g => g.querySelectorAll('span').forEach(s => s.onclick = () => { g.querySelectorAll('span').forEach(x => x.classList.remove('on')); s.classList.add('on'); }));
+  document.querySelectorAll('#tbDemo .tool').forEach(t => t.onclick = () => { document.querySelectorAll('#tbDemo .tool').forEach(x => x.classList.remove('on')); t.classList.add('on'); });
+  document.querySelectorAll('.ui-slider').forEach(sl => {
+    const out = sl.parentElement.querySelector('output');
+    const set = e => { const r = sl.getBoundingClientRect(); let v = (e.clientX - r.left) / r.width; if (h.dir === 'rtl') v = 1 - v; v = Math.max(0, Math.min(1, v)); sl.style.setProperty('--v', (v * 100).toFixed(0) + '%'); if (out) out.textContent = v.toFixed(2); };
+    sl.addEventListener('pointerdown', e => { sl.setPointerCapture(e.pointerId); set(e); sl.onpointermove = set; });
+    sl.addEventListener('pointerup', () => sl.onpointermove = null);
+  });
+
+  // Sheet + snackbar
+  const ss = document.getElementById('sheetStage');
+  const toggleSheet = open => { ss.querySelector('.ui-sheet').classList.toggle('hide', !open); ss.querySelector('.ui-scrim').classList.toggle('hide', !open); };
+  document.getElementById('openSheet').onclick = () => toggleSheet(true);
+  ss.querySelector('.ui-scrim').onclick = () => toggleSheet(false);
+  const snack = document.getElementById('snack');
+  document.getElementById('snackBtn').onclick = () => { snack.classList.remove('hide'); clearTimeout(snack._t); snack._t = setTimeout(() => snack.classList.add('hide'), 2600); };
+  snack.querySelector('u').onclick = () => snack.classList.add('hide');
+})();
+</script>
+</body>
+</html>

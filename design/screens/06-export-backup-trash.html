@@ -1,0 +1,421 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BestNote · Export, backup &amp; trash</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Sans+Arabic:wght@400;500;600&family=Caveat:wght@500;700&family=Material+Symbols+Rounded:opsz,wght,FILL@24,400,0..1&family=Fraunces:opsz,wght@9..144,500;9..144,600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../tokens.css">
+<link rel="stylesheet" href="../board.css">
+<script src="../shell.js"></script>
+<style>
+  .rail .rail-logo { background: var(--accent); color: var(--on-accent); }
+  /* editor backdrop */
+  .bg-ed { position: absolute; inset: 0; display: flex; flex-direction: column; background: #E9E6DF; }
+  [data-theme="dark"] .bg-ed, [data-look="studio"] .bg-ed { background: #121214; }
+  .bg-ed .canvas { cursor: default; }
+  .bg-ed .page { width: 560px; height: 760px; }
+
+  .exp { width: 1000px; height: 640px; display: grid; grid-template-columns: 400px 1fr; overflow: hidden; }
+  .exp-pv { background: var(--surface); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; padding: 24px; position: relative; }
+  .exp-pv .pp { width: 300px; height: 400px; position: relative; border-radius: 3px; box-shadow: var(--shadow-3); overflow: hidden; background: #fff; }
+  .exp-pv .pp svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .exp-pv .pp .ann { transition: opacity var(--dur-medium) var(--ease-standard); }
+  .exp-pv .pp.clean .ann { opacity: 0; }
+  .exp-pv .pp.stack { box-shadow: var(--shadow-3), 8px 8px 0 -1px var(--chrome-solid), 8px 8px 0 0 var(--outline), 16px 16px 0 -1px var(--chrome-solid), 16px 16px 0 0 var(--outline); }
+  .exp-pv .cap { font-size: 12px; color: var(--ink-3); text-align: center; }
+  .exp-pv .cap b { color: var(--ink); }
+  .exp-f { padding: 22px 26px 0; display: flex; flex-direction: column; min-width: 0; }
+  .exp-f .top { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+  .exp-f .top h3 { font: 600 22px var(--font-display); flex: 1; }
+  [data-look="galaxy"] .exp-f .top h3 { font-weight: 700; }
+  .fmts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+  .fmt { border: 2px solid var(--outline); border-radius: var(--r-card); padding: 12px 14px; cursor: pointer; display: flex; gap: 10px; align-items: center; background: var(--chrome-solid); }
+  .fmt.on { border-color: var(--accent); background: color-mix(in srgb, var(--accent-soft) 55%, var(--chrome-solid)); }
+  .fmt .ms { font-size: 28px; color: var(--accent); }
+  .fmt b { display: block; font-size: 14px; }
+  .fmt small { font-size: 11.5px; color: var(--ink-3); }
+  .lbl { font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); margin: 16px 0 8px; }
+  .opts .ui-row { padding: 9px 0; min-height: 0; }
+  .opts .ui-row .t b { font-size: 14px; }
+  .dests { display: flex; gap: 8px; margin-top: auto; padding: 14px 0 18px; border-top: 1px solid var(--outline); align-items: center; }
+  .dests .d { display: flex; flex-direction: column; align-items: center; gap: 4px; font-size: 11.5px; color: var(--ink-2); width: 74px; cursor: pointer; }
+  .dests .d span { width: 46px; height: 46px; border-radius: 16px; background: var(--surface); display: grid; place-items: center; color: var(--ink); }
+  [data-look="galaxy"] .dests .d span { border-radius: 50%; }
+  .ann-seg { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .ann-seg div { border: 1.5px solid var(--outline); border-radius: 12px; padding: 10px; cursor: pointer; font-size: 12.5px; display: flex; gap: 8px; align-items: center; }
+  .ann-seg div.on { border-color: var(--accent); color: var(--accent); font-weight: 600; background: var(--accent-soft); }
+  .ann-seg .ms { font-size: 20px; }
+  .pagepick { display: grid; grid-template-columns: repeat(8, 1fr); gap: 8px; }
+  .pagepick .thumb .pg { position: relative; margin-bottom: 2px; }
+  .pagepick .thumb { font-size: 11px; }
+  .pagepick .thumb .ui-check { position: absolute; top: 3px; inset-inline-end: 3px; width: 18px; height: 18px; }
+  .pagepick .thumb .ui-check.on::after { font-size: 13px; }
+  .tree-zip { font: 12.5px/1.7 ui-monospace, Menlo, monospace; background: var(--surface); border-radius: 12px; padding: 10px 14px; color: var(--ink-2); }
+  .tree-zip b { color: var(--ink); font-weight: 600; }
+  .tree-zip i { color: var(--ink-3); font-style: normal; }
+
+  /* backup page */
+  .set { flex: 1; display: grid; grid-template-columns: 1fr 1fr; gap: 22px; padding: 22px 28px; overflow: hidden; align-content: start; }
+  .set-h { grid-column: 1 / -1; display: flex; align-items: center; gap: 12px; }
+  .set-h h2 { font: 600 26px var(--font-display); flex: 1; }
+  [data-look="galaxy"] .set-h h2 { font-weight: 700; }
+  .hero { background: var(--chrome-solid); border: 1px solid var(--outline); border-radius: var(--r-card); padding: 20px; display: flex; gap: 18px; align-items: center; }
+  [data-look="galaxy"] .hero { border-color: transparent; }
+  [data-look="studio"] .hero { background: radial-gradient(100% 120% at 0% 0%, var(--accent-soft), transparent 60%), var(--chrome-solid); }
+  .ring { width: 92px; height: 92px; border-radius: 50%; background: conic-gradient(var(--accent) var(--p), var(--surface-2) 0); display: grid; place-items: center; flex: none; }
+  .ring > div { width: 74px; height: 74px; border-radius: 50%; background: var(--chrome-solid); display: grid; place-items: center; }
+  .ring .ms { font-size: 34px; color: var(--accent); font-variation-settings: "FILL" 1; }
+  .hero b { font-size: 18px; display: block; }
+  .hero small { color: var(--ink-3); font-size: 13px; display: block; margin: 2px 0 10px; }
+  .bk-list .ui-row .ms { color: var(--accent); }
+  .loc { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 12px; background: var(--surface); font-size: 13px; }
+  .loc .ms { color: var(--ink-3); }
+  .loc code { font: 12.5px ui-monospace, Menlo, monospace; color: var(--ink); }
+
+  /* system folder picker (Android Documents UI) */
+  .docsui { display: flex; flex-direction: column; background: var(--chrome-solid) !important; }
+  .docsui .bar { display: flex; align-items: center; gap: 14px; padding: 14px 22px; border-bottom: 1px solid var(--outline); }
+  .docsui .crumb { display: flex; align-items: center; gap: 4px; padding: 10px 22px; font-size: 13px; color: var(--ink-3); }
+  .docsui .crumb b { color: var(--accent); }
+  .docsui .grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; padding: 4px 22px; }
+  .docsui .f { display: flex; align-items: center; gap: 10px; padding: 14px; border-radius: 14px; background: var(--surface); font-size: 13.5px; }
+  .docsui .f .ms { color: var(--ink-3); font-variation-settings: "FILL" 1; }
+  .docsui .f.sel { background: var(--accent-soft); }
+  .docsui .f.sel .ms { color: var(--accent); }
+  .docsui .use { margin-top: auto; display: flex; justify-content: flex-end; gap: 10px; padding: 14px 22px; border-top: 1px solid var(--outline); }
+  .perm { width: 420px; padding: 22px; text-align: center; }
+  .perm .ms.big { font-size: 34px; color: var(--accent); }
+  .perm h4 { font-size: 18px; text-transform: none; letter-spacing: 0; color: var(--ink); margin: 10px 0 8px; font-weight: 600; }
+  .perm p { font-size: 13.5px; color: var(--ink-2); }
+  .perm .acts { display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; }
+
+  /* restore */
+  .rst { width: 720px; padding: 22px 24px; }
+  .rst h3 { font: 600 22px var(--font-display); }
+  .rst .src-card { display: flex; gap: 14px; align-items: center; padding: 14px; border-radius: var(--r-card); background: var(--surface); margin: 14px 0; }
+  .rst .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 14px; }
+  .rst .stats div { background: var(--surface); border-radius: 12px; padding: 10px 12px; }
+  .rst .stats b { font: 600 22px var(--font-display); display: block; }
+  .rst .stats small { color: var(--ink-3); font-size: 12px; }
+  .modes { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .mode { border: 2px solid var(--outline); border-radius: var(--r-card); padding: 14px; display: flex; gap: 10px; cursor: pointer; }
+  .mode.on { border-color: var(--accent); background: color-mix(in srgb, var(--accent-soft) 55%, var(--chrome-solid)); }
+  .mode b { display: block; font-size: 14px; }
+  .mode small { color: var(--ink-3); font-size: 12px; }
+  .mode.warn small { color: var(--danger); }
+  .rst .acts { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
+
+  /* trash */
+  .trash { flex: 1; padding: 20px 28px; position: relative; overflow: hidden; }
+  .banner { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-radius: 12px; background: var(--surface-2); font-size: 13px; color: var(--ink-2); margin: 12px 0 16px; }
+  .banner .ms { color: var(--ink-3); }
+  .tgrid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 22px 20px; }
+  .titem { position: relative; cursor: pointer; }
+  .titem .cover, .titem .tp { filter: saturate(.55); opacity: .9; }
+  .titem .tp { aspect-ratio: 3 / 4; border-radius: 6px; box-shadow: var(--shadow-1); }
+  .titem b { display: block; font-size: 13px; margin-top: 8px; }
+  .titem small { color: var(--ink-3); font-size: 11.5px; display: flex; align-items: center; gap: 6px; }
+  .days { width: 16px; height: 16px; border-radius: 50%; background: conic-gradient(var(--c, var(--accent)) var(--p), var(--surface-2) 0); flex: none; }
+  .titem.sel .cover, .titem.sel .tp { box-shadow: 0 0 0 3px var(--accent), var(--shadow-2); filter: none; opacity: 1; }
+  .titem .ui-check { position: absolute; top: 8px; inset-inline-start: 12px; z-index: 2; }
+  .titem .kind { position: absolute; top: 8px; inset-inline-end: 8px; z-index: 2; font-size: 10px; font-weight: 600; background: rgba(0,0,0,.55); color: #fff; padding: 2px 6px; border-radius: 6px; }
+  .confirm { width: 440px; padding: 24px; }
+  .confirm .ms.big { font-size: 36px; color: var(--danger); }
+  .confirm h4 { font-size: 19px; text-transform: none; letter-spacing: 0; color: var(--ink); margin: 10px 0 6px; font-weight: 600; }
+  .confirm p { color: var(--ink-2); font-size: 14px; }
+  .confirm .acts { display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; }
+  .btn.danger-fill { background: var(--danger); color: #fff; }
+</style>
+</head>
+<body>
+<div class="page-wrap">
+  <h1>Export, backup &amp; trash</h1>
+  <p class="lead muted">Your notes are yours: export any notebook as PDF, PNG or the open .bnote format, back up everything to a folder you choose, and get deleted things back for 30 days. In state 1, switch annotations on and off to see the preview change.</p>
+  <div class="variants">
+
+    <div>
+      <div class="variant-label">1 · Export as PDF: with or without your annotations (interactive)</div>
+      <div class="device tablet">
+        <div class="status"><span>9:41</span><span><i class="ms">wifi</i><i class="ms">battery_full</i></span></div>
+        <div class="scr">
+          <div class="bg-ed" data-bged></div>
+          <div class="ui-scrim"></div>
+          <div class="ui-sheet center exp">
+            <div class="exp-pv">
+              <div class="pp" id="pp">
+                <svg viewBox="0 0 300 400">
+                  <rect width="300" height="54" fill="#1d3c8a"/><text x="18" y="34" font-family="Inter" font-weight="600" font-size="18" fill="#fff">Conservation of Momentum</text>
+                  <text x="18" y="84" font-family="Georgia" font-size="11" fill="#333">For an isolated system, the total linear</text>
+                  <text x="18" y="100" font-family="Georgia" font-size="11" fill="#333">momentum stays constant in every collision.</text>
+                  <text x="18" y="130" font-family="Georgia" font-size="11" fill="#333">Elastic: kinetic energy is also conserved.</text>
+                  <text x="18" y="146" font-family="Georgia" font-size="11" fill="#333">Inelastic: objects may stick together.</text>
+                  <path d="M40 300 L 260 300 M 60 290 L 60 310 M 240 290 L 240 310" stroke="#333" stroke-width="1.4"/>
+                  <rect x="80" y="270" width="44" height="28" fill="#dfe6f5" stroke="#333"/><rect x="170" y="270" width="44" height="28" fill="#f5e0df" stroke="#333"/>
+                  <g class="ann">
+                    <path d="M18 96 L 240 96" stroke="#ffd54f" stroke-width="13" opacity=".55" stroke-linecap="round"/>
+                    <text x="20" y="196" font-family="Caveat" font-weight="700" font-size="22" fill="#c62828">p before = p after !!</text>
+                    <rect x="12" y="176" width="190" height="28" fill="none" stroke="#c62828" stroke-width="1.6" rx="3"/>
+                    <path d="M130 284 L 162 284 M 154 278 L 163 284 L 154 290" stroke="#2a4bd7" stroke-width="2" fill="none" stroke-linecap="round"/>
+                    <text x="128" y="262" font-family="Caveat" font-weight="600" font-size="17" fill="#2a4bd7">v₁</text>
+                    <text x="190" y="350" font-family="Caveat" font-weight="600" font-size="18" fill="#2e7d32">see p.15 →</text>
+                    <path d="M244 120 C 270 130, 272 160, 250 170" stroke="#2e7d32" stroke-width="2" fill="none"/>
+                  </g>
+                </svg>
+              </div>
+              <div class="cap"><b>Lecture 7 slides</b> · page 11 of 48<br><span id="capT">PDF with your ink, highlights and text</span></div>
+            </div>
+            <div class="exp-f">
+              <div class="top"><h3>Export</h3><span class="ui-ib"><i class="ms">close</i></span></div>
+              <div class="fmts"><div class="fmt on"><i class="ms">picture_as_pdf</i><div><b>PDF</b><small>Print &amp; share</small></div></div><div class="fmt"><i class="ms">image</i><div><b>PNG pages</b><small>One image per page</small></div></div><div class="fmt"><i class="ms">folder_zip</i><div><b>.bnote</b><small>Editable, open format</small></div></div></div>
+              <div class="lbl">Annotations</div>
+              <div class="ann-seg" id="annSeg"><div class="on" data-a="with"><i class="ms">draw</i>With annotations</div><div data-a="clean"><i class="ms">picture_as_pdf</i>Original only</div><div data-a="flat"><i class="ms">layers</i>Flattened</div></div>
+              <div class="lbl">Pages</div>
+              <div class="seg" style="margin:0"><span class="on">All 48</span><span>This page</span><span>Range…</span><span>Annotated only (9)</span></div>
+              <div class="opts" style="margin-top:8px">
+                <div class="ui-row"><div class="t"><b>Include paper template</b><small>Lines and grids on note pages</small></div><div class="switch on tog"><i></i></div></div>
+                <div class="ui-row"><div class="t"><b>Keep links &amp; outline</b><small>Bookmarks become PDF outline</small></div><div class="switch on tog"><i></i></div></div>
+                <div class="ui-row"><div class="t"><b>File name</b></div><span class="val">PHYS201_Lecture7_annotated.pdf</span></div>
+              </div>
+              <div class="dests">
+                <div class="d"><span><i class="ms">share</i></span>Share…</div>
+                <div class="d"><span><i class="ms">folder_open</i></span>Save to…</div>
+                <div class="d"><span><i class="ms">print</i></span>Print</div>
+                <div class="d"><span><i class="ms">devices</i></span>Quick Share</div>
+                <span class="grow"></span><span class="muted">≈ 14.2 MB</span><button class="btn primary">Export PDF</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div class="variant-label">2 · Export PNG pages: pick pages, resolution, transparent background</div>
+      <div class="device tablet">
+        <div class="status"><span>9:41</span><span><i class="ms">wifi</i><i class="ms">battery_full</i></span></div>
+        <div class="scr">
+          <div class="bg-ed" data-bged></div>
+          <div class="ui-scrim"></div>
+          <div class="ui-sheet center exp">
+            <div class="exp-pv">
+              <div class="pp stack page ruled-s" style="background-color:var(--paper)"><svg viewBox="0 0 300 400"><text x="24" y="50" font-family="Caveat" font-weight="700" font-size="28" fill="#1d3c8a">Lecture 7 · Oct 14</text><text x="24" y="96" font-family="Caveat" font-weight="600" font-size="22" fill="#1d2a4a">Linear momentum p = m·v</text><text x="24" y="132" font-family="Caveat" font-weight="600" font-size="20" fill="#c62828">(vector!)</text><path d="M40 300 L 240 300 L 240 200 Z" fill="none" stroke="#1d2a4a" stroke-width="2.2"/></svg></div>
+              <div class="cap"><b>4 pages</b> → 4 PNG files<br>2732 × 3644 px each</div>
+            </div>
+            <div class="exp-f">
+              <div class="top"><h3>Export</h3><span class="ui-ib"><i class="ms">close</i></span></div>
+              <div class="fmts"><div class="fmt"><i class="ms">picture_as_pdf</i><div><b>PDF</b><small>Print &amp; share</small></div></div><div class="fmt on"><i class="ms">image</i><div><b>PNG pages</b><small>One image per page</small></div></div><div class="fmt"><i class="ms">folder_zip</i><div><b>.bnote</b><small>Editable, open format</small></div></div></div>
+              <div class="lbl">Pages · 4 selected</div>
+              <div class="pagepick" id="pick"></div>
+              <div class="lbl">Resolution</div>
+              <div class="seg" style="margin:0"><span>1× · screen</span><span class="on">2× · sharp</span><span>3× · print</span></div>
+              <div class="opts" style="margin-top:8px">
+                <div class="ui-row"><div class="t"><b>Transparent background</b><small>Ink only, for slides and stickers</small></div><div class="switch tog"><i></i></div></div>
+                <div class="ui-row"><div class="t"><b>Crop to content</b><small>Trim empty paper around the ink</small></div><div class="switch on tog"><i></i></div></div>
+              </div>
+              <div class="dests"><div class="d"><span><i class="ms">share</i></span>Share…</div><div class="d"><span><i class="ms">photo_library</i></span>To Gallery</div><div class="d"><span><i class="ms">content_copy</i></span>Copy</div><span class="grow"></span><span class="muted">≈ 6.8 MB</span><button class="btn primary">Export 4 images</button></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div class="variant-label">3 · Export .bnote: the full, editable notebook in an open format · done snackbar</div>
+      <div class="device tablet">
+        <div class="status"><span>9:41</span><span><i class="ms">wifi</i><i class="ms">battery_full</i></span></div>
+        <div class="scr">
+          <div class="bg-ed" data-bged></div>
+          <div class="ui-scrim"></div>
+          <div class="ui-sheet center exp">
+            <div class="exp-pv">
+              <div class="nb" style="--cv:#29324a; width:210px"><div class="cover" style="box-shadow:var(--shadow-3), inset 6px 0 0 rgba(0,0,0,.18)"><span class="ttl" style="font-size:22px">Physics 201</span><span class="sub">Mechanics</span></div></div>
+              <div class="cap"><b>Physics 201.bnote</b> · 38 MB<br>22 pages · 2 recordings · 6 images</div>
+            </div>
+            <div class="exp-f">
+              <div class="top"><h3>Export</h3><span class="ui-ib"><i class="ms">close</i></span></div>
+              <div class="fmts"><div class="fmt"><i class="ms">picture_as_pdf</i><div><b>PDF</b><small>Print &amp; share</small></div></div><div class="fmt"><i class="ms">image</i><div><b>PNG pages</b><small>One image per page</small></div></div><div class="fmt on"><i class="ms">folder_zip</i><div><b>.bnote</b><small>Editable, open format</small></div></div></div>
+              <div class="lbl">What’s inside</div>
+              <div class="tree-zip"><b>Physics 201.bnote</b> <i>(zip)</i><br>├─ notebook.json <i>pages, layers, tags</i><br>├─ ink/ <i>vector strokes with pressure &amp; tilt</i><br>├─ pdf/Lecture7.pdf <i>untouched original</i><br>├─ audio/ <i>2 recordings synced to ink</i><br>└─ images/ <i>6 files</i></div>
+              <div class="opts" style="margin-top:8px">
+                <div class="ui-row"><div class="t"><b>Include audio recordings</b><small>+ 21 MB</small></div><div class="switch on tog"><i></i></div></div>
+                <div class="ui-row"><div class="t"><b>Include page history</b><small>Undo steps, for version recovery</small></div><div class="switch tog"><i></i></div></div>
+              </div>
+              <p class="muted" style="margin-top:8px">The format is documented and open source, so other apps can read it too.</p>
+              <div class="dests"><div class="d"><span><i class="ms">share</i></span>Share…</div><div class="d"><span><i class="ms">folder_open</i></span>Save to…</div><div class="d"><span><i class="ms">devices</i></span>Quick Share</div><span class="grow"></span><span class="muted">≈ 38 MB</span><button class="btn primary">Export</button></div>
+            </div>
+          </div>
+          <div class="ui-snack" style="left:50%; bottom:26px; transform:translateX(-50%); z-index:30"><i class="ms">check_circle</i>Saved “Physics 201.bnote” to Documents<u>Open folder</u></div>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div class="variant-label">4 · Backup &amp; restore: everything to a folder you choose, on a schedule</div>
+      <div class="device tablet">
+        <div class="status"><span>9:41</span><span><i class="ms">wifi</i><i class="ms">battery_full</i></span></div>
+        <div class="lib scr">
+          <aside class="rail"><div class="rail-logo">B</div><a><i class="ms">auto_stories</i><small>Library</small></a><a><i class="ms">star</i><small>Favorites</small></a><a><i class="ms">search</i><small>Search</small></a><span class="grow"></span><a><i class="ms">delete</i><small>Trash</small></a><a class="on"><i class="ms">settings</i><small>Settings</small></a></aside>
+          <div class="set">
+            <div class="set-h"><span class="ui-ib"><i class="ms flip">arrow_back</i></span><h2>Backup &amp; restore</h2><button class="btn ghost"><i class="ms">settings_backup_restore</i>Restore…</button><button class="btn primary"><i class="ms">backup</i>Back up now</button></div>
+            <div>
+              <div class="hero"><div class="ring" style="--p:100%"><div><i class="ms">verified</i></div></div><div><b>Backed up 2 hours ago</b><small>Everything: 24 notebooks, 3 PDFs, audio and settings · 412 MB</small><div class="loc"><i class="ms">folder</i><code>Documents/BestNote Backups</code><span class="grow"></span><a style="color:var(--accent); font-weight:600; cursor:pointer">Change</a></div></div></div>
+              <div class="ui-gl">Automatic</div>
+              <div class="ui-group">
+                <div class="ui-row"><i class="ms">schedule</i><div class="t"><b>Back up automatically</b><small>While charging and idle</small></div><div class="switch on tog"><i></i></div></div>
+                <div class="ui-row"><i class="ms">event_repeat</i><div class="t"><b>How often</b></div><div class="seg" style="margin:0; width:220px"><span class="on">Daily</span><span>Weekly</span><span>Monthly</span></div></div>
+                <div class="ui-row"><i class="ms">history</i><div class="t"><b>Keep</b><small>Older backups are removed</small></div><span class="val">Last 5 backups</span><i class="ms" style="color:var(--ink-3)">expand_more</i></div>
+                <div class="ui-row"><i class="ms">mic</i><div class="t"><b>Include audio</b><small>Recordings make backups larger</small></div><div class="switch on tog"><i></i></div></div>
+                <div class="ui-row"><i class="ms">lock</i><div class="t"><b>Encrypt with a password</b><small>You’ll need it to restore</small></div><div class="switch tog"><i></i></div></div>
+              </div>
+            </div>
+            <div>
+              <div class="ui-gl" style="margin-top:0">Backups in this folder</div>
+              <div class="ui-group bk-list">
+                <div class="ui-row"><i class="ms">folder_zip</i><div class="t"><b>Today, 07:40</b><small>412 MB · automatic</small></div><button class="btn ghost sm">Restore</button></div>
+                <div class="ui-row"><i class="ms">folder_zip</i><div class="t"><b>Yesterday, 07:35</b><small>408 MB · automatic</small></div><button class="btn ghost sm">Restore</button></div>
+                <div class="ui-row"><i class="ms">folder_zip</i><div class="t"><b>Oct 12, 21:02</b><small>401 MB · before reset, manual</small></div><button class="btn ghost sm">Restore</button></div>
+                <div class="ui-row"><i class="ms">folder_zip</i><div class="t"><b>Oct 11, 07:31</b><small>396 MB · automatic</small></div><button class="btn ghost sm">Restore</button></div>
+              </div>
+              <div class="banner" style="margin-top:14px"><i class="ms">info</i>Pick a folder synced by Google Drive, OneDrive or an SD card to keep a copy off this tablet. BestNote never uploads anything itself.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div class="variant-label">5 · Choose the backup folder: Android folder picker, then the access prompt</div>
+      <div class="device tablet">
+        <div class="status"><span>9:41</span><span><i class="ms">wifi</i><i class="ms">battery_full</i></span></div>
+        <div class="scr docsui col">
+          <div class="bar"><i class="ms">menu</i><b style="font-size:18px">Documents</b><span class="grow"></span><i class="ms">create_new_folder</i><i class="ms">search</i><i class="ms">more_vert</i></div>
+          <div class="crumb">Galaxy Tab S10 Ultra <i class="ms flip" style="font-size:16px">chevron_right</i> Documents <i class="ms flip" style="font-size:16px">chevron_right</i> <b>BestNote Backups</b></div>
+          <div class="grid">
+            <div class="f"><i class="ms">folder</i>Drive (synced)</div>
+            <div class="f sel"><i class="ms">folder</i>BestNote Backups</div>
+            <div class="f"><i class="ms">folder</i>Scans</div>
+            <div class="f"><i class="ms">folder</i>University</div>
+            <div class="f"><i class="ms">folder</i>Work</div>
+          </div>
+          <div class="use"><button class="btn ghost">Cancel</button><button class="btn primary">Use this folder</button></div>
+          <div class="ui-scrim"></div>
+          <div class="ui-sheet center perm">
+            <i class="ms big">folder_managed</i>
+            <h4>Allow BestNote to access files in “BestNote Backups”?</h4>
+            <p>This lets BestNote save and read backups in this folder only. You can change this in Settings anytime.</p>
+            <div class="acts"><button class="btn ghost">Cancel</button><button class="btn primary">Allow</button></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div class="variant-label">6 · Restore: preview what’s inside, then merge or replace</div>
+      <div class="device tablet">
+        <div class="status"><span>9:41</span><span><i class="ms">wifi</i><i class="ms">battery_full</i></span></div>
+        <div class="scr">
+          <div class="bg-ed" data-bglib></div>
+          <div class="ui-scrim"></div>
+          <div class="ui-sheet center rst">
+            <h3>Restore backup</h3>
+            <div class="src-card"><span class="ui-tile lg"><i class="ms">folder_zip</i></span><div><b>bestnote-backup-2026-10-14.bnbackup</b><div class="muted">Made Oct 14, 07:35 on Galaxy Tab S9 · 408 MB</div></div></div>
+            <div class="stats"><div><b>24</b><small>notebooks</small></div><div><b>3</b><small>PDFs</small></div><div><b>11</b><small>folders</small></div><div><b>2</b><small>recordings</small></div></div>
+            <div class="modes" id="modes">
+              <div class="mode on"><span class="ui-radio on"></span><div><b>Merge</b><small>Add what’s missing. If both have a notebook, keep the newer one and save the other as a copy.</small></div></div>
+              <div class="mode warn"><span class="ui-radio"></span><div><b>Replace everything</b><small>Removes what’s on this tablet now. A safety backup is made first.</small></div></div>
+            </div>
+            <div class="prog-card" style="margin-top:14px; padding:12px 14px; border-radius:var(--r-card); background:var(--surface); font-size:12.5px"><div style="display:flex; justify-content:space-between; margin-bottom:8px"><span>Restoring… Organic Chem (14 of 24)</span><b>58%</b></div><div class="ui-prog"><i style="--v:58%"></i></div></div>
+            <div class="acts"><button class="btn ghost">Cancel</button><button class="btn primary" style="opacity:.5">Restoring…</button></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div class="variant-label">7 · Trash: 30 days to change your mind (tap items to select)</div>
+      <div class="device tablet">
+        <div class="status"><span>9:41</span><span><i class="ms">wifi</i><i class="ms">battery_full</i></span></div>
+        <div class="lib scr">
+          <aside class="rail"><div class="rail-logo">B</div><a><i class="ms">auto_stories</i><small>Library</small></a><a><i class="ms">star</i><small>Favorites</small></a><a><i class="ms">search</i><small>Search</small></a><span class="grow"></span><a class="on"><i class="ms">delete</i><small>Trash</small></a><a><i class="ms">settings</i><small>Settings</small></a></aside>
+          <div class="trash">
+            <div class="shelf-head"><div><h2>Trash</h2><p class="muted">7 items · 96 MB</p></div><button class="btn ghost danger"><i class="ms">delete_forever</i>Empty trash</button></div>
+            <div class="banner"><i class="ms">auto_delete</i>Items are deleted forever 30 days after you trash them. Pages you delete inside a notebook show up here too.</div>
+            <div class="tgrid" id="tgrid"></div>
+            <div class="ui-actionbar">
+              <span class="act"><i class="ms">restore_from_trash</i>Restore</span>
+              <span class="act"><i class="ms">drive_file_move</i>Restore to…</span>
+              <span class="act danger"><i class="ms">delete_forever</i>Delete forever</span>
+            </div>
+          </div>
+          <div class="ui-snack" style="top:24px; inset-inline-end:28px"><i class="ms">restore_from_trash</i>“Calculus II” restored to Calculus II<u>Open</u></div>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div class="variant-label">8 · Empty trash: one clear confirmation</div>
+      <div class="device tablet">
+        <div class="status"><span>9:41</span><span><i class="ms">wifi</i><i class="ms">battery_full</i></span></div>
+        <div class="lib scr">
+          <aside class="rail"><div class="rail-logo">B</div><a><i class="ms">auto_stories</i><small>Library</small></a><a><i class="ms">star</i><small>Favorites</small></a><a><i class="ms">search</i><small>Search</small></a><span class="grow"></span><a class="on"><i class="ms">delete</i><small>Trash</small></a><a><i class="ms">settings</i><small>Settings</small></a></aside>
+          <div class="trash">
+            <div class="shelf-head"><div><h2>Trash</h2><p class="muted">7 items · 96 MB</p></div><button class="btn ghost danger"><i class="ms">delete_forever</i>Empty trash</button></div>
+            <div class="banner"><i class="ms">auto_delete</i>Items are deleted forever 30 days after you trash them.</div>
+            <div class="tgrid" data-tgrid></div>
+          </div>
+          <div class="ui-scrim"></div>
+          <div class="ui-sheet center confirm">
+            <i class="ms big">delete_forever</i>
+            <h4>Delete 7 items forever?</h4>
+            <p>4 notebooks, 2 pages and 1 PDF (96 MB). This can’t be undone, and they won’t be in future backups.</p>
+            <div class="acts"><button class="btn ghost">Cancel</button><button class="btn danger-fill">Delete forever</button></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+  <p class="note">Export and backup run in the background with a progress notification; the app stays usable. Restore always makes a safety backup before replacing anything. Trash keeps the full notebook, including audio, until day 30.</p>
+</div>
+<script>
+(function () {
+  // editor backdrop
+  document.querySelectorAll('[data-bged]').forEach(b => b.innerHTML = `<div class="ed-top"><span class="back"><i class="ms flip">arrow_back</i></span><div class="doc-tabs"><span class="on">Lecture 7 slides</span><span>Physics 201</span></div><span class="grow"></span><span class="icon"><i class="ms">ios_share</i></span></div><div class="canvas"><div class="page ruled"><div class="margin-line"></div></div></div>`);
+  document.querySelectorAll('[data-bglib]').forEach(b => { b.style.background = 'var(--surface)'; b.innerHTML = `<div style="padding:30px 40px"><h2 style="font:600 26px var(--font-display)">All notebooks</h2></div>`; });
+
+  // annotations toggle
+  const pp = document.getElementById('pp'), cap = document.getElementById('capT');
+  const txt = { with: 'PDF with your ink, highlights and text', clean: 'The original PDF, no annotations', flat: 'Annotations burned in, not editable' };
+  document.querySelectorAll('#annSeg div').forEach(d => d.onclick = () => { document.querySelectorAll('#annSeg div').forEach(x => x.classList.toggle('on', x === d)); pp.classList.toggle('clean', d.dataset.a === 'clean'); cap.textContent = txt[d.dataset.a]; });
+
+  // page picker
+  const kinds = ['ruled-s w', 'ruled-s', 'grid-s w', 'pdf-s', 'ruled-s w', 'cornell-s', 'dots-s', 'ruled-s w'];
+  const on = [0, 3, 4, 7];
+  document.getElementById('pick').innerHTML = kinds.map((k, i) => `<div class="thumb${on.includes(i) ? ' sel' : ''}"><div class="pg ${k}"><span class="ui-check${on.includes(i) ? ' on' : ''}"></span></div>${i + 1}</div>`).join('');
+  document.querySelectorAll('#pick .thumb').forEach(t => t.onclick = () => { t.classList.toggle('sel'); t.querySelector('.ui-check').classList.toggle('on'); });
+
+  // trash items
+  const items = [
+    ['nb', '#7a2d2d', 'Calculus II', 29, 'lined'], ['nb', '#6b2d4f', 'Organic Chem (old)', 24, ''], ['pg', 'grid-s', 'Physics 201 · p.9', 18, ''], ['pdf', '', 'Syllabus 2025.pdf', 12, ''],
+    ['nb', '#3b4a6b', 'Scratch', 6, 'dots'], ['pg', 'ruled-s w', 'أدب عربي · ص.4', 3, ''], ['nb', '#8a5a2b', 'Old planner', 1, 'lined']
+  ];
+  const sel = [1, 4];
+  const html = withSel => items.map(([k, v, n, d, x], i) => {
+    const s = withSel && sel.includes(i);
+    const vis = k === 'nb' ? `<div class="cover ${x}" style="--cv:${v}"><span class="ttl">${n}</span></div>` : k === 'pdf' ? `<div class="cover pdfc"><span>PDF</span><div class="lines"></div></div>` : `<div class="tp page ${v}"></div>`;
+    const c = d <= 3 ? 'var(--danger)' : 'var(--accent)';
+    return `<div class="titem${s ? ' sel' : ''}">${withSel ? `<span class="ui-check${s ? ' on' : ''}"></span>` : ''}${k === 'pg' ? '<span class="kind">PAGE</span>' : ''}${vis}<b>${n}</b><small><i class="days" style="--p:${d / 30 * 100}%; --c:${c}"></i>${d === 1 ? '1 day left' : d + ' days left'}</small></div>`;
+  }).join('');
+  document.getElementById('tgrid').innerHTML = html(true);
+  document.querySelectorAll('[data-tgrid]').forEach(t => t.innerHTML = html(false));
+  document.querySelectorAll('#tgrid .titem').forEach(t => t.onclick = () => { t.classList.toggle('sel'); t.querySelector('.ui-check').classList.toggle('on'); });
+
+  document.querySelectorAll('.fmts').forEach(g => g.querySelectorAll('.fmt').forEach(f => f.onclick = () => g.querySelectorAll('.fmt').forEach(x => x.classList.toggle('on', x === f))));
+  document.querySelectorAll('.seg').forEach(g => g.querySelectorAll('span').forEach(s => s.onclick = () => g.querySelectorAll('span').forEach(x => x.classList.toggle('on', x === s))));
+  document.querySelectorAll('.tog').forEach(s => s.onclick = () => s.classList.toggle('on'));
+  document.querySelectorAll('#modes .mode').forEach(m => m.onclick = () => document.querySelectorAll('#modes .mode').forEach(x => { x.classList.toggle('on', x === m); x.querySelector('.ui-radio').classList.toggle('on', x === m); }));
+})();
+</script>
+</body>
+</html>

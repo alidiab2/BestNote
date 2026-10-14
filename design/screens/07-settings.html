@@ -1,0 +1,474 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BestNote · Settings</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Sans+Arabic:wght@400;500;600&family=Caveat:wght@500;700&family=Material+Symbols+Rounded:opsz,wght,FILL@24,400,0..1&family=Fraunces:opsz,wght@9..144,500;9..144,600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../tokens.css">
+<link rel="stylesheet" href="../board.css">
+<script src="../shell.js"></script>
+<style>
+  .st { display: grid !important; grid-template-columns: 330px 1fr; }
+  .nav { background: var(--chrome-solid); border-inline-end: 1px solid var(--outline); padding: 18px 14px; display: flex; flex-direction: column; gap: 2px; overflow: hidden; }
+  [data-look="galaxy"] .nav { background: var(--surface); border: 0; }
+  .nav .hd { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+  .nav .hd h2 { font: 600 26px var(--font-display); flex: 1; }
+  [data-look="galaxy"] .nav .hd h2 { font-weight: 700; font-size: 30px; }
+  .nav .ui-field { padding: 9px 14px; font-size: 14px; margin-bottom: 10px; border-radius: 999px; }
+  .nav a { display: flex; align-items: center; gap: 12px; padding: 9px 10px; border-radius: 12px; font-size: 14.5px; cursor: pointer; color: var(--ink); }
+  .nav a:hover { background: var(--surface); }
+  .nav a .ic { width: 32px; height: 32px; border-radius: 10px; display: grid; place-items: center; background: var(--surface); color: var(--ink-2); flex: none; }
+  .nav a .ic .ms { font-size: 19px; }
+  [data-look="galaxy"] .nav a .ic { background: var(--c); color: #fff; border-radius: 50%; }
+  [data-look="galaxy"] .nav a { padding: 10px 12px; border-radius: 18px; }
+  [data-look="studio"] .nav a .ic { background: transparent; border: 1px solid var(--outline); color: var(--c); }
+  .nav a small { display: block; font-size: 11.5px; color: var(--ink-3); }
+  .nav a.on { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+  .nav a.on .ic { background: var(--accent); color: var(--on-accent); }
+  [data-look="studio"] .nav a.on .ic { border-color: var(--accent); }
+  .nav .sp { height: 8px; }
+  .det { padding: 24px 34px; overflow: hidden; display: flex; flex-direction: column; }
+  .det > h3 { font: 600 28px var(--font-display); margin-bottom: 2px; }
+  [data-look="galaxy"] .det > h3 { font-weight: 700; letter-spacing: -.02em; }
+  .det > p.muted { margin-bottom: 4px; }
+  .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 0 22px; }
+  .det .ui-row .t b { font-size: 14.5px; }
+  .det .ui-gl:first-of-type { margin-top: 16px; }
+
+  /* appearance */
+  .looks { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+  .lk { border: 2px solid var(--outline); border-radius: var(--r-card); padding: 10px; cursor: pointer; background: var(--chrome-solid); }
+  .lk.on { border-color: var(--accent); }
+  .lk .mock { height: 120px; border-radius: 10px; background: var(--m-bg); position: relative; overflow: hidden; display: flex; }
+  .lk .mock .rl { width: 22px; background: var(--m-ch); }
+  .lk .mock .cv { width: 30px; height: 40px; border-radius: var(--m-r); margin: 6px 0 0 6px; }
+  .lk .mock .pill { position: absolute; bottom: 10px; left: 34px; right: 12px; height: 16px; border-radius: 999px; background: var(--m-ch); box-shadow: 0 2px 6px rgba(0,0,0,.2); }
+  .lk .mock .pill i { position: absolute; left: 5px; top: 3px; width: 10px; height: 10px; border-radius: 50%; background: var(--m-ac); }
+  .lk .mock .tt { position: absolute; left: 34px; top: 12px; font: 600 14px var(--m-f); color: var(--m-ink); }
+  .lk .cap { display: flex; align-items: center; gap: 8px; margin-top: 10px; font-size: 13.5px; }
+  .lk .cap b { flex: 1; }
+  .lk-a { --m-bg: #F3F1EC; --m-ch: #FFFFFF; --m-ac: #2F54EB; --m-ink: #1D1D1F; --m-r: 3px 7px 7px 3px; --m-f: "Fraunces", serif; }
+  .lk-b { --m-bg: #0F1016; --m-ch: #1C1E28; --m-ac: #A78BFA; --m-ink: #F4F4F8; --m-r: 4px 9px 9px 4px; --m-f: "Inter", sans-serif; }
+  .lk-c { --m-bg: #F4F5F9; --m-ch: #FFFFFF; --m-ac: #1A73E8; --m-ink: #111318; --m-r: 10px; --m-f: "Inter", sans-serif; }
+  .dyn { display: flex; gap: 6px; }
+  .dyn span { width: 26px; height: 26px; border-radius: 50%; background: var(--c); box-shadow: inset 0 0 0 1px rgba(0,0,0,.1); cursor: pointer; }
+  .dyn span.on { box-shadow: 0 0 0 2px var(--chrome-solid), 0 0 0 4px var(--accent); }
+
+  /* S Pen */
+  .btn-acts { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+  .ba { border: 2px solid var(--outline); border-radius: var(--r-card); padding: 12px; cursor: pointer; text-align: center; background: var(--chrome-solid); transition: border-color var(--dur-short), transform var(--dur-short) var(--spring-snappy); }
+  .ba:active { transform: scale(.97); }
+  .ba.on { border-color: var(--accent); background: color-mix(in srgb, var(--accent-soft) 55%, var(--chrome-solid)); }
+  .ba svg { width: 100%; height: 64px; }
+  .ba svg .pen { fill: var(--ink-2); }
+  .ba svg .btnk { fill: var(--accent); }
+  .ba svg .stroke { fill: none; stroke: var(--ink-3); stroke-width: 2.4; stroke-linecap: round; stroke-dasharray: 3 4; }
+  .ba svg .act { fill: none; stroke: var(--accent); stroke-width: 3; stroke-linecap: round; }
+  .ba b { display: block; font-size: 13.5px; margin-top: 4px; }
+  .ba small { font-size: 11.5px; color: var(--ink-3); }
+  .palm { display: flex; flex-direction: column; gap: 6px; flex: 1; }
+  .palm .ui-slider { flex: none; }
+  .palm .ticks { display: flex; justify-content: space-between; font-size: 11px; color: var(--ink-3); }
+  .hover-pv { width: 120px; height: 64px; border-radius: 10px; background: var(--paper) repeating-linear-gradient(transparent 0 15px, var(--paper-line) 15px 16px); position: relative; flex: none; }
+  .hover-pv i { position: absolute; left: 50px; top: 22px; width: 16px; height: 16px; border-radius: 50%; border: 1.5px solid rgba(29,29,31,.7); background: rgba(29,29,31,.08); animation: hov 2.4s ease-in-out infinite; }
+  @keyframes hov { 50% { transform: translate(26px, 4px); } }
+  .curve { width: 120px; height: 80px; flex: none; background: var(--surface); border-radius: 10px; }
+  .curve path { fill: none; stroke: var(--accent); stroke-width: 2.5; }
+  .curve .ax { stroke: var(--outline); stroke-width: 1; }
+  .curve circle { fill: var(--chrome-solid); stroke: var(--accent); stroke-width: 2; }
+
+  /* gestures */
+  .gest { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .g { display: flex; gap: 14px; align-items: center; padding: 14px; border-radius: var(--r-card); background: var(--chrome-solid); border: 1px solid var(--outline); }
+  [data-look="galaxy"] .g { border-color: transparent; }
+  .g svg { width: 76px; height: 76px; flex: none; background: var(--paper); border-radius: 12px; border: 1px solid var(--outline); }
+  .g svg .f { fill: color-mix(in srgb, var(--accent) 22%, transparent); stroke: var(--accent); stroke-width: 1.5; }
+  .g svg .tap { animation: tap 1.6s ease-out infinite; transform-origin: center; transform-box: fill-box; }
+  .g svg .tap.d2 { animation-delay: .1s; } .g svg .tap.d3 { animation-delay: .2s; }
+  @keyframes tap { 0%, 60%, 100% { transform: scale(1); opacity: 1; } 30% { transform: scale(.75); opacity: .6; } }
+  .g svg .ink { fill: none; stroke: #1d2a4a; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
+  .g svg .acc { fill: none; stroke: var(--accent); stroke-width: 2.4; stroke-linecap: round; stroke-dasharray: 120; stroke-dashoffset: 120; animation: drawg 2s ease-in-out infinite; }
+  @keyframes drawg { 60%, 100% { stroke-dashoffset: 0; } }
+  .g svg .lbl { font: 600 10px var(--font-ui); fill: var(--accent); }
+  .g .t { flex: 1; min-width: 0; }
+  .g .t b { display: block; font-size: 14.5px; }
+  .g .t small { color: var(--ink-3); font-size: 12px; }
+
+  /* pens */
+  .defpen { display: flex; gap: 16px; align-items: center; padding: 14px 16px; }
+  .defpen .stroke-pv { flex: 1; height: 70px; background: var(--paper); border-radius: 10px; }
+  .defpen .stroke-pv path { fill: none; stroke: #2a4bd7; stroke-linecap: round; }
+  .favp { display: flex; align-items: center; gap: 12px; }
+  .favp svg { width: 60px; height: 22px; }
+  .favp svg path { fill: none; stroke-linecap: round; }
+  .favp .ms.drag { color: var(--ink-3); cursor: grab; }
+  .tplrow { display: flex; gap: 10px; }
+  .tplrow .tpl .pg { width: 46px; height: 60px; }
+  .tplrow .tpl { font-size: 11px; }
+
+  /* storage */
+  .bar { display: flex; height: 18px; border-radius: 9px; overflow: hidden; background: var(--surface-2); margin: 10px 0 12px; }
+  .bar i { width: var(--w); background: var(--c); }
+  .legend2 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px 16px; font-size: 13px; }
+  .legend2 span { display: flex; align-items: center; gap: 8px; color: var(--ink-2); }
+  .legend2 span::before { content: ""; width: 10px; height: 10px; border-radius: 3px; background: var(--c); }
+  .legend2 b { margin-inline-start: auto; color: var(--ink); font-weight: 600; font-variant-numeric: tabular-nums; }
+  .big-n { font: 600 34px var(--font-display); }
+  .mini-cv { width: 26px; height: 34px; border-radius: 2px 5px 5px 2px; background: var(--cv); box-shadow: inset 3px 0 0 rgba(0,0,0,.2); flex: none; }
+
+  /* AI */
+  .prov { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+  .pv { border: 2px solid var(--outline); border-radius: var(--r-card); padding: 12px; display: flex; flex-direction: column; gap: 8px; cursor: pointer; background: var(--chrome-solid); }
+  .pv.on { border-color: var(--accent); background: color-mix(in srgb, var(--accent-soft) 55%, var(--chrome-solid)); }
+  .pv .lg { width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center; font-weight: 700; color: #fff; }
+  .pv b { font-size: 13.5px; }
+  .pv small { font-size: 11.5px; color: var(--ink-3); }
+  .key { font-family: ui-monospace, Menlo, monospace; font-size: 14px; letter-spacing: .04em; }
+  .ok-line { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--sem-annotation); margin-top: 8px; }
+  [data-theme="dark"] .ok-line, [data-look="studio"] .ok-line { color: #7bd88f; }
+  .privacy-card { border-radius: var(--r-card); padding: 16px 18px; background: var(--accent-soft); color: var(--ink); display: flex; gap: 14px; }
+  .privacy-card .ms { color: var(--accent); font-size: 26px; }
+  .privacy-card ul { margin: 6px 0 0; padding-inline-start: 18px; font-size: 13px; color: var(--ink-2); line-height: 1.6; }
+  .flowline { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--ink-2); margin-top: 10px; }
+  .flowline span { white-space: nowrap; display: flex; align-items: center; gap: 6px; padding: 6px 10px; border-radius: 999px; background: var(--chrome-solid); }
+  .flowline .ms { font-size: 16px; }
+  .flowline .x { color: var(--danger); text-decoration: line-through; }
+
+  /* language */
+  .langs .ui-row .ar { font-family: "IBM Plex Sans Arabic"; }
+  .langs .ui-row .val { font-size: 12.5px; }
+
+  /* about */
+  .about-hero { display: flex; gap: 18px; align-items: center; padding: 18px; border-radius: var(--r-card); background: var(--chrome-solid); border: 1px solid var(--outline); }
+  [data-look="galaxy"] .about-hero { border-color: transparent; }
+  .about-hero .lg { width: 72px; height: 72px; border-radius: 22px; background: var(--accent); color: var(--on-accent); display: grid; place-items: center; font: 600 40px var(--font-display); box-shadow: var(--shadow-2); }
+  .about-hero h4 { font: 600 24px var(--font-display); text-transform: none; letter-spacing: 0; color: var(--ink); margin: 0; }
+</style>
+</head>
+<body>
+<div class="page-wrap">
+  <h1>Settings</h1>
+  <p class="lead muted">Two-pane on tablets: sections on the side, details on the right (single pane on phones). Every choice applies live. Try the S Pen button cards, switches and sliders.</p>
+  <div class="variants" id="states">
+
+    <div>
+      <div class="variant-label">1 · Appearance: look, theme, dynamic color</div>
+      <div class="device tablet"><div class="status"><span>9:41</span><span><i class="ms">wifi</i><i class="ms">battery_full</i></span></div>
+        <div class="scr st"><aside class="nav" data-nav="appearance"></aside>
+          <div class="det">
+            <h3>Appearance</h3><p class="muted">How BestNote looks. Paper and ink colors never change with these.</p>
+            <div class="ui-gl">Look</div>
+            <div class="looks" id="looks">
+              <div class="lk lk-a" data-l="paper"><div class="mock"><div class="rl"></div><div class="cv" style="background:#29324a"></div><div class="cv" style="background:#7a2d2d"></div><span class="tt">Library</span><div class="pill"><i></i></div></div><div class="cap"><span class="ui-radio"></span><b>Calm Paper</b><span class="muted">A</span></div></div>
+              <div class="lk lk-b" data-l="studio"><div class="mock"><div class="rl"></div><div class="cv" style="background:#29324a"></div><div class="cv" style="background:#7a2d2d"></div><span class="tt">Library</span><div class="pill"><i></i></div></div><div class="cap"><span class="ui-radio"></span><b>Midnight Studio</b><span class="muted">B</span></div></div>
+              <div class="lk lk-c" data-l="galaxy"><div class="mock"><div class="rl"></div><div class="cv" style="background:#29324a"></div><div class="cv" style="background:#7a2d2d"></div><span class="tt">Library</span><div class="pill"><i></i></div></div><div class="cap"><span class="ui-radio"></span><b>Galaxy Native</b><span class="muted">C</span></div></div>
+            </div>
+            <div class="cols">
+              <div>
+                <div class="ui-gl">Theme</div>
+                <div class="ui-group">
+                  <div class="ui-row"><i class="ms">dark_mode</i><div class="t"><b>Mode</b></div><div class="seg" style="margin:0; width:230px"><span>Light</span><span>Dark</span><span class="on">System</span></div></div>
+                  <div class="ui-row"><i class="ms">wallpaper</i><div class="t"><b>Dynamic color</b><small>Accent from your wallpaper</small></div><div class="switch on tog"><i></i></div></div>
+                  <div class="ui-row"><i class="ms">palette</i><div class="t"><b>Accent</b></div><div class="dyn"><span class="on" style="--c:var(--accent)"></span><span style="--c:#2e7d32"></span><span style="--c:#c2185b"></span><span style="--c:#ef6c00"></span><span style="--c:#00838f"></span></div></div>
+                </div>
+              </div>
+              <div>
+                <div class="ui-gl">Library &amp; motion</div>
+                <div class="ui-group">
+                  <div class="ui-row"><i class="ms">texture</i><div class="t"><b>Paper texture on covers</b></div><div class="switch on tog"><i></i></div></div>
+                  <div class="ui-row"><i class="ms">animation</i><div class="t"><b>Reduce motion</b><small>Follows Android “Remove animations”</small></div><div class="switch tog"><i></i></div></div>
+                  <div class="ui-row"><i class="ms">format_size</i><div class="t"><b>Text size</b></div><span class="val">System</span></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div class="variant-label">2 · S Pen: side-button action, hover cursor, stylus-only, palm rejection</div>
+      <div class="device tablet"><div class="status"><span>9:41</span><span><i class="ms">wifi</i><i class="ms">battery_full</i></span></div>
+        <div class="scr st"><aside class="nav" data-nav="spen"></aside>
+          <div class="det">
+            <h3>S Pen</h3><p class="muted">Galaxy Tab S10 Ultra · S Pen connected</p>
+            <div class="ui-gl">Hold the side button for</div>
+            <div class="btn-acts" id="btnActs">
+              <div class="ba on"><svg viewBox="0 0 120 64"><g transform="rotate(35 30 30)"><rect class="pen" x="24" y="-10" width="10" height="64" rx="5"/><rect class="btnk" x="31" y="14" width="4" height="10" rx="2"/></g><path class="stroke" d="M58 40 C 72 26, 84 50, 108 32"/><rect x="74" y="26" width="18" height="12" rx="3" fill="var(--accent)" opacity=".85"/></svg><b>Eraser</b><small>Most popular</small></div>
+              <div class="ba"><svg viewBox="0 0 120 64"><g transform="rotate(35 30 30)"><rect class="pen" x="24" y="-10" width="10" height="64" rx="5"/><rect class="btnk" x="31" y="14" width="4" height="10" rx="2"/></g><path class="act" d="M70 18 C 108 8, 116 50, 84 52 C 62 54, 56 30, 70 18" style="stroke-dasharray:5 4"/></svg><b>Lasso</b><small>Select &amp; move</small></div>
+              <div class="ba"><svg viewBox="0 0 120 64"><g transform="rotate(35 30 30)"><rect class="pen" x="24" y="-10" width="10" height="64" rx="5"/><rect class="btnk" x="31" y="14" width="4" height="10" rx="2"/></g><path d="M62 36 L 110 36" stroke="#ffd54f" stroke-width="12" opacity=".7" stroke-linecap="round"/></svg><b>Highlighter</b><small>Mark while reading</small></div>
+              <div class="ba"><svg viewBox="0 0 120 64"><g transform="rotate(35 30 30)"><rect class="pen" x="24" y="-10" width="10" height="64" rx="5"/><rect class="btnk" x="31" y="14" width="4" height="10" rx="2"/></g><path class="act" d="M66 34 a 18 18 0 1 0 6 -14 M66 14 L 72 20 L 64 24"/></svg><b>Previous tool</b><small>Quick switch</small></div>
+            </div>
+            <div class="cols">
+              <div>
+                <div class="ui-gl">Writing</div>
+                <div class="ui-group">
+                  <div class="ui-row"><div class="t"><b>Hover cursor</b><small>Shows tip size and color before you touch</small></div><div class="hover-pv"><i></i></div><div class="switch on tog"><i></i></div></div>
+                  <div class="ui-row"><div class="t"><b>Stylus-only mode</b><small>Fingers scroll and zoom, only the pen writes. Turns on when an S Pen is detected.</small></div><div class="switch on tog"><i></i></div></div>
+                  <div class="ui-row"><div class="t"><b>Pressure curve</b><small>Drag the point. Softer → thicker lines with light pressure.</small></div><svg class="curve" viewBox="0 0 120 80"><path class="ax" d="M10 70 H 112 M10 70 V 8"/><path d="M10 70 C 40 30, 70 22, 110 12"/><circle cx="52" cy="34" r="5"/></svg></div>
+                </div>
+              </div>
+              <div>
+                <div class="ui-gl">Palm rejection</div>
+                <div class="ui-group">
+                  <div class="ui-row"><div class="palm"><div style="display:flex; justify-content:space-between; font-size:14.5px"><b style="font-weight:500">Sensitivity</b><b id="palmL" style="color:var(--accent)">Balanced</b></div><div class="ui-slider" id="palmS" style="--v:50%"><i></i></div><div class="ticks"><span>Gentle</span><span>Balanced</span><span>Strict</span></div><small class="muted">Strict ignores more touches near the pen, best if you rest your hand heavily.</small></div></div>
+                  <div class="ui-row"><i class="ms">touch_app</i><div class="t"><b>Test palm rejection</b><small>Opens the test pad from setup</small></div><i class="ms flip" style="color:var(--ink-3)">chevron_right</i></div>
+                  <div class="ui-row"><i class="ms">air</i><div class="t"><b>Air actions</b><small>Wave the pen to undo or turn pages</small></div><span class="ui-badge neutral">Coming</span></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div class="variant-label">3 · Gestures: each with a looping mini demo</div>
+      <div class="device tablet"><div class="status"><span>9:41</span><span><i class="ms">wifi</i><i class="ms">battery_full</i></span></div>
+        <div class="scr st"><aside class="nav" data-nav="gestures"></aside>
+          <div class="det">
+            <h3>Gestures</h3><p class="muted">Finger gestures work even in stylus-only mode.</p>
+            <div class="ui-gl">Touch</div>
+            <div class="gest">
+              <div class="g"><svg viewBox="0 0 76 76"><circle class="f tap" cx="28" cy="38" r="10"/><circle class="f tap d2" cx="48" cy="38" r="10"/><text class="lbl" x="22" y="68">UNDO</text></svg><div class="t"><b>Two-finger tap</b><small>Undo</small></div><div class="switch on tog"><i></i></div></div>
+              <div class="g"><svg viewBox="0 0 76 76"><circle class="f tap" cx="20" cy="38" r="9"/><circle class="f tap d2" cx="38" cy="34" r="9"/><circle class="f tap d3" cx="56" cy="38" r="9"/><text class="lbl" x="22" y="68">REDO</text></svg><div class="t"><b>Three-finger tap</b><small>Redo</small></div><div class="switch on tog"><i></i></div></div>
+              <div class="g"><svg viewBox="0 0 76 76"><circle class="f" cx="26" cy="38" r="9"/><circle class="f" cx="50" cy="38" r="9"/><path class="acc" d="M26 54 L 26 70 M 50 54 L 50 70" style="stroke-dasharray:20; stroke-dashoffset:20"/></svg><div class="t"><b>Two-finger swipe</b><small>Next / previous page</small></div><div class="switch on tog"><i></i></div></div>
+              <div class="g"><svg viewBox="0 0 76 76"><circle class="f tap" cx="38" cy="38" r="10"/><text class="lbl" x="12" y="68">DOUBLE TAP</text></svg><div class="t"><b>Double-tap with finger</b><small>Zoom to fit width</small></div><div class="switch tog"><i></i></div></div>
+            </div>
+            <div class="ui-gl">With the pen</div>
+            <div class="gest">
+              <div class="g"><svg viewBox="0 0 76 76"><path class="ink" d="M12 30 C 22 20, 34 40, 44 26 S 60 24, 64 30"/><path class="acc" d="M10 26 L 24 36 L 30 22 L 40 38 L 48 22 L 56 36 L 66 24"/></svg><div class="t"><b>Scribble to erase</b><small>Scribble over ink to delete it</small></div><div class="switch on tog"><i></i></div></div>
+              <div class="g"><svg viewBox="0 0 76 76"><path class="ink" d="M24 38 L 52 38 M 30 30 L 46 30"/><path class="acc" d="M38 14 C 66 14, 68 58, 38 60 C 10 60, 10 16, 38 16" style="stroke-dasharray:160; stroke-dashoffset:160"/></svg><div class="t"><b>Circle to lasso</b><small>Draw a closed loop, then hold</small></div><div class="switch on tog"><i></i></div></div>
+              <div class="g"><svg viewBox="0 0 76 76"><path class="acc" d="M14 52 C 24 30, 46 26, 62 24"/><path class="ink" d="M14 52 L 62 24" style="stroke:var(--accent); opacity:.35"/></svg><div class="t"><b>Hold to straighten</b><small>Pause at the end of a line or shape to snap it</small></div><div class="switch on tog"><i></i></div></div>
+              <div class="g"><svg viewBox="0 0 76 76"><rect x="18" y="20" width="40" height="36" rx="4" class="ink" style="stroke:var(--ink-3)"/><circle class="f tap" cx="38" cy="38" r="8"/><text class="lbl" x="14" y="70">LONG PRESS</text></svg><div class="t"><b>Long-press with pen</b><small>Context menu (paste, add page, link)</small></div><div class="switch on tog"><i></i></div></div>
+            </div>
+            <p class="muted" style="margin-top:12px">A light “confirm” haptic plays when undo or redo is recognized. Turn haptics off in Android settings.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div class="variant-label">4 · Pens &amp; default paper</div>
+      <div class="device tablet"><div class="status"><span>9:41</span><span><i class="ms">wifi</i><i class="ms">battery_full</i></span></div>
+        <div class="scr st"><aside class="nav" data-nav="pens"></aside>
+          <div class="det">
+            <h3>Pens &amp; paper</h3><p class="muted">Defaults for new notebooks. Each notebook remembers its own last pen.</p>
+            <div class="cols">
+              <div>
+                <div class="ui-gl">Default pen</div>
+                <div class="ui-group">
+                  <div class="defpen"><div class="stroke-pv"><svg viewBox="0 0 260 70" width="100%" height="70"><path d="M14 46 C 50 10, 80 60, 120 32 S 200 14, 246 40" stroke-width="3.4"/></svg></div></div>
+                  <div class="ui-row"><div class="t"><b>Type</b></div><div class="seg" style="margin:0; width:260px"><span class="on">Fountain</span><span>Ball</span><span>Brush</span><span>Pencil</span></div></div>
+                  <div class="ui-row"><div class="t"><b>Thickness</b></div><div class="ui-slider" style="--v:40%; max-width:200px"><i></i></div><span class="val">0.5 mm</span></div>
+                  <div class="ui-row"><div class="t"><b>Stabilization</b><small>Smooths shaky lines</small></div><div class="ui-slider" style="--v:25%; max-width:200px"><i></i></div></div>
+                  <div class="ui-row"><div class="t"><b>Color</b></div><div class="pens-row"><b style="--c:#1d1d1f"></b><b style="--c:#2a4bd7" class="on"></b><b style="--c:#c62828"></b><b style="--c:#2e7d32"></b><b style="--c:#7b3fe4"></b></div></div>
+                </div>
+                <div class="ui-gl">Favorite pens in the toolbar</div>
+                <div class="ui-group">
+                  <div class="ui-row favp"><i class="ms drag">drag_indicator</i><svg viewBox="0 0 60 22"><path d="M4 16 C 18 4, 32 20, 56 6" stroke="#1d1d1f" stroke-width="3"/></svg><div class="t"><b>Black fountain 0.4</b></div><i class="ms" style="color:var(--ink-3)">more_vert</i></div>
+                  <div class="ui-row favp"><i class="ms drag">drag_indicator</i><svg viewBox="0 0 60 22"><path d="M4 16 C 18 4, 32 20, 56 6" stroke="#2a4bd7" stroke-width="3"/></svg><div class="t"><b>Blue ball 0.5</b></div><i class="ms" style="color:var(--ink-3)">more_vert</i></div>
+                  <div class="ui-row favp"><i class="ms drag">drag_indicator</i><svg viewBox="0 0 60 22"><path d="M4 12 L 56 12" stroke="#ffd54f" stroke-width="10" opacity=".7"/></svg><div class="t"><b>Yellow highlighter</b></div><i class="ms" style="color:var(--ink-3)">more_vert</i></div>
+                </div>
+              </div>
+              <div>
+                <div class="ui-gl">Default paper</div>
+                <div class="ui-group">
+                  <div class="ui-row"><div class="tplrow"><div class="tpl"><div class="pg blank-s"></div>Blank</div><div class="tpl on"><div class="pg ruled-s"></div>Ruled</div><div class="tpl"><div class="pg grid-s"></div>Grid</div><div class="tpl"><div class="pg dots-s"></div>Dotted</div><div class="tpl"><div class="pg cornell-s"></div>Cornell</div><div class="tpl"><div class="pg dark-s"></div>Dark</div></div></div>
+                  <div class="ui-row"><div class="t"><b>Size</b></div><span class="val">A4 · portrait</span><i class="ms" style="color:var(--ink-3)">expand_more</i></div>
+                  <div class="ui-row"><div class="t"><b>New pages copy the current page</b><small>Same template and size as where you are</small></div><div class="switch on tog"><i></i></div></div>
+                  <div class="ui-row"><div class="t"><b>Scroll direction</b></div><div class="seg" style="margin:0; width:200px"><span class="on">Vertical</span><span>Horizontal</span></div></div>
+                </div>
+                <div class="ui-gl">Dark paper</div>
+                <div class="ui-group">
+                  <div class="ui-row"><div class="t"><b>Swap black and white ink</b><small>Colors keep their hue on dark paper</small></div><div class="switch on tog"><i></i></div></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div class="variant-label">5 · Storage</div>
+      <div class="device tablet"><div class="status"><span>9:41</span><span><i class="ms">wifi</i><i class="ms">battery_full</i></span></div>
+        <div class="scr st"><aside class="nav" data-nav="storage"></aside>
+          <div class="det">
+            <h3>Storage</h3><p class="muted">Everything is stored on this tablet, in BestNote’s private folder.</p>
+            <div class="ui-gl">Used by BestNote</div>
+            <div class="ui-group" style="padding:16px 18px">
+              <div style="display:flex; align-items:baseline; gap:10px"><span class="big-n">1.24 GB</span><span class="muted">of 412 GB free on device</span></div>
+              <div class="bar"><i style="--w:38%; --c:var(--accent)"></i><i style="--w:24%; --c:#ef6c00"></i><i style="--w:16%; --c:#2e7d32"></i><i style="--w:9%; --c:#7b3fe4"></i><i style="--w:7%; --c:#8e8e96"></i></div>
+              <div class="legend2"><span style="--c:var(--accent)">Notebooks &amp; ink<b>472 MB</b></span><span style="--c:#ef6c00">PDFs<b>298 MB</b></span><span style="--c:#2e7d32">Audio<b>198 MB</b></span><span style="--c:#7b3fe4">Images<b>112 MB</b></span><span style="--c:#8e8e96">Thumbnails &amp; cache<b>86 MB</b></span><span style="--c:var(--outline)">Search index<b>74 MB</b></span></div>
+            </div>
+            <div class="cols">
+              <div>
+                <div class="ui-gl">Largest notebooks</div>
+                <div class="ui-group">
+                  <div class="ui-row"><span class="mini-cv" style="--cv:#fff; border:1px solid var(--outline)"></span><div class="t"><b>Reading: Sapiens</b><small>PDF · 312 pages</small></div><span class="val">184 MB</span></div>
+                  <div class="ui-row"><span class="mini-cv" style="--cv:#29324a"></span><div class="t"><b>Physics 201</b><small>2 recordings</small></div><span class="val">96 MB</span></div>
+                  <div class="ui-row"><span class="mini-cv" style="--cv:#26535f"></span><div class="t"><b>Sketchbook</b><small>Images, layers</small></div><span class="val">71 MB</span></div>
+                </div>
+              </div>
+              <div>
+                <div class="ui-gl">Clean up</div>
+                <div class="ui-group">
+                  <div class="ui-row"><i class="ms">cleaning_services</i><div class="t"><b>Clear thumbnails &amp; cache</b><small>86 MB · rebuilt when needed</small></div><button class="btn ghost sm">Clear</button></div>
+                  <div class="ui-row"><i class="ms">delete</i><div class="t"><b>Trash</b><small>7 items · 96 MB</small></div><button class="btn ghost sm">Open</button></div>
+                  <div class="ui-row"><i class="ms">mic_off</i><div class="t"><b>Compress old audio</b><small>Recordings older than 90 days</small></div><div class="switch tog"><i></i></div></div>
+                  <div class="ui-row"><i class="ms">backup</i><div class="t"><b>Backup &amp; restore</b><small>Last backup 2 hours ago</small></div><i class="ms flip" style="color:var(--ink-3)">chevron_right</i></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div class="variant-label">6 · Smart Board AI: your own key, your choice of provider, clear privacy</div>
+      <div class="device tablet"><div class="status"><span>9:41</span><span><i class="ms">wifi</i><i class="ms">battery_full</i></span></div>
+        <div class="scr st"><aside class="nav" data-nav="ai"></aside>
+          <div class="det">
+            <div style="display:flex; align-items:center; gap:12px"><div style="flex:1"><h3 style="font:600 28px var(--font-display)">Smart Board AI</h3><p class="muted">Turns a photo of a lecture board into neat notes in your handwriting.</p></div><div class="switch on tog"><i></i></div></div>
+            <div class="ui-gl">Provider</div>
+            <div class="prov" id="prov">
+              <div class="pv on"><span class="lg" style="background:#c96442">A</span><b>Anthropic</b><small>Claude</small></div>
+              <div class="pv"><span class="lg" style="background:#10a37f">O</span><b>OpenAI</b><small>GPT models</small></div>
+              <div class="pv"><span class="lg" style="background:#4285f4">G</span><b>Google</b><small>Gemini</small></div>
+              <div class="pv"><span class="lg" style="background:#6b6b73"><i class="ms">dns</i></span><b>Custom</b><small>Any compatible endpoint</small></div>
+            </div>
+            <div class="cols">
+              <div>
+                <div class="ui-gl">Your API key</div>
+                <div class="ui-field focus"><i class="ms">key</i><span class="key">sk-ant-••••••••••••••••7Qf2</span><span class="grow"></span><i class="ms">visibility</i></div>
+                <div class="ok-line"><i class="ms" style="font-size:18px">check_circle</i>Key works. Tested just now.</div>
+                <div class="ui-group" style="margin-top:12px">
+                  <div class="ui-row"><div class="t"><b>Model</b><small>Recommended for handwriting and diagrams</small></div><span class="val">Default</span><i class="ms" style="color:var(--ink-3)">expand_more</i></div>
+                  <div class="ui-row"><div class="t"><b>Default note style</b></div><span class="val">Lecture</span><i class="ms" style="color:var(--ink-3)">expand_more</i></div>
+                  <div class="ui-row"><div class="t"><b>Ask before each upload</b></div><div class="switch on tog"><i></i></div></div>
+                </div>
+              </div>
+              <div>
+                <div class="ui-gl">Privacy</div>
+                <div class="privacy-card"><i class="ms">shield_lock</i><div><b>What leaves your tablet</b><ul><li>Only the board photo you choose, nothing else from your notebooks.</li><li>Sent straight from this tablet to the provider you picked. There is no BestNote server in between.</li><li>Your key is stored encrypted in Android Keystore and never exported in backups.</li><li>You pay the provider directly, usually about a cent per photo.</li></ul></div></div>
+                <div class="flowline"><span><i class="ms">tablet_android</i>This tablet</span><i class="ms flip">arrow_forward</i><span><i class="ms">cloud</i>Anthropic API</span><span class="x">BestNote server</span></div>
+                <button class="btn ghost sm" style="margin-top:14px"><i class="ms">delete</i>Remove key</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div class="variant-label">7 · Language: app language, handwriting recognition packs, Arabic options</div>
+      <div class="device tablet"><div class="status"><span>9:41</span><span><i class="ms">wifi</i><i class="ms">battery_full</i></span></div>
+        <div class="scr st"><aside class="nav" data-nav="language"></aside>
+          <div class="det">
+            <h3>Language</h3><p class="muted">The app follows your Android language unless you pick one here.</p>
+            <div class="cols">
+              <div>
+                <div class="ui-gl">App language</div>
+                <div class="ui-group langs">
+                  <div class="ui-row"><span class="ui-radio"></span><div class="t"><b>System default</b><small>English (UK)</small></div></div>
+                  <div class="ui-row"><span class="ui-radio"></span><div class="t"><b>English</b></div></div>
+                  <div class="ui-row"><span class="ui-radio on"></span><div class="t"><b class="ar">العربية</b><small>Arabic · right-to-left</small></div></div>
+                  <div class="ui-row"><span class="ui-radio"></span><div class="t"><b>Français</b></div></div>
+                  <div class="ui-row"><span class="ui-radio"></span><div class="t"><b>Türkçe</b></div></div>
+                  <div class="ui-row"><span class="ui-radio"></span><div class="t"><b>Bahasa Indonesia</b></div></div>
+                </div>
+              </div>
+              <div>
+                <div class="ui-gl">Handwriting recognition</div>
+                <div class="ui-group langs">
+                  <div class="ui-row"><i class="ms">gesture</i><div class="t"><b>English</b><small>For search and convert to text</small></div><span class="ui-badge"><i class="ms">check</i>Installed</span></div>
+                  <div class="ui-row"><i class="ms">gesture</i><div class="t"><b class="ar">العربية</b><small>Arabic · 34 MB</small></div><span class="ui-badge"><i class="ms">check</i>Installed</span></div>
+                  <div class="ui-row"><i class="ms">gesture</i><div class="t"><b>Français</b><small>29 MB</small></div><button class="btn ghost sm"><i class="ms">download</i>Get</button></div>
+                </div>
+                <div class="ui-gl">Arabic</div>
+                <div class="ui-group">
+                  <div class="ui-row"><div class="t"><b>Arabic-Indic numerals</b><small>Show page numbers as ١٢٣</small></div><div class="switch tog"><i></i></div></div>
+                  <div class="ui-row"><div class="t"><b>Forgiving search</b><small>Ignore diacritics, alef and yaa forms</small></div><div class="switch on tog"><i></i></div></div>
+                  <div class="ui-row"><div class="t"><b>Mirror toolbar with RTL</b><small>Off: keep it where your hand is</small></div><div class="switch tog"><i></i></div></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div class="variant-label">8 · About</div>
+      <div class="device tablet"><div class="status"><span>9:41</span><span><i class="ms">wifi</i><i class="ms">battery_full</i></span></div>
+        <div class="scr st"><aside class="nav" data-nav="about"></aside>
+          <div class="det">
+            <h3>About</h3><p class="muted" style="margin-bottom:16px">&nbsp;</p>
+            <div class="about-hero"><div class="lg">B</div><div style="flex:1"><h4>BestNote</h4><div class="muted">Version 0.4.0 (402) · up to date</div><div style="display:flex; gap:6px; margin-top:8px"><span class="ui-badge"><i class="ms">code</i>Open source</span><span class="ui-badge neutral"><i class="ms">no_accounts</i>No account</span><span class="ui-badge neutral"><i class="ms">block</i>No ads or tracking</span></div></div><button class="btn tonal"><i class="ms">favorite</i>Support the project</button></div>
+            <div class="cols">
+              <div>
+                <div class="ui-gl">Project</div>
+                <div class="ui-group">
+                  <div class="ui-row"><i class="ms">code</i><div class="t"><b>Source code</b><small>github.com/bestnote</small></div><i class="ms" style="color:var(--ink-3)">open_in_new</i></div>
+                  <div class="ui-row"><i class="ms">new_releases</i><div class="t"><b>What’s new</b><small>Smart Board beautify, Arabic search</small></div><i class="ms flip" style="color:var(--ink-3)">chevron_right</i></div>
+                  <div class="ui-row"><i class="ms">bug_report</i><div class="t"><b>Report a problem</b><small>Opens an issue with device info, no notes</small></div><i class="ms" style="color:var(--ink-3)">open_in_new</i></div>
+                  <div class="ui-row"><i class="ms">translate</i><div class="t"><b>Help translate</b></div><i class="ms" style="color:var(--ink-3)">open_in_new</i></div>
+                </div>
+              </div>
+              <div>
+                <div class="ui-gl">Legal</div>
+                <div class="ui-group">
+                  <div class="ui-row"><i class="ms">gavel</i><div class="t"><b>License</b></div><i class="ms flip" style="color:var(--ink-3)">chevron_right</i></div>
+                  <div class="ui-row"><i class="ms">library_books</i><div class="t"><b>Open-source libraries</b><small>androidx.ink, Jetpack Compose, PDF renderer and more</small></div><i class="ms flip" style="color:var(--ink-3)">chevron_right</i></div>
+                  <div class="ui-row"><i class="ms">policy</i><div class="t"><b>Privacy policy</b><small>Short version: we collect nothing</small></div><i class="ms flip" style="color:var(--ink-3)">chevron_right</i></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+  <p class="note">Settings open as a panel from the library rail. Changes apply immediately, no Save button. Search at the top of the list finds any setting, including synonyms (“palm” → Palm rejection).</p>
+</div>
+<script>
+(function () {
+  const h = document.documentElement;
+  const sec = [
+    ['appearance', 'palette', 'Appearance', 'Look, theme, color', '#5e6ad2'],
+    ['pens', 'ink_pen', 'Pens & paper', 'Defaults, favorites', '#2e7d32'],
+    ['spen', 'stylus', 'S Pen', 'Button, hover, palm', '#1a73e8'],
+    ['gestures', 'swipe', 'Gestures', 'Undo, scribble, lasso', '#ef6c00'],
+    ['storage', 'hard_drive', 'Storage', '1.24 GB used', '#6b6b73'],
+    ['backup', 'backup', 'Backup & restore', '2 hours ago', '#00897b'],
+    ['ai', 'document_scanner', 'Smart Board AI', 'Your key · Anthropic', '#c96442'],
+    ['language', 'translate', 'Language', 'العربية', '#7b3fe4'],
+    ['about', 'info', 'About', 'Version 0.4.0', '#8e8e96']
+  ];
+  document.querySelectorAll('[data-nav]').forEach(n => n.innerHTML = `<div class="hd"><span class="ui-ib"><i class="ms flip">arrow_back</i></span><h2>Settings</h2></div><div class="ui-field"><i class="ms">search</i><span class="ph">Search settings</span></div>` +
+    sec.map(([id, ic, t, s, c], i) => `${i === 5 || i === 8 ? '<div class="sp"></div>' : ''}<a class="${id === n.dataset.nav ? 'on' : ''}" style="--c:${c}"><span class="ic"><i class="ms">${ic}</i></span><span><span>${t}</span><small>${s}</small></span></a>`).join(''));
+
+  // look cards reflect + switch the actual look
+  const marks = () => document.querySelectorAll('#looks .lk').forEach(l => { l.classList.toggle('on', l.dataset.l === h.dataset.look); l.querySelector('.ui-radio').classList.toggle('on', l.dataset.l === h.dataset.look); });
+  marks(); new MutationObserver(marks).observe(h, { attributes: true, attributeFilter: ['data-look'] });
+  document.querySelectorAll('#looks .lk').forEach(l => l.onclick = () => document.querySelector(`.shell-looks [data-look="${l.dataset.l}"]`)?.click());
+
+  document.querySelectorAll('#btnActs .ba').forEach(b => b.onclick = () => document.querySelectorAll('#btnActs .ba').forEach(x => x.classList.toggle('on', x === b)));
+  document.querySelectorAll('#prov .pv').forEach(b => b.onclick = () => document.querySelectorAll('#prov .pv').forEach(x => x.classList.toggle('on', x === b)));
+  document.querySelectorAll('.seg').forEach(g => g.querySelectorAll('span').forEach(s => s.onclick = () => g.querySelectorAll('span').forEach(x => x.classList.toggle('on', x === s))));
+  document.querySelectorAll('.tog').forEach(s => s.onclick = () => s.classList.toggle('on'));
+  document.querySelectorAll('.dyn span').forEach(s => s.onclick = () => s.parentElement.querySelectorAll('span').forEach(x => x.classList.toggle('on', x === s)));
+  document.querySelectorAll('.langs .ui-radio').forEach(r => r.parentElement.onclick = () => { r.closest('.ui-group').querySelectorAll('.ui-radio').forEach(x => x.classList.toggle('on', x === r)); });
+  document.querySelectorAll('.ui-slider').forEach(sl => {
+    const set = e => { const r = sl.getBoundingClientRect(); let v = (e.clientX - r.left) / r.width; if (h.dir === 'rtl') v = 1 - v; v = Math.max(0, Math.min(1, v)); sl.style.setProperty('--v', (v * 100).toFixed(0) + '%'); if (sl.id === 'palmS') document.getElementById('palmL').textContent = v < .34 ? 'Gentle' : v < .67 ? 'Balanced' : 'Strict'; };
+    sl.addEventListener('pointerdown', e => { sl.setPointerCapture(e.pointerId); set(e); sl.onpointermove = set; });
+    sl.addEventListener('pointerup', () => sl.onpointermove = null);
+  });
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,408 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BestNote · Onboarding</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Sans+Arabic:wght@400;500;600&family=Caveat:wght@500;700&family=Material+Symbols+Rounded:opsz,wght,FILL@24,400,0..1&family=Fraunces:opsz,wght@9..144,500;9..144,600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../tokens.css">
+<link rel="stylesheet" href="../board.css">
+<script src="../shell.js"></script>
+<style>
+  .ob { display: grid !important; grid-template-columns: 1.08fr 1fr; }
+  .ob-vis { position: relative; overflow: hidden; background: radial-gradient(90% 80% at 20% 15%, var(--accent-soft), transparent 70%), var(--surface-2); display: grid; place-items: center; }
+  [data-look="studio"] .ob-vis { background: radial-gradient(70% 60% at 30% 30%, color-mix(in srgb, var(--accent) 35%, transparent), transparent 70%), radial-gradient(60% 60% at 90% 90%, var(--accent-soft), transparent 70%), var(--surface-2); }
+  [data-look="galaxy"] .ob-vis { margin: 16px; border-radius: var(--r-sheet); background: linear-gradient(160deg, var(--accent-soft), var(--surface-2)); }
+  .ob-txt { background: var(--chrome-solid); padding: 56px 56px 32px; display: flex; flex-direction: column; }
+  [data-look="galaxy"] .ob-txt { background: var(--surface); }
+  [data-look="studio"] .ob-txt { background: var(--surface); }
+  .ob-step { font-size: 12px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--accent); margin-bottom: 14px; display: flex; align-items: center; gap: 8px; }
+  .ob-txt h2 { font: 600 44px/1.05 var(--font-display); letter-spacing: -.02em; margin-bottom: 14px; }
+  [data-look="galaxy"] .ob-txt h2 { font-weight: 700; letter-spacing: -.035em; }
+  .ob-txt p.body { color: var(--ink-2); font-size: 16px; max-width: 440px; }
+  .ob-foot { margin-top: auto; display: flex; align-items: center; gap: 10px; padding-top: 20px; }
+  .dots { display: flex; gap: 6px; margin-inline-end: auto; }
+  .dots i { width: 7px; height: 7px; border-radius: 99px; background: var(--outline); transition: width var(--dur-medium) var(--spring-snappy); }
+  .dots i.on { width: 22px; background: var(--accent); }
+
+  /* 1 · welcome */
+  .wl-stack { position: relative; width: 470px; height: 520px; }
+  .wl-stack .cover { position: absolute; width: 170px; box-shadow: var(--shadow-3), inset 6px 0 0 rgba(0,0,0,.18); }
+  .wl-page { position: absolute; left: 110px; top: 70px; width: 300px; height: 400px; border-radius: 6px; box-shadow: var(--shadow-3); transform: rotate(2deg); overflow: hidden; }
+  .wl-page svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .wl-page .d { fill: none; stroke: #1d2a4a; stroke-width: 2.4; stroke-linecap: round; stroke-dasharray: 1; stroke-dashoffset: 1; animation: draw 1s ease-out forwards; animation-delay: var(--d); }
+  .wl-page .d.red { stroke: #c62828; } .wl-page .d.blue { stroke: #2a4bd7; }
+  .wl-page text { font: 600 26px var(--font-hand); fill: #1d2a4a; clip-path: inset(-30% 100% -30% -5%); animation: write .6s steps(18, end) forwards; animation-delay: var(--d); }
+  .wl-pen { position: absolute; right: 30px; bottom: 60px; width: 30px; height: 250px; transform: rotate(28deg); }
+  .lang { display: inline-flex; gap: 4px; background: var(--surface); border-radius: 999px; padding: 4px; margin-top: 26px; align-self: flex-start; }
+  .lang span { padding: 6px 14px; border-radius: 999px; font-size: 13px; color: var(--ink-2); cursor: pointer; }
+  .lang span.on { background: var(--chrome-solid); color: var(--ink); box-shadow: var(--shadow-1); font-weight: 600; }
+  .feat { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 26px; max-width: 460px; }
+  .feat div { display: flex; gap: 10px; align-items: center; font-size: 13px; color: var(--ink-2); }
+  .feat .ms { color: var(--accent); font-size: 20px; }
+
+  /* 2 · S Pen + palm test */
+  .pad-wrap { width: 520px; display: flex; flex-direction: column; gap: 12px; }
+  .pad { position: relative; height: 470px; border-radius: 8px; box-shadow: var(--shadow-3); overflow: hidden; touch-action: none; cursor: crosshair; }
+  .pad svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .pad .ink-p { fill: none; stroke: #1d2a4a; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
+  .pad .palm { fill: color-mix(in srgb, var(--danger) 14%, transparent); stroke: color-mix(in srgb, var(--danger) 60%, transparent); stroke-width: 1.5; stroke-dasharray: 4 4; }
+  .pad .palm-l { font: 600 12px var(--font-ui); fill: var(--danger); }
+  .pad-hint { position: absolute; top: 12px; inset-inline-start: 50%; transform: translateX(-50%); font-size: 12px; background: rgba(30,30,34,.78); color: #fff; padding: 5px 12px; border-radius: 999px; white-space: nowrap; pointer-events: none; }
+  [dir="rtl"] .pad-hint { transform: translateX(50%); }
+  .pad-tools { display: flex; gap: 8px; align-items: center; }
+  .stat { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 24px; max-width: 440px; }
+  .stat div { background: var(--surface); border-radius: var(--r-card); padding: 14px 16px; }
+  [data-look="galaxy"] .stat div, [data-look="studio"] .stat div { background: var(--chrome-solid); }
+  .stat b { font: 600 30px var(--font-display); display: block; font-variant-numeric: tabular-nums; }
+  .stat small { color: var(--ink-3); font-size: 12px; }
+  .stat .ok b { color: var(--sem-annotation); }
+  .detect { display: inline-flex; align-items: center; gap: 10px; padding: 8px 14px 8px 8px; border-radius: 999px; background: var(--chrome-solid); border: 1px solid var(--outline); margin-bottom: 18px; align-self: flex-start; font-size: 13px; }
+  .detect .pulse { width: 32px; height: 32px; border-radius: 50%; background: var(--accent); color: var(--on-accent); display: grid; place-items: center; animation: pulse 1.8s var(--ease-standard) infinite; }
+  .detect .pulse .ms { font-size: 18px; }
+  @keyframes pulse { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 50%, transparent); } 100% { box-shadow: 0 0 0 14px transparent; } }
+  .sens { margin-top: 22px; max-width: 440px; }
+  .sens .lbl { display: flex; justify-content: space-between; font-size: 13px; color: var(--ink-2); margin-bottom: 6px; }
+  .sens .lbl b { color: var(--ink); }
+  .sens .ticks { display: flex; justify-content: space-between; font-size: 11px; color: var(--ink-3); margin-top: 4px; }
+
+  /* 3 · handedness + toolbar */
+  .hands { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 22px; max-width: 460px; }
+  .choice { border: 2px solid var(--outline); border-radius: var(--r-card); padding: 16px; cursor: pointer; display: flex; flex-direction: column; gap: 10px; position: relative; background: var(--chrome-solid); transition: border-color var(--dur-short), transform var(--dur-short) var(--spring-snappy); }
+  .choice:active { transform: scale(.98); }
+  .choice.on { border-color: var(--accent); background: color-mix(in srgb, var(--accent-soft) 55%, var(--chrome-solid)); }
+  .choice .ms.big { font-size: 40px; color: var(--accent); }
+  .choice .ui-radio { position: absolute; top: 14px; inset-inline-end: 14px; }
+  .choice b { font-size: 15px; }
+  .choice small { color: var(--ink-3); font-size: 12px; }
+  .positions { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; max-width: 460px; }
+  .pos { border: 2px solid var(--outline); border-radius: 14px; padding: 8px; text-align: center; font-size: 12px; color: var(--ink-2); cursor: pointer; background: var(--chrome-solid); }
+  .pos.on { border-color: var(--accent); color: var(--accent); font-weight: 600; }
+  .pos .mini { height: 52px; border-radius: 6px; background: var(--surface); position: relative; margin-bottom: 6px; }
+  .pos .mini::after { content: ""; position: absolute; background: var(--accent); border-radius: 9px; }
+  .pos[data-p="top"] .mini::after { top: 5px; left: 25%; right: 25%; height: 6px; }
+  .pos[data-p="bottom"] .mini::after { bottom: 5px; left: 25%; right: 25%; height: 6px; }
+  .pos[data-p="left"] .mini::after { left: 5px; top: 20%; bottom: 20%; width: 6px; }
+  .pos[data-p="right"] .mini::after { right: 5px; top: 20%; bottom: 20%; width: 6px; }
+  .pv { position: relative; width: 500px; height: 520px; background: #E9E6DF; border-radius: 18px; box-shadow: var(--shadow-3); overflow: hidden; }
+  [data-theme="dark"] .pv, [data-look="studio"] .pv { background: #121214; }
+  .pv .page { position: absolute; left: 70px; right: 70px; top: 70px; bottom: 0; }
+  .pv .page svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .pv .toolbar-pill { position: absolute; transition: all var(--dur-long) var(--spring-gentle); }
+  .pv[data-pos="top"] .toolbar-pill { top: 14px; left: 50%; transform: translateX(-50%); flex-direction: row; }
+  .pv[data-pos="bottom"] .toolbar-pill { bottom: 14px; left: 50%; transform: translateX(-50%); flex-direction: row; }
+  .pv[data-pos="left"] .toolbar-pill { left: 12px; top: 50%; transform: translateY(-50%); flex-direction: column; }
+  .pv[data-pos="right"] .toolbar-pill { right: 12px; top: 50%; transform: translateY(-50%); flex-direction: column; }
+  .pv[data-pos="left"] .sep, .pv[data-pos="right"] .sep { width: 22px; height: 1px; margin: 4px 0; }
+  .pv[data-pos="left"] .page, .pv[data-pos="right"] .page { top: 24px; }
+  .pv .hand-ill { position: absolute; bottom: -30px; width: 210px; height: 230px; opacity: .9; transition: all var(--dur-long) var(--spring-gentle); pointer-events: none; }
+  .pv[data-hand="right"] .hand-ill { right: 10px; }
+  .pv[data-hand="left"] .hand-ill { left: 10px; transform: scaleX(-1); }
+  .hand-ill path { fill: color-mix(in srgb, var(--ink-3) 30%, transparent); stroke: color-mix(in srgb, var(--ink-3) 70%, transparent); stroke-width: 2; }
+  .hand-ill .pen { fill: var(--ink); stroke: none; }
+  .note-chip { position: absolute; top: 16px; inset-inline-start: 16px; font-size: 12px; background: var(--chrome-solid); color: var(--ink-2); border-radius: 999px; padding: 5px 12px; box-shadow: var(--shadow-1); }
+  .sub-h { font-size: 12px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-3); margin: 24px 0 10px; }
+
+  /* 4 · privacy */
+  .vault { position: relative; width: 420px; height: 420px; display: grid; place-items: center; }
+  .vault .ring { position: absolute; border-radius: 50%; border: 1.5px dashed color-mix(in srgb, var(--accent) 45%, transparent); }
+  .vault .ring.a { inset: 0; animation: spin 40s linear infinite; }
+  .vault .ring.b { inset: 60px; border-style: solid; border-color: var(--outline); }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .tab-ill { width: 220px; height: 160px; border-radius: 18px; background: #0e0e10; padding: 8px; box-shadow: var(--shadow-3); position: relative; }
+  .tab-ill > div { width: 100%; height: 100%; border-radius: 11px; background: var(--chrome-solid); display: grid; grid-template-columns: repeat(4, 1fr); gap: 7px; padding: 12px; }
+  .tab-ill > div i { border-radius: 2px 5px 5px 2px; background: var(--c); }
+  .shield { position: absolute; bottom: 70px; inset-inline-end: 80px; width: 84px; height: 84px; border-radius: 26px; background: var(--accent); color: var(--on-accent); display: grid; place-items: center; box-shadow: var(--shadow-3); }
+  .shield .ms { font-size: 44px; font-variation-settings: "FILL" 1; }
+  .orb { position: absolute; width: 50px; height: 50px; border-radius: 50%; background: var(--chrome-solid); box-shadow: var(--shadow-2); display: grid; place-items: center; color: var(--ink-3); }
+  .orb.x::after { content: ""; position: absolute; width: 60%; height: 2px; background: var(--danger); transform: rotate(-45deg); border-radius: 2px; }
+  .promises { margin-top: 22px; max-width: 470px; }
+  .promises .ui-row { padding: 12px 14px; }
+
+  /* 5 · done */
+  .done-vis { position: relative; width: 460px; height: 480px; }
+  .done-vis .nb { position: absolute; left: 130px; top: 40px; width: 200px; }
+  .done-vis .nb .cover { box-shadow: var(--shadow-3), inset 6px 0 0 rgba(0,0,0,.18); }
+  .confetti i { position: absolute; width: 10px; height: 16px; border-radius: 3px; background: var(--c); opacity: .9; animation: fall 2.6s var(--ease-standard) infinite; animation-delay: var(--d); }
+  @keyframes fall { 0% { transform: translateY(-30px) rotate(0); opacity: 0; } 15% { opacity: 1; } 100% { transform: translateY(140px) rotate(220deg); opacity: 0; } }
+  .tips { display: grid; gap: 10px; margin-top: 22px; max-width: 470px; }
+  .tip { display: flex; gap: 14px; align-items: center; padding: 12px 14px; border-radius: var(--r-card); background: var(--surface); }
+  [data-look="galaxy"] .tip, [data-look="studio"] .tip { background: var(--chrome-solid); }
+  .tip svg { width: 46px; height: 46px; flex: none; }
+  .tip svg .f { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 2; }
+  .tip svg .l { fill: none; stroke: var(--accent); stroke-width: 2.2; stroke-linecap: round; }
+  .tip b { display: block; font-size: 14px; }
+  .tip small { color: var(--ink-3); font-size: 12.5px; }
+  .note { max-width: 1100px; }
+  .ob-step .logo { background: var(--accent); color: var(--on-accent); }
+</style>
+</head>
+<body>
+<div class="page-wrap">
+  <h1>Onboarding</h1>
+  <p class="lead muted">Five calm steps, under a minute, no account. The S Pen step has a live test pad: draw on it with a mouse or pen, touch it with a finger (or press “Drop a palm”) to see palm rejection. Step 3’s choices move the toolbar live.</p>
+  <div class="variants">
+
+    <!-- 1 · Welcome -->
+    <div>
+      <div class="variant-label">Step 1 of 5 · Welcome</div>
+      <div class="device tablet">
+        <div class="status"><span>9:41</span><span><i class="ms">wifi</i><i class="ms">battery_full</i></span></div>
+        <div class="scr ob">
+          <div class="ob-vis">
+            <div class="wl-stack">
+              <div class="cover" style="--cv:#7a2d2d; left:0; top:20px; transform:rotate(-9deg)"><span class="ttl">Calculus II</span></div>
+              <div class="cover dots" style="--cv:#2f5d50; left:300px; top:300px; transform:rotate(8deg)"><span class="ttl">Lab Journal</span></div>
+              <div class="wl-page page ruled">
+                <div class="margin-line"></div>
+                <svg viewBox="0 0 300 400">
+                  <text x="64" y="64" style="--d:.2s; font-size:32px; fill:#1d3c8a">Lecture 7</text>
+                  <path class="d blue" pathLength="1" style="--d:.8s" d="M62 74 C 110 71, 150 75, 180 72"/>
+                  <text x="64" y="118" style="--d:1.1s">Momentum</text>
+                  <text x="64" y="160" style="--d:1.6s">p = m · v</text>
+                  <path class="d red" pathLength="1" style="--d:2.1s" d="M56 132 H 168 V 172 H 56 Z"/>
+                  <path class="d" pathLength="1" style="--d:2.4s" d="M70 300 L 230 300 L 230 220 Z"/>
+                  <path class="d red" pathLength="1" style="--d:2.8s" d="M180 255 V 290 M 174 282 L 180 292 L 186 282"/>
+                  <text x="196" y="212" style="--d:3s; font-size:22px; fill:#2e7d32">conserved!</text>
+                </svg>
+              </div>
+              <svg class="wl-pen" viewBox="0 0 30 250"><rect x="6" y="0" width="18" height="215" rx="9" fill="#2b2d33"/><rect x="6" y="150" width="18" height="10" fill="#3a3d45"/><rect x="19" y="120" width="5" height="22" rx="2" fill="#555"/><path d="M6 212 L15 248 L24 212 Z" fill="#2b2d33"/></svg>
+            </div>
+          </div>
+          <div class="ob-txt">
+            <div class="ob-step"><span class="logo">B</span>BestNote</div>
+            <h2>Write like it’s paper.</h2>
+            <p class="body">A free, open-source notebook for your Galaxy Tab and S Pen. Handwriting, PDFs, and lecture boards turned into clean notes.</p>
+            <div class="feat">
+              <div><i class="ms">stylus</i>Built for the S Pen</div>
+              <div><i class="ms">cloud_off</i>No account needed</div>
+              <div><i class="ms">picture_as_pdf</i>Annotate any PDF</div>
+              <div><i class="ms">translate</i>English &amp; العربية</div>
+            </div>
+            <div class="lang"><span class="on">English</span><span>العربية</span><span>Français</span><span>More…</span></div>
+            <div class="ob-foot">
+              <div class="dots"><i class="on"></i><i></i><i></i><i></i><i></i></div>
+              <button class="btn ghost">Restore a backup</button>
+              <button class="btn primary lg">Get started <i class="ms flip">arrow_forward</i></button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 2 · S Pen -->
+    <div>
+      <div class="variant-label">Step 2 of 5 · S Pen detected, live palm-rejection test</div>
+      <div class="device tablet">
+        <div class="status"><span>9:41</span><span><i class="ms">wifi</i><i class="ms">battery_full</i></span></div>
+        <div class="scr ob">
+          <div class="ob-vis">
+            <div class="pad-wrap">
+              <div class="pad page ruled" id="pad">
+                <svg id="padSvg" viewBox="0 0 520 470" preserveAspectRatio="none">
+                  <text x="40" y="76" class="hand" style="fill:#1d2a4a">Hello, S Pen</text>
+                  <path class="ink-p" d="M40 92 C 120 86, 200 94, 248 88"/>
+                  <ellipse class="palm" cx="380" cy="300" rx="58" ry="78" transform="rotate(-24 380 300)"/>
+                  <text class="palm-l" x="344" y="304">palm · ignored</text>
+                </svg>
+                <div class="pad-hint">Write here with your pen, rest your palm on it too</div>
+              </div>
+              <div class="pad-tools">
+                <button class="btn ghost sm" id="palmBtn"><i class="ms">back_hand</i>Drop a palm</button>
+                <button class="btn ghost sm" id="clearPad"><i class="ms">restart_alt</i>Clear</button>
+                <span class="grow"></span>
+                <span class="muted">Pen pressure: <b id="press" style="color:var(--ink)">0.62</b></span>
+              </div>
+            </div>
+          </div>
+          <div class="ob-txt">
+            <div class="detect"><span class="pulse"><i class="ms">stylus</i></span><span><b>S Pen detected</b> · Galaxy Tab S10 Ultra</span></div>
+            <h2>Rest your hand. We’ll ignore it.</h2>
+            <p class="body">Write a few words while your palm touches the screen. With the S Pen, fingers scroll and zoom, and only the pen writes.</p>
+            <div class="stat">
+              <div class="ok"><b id="penCount">1</b><small>pen strokes written</small></div>
+              <div><b id="palmCount">1</b><small>palm touches ignored</small></div>
+            </div>
+            <div class="sens">
+              <div class="lbl"><span>Palm rejection</span><b id="sensLbl">Balanced</b></div>
+              <div class="ui-slider" id="sens" style="--v:50%"><i></i></div>
+              <div class="ticks"><span>Gentle</span><span>Balanced</span><span>Strict</span></div>
+            </div>
+            <div class="ob-foot">
+              <div class="dots"><i></i><i class="on"></i><i></i><i></i><i></i></div>
+              <button class="btn ghost">I use my finger</button>
+              <button class="btn primary lg">Looks good <i class="ms flip">arrow_forward</i></button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 3 · Handedness -->
+    <div>
+      <div class="variant-label">Step 3 of 5 · Handedness and toolbar position (tap the options)</div>
+      <div class="device tablet">
+        <div class="status"><span>9:41</span><span><i class="ms">wifi</i><i class="ms">battery_full</i></span></div>
+        <div class="scr ob">
+          <div class="ob-vis">
+            <div class="pv" id="pv" data-pos="left" data-hand="right">
+              <div class="page ruled"><div class="margin-line"></div>
+                <svg viewBox="0 0 360 450"><text x="64" y="56" class="hand" style="font-size:28px">Organic chem · Ch. 4</text><text x="64" y="98" class="hand sm">SN1 vs SN2</text><path d="M64 140 C 100 120, 140 160, 180 135" fill="none" stroke="#2a4bd7" stroke-width="2.4" stroke-linecap="round"/></svg>
+              </div>
+              <div class="toolbar-pill">
+                <span class="tool on"><i class="ms">ink_pen</i></span><span class="tool"><i class="ms">ink_highlighter</i></span><span class="tool"><i class="ms">ink_eraser</i></span><span class="tool"><i class="ms">lasso_select</i></span><span class="sep"></span><span class="tool"><i class="ms">undo</i></span>
+              </div>
+              <svg class="hand-ill" viewBox="0 0 210 230"><path d="M70 230 C 50 170, 40 120, 70 90 C 90 70, 120 70, 140 80 L 175 40 C 185 30, 200 40, 192 52 L 160 100 C 175 120, 180 160, 170 230 Z"/><rect class="pen" x="150" y="-20" width="12" height="120" rx="6" transform="rotate(32 156 40)"/></svg>
+              <span class="note-chip" id="pvNote">Toolbar stays clear of your writing hand</span>
+            </div>
+          </div>
+          <div class="ob-txt">
+            <div class="ob-step">Make it yours</div>
+            <h2>Which hand holds the pen?</h2>
+            <p class="body">We keep tools and popovers away from your palm. This is separate from the app language, so Arabic right-handers get the same layout.</p>
+            <div class="hands" id="hands">
+              <div class="choice" data-h="left"><span class="ui-radio"></span><i class="ms big" style="transform:scaleX(-1)">front_hand</i><b>Left-handed</b><small>Tools on the right</small></div>
+              <div class="choice on" data-h="right"><span class="ui-radio on"></span><i class="ms big">front_hand</i><b>Right-handed</b><small>Tools on the left or top</small></div>
+            </div>
+            <div class="sub-h">Toolbar position</div>
+            <div class="positions" id="positions">
+              <div class="pos" data-p="top"><div class="mini"></div>Top</div>
+              <div class="pos on" data-p="left"><div class="mini"></div>Left</div>
+              <div class="pos" data-p="right"><div class="mini"></div>Right</div>
+              <div class="pos" data-p="bottom"><div class="mini"></div>Bottom</div>
+            </div>
+            <div class="ob-foot">
+              <div class="dots"><i></i><i></i><i class="on"></i><i></i><i></i></div>
+              <button class="btn ghost">Back</button>
+              <button class="btn primary lg">Continue <i class="ms flip">arrow_forward</i></button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 4 · Privacy -->
+    <div>
+      <div class="variant-label">Step 4 of 5 · Privacy: no account, everything on your device</div>
+      <div class="device tablet">
+        <div class="status"><span>9:41</span><span><i class="ms">wifi</i><i class="ms">battery_full</i></span></div>
+        <div class="scr ob">
+          <div class="ob-vis">
+            <div class="vault">
+              <div class="ring a"></div><div class="ring b"></div>
+              <div class="tab-ill"><div><i style="--c:#29324a"></i><i style="--c:#7a2d2d"></i><i style="--c:#2f5d50"></i><i style="--c:#5b3f8f"></i><i style="--c:#c9a227"></i><i style="--c:#3b4a6b"></i><i style="--c:#8a5a2b"></i><i style="--c:#26535f"></i></div></div>
+              <div class="shield"><i class="ms">shield_lock</i></div>
+              <div class="orb x" style="top:24px; left:180px"><i class="ms">person</i></div>
+              <div class="orb x" style="top:130px; left:-6px"><i class="ms">cloud</i></div>
+              <div class="orb x" style="top:290px; left:20px"><i class="ms">ads_click</i></div>
+            </div>
+          </div>
+          <div class="ob-txt">
+            <div class="ob-step"><i class="ms" style="font-size:18px">lock</i>Private by design</div>
+            <h2>No account. Your notes stay on this tablet.</h2>
+            <p class="body">Nothing to sign up for and nothing to sync unless you choose to. You own the files.</p>
+            <div class="ui-group promises">
+              <div class="ui-row"><span class="ui-tile"><i class="ms">no_accounts</i></span><div class="t"><b>No sign-in, ever</b><small>Open the app and write. There is no BestNote server.</small></div></div>
+              <div class="ui-row"><span class="ui-tile"><i class="ms">folder_zip</i></span><div class="t"><b>Open file format</b><small>Notebooks are .bnote files. Export everything any time.</small></div></div>
+              <div class="ui-row"><span class="ui-tile"><i class="ms">document_scanner</i></span><div class="t"><b>Smart Board is opt-in</b><small>Uses your own AI key. Only the photo you pick is sent.</small></div></div>
+              <div class="ui-row"><span class="ui-tile"><i class="ms">bug_report</i></span><div class="t"><b>Share crash reports</b><small>Anonymous, no note content. Off by default.</small></div><div class="switch" id="crashSw"><i></i></div></div>
+            </div>
+            <div class="ob-foot">
+              <div class="dots"><i></i><i></i><i></i><i class="on"></i><i></i></div>
+              <button class="btn ghost">Read the privacy policy</button>
+              <button class="btn primary lg">Sounds good <i class="ms flip">arrow_forward</i></button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 5 · Done -->
+    <div>
+      <div class="variant-label">Step 5 of 5 · Done: first notebook ready, three gestures to remember</div>
+      <div class="device tablet">
+        <div class="status"><span>9:41</span><span><i class="ms">wifi</i><i class="ms">battery_full</i></span></div>
+        <div class="scr ob">
+          <div class="ob-vis">
+            <div class="done-vis">
+              <div class="confetti">
+                <i style="--c:#2a4bd7; left:90px; top:20px; --d:0s"></i><i style="--c:#c62828; left:360px; top:10px; --d:.5s"></i><i style="--c:#ffd54f; left:250px; top:0; --d:1s"></i><i style="--c:#2e7d32; left:40px; top:120px; --d:1.4s"></i><i style="--c:#7b3fe4; left:400px; top:140px; --d:.8s"></i><i style="--c:#ef6c00; left:180px; top:30px; --d:1.9s"></i>
+              </div>
+              <div class="nb"><div class="cover" style="--cv:#29324a"><span class="ttl" style="font-size:22px">My first notebook</span><span class="sub">Ruled · A4</span></div></div>
+              <div class="hint-toast" style="position:absolute; left:80px; bottom:20px; animation-delay:0s">Saved on this device · <u>Change paper</u></div>
+            </div>
+          </div>
+          <div class="ob-txt">
+            <div class="ob-step"><i class="ms" style="font-size:18px">check_circle</i>All set</div>
+            <h2>You’re ready to write.</h2>
+            <p class="body">We made you a first notebook. Three moves worth knowing:</p>
+            <div class="tips">
+              <div class="tip"><svg viewBox="0 0 46 46"><rect class="f" x="18" y="4" width="10" height="38" rx="5"/><rect x="25" y="16" width="5" height="10" rx="2" fill="var(--accent)"/></svg><div><b>Hold the S Pen button</b><small>Temporary eraser. Let go to keep writing.</small></div></div>
+              <div class="tip"><svg viewBox="0 0 46 46"><circle class="f" cx="16" cy="24" r="7"/><circle class="f" cx="30" cy="24" r="7"/><path class="l" d="M10 10 C 16 4, 26 4, 32 10"/></svg><div><b>Two-finger tap to undo</b><small>Three fingers to redo.</small></div></div>
+              <div class="tip"><svg viewBox="0 0 46 46"><path class="l" d="M8 30 C 14 16, 22 36, 28 22 S 38 20, 40 28"/><path class="l" d="M12 36 L 34 36" style="stroke-dasharray:3 4"/></svg><div><b>Scribble over ink to erase it</b><small>Circle something to select it.</small></div></div>
+            </div>
+            <div class="ob-foot">
+              <div class="dots"><i></i><i></i><i></i><i></i><i class="on"></i></div>
+              <button class="btn ghost"><i class="ms">upload_file</i>Import a PDF</button>
+              <button class="btn primary lg">Open my notebook</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+  <p class="note">Motion: steps advance with Spring.Gentle (content slides, the visual cross-fades). The welcome handwriting is an illustration, so it may animate. Real ink never does. Every step can be skipped; all choices live in Settings later.</p>
+</div>
+<script>
+(function () {
+  const h = document.documentElement;
+  // Palm-rejection test pad
+  const pad = document.getElementById('pad'), svg = document.getElementById('padSvg');
+  const NS = 'http://www.w3.org/2000/svg';
+  let pens = 1, palms = 1, path = null, d = '';
+  const pc = document.getElementById('penCount'), pl = document.getElementById('palmCount'), pr = document.getElementById('press');
+  const pt = e => { const r = pad.getBoundingClientRect(); return [((e.clientX - r.left) / r.width * 520).toFixed(1), ((e.clientY - r.top) / r.height * 470).toFixed(1)]; };
+  function palmAt(x, y) {
+    const g = document.createElementNS(NS, 'g');
+    g.innerHTML = `<ellipse class="palm" cx="${x}" cy="${y}" rx="52" ry="72" transform="rotate(-24 ${x} ${y})"/><text class="palm-l" x="${x - 36}" y="${+y + 4}">palm · ignored</text>`;
+    svg.append(g); palms++; pl.textContent = palms;
+    setTimeout(() => g.style.transition = 'opacity 600ms', 10); setTimeout(() => g.style.opacity = '.35', 900);
+  }
+  pad.addEventListener('pointerdown', e => {
+    e.preventDefault();
+    const [x, y] = pt(e);
+    if (e.pointerType === 'touch') { palmAt(x, y); return; }
+    pad.setPointerCapture(e.pointerId);
+    path = document.createElementNS(NS, 'path'); path.setAttribute('class', 'ink-p'); d = `M${x} ${y}`; path.setAttribute('d', d); svg.append(path);
+  });
+  pad.addEventListener('pointermove', e => {
+    if (!path) return;
+    const [x, y] = pt(e); d += ` L${x} ${y}`; path.setAttribute('d', d);
+    const p = e.pressure && e.pressure !== .5 ? e.pressure : .55 + Math.random() * .15; pr.textContent = p.toFixed(2);
+  });
+  pad.addEventListener('pointerup', () => { if (path) { pens++; pc.textContent = pens; } path = null; });
+  document.getElementById('palmBtn').onclick = () => palmAt(120 + Math.random() * 300, 200 + Math.random() * 200);
+  document.getElementById('clearPad').onclick = () => { svg.querySelectorAll('path.ink-p, g').forEach(n => n.remove()); };
+
+  // Sliders
+  document.querySelectorAll('.ui-slider').forEach(sl => {
+    const set = e => { const r = sl.getBoundingClientRect(); let v = (e.clientX - r.left) / r.width; if (h.dir === 'rtl') v = 1 - v; v = Math.max(0, Math.min(1, v)); sl.style.setProperty('--v', (v * 100).toFixed(0) + '%'); if (sl.id === 'sens') document.getElementById('sensLbl').textContent = v < .34 ? 'Gentle' : v < .67 ? 'Balanced' : 'Strict'; };
+    sl.addEventListener('pointerdown', e => { sl.setPointerCapture(e.pointerId); set(e); sl.onpointermove = set; });
+    sl.addEventListener('pointerup', () => sl.onpointermove = null);
+  });
+
+  // Handedness + toolbar position
+  const pv = document.getElementById('pv');
+  const setPos = p => { pv.dataset.pos = p; document.querySelectorAll('#positions .pos').forEach(x => x.classList.toggle('on', x.dataset.p === p)); };
+  document.querySelectorAll('#positions .pos').forEach(x => x.onclick = () => setPos(x.dataset.p));
+  document.querySelectorAll('#hands .choice').forEach(c => c.onclick = () => {
+    document.querySelectorAll('#hands .choice').forEach(x => { x.classList.toggle('on', x === c); x.querySelector('.ui-radio').classList.toggle('on', x === c); });
+    pv.dataset.hand = c.dataset.h; setPos(c.dataset.h === 'left' ? 'right' : 'left');
+  });
+  document.getElementById('crashSw').onclick = e => e.currentTarget.classList.toggle('on');
+  document.querySelectorAll('.lang span').forEach(s => s.onclick = () => { s.parentElement.querySelectorAll('span').forEach(x => x.classList.toggle('on', x === s)); });
+})();
+</script>
+</body>
+</html>

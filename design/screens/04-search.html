@@ -1,0 +1,331 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BestNote · Search</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Sans+Arabic:wght@400;500;600&family=Caveat:wght@500;700&family=Aref+Ruqaa:wght@400;700&family=Material+Symbols+Rounded:opsz,wght,FILL@24,400,0..1&family=Fraunces:opsz,wght@9..144,500;9..144,600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../tokens.css">
+<link rel="stylesheet" href="../board.css">
+<script src="../shell.js"></script>
+<style>
+  .rail .rail-logo { background: var(--accent); color: var(--on-accent); }
+  .sx { flex: 1; display: flex; flex-direction: column; min-width: 0; position: relative; }
+  .sx-top { padding: 18px 26px 10px; display: flex; flex-direction: column; gap: 12px; }
+  .sx-top .ui-field { font-size: 17px; padding: 12px 16px; border-radius: 999px; }
+  [data-look="galaxy"] .sx-top .ui-field { border-radius: 22px; }
+  .sx-top .ui-field .q { font-weight: 500; }
+  .sx-top .ui-field .ar { font-family: "IBM Plex Sans Arabic"; }
+  .chips { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+  .chips .chip .n { font-size: 11px; color: var(--ink-3); margin-inline-start: 2px; }
+  .chips .chip.on .n { color: inherit; opacity: .7; }
+  .chips .div { width: 1px; height: 20px; background: var(--outline); margin: 0 4px; }
+  .sx-body { flex: 1; min-height: 0; display: grid; grid-template-columns: 1fr 400px; }
+  .sx-body.one { grid-template-columns: 1fr; }
+  .res { overflow: hidden; padding: 4px 26px 20px; }
+  .res-meta { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--ink-3); margin: 2px 0 10px; }
+  .res-meta b { color: var(--ink); }
+  .grp { margin-bottom: 14px; }
+  .grp-h { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+  .grp-h .mini-cv { width: 26px; height: 34px; border-radius: 2px 5px 5px 2px; background: var(--cv); box-shadow: var(--shadow-1), inset 3px 0 0 rgba(0,0,0,.2); flex: none; }
+  .grp-h .mini-cv.pdf { background: #fff; border: 1px solid var(--outline); }
+  .grp-h b { font-size: 15px; }
+  .grp-h small { color: var(--ink-3); font-size: 12px; }
+  .grp-h .ui-badge { margin-inline-start: auto; }
+  .hit { display: grid; grid-template-columns: 1fr auto; gap: 6px 12px; align-items: center; padding: 10px 12px; border-radius: 14px; background: var(--chrome-solid); border: 1px solid var(--outline); margin-bottom: 6px; cursor: pointer; transition: border-color var(--dur-short); }
+  [data-look="galaxy"] .hit { border-color: transparent; border-radius: 20px; }
+  .hit:hover { border-color: var(--accent); }
+  .hit.on { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+  .hit .kind { display: flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--ink-3); grid-column: 1 / -1; }
+  .hit .kind .ms { font-size: 15px; }
+  .hit .pg-n { font-size: 12px; color: var(--ink-3); white-space: nowrap; }
+  .ink-snip { position: relative; font: 600 25px/1.25 var(--font-hand); color: #1d2a4a; background: var(--paper) repeating-linear-gradient(transparent 0 30px, var(--paper-line) 30px 31px); padding: 2px 14px 4px; border-radius: 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border: 1px solid var(--outline); }
+  .ink-snip mark { background: linear-gradient(176deg, transparent 18%, rgba(255, 213, 79, .8) 18% 88%, transparent 88%); color: inherit; padding: 0 4px; border-radius: 4px; }
+  .ink-snip .r { color: #c62828; } .ink-snip .g { color: #2e7d32; } .ink-snip .b { color: #2a4bd7; }
+  .ink-snip.ar { font: 400 25px/1.4 "Aref Ruqaa", serif; direction: rtl; text-align: start; }
+  .ink-snip svg { position: absolute; pointer-events: none; }
+  .ink-snip svg path { fill: none; stroke-width: 2; stroke-linecap: round; }
+  .pdf-snip { font: 13.5px/1.5 Georgia, "Times New Roman", serif; color: var(--ink-2); padding: 2px 2px; }
+  .pdf-snip mark { background: var(--accent-soft); color: var(--ink); border-radius: 3px; padding: 0 2px; font-weight: 600; }
+  .pdf-snip.ar { font-family: "IBM Plex Sans Arabic"; direction: rtl; }
+  .title-hit { font-size: 15px; font-weight: 600; }
+  .title-hit mark { background: var(--accent-soft); color: var(--accent); border-radius: 4px; padding: 0 3px; }
+
+  .pv { background: var(--chrome-solid); border-inline-start: 1px solid var(--outline); display: flex; flex-direction: column; padding: 16px 18px; gap: 10px; }
+  .pv-h { display: flex; align-items: center; gap: 8px; }
+  .pv-h b { font-size: 14px; }
+  .pv-page { flex: 1; border-radius: 4px; box-shadow: var(--shadow-2); position: relative; overflow: hidden; }
+  .pv-page .l { position: absolute; font: 600 22px var(--font-hand); color: #1d2a4a; white-space: nowrap; }
+  .pv-page .ring { position: absolute; border: 2.5px solid var(--accent); border-radius: 10px; box-shadow: 0 0 0 6px color-mix(in srgb, var(--accent) 22%, transparent); animation: ringP 1.6s var(--ease-standard) infinite; }
+  @keyframes ringP { 50% { box-shadow: 0 0 0 12px color-mix(in srgb, var(--accent) 6%, transparent); } }
+  .pv-page svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .pv-nav { display: flex; align-items: center; gap: 8px; }
+
+  /* landing */
+  .land { display: grid; grid-template-columns: 1fr 1fr; gap: 26px; padding: 6px 26px; }
+  .land h4 { margin: 14px 0 8px; display: flex; align-items: center; }
+  .land h4 a { margin-inline-start: auto; text-transform: none; letter-spacing: 0; color: var(--accent); cursor: pointer; font-size: 12px; }
+  .rec { display: flex; align-items: center; gap: 12px; padding: 9px 10px; border-radius: 12px; font-size: 14.5px; cursor: pointer; }
+  .rec:hover { background: var(--chrome-solid); }
+  .rec .ms { color: var(--ink-3); font-size: 20px; }
+  .rec .x { margin-inline-start: auto; font-size: 18px; opacity: .6; }
+  .rec .ar { font-family: "IBM Plex Sans Arabic"; }
+  .rec small { color: var(--ink-3); font-size: 12px; }
+  .sugg { display: flex; flex-wrap: wrap; gap: 8px; }
+  .sugg span { padding: 8px 12px; border-radius: 12px; background: var(--chrome-solid); border: 1px solid var(--outline); font-size: 13px; display: flex; align-items: center; gap: 6px; cursor: pointer; }
+  .sugg span .ms { font-size: 17px; color: var(--accent); }
+  .tips { background: var(--chrome-solid); border: 1px solid var(--outline); border-radius: var(--r-card); padding: 14px 16px; font-size: 13px; color: var(--ink-2); }
+  [data-look="galaxy"] .tips, [data-look="galaxy"] .sugg span { border-color: transparent; }
+  .tips div { display: flex; gap: 10px; align-items: baseline; padding: 5px 0; }
+  .tips code { font: 12px ui-monospace, Menlo, monospace; background: var(--surface); padding: 2px 6px; border-radius: 6px; color: var(--ink); white-space: nowrap; }
+  .idx { display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-radius: var(--r-card); background: var(--accent-soft); font-size: 13px; color: var(--ink); margin-top: 14px; }
+  .idx .ms { color: var(--accent); }
+  .mini-covers { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+
+  /* filters panel */
+  .fpanel { width: 360px; padding: 18px 20px; display: flex; flex-direction: column; gap: 4px; overflow: hidden; }
+  .fpanel h3 { font: 600 20px var(--font-display); display: flex; align-items: center; margin-bottom: 4px; }
+  .fpanel .ui-mi { padding: 7px 4px; }
+  .fpanel .sec-l { font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); margin: 12px 0 6px; }
+  .inkc { display: flex; gap: 8px; }
+  .inkc b { width: 26px; height: 26px; border-radius: 50%; background: var(--c); box-shadow: inset 0 0 0 1px rgba(0,0,0,.12); cursor: pointer; }
+  .inkc b.on { box-shadow: 0 0 0 2px var(--chrome-solid), 0 0 0 4px var(--accent); }
+  .fpanel .foot { margin-top: auto; display: flex; gap: 8px; padding-top: 12px; }
+  .fpanel .foot .btn { flex: 1; }
+
+  .norm { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 12.5px; color: var(--ink-2); background: var(--surface-2); padding: 8px 12px; border-radius: 12px; margin-bottom: 12px; }
+  .norm .ar { font-family: "IBM Plex Sans Arabic"; background: var(--chrome-solid); padding: 1px 8px; border-radius: 6px; color: var(--ink); }
+  .none-ill { width: 180px; height: 130px; }
+  .none-ill .s { fill: none; stroke: var(--ink-3); stroke-width: 2; stroke-linecap: round; }
+  .none-ill .a { fill: none; stroke: var(--accent); stroke-width: 3; stroke-linecap: round; }
+</style>
+</head>
+<body>
+<div class="page-wrap">
+  <h1>Search</h1>
+  <p class="lead muted">One field searches handwriting, PDF text, typed text and titles, across every notebook, in English and Arabic. Handwriting matches show the actual ink with a marker highlight. In state 2, tap a result to move the preview.</p>
+  <div class="variants">
+
+    <div>
+      <div class="variant-label">1 · Search opened: recent searches, suggestions, filters, index status</div>
+      <div class="device tablet">
+        <div class="status"><span>9:41</span><span><i class="ms">wifi</i><i class="ms">battery_full</i></span></div>
+        <div class="lib scr">
+          <aside class="rail" data-rail></aside>
+          <div class="sx">
+            <div class="sx-top">
+              <div class="ui-field focus"><i class="ms">search</i><span class="ph">Search handwriting, PDFs, titles…</span><span class="ui-caret"></span><span class="grow"></span><i class="ms">mic</i></div>
+              <div class="chips"><span class="chip on">All</span><span class="chip"><i class="ms">gesture</i>Handwriting</span><span class="chip"><i class="ms">picture_as_pdf</i>PDF text</span><span class="chip"><i class="ms">text_fields</i>Typed text</span><span class="chip"><i class="ms">title</i>Titles</span><span class="div"></span><span class="chip"><i class="ms">folder</i>Anywhere<i class="ms">expand_more</i></span><span class="chip"><i class="ms">calendar_month</i>Any time<i class="ms">expand_more</i></span></div>
+            </div>
+            <div class="land">
+              <div>
+                <h4>Recent searches <a>Clear</a></h4>
+                <div class="rec"><i class="ms">history</i>momentum<small>· Physics 201</small><i class="ms x">close</i></div>
+                <div class="rec"><i class="ms">history</i>integration by parts<i class="ms x">close</i></div>
+                <div class="rec"><i class="ms">history</i><span class="ar">المعلقات</span><i class="ms x">close</i></div>
+                <div class="rec"><i class="ms">history</i>“Krebs cycle”<small>· exact phrase</small><i class="ms x">close</i></div>
+                <div class="rec"><i class="ms">history</i>midterm<small>· tag</small><i class="ms x">close</i></div>
+                <h4>Try</h4>
+                <div class="sugg"><span><i class="ms">ink_highlighter</i>Everything I highlighted</span><span><i class="ms">format_color_text</i>Red ink only</span><span><i class="ms">mic</i>Notes with audio</span><span><i class="ms">star</i>Starred pages</span></div>
+                <div class="idx"><i class="ms">task_alt</i><span><b>Handwriting index up to date.</b> 1,284 pages in English and Arabic, built on this device.</span></div>
+              </div>
+              <div>
+                <h4>Recently opened</h4>
+                <div class="mini-covers covers">
+                  <div class="nb" style="--cv:#29324a"><div class="cover"><span class="ttl">Physics 201</span></div><b>Physics 201</b></div>
+                  <div class="nb" style="--cv:#7a2d2d"><div class="cover lined"><span class="ttl">Calculus II</span></div><b>Calculus II</b></div>
+                  <div class="nb"><div class="cover pdfc"><span>PDF</span><div class="lines"></div></div><b>Lecture 7 slides</b></div>
+                  <div class="nb" style="--cv:#5b3f8f"><div class="cover"><span class="ttl ar">أدب عربي</span></div><b>أدب عربي</b></div>
+                </div>
+                <h4>Search tips</h4>
+                <div class="tips">
+                  <div><code>"exact phrase"</code>Match words in order</div>
+                  <div><code>-lab</code>Leave out a word</div>
+                  <div><code>in:Physics</code>Only one folder or notebook</div>
+                  <div><code>الزخم</code>Arabic ignores diacritics and alef forms</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div class="variant-label">2 · Results for “momentum”: grouped by notebook, ink snippets, PDF text, titles, live preview</div>
+      <div class="device tablet">
+        <div class="status"><span>9:41</span><span><i class="ms">wifi</i><i class="ms">battery_full</i></span></div>
+        <div class="lib scr">
+          <aside class="rail" data-rail></aside>
+          <div class="sx">
+            <div class="sx-top">
+              <div class="ui-field focus"><i class="ms">search</i><span class="q">momentum</span><span class="ui-caret"></span><span class="grow"></span><i class="ms">close</i></div>
+              <div class="chips"><span class="chip on">All <span class="n">23</span></span><span class="chip"><i class="ms">gesture</i>Handwriting <span class="n">14</span></span><span class="chip"><i class="ms">picture_as_pdf</i>PDF text <span class="n">7</span></span><span class="chip"><i class="ms">text_fields</i>Typed <span class="n">1</span></span><span class="chip"><i class="ms">title</i>Titles <span class="n">1</span></span><span class="div"></span><span class="chip"><i class="ms">tune</i>Filters</span></div>
+            </div>
+            <div class="sx-body">
+              <div class="res" id="results">
+                <div class="res-meta"><b>23 matches</b> in 4 notebooks · best first</div>
+                <div class="grp">
+                  <div class="grp-h"><span class="mini-cv" style="--cv:#29324a"></span><div><b>Physics 201</b><br><small>Physics 201 › Lectures</small></div><span class="ui-badge">9 matches</span></div>
+                  <div class="hit on" data-p="14" data-y="132"><div class="kind"><i class="ms">gesture</i>Handwriting · Lecture 7</div><div class="ink-snip">Linear <mark>momentum</mark> p = m·v <span class="r">(vector!)</span></div><span class="pg-n">p. 14</span></div>
+                  <div class="hit" data-p="15" data-y="300"><div class="kind"><i class="ms">gesture</i>Handwriting</div><div class="ink-snip">total <mark>momentum</mark> before = after <span class="g">✓ conserved</span></div><span class="pg-n">p. 15</span></div>
+                  <div class="hit" data-p="18" data-y="210"><div class="kind"><i class="ms">gesture</i>Handwriting · margin note</div><div class="ink-snip"><span class="b">ask prof:</span> angular <mark>momentum</mark> L = r × p?</div><span class="pg-n">p. 18</span></div>
+                </div>
+                <div class="grp">
+                  <div class="grp-h"><span class="mini-cv pdf"></span><div><b>Lecture 7 slides</b><br><small>PDF · 48 pages</small></div><span class="ui-badge">7 matches</span></div>
+                  <div class="hit" data-p="3" data-y="90"><div class="kind"><i class="ms">picture_as_pdf</i>PDF text</div><div class="pdf-snip">…the linear <mark>momentum</mark> of a particle is defined as the product of its mass and velocity, <i>p = mv</i>…</div><span class="pg-n">p. 3</span></div>
+                  <div class="hit" data-p="11" data-y="380"><div class="kind"><i class="ms">ink_highlighter</i>PDF text · you highlighted this</div><div class="pdf-snip">Conservation of <mark>momentum</mark> holds for any isolated system.</div><span class="pg-n">p. 11</span></div>
+                </div>
+                <div class="grp">
+                  <div class="grp-h"><span class="mini-cv" style="--cv:#a23b3b"></span><div><b class="title-hit">Midterm review: <mark>Momentum</mark> &amp; Energy</b><br><small>Title match · Physics 201 › Exam prep</small></div><span class="ui-badge neutral">title</span></div>
+                </div>
+              </div>
+              <div class="pv">
+                <div class="pv-h"><b>Physics 201</b><span class="muted" id="pvP">· page 14</span><span class="grow"></span><span class="ui-ib"><i class="ms">open_in_full</i></span></div>
+                <div class="pv-page page ruled">
+                  <div class="margin-line"></div>
+                  <div class="l" style="left:44px; top:38px; color:#1d3c8a; font-size:28px">Lecture 7 · Oct 14</div>
+                  <div class="l" style="left:44px; top:90px">Collisions &amp; impulse</div>
+                  <div class="l" style="left:44px; top:132px">Linear momentum p = m·v</div>
+                  <div class="l" style="left:44px; top:174px; color:#c62828">(vector!)</div>
+                  <div class="l" style="left:44px; top:216px">J = Δp = F·Δt</div>
+                  <div class="l" style="left:44px; top:300px">total momentum before = after</div>
+                  <div class="l" style="left:44px; top:380px; font-size:18px; color:#2e7d32">ex: 2 carts, m₁v₁ + m₂v₂ = (m₁+m₂)v</div>
+                  <svg viewBox="0 0 360 520"><path d="M60 470 L 300 470 M 80 460 L 80 480 M 280 460 L 280 480" stroke="#1d2a4a" stroke-width="2" fill="none" stroke-linecap="round"/><rect x="96" y="440" width="44" height="28" rx="3" fill="none" stroke="#1d2a4a" stroke-width="2"/><rect x="200" y="440" width="44" height="28" rx="3" fill="none" stroke="#1d2a4a" stroke-width="2"/><path d="M145 452 L 180 452 M 172 446 L 181 452 L 172 458" stroke="#c62828" stroke-width="2" fill="none"/></svg>
+                  <div class="ring" id="ring" style="left:94px; top:130px; width:94px; height:36px"></div>
+                </div>
+                <div class="pv-nav"><span class="ui-ib"><i class="ms">keyboard_arrow_up</i></span><span class="ui-ib"><i class="ms">keyboard_arrow_down</i></span><span class="muted">1 of 23</span><span class="grow"></span><button class="btn primary"><i class="ms">open_in_new</i>Open at this spot</button></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div class="variant-label">3 · Filters: type, where, when, ink color, highlights</div>
+      <div class="device tablet">
+        <div class="status"><span>9:41</span><span><i class="ms">wifi</i><i class="ms">battery_full</i></span></div>
+        <div class="lib scr">
+          <aside class="rail" data-rail></aside>
+          <div class="sx">
+            <div class="sx-top">
+              <div class="ui-field"><i class="ms">search</i><span class="q">enzyme</span><span class="grow"></span><i class="ms">close</i></div>
+              <div class="chips"><span class="chip on"><i class="ms">gesture</i>Handwriting<i class="ms">close</i></span><span class="chip on"><i class="ms">folder</i>Biology 110<i class="ms">close</i></span><span class="chip on"><i class="ms">format_color_text</i>Red ink<i class="ms">close</i></span><span class="chip on"><i class="ms">tune</i>Filters · 3</span></div>
+            </div>
+            <div class="res" style="opacity:.55">
+              <div class="res-meta"><b>4 matches</b> in Biology 110</div>
+              <div class="hit"><div class="kind"><i class="ms">gesture</i>Handwriting</div><div class="ink-snip"><span class="r">KEY: <mark>enzyme</mark> lowers activation energy</span></div><span class="pg-n">p. 8</span></div>
+              <div class="hit"><div class="kind"><i class="ms">gesture</i>Handwriting</div><div class="ink-snip"><span class="r"><mark>enzyme</mark> + substrate → complex</span></div><span class="pg-n">p. 9</span></div>
+              <div class="hit"><div class="kind"><i class="ms">gesture</i>Handwriting</div><div class="ink-snip"><span class="r">denatured <mark>enzyme</mark> = shape lost</span></div><span class="pg-n">p. 12</span></div>
+            </div>
+            <div class="ui-sheet side fpanel">
+              <h3>Filters<span class="grow"></span><span class="ui-ib"><i class="ms">close</i></span></h3>
+              <div class="sec-l">Look in</div>
+              <div class="ui-mi"><span class="ui-check sq on"></span>Handwriting<span class="end">OCR on device</span></div>
+              <div class="ui-mi"><span class="ui-check sq"></span>PDF text</div>
+              <div class="ui-mi"><span class="ui-check sq"></span>Typed text &amp; titles</div>
+              <div class="ui-mi"><span class="ui-check sq"></span>Audio transcripts<span class="end ui-badge neutral">soon</span></div>
+              <div class="sec-l">Where</div>
+              <div class="ui-field" style="padding:9px 12px; font-size:14px"><i class="ms" style="color:#44543a; font-variation-settings:'FILL' 1">folder</i>Biology 110<span class="grow"></span><i class="ms">expand_more</i></div>
+              <div class="sec-l">When</div>
+              <div class="chips"><span class="chip">Today</span><span class="chip">This week</span><span class="chip on">This semester</span><span class="chip"><i class="ms">date_range</i>Custom</span></div>
+              <div class="sec-l">Ink color</div>
+              <div class="inkc"><b style="--c:#1d1d1f"></b><b style="--c:#2a4bd7"></b><b style="--c:#c62828" class="on"></b><b style="--c:#2e7d32"></b><b style="--c:#7b3fe4"></b><b style="--c:#ffd54f"></b></div>
+              <div class="sec-l">Also</div>
+              <div class="ui-mi"><span class="ui-check sq"></span>Only highlighted text</div>
+              <div class="ui-mi"><span class="ui-check sq"></span>Include trash</div>
+              <div class="foot"><button class="btn ghost">Reset</button><button class="btn primary">Show 4 results</button></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div class="variant-label">4 · Arabic query “الزخم”: normalized matching, Arabic ink and PDF text</div>
+      <div class="device tablet">
+        <div class="status"><span>9:41</span><span><i class="ms">wifi</i><i class="ms">battery_full</i></span></div>
+        <div class="lib scr">
+          <aside class="rail" data-rail></aside>
+          <div class="sx">
+            <div class="sx-top">
+              <div class="ui-field focus"><i class="ms">search</i><span class="q ar" dir="rtl">الزخم</span><span class="ui-caret"></span><span class="grow"></span><span class="ui-badge neutral">عربي</span><i class="ms">close</i></div>
+              <div class="chips"><span class="chip on">All <span class="n">9</span></span><span class="chip"><i class="ms">gesture</i>Handwriting <span class="n">6</span></span><span class="chip"><i class="ms">picture_as_pdf</i>PDF text <span class="n">3</span></span></div>
+            </div>
+            <div class="sx-body">
+              <div class="res">
+                <div class="norm"><i class="ms" style="font-size:18px; color:var(--accent)">auto_awesome</i>Also matching <span class="ar">الزَّخْم</span><span class="ar">ٱلزخم</span><span class="ar">زخم</span> · diacritics, alef forms and “ال” ignored</div>
+                <div class="grp">
+                  <div class="grp-h"><span class="mini-cv" style="--cv:#1f4e5f"></span><div><b style="font-family:'IBM Plex Sans Arabic'">الفيزياء الحديثة</b><br><small>Physics (Arabic) · 12 pages</small></div><span class="ui-badge">6 matches</span></div>
+                  <div class="hit on"><div class="kind"><i class="ms">gesture</i>Handwriting · Arabic</div><div class="ink-snip ar">قانون حفظ <mark>الزخم</mark> الخطي: م × ع</div><span class="pg-n">p. 4</span></div>
+                  <div class="hit"><div class="kind"><i class="ms">gesture</i>Handwriting · mixed</div><div class="ink-snip ar"><mark>الزَّخم</mark> = momentum <span class="r">(كمية متجهة)</span></div><span class="pg-n">p. 5</span></div>
+                </div>
+                <div class="grp">
+                  <div class="grp-h"><span class="mini-cv pdf"></span><div><b style="font-family:'IBM Plex Sans Arabic'">ملخص الفيزياء.pdf</b><br><small>PDF · 30 pages</small></div><span class="ui-badge">3 matches</span></div>
+                  <div class="hit"><div class="kind"><i class="ms">picture_as_pdf</i>PDF text</div><div class="pdf-snip ar">…ويُعرَّف <mark>الزخم</mark> بأنه حاصل ضرب كتلة الجسم في سرعته…</div><span class="pg-n">p. 7</span></div>
+                </div>
+              </div>
+              <div class="pv">
+                <div class="pv-h"><b style="font-family:'IBM Plex Sans Arabic'">الفيزياء الحديثة</b><span class="muted">· page 4</span><span class="grow"></span><span class="ui-ib"><i class="ms">open_in_full</i></span></div>
+                <div class="pv-page page ruled" dir="rtl">
+                  <div class="l" style="right:30px; top:30px; font:700 30px 'Aref Ruqaa'; color:#1d3c8a">الدرس الرابع: الزخم</div>
+                  <div class="l" style="right:30px; top:96px; font:400 24px 'Aref Ruqaa'">قانون حفظ الزخم الخطي: م × ع</div>
+                  <div class="l" style="right:30px; top:150px; font:400 24px 'Aref Ruqaa'">في نظام معزول يبقى ثابتاً</div>
+                  <div class="l" style="right:30px; top:206px; font:400 22px 'Aref Ruqaa'; color:#c62828">مثال: تصادم كرتين</div>
+                  <div class="l" style="right:40px; top:270px; font:600 24px var(--font-hand); direction:ltr">m₁v₁ + m₂v₂ = m₁v₁′ + m₂v₂′</div>
+                  <div class="ring" style="right:128px; top:96px; width:66px; height:42px"></div>
+                </div>
+                <div class="pv-nav"><span class="ui-ib"><i class="ms">keyboard_arrow_up</i></span><span class="ui-ib"><i class="ms">keyboard_arrow_down</i></span><span class="muted">1 of 9</span><span class="grow"></span><button class="btn primary"><i class="ms">open_in_new</i>Open</button></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div class="variant-label">5 · No results yet: some notebooks are still being indexed</div>
+      <div class="device tablet">
+        <div class="status"><span>9:41</span><span><i class="ms">wifi</i><i class="ms">battery_full</i></span></div>
+        <div class="lib scr">
+          <aside class="rail" data-rail></aside>
+          <div class="sx">
+            <div class="sx-top">
+              <div class="ui-field focus"><i class="ms">search</i><span class="q">entropy</span><span class="ui-caret"></span><span class="grow"></span><i class="ms">close</i></div>
+              <div class="chips"><span class="chip on">All <span class="n">0</span></span><span class="chip"><i class="ms">gesture</i>Handwriting</span><span class="chip"><i class="ms">picture_as_pdf</i>PDF text</span></div>
+            </div>
+            <div class="ui-empty" style="margin-top:40px">
+              <svg class="none-ill" viewBox="0 0 180 130"><circle class="s" cx="76" cy="58" r="36"/><path class="s" d="M102 84 L 136 118"/><path class="a" d="M58 60 C 66 48, 76 72, 86 56 S 96 50, 98 58"/></svg>
+              <h3>No “entropy” yet.</h3>
+              <p class="muted" style="font-size:14px">Nothing matches in what’s indexed so far. Three notebooks imported today are still being read.</p>
+              <div class="ui-group" style="width:440px; text-align:start; margin-top:8px">
+                <div class="ui-row"><i class="ms">hourglass_top</i><div class="t"><b>Indexing 3 notebooks · 62%</b><small>Thermodynamics, Lecture 9 slides, Lab 4. On device, pauses while you write.</small><div class="ui-prog" style="margin-top:8px"><i style="--v:62%"></i></div></div></div>
+                <div class="ui-row"><i class="ms">spellcheck</i><div class="t"><b>Did you mean “enthalpy”?</b><small>3 matches in Thermodynamics</small></div><i class="ms flip" style="color:var(--ink-3)">chevron_right</i></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+  <p class="note">Handwriting recognition runs on the device, in the background, never while the pen is down. Tapping a result opens the notebook at that page and the ring pulses once around the match (Duration.Long), then fades.</p>
+</div>
+<script>
+(function () {
+  document.querySelectorAll('[data-rail]').forEach(r => r.innerHTML = `<div class="rail-logo">B</div><a><i class="ms">auto_stories</i><small>Library</small></a><a><i class="ms">star</i><small>Favorites</small></a><a class="on"><i class="ms">search</i><small>Search</small></a><a><i class="ms">document_scanner</i><small>Board</small></a><span class="grow"></span><a><i class="ms">settings</i><small>Settings</small></a>`);
+  const ring = document.getElementById('ring'), pvP = document.getElementById('pvP');
+  document.querySelectorAll('#results .hit').forEach(hit => hit.onclick = () => {
+    document.querySelectorAll('#results .hit').forEach(x => x.classList.toggle('on', x === hit));
+    pvP.textContent = '· page ' + hit.dataset.p;
+    ring.style.transition = 'top 450ms var(--spring-snappy)';
+    ring.style.top = (+hit.dataset.y - 2) + 'px';
+  });
+  document.querySelectorAll('.chips').forEach(g => g.querySelectorAll('.chip').forEach(c => c.addEventListener('click', () => { if (!c.querySelector('.ms') || c.textContent.includes('Handwriting') || c.textContent.includes('PDF')) { g.querySelectorAll('.chip').forEach(x => { if (x.querySelector('.n') || x.textContent.trim() === 'All') x.classList.toggle('on', x === c); }); } })));
+  document.querySelectorAll('.inkc b').forEach(b => b.onclick = () => b.classList.toggle('on'));
+  document.querySelectorAll('.fpanel .ui-check').forEach(c => c.parentElement.onclick = () => c.classList.toggle('on'));
+})();
+</script>
+</body>
+</html>

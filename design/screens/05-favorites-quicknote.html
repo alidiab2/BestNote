@@ -1,0 +1,285 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BestNote · Favorites &amp; Quicknote</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Sans+Arabic:wght@400;500;600&family=Caveat:wght@500;700&family=Material+Symbols+Rounded:opsz,wght,FILL@24,400,0..1&family=Fraunces:opsz,wght@9..144,500;9..144,600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../tokens.css">
+<link rel="stylesheet" href="../board.css">
+<script src="../shell.js"></script>
+<style>
+  .rail .rail-logo { background: var(--accent); color: var(--on-accent); }
+  .shelf { padding: 20px 28px; }
+  .shelf h4 { display: flex; align-items: center; gap: 8px; margin-top: 18px; }
+  .shelf h4 .hint { margin-inline-start: auto; text-transform: none; letter-spacing: 0; font-weight: 500; color: var(--ink-3); }
+  .nb { position: relative; }
+  .nb .star { position: absolute; top: 6px; inset-inline-end: 6px; z-index: 2; font-size: 16px; color: #FFD54F; font-variation-settings: "FILL" 1; text-shadow: 0 1px 2px rgba(0,0,0,.3); }
+  .fav-pages { display: grid; grid-template-columns: repeat(5, 1fr); gap: 18px; }
+  .fp { cursor: pointer; }
+  .fp .pg { aspect-ratio: 4 / 3; border-radius: 6px; box-shadow: var(--shadow-1); position: relative; overflow: hidden; transition: transform var(--dur-medium) var(--spring-snappy); }
+  .fp:hover .pg { transform: translateY(-3px); }
+  .fp .pg svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .fp .pg .bm { position: absolute; top: -2px; inset-inline-end: 12px; width: 14px; height: 22px; background: #FFD54F; clip-path: polygon(0 0, 100% 0, 100% 100%, 50% 75%, 0 100%); }
+  .fp b { display: block; font-size: 13px; margin-top: 8px; }
+  .fp small { color: var(--ink-3); font-size: 11.5px; }
+  .fcards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+  .fcard { display: flex; align-items: center; gap: 12px; padding: 12px 14px; background: var(--chrome-solid); border: 1px solid var(--outline); border-radius: var(--r-card); }
+  [data-look="galaxy"] .fcard { border-color: transparent; }
+  .fcard > .ms { font-size: 30px; color: var(--c); font-variation-settings: "FILL" 1; }
+  .fcard b { display: block; font-size: 14px; }
+  .fcard small { color: var(--ink-3); font-size: 12px; }
+  .seg.inline { display: inline-flex; margin: 0; }
+  .seg.inline span { padding: 6px 14px; }
+
+  /* home screen (system UI, wallpaper is content) */
+  .home { position: relative; background: radial-gradient(70% 90% at 15% 10%, #6f7fd6 0%, transparent 60%), radial-gradient(60% 80% at 90% 90%, #e38c6f 0%, transparent 60%), linear-gradient(160deg, #2b3270, #6b3f6f 60%, #c66a5a) !important; color: #fff; padding: 40px 56px; display: block !important; }
+  [data-look="studio"] .home { background: radial-gradient(60% 70% at 20% 20%, #3b2c7a, transparent 60%), radial-gradient(60% 80% at 90% 90%, #12385a, transparent 60%), #07080d !important; }
+  [data-look="galaxy"] .home { background: radial-gradient(70% 80% at 80% 10%, #8ec5ff, transparent 60%), radial-gradient(70% 80% at 10% 90%, #3c6be0, transparent 60%), linear-gradient(160deg, #1f4fbf, #5aa0f5) !important; }
+  .clock { font: 300 76px/1 var(--font-ui); letter-spacing: -.03em; text-shadow: 0 2px 20px rgba(0,0,0,.2); }
+  .date { font-size: 17px; opacity: .9; margin-top: 6px; }
+  .apps { position: absolute; display: grid; grid-template-columns: repeat(6, 76px); gap: 26px 34px; }
+  .app { display: flex; flex-direction: column; align-items: center; gap: 7px; font-size: 12.5px; text-shadow: 0 1px 3px rgba(0,0,0,.4); }
+  .app .ic { width: 64px; height: 64px; border-radius: 22px; display: grid; place-items: center; box-shadow: 0 6px 18px rgba(0,0,0,.25); }
+  .app .ic .ms { font-size: 32px; color: #fff; }
+  .app .ic.bn { background: var(--accent); }
+  .app .ic.bn b { font: 600 34px var(--font-display); color: var(--on-accent); }
+  .dock { position: absolute; bottom: 22px; left: 50%; transform: translateX(-50%); display: flex; gap: 22px; padding: 12px 22px; border-radius: 30px; background: rgba(255,255,255,.18); backdrop-filter: blur(14px); }
+  .dock .ic { width: 56px; height: 56px; border-radius: 18px; display: grid; place-items: center; }
+  .dock .ic .ms { font-size: 28px; color: #fff; }
+  .longpress .ic.bn { transform: scale(1.08); box-shadow: 0 0 0 6px rgba(255,255,255,.35), 0 10px 30px rgba(0,0,0,.35); }
+  .sc-menu { position: absolute; z-index: 5; width: 300px; color: var(--ink); padding: 8px; }
+  .sc-menu .ui-mi { padding: 11px 12px; font-size: 15px; }
+  .sc-menu .ui-mi .ms { color: var(--accent); }
+  .sc-menu .row-icons { display: flex; justify-content: space-around; padding: 8px 4px 4px; border-top: 1px solid var(--outline); margin-top: 6px; }
+  .sc-menu .row-icons span { display: flex; flex-direction: column; align-items: center; gap: 2px; font-size: 11px; color: var(--ink-2); }
+  .touch { position: absolute; width: 54px; height: 54px; border-radius: 50%; background: rgba(255,255,255,.35); border: 2px solid rgba(255,255,255,.8); z-index: 6; animation: tp 1.4s ease-out infinite; pointer-events: none; }
+  @keyframes tp { 0% { transform: scale(.8); opacity: 1; } 100% { transform: scale(1.3); opacity: .2; } }
+
+  /* widgets */
+  .wdg { position: absolute; background: var(--chrome-solid); color: var(--ink); border-radius: 28px; box-shadow: 0 10px 30px rgba(0,0,0,.25); padding: 16px 18px; overflow: hidden; }
+  [data-look="studio"] .wdg { background: var(--chrome); backdrop-filter: var(--glass); border: 1px solid var(--outline); }
+  [data-look="paper"] .wdg { border-radius: 22px; }
+  .wdg .wh { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; margin-bottom: 12px; }
+  .wdg .wh .lg { width: 22px; height: 22px; border-radius: 7px; background: var(--accent); color: var(--on-accent); display: grid; place-items: center; font: 600 13px var(--font-display); }
+  .wdg .wh .ms { margin-inline-start: auto; font-size: 20px; color: var(--ink-3); }
+  .wdg .covers { gap: 14px; }
+  .wdg .nb b { font-size: 12px; margin-top: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .wdg .cover { padding: 10px 8px 8px 12px; }
+  .wdg .cover .ttl { font-size: 12px; }
+  .qn-big { display: flex; flex-direction: column; gap: 10px; }
+  .qn-big .write { flex: 1; border-radius: 18px; background: var(--accent); color: var(--on-accent); display: flex; flex-direction: column; justify-content: space-between; padding: 14px; }
+  [data-look="studio"] .qn-big .write { box-shadow: 0 8px 24px color-mix(in srgb, var(--accent) 45%, transparent); }
+  .qn-big .write .ms { font-size: 34px; }
+  .qn-big .write b { font-size: 16px; }
+  .qn-big .last { border-radius: 14px; background: var(--paper) repeating-linear-gradient(transparent 0 17px, var(--paper-line) 17px 18px); padding: 2px 10px; font: 600 18px/18px var(--font-hand); color: #1d2a4a; height: 58px; overflow: hidden; }
+  .wdg.mini { padding: 0; width: 76px; height: 76px; border-radius: 24px; display: grid; place-items: center; background: var(--accent); color: var(--on-accent); }
+  .wdg.mini .ms { font-size: 34px; font-variation-settings: "FILL" 1; }
+  .wdg .cont { display: flex; gap: 12px; }
+  .wdg .cont .pg { width: 120px; aspect-ratio: 3/4; border-radius: 6px; box-shadow: var(--shadow-1); position: relative; overflow: hidden; flex: none; }
+  .wdg .cont .pg svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .wdg .cont b { font-size: 15px; display: block; }
+  .wdg .cont small { color: var(--ink-3); font-size: 12px; }
+  .wdg .cont .btn { margin-top: 10px; }
+  .wl { position: absolute; font-size: 11px; color: rgba(255,255,255,.85); text-shadow: 0 1px 2px rgba(0,0,0,.4); }
+
+  /* widget picker */
+  .picker { width: 940px; padding: 6px 26px 22px; color: var(--ink); }
+  .picker .wrow { display: grid; grid-template-columns: 300px 180px 240px 1fr; gap: 16px; align-items: end; margin-top: 14px; }
+  .picker .wprev { position: relative; background: var(--surface); border-radius: 22px; padding: 16px; display: grid; place-items: center; height: 190px; }
+  .picker .wprev .wdg { position: relative; box-shadow: var(--shadow-2); }
+  .picker .wcap { text-align: center; font-size: 12.5px; margin-top: 8px; color: var(--ink-2); }
+  .picker .wcap b { display: block; color: var(--ink); font-size: 13.5px; }
+
+  /* quicknote editor */
+  .qn { display: flex; flex-direction: column; position: relative; background: #E9E6DF !important; }
+  [data-theme="dark"] .qn, [data-look="studio"] .qn { background: #121214 !important; }
+  .qn-top { height: 52px; background: var(--chrome-solid); display: flex; align-items: center; gap: 10px; padding: 0 14px; border-bottom: 1px solid var(--outline); }
+  .qn-top .tt b { font-size: 15px; display: block; line-height: 1.1; }
+  .qn-top .tt small { font-size: 11.5px; color: var(--ink-3); }
+  .qn .toolbar-pill { position: absolute; top: 66px; left: 50%; transform: translateX(-50%); z-index: 3; }
+  .qn .canvas { cursor: default; padding-top: 30px; }
+  .qn .canvas .page { width: 640px; height: 820px; }
+  .qn .hint-toast { left: auto; inset-inline-end: 22px; bottom: 22px; display: flex; align-items: center; gap: 8px; }
+  .qn .hint-toast .ms { color: var(--accent); font-size: 18px; }
+  .launch-chip { position: absolute; bottom: 22px; inset-inline-start: 22px; display: flex; gap: 8px; align-items: center; background: var(--chrome-solid); border-radius: 999px; padding: 6px 14px 6px 6px; box-shadow: var(--shadow-2); font-size: 12px; color: var(--ink-2); }
+  .launch-chip .ic { width: 26px; height: 26px; border-radius: 50%; background: var(--accent-soft); color: var(--accent); display: grid; place-items: center; }
+  .launch-chip .ic .ms { font-size: 16px; }
+  .qn .ink text { font: 600 30px var(--font-hand); fill: #1d2a4a; }
+  .qn .ink .stroke { fill: none; stroke: #1d2a4a; stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round; }
+  .move-pop { top: 58px; inset-inline-end: 14px; width: 280px; }
+</style>
+</head>
+<body>
+<div class="page-wrap">
+  <h1>Favorites &amp; Quicknote</h1>
+  <p class="lead muted">Favorites collects starred notebooks, single pages and folders in one place. Quicknote skips the library entirely: from a launcher shortcut or widget you land on a blank page with the pen ready. Widgets bring both to the home screen.</p>
+  <div class="variants">
+
+    <div>
+      <div class="variant-label">1 · Favorites: notebooks, bookmarked pages, folders (drag to reorder)</div>
+      <div class="device tablet">
+        <div class="status"><span>9:41</span><span><i class="ms">wifi</i><i class="ms">battery_full</i></span></div>
+        <div class="lib scr">
+          <aside class="rail">
+            <div class="rail-logo">B</div>
+            <a><i class="ms">auto_stories</i><small>Library</small></a><a class="on"><i class="ms">star</i><small>Favorites</small></a><a><i class="ms">search</i><small>Search</small></a><a><i class="ms">document_scanner</i><small>Board</small></a><span class="grow"></span><a><i class="ms">settings</i><small>Settings</small></a>
+          </aside>
+          <div class="shelf">
+            <div class="shelf-head"><div><h2>Favorites</h2><p class="muted">4 notebooks · 5 pages · 2 folders</p></div><div class="seg inline"><span class="on">All</span><span>Notebooks</span><span>Pages</span><span>Folders</span></div><button class="btn ghost sm"><i class="ms">edit</i>Edit</button></div>
+            <h4>Notebooks <span class="hint">Long-press and drag to reorder</span></h4>
+            <div class="covers">
+              <div class="nb" style="--cv:#29324a"><i class="ms star">star</i><div class="cover"><span class="ttl">Physics 201</span><span class="sub">Mechanics</span></div><b>Physics 201</b><small>Today · p.14</small></div>
+              <div class="nb" style="--cv:#c9a227"><i class="ms star">star</i><div class="cover"><span class="ttl">Planner 2026</span><span class="sub">Oct</span></div><b>Planner 2026</b><small>Oct 12</small></div>
+              <div class="nb" style="--cv:#26535f"><i class="ms star">star</i><div class="cover dots"><span class="ttl">Sketchbook</span></div><b>Sketchbook</b><small>Oct 6</small></div>
+              <div class="nb" style="--cv:#5b3f8f"><i class="ms star">star</i><div class="cover"><span class="ttl ar">أدب عربي</span></div><b>أدب عربي</b><small>Oct 10</small></div>
+            </div>
+            <h4>Pages</h4>
+            <div class="fav-pages" id="favPages"></div>
+            <h4>Folders</h4>
+            <div class="fcards">
+              <div class="fcard"><i class="ms" style="--c:#2a4bd7">folder</i><div><b>Exam prep</b><small>Physics 201 · 3 items</small></div></div>
+              <div class="fcard"><i class="ms" style="--c:#7b3fe4">folder</i><div><b style="font-family:'IBM Plex Sans Arabic'">المعلقات</b><small>أدب عربي · 2 items</small></div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div class="variant-label">2 · Launcher shortcut: long-press the BestNote icon on the home screen</div>
+      <div class="device tablet">
+        <div class="status" style="background:transparent; position:absolute; left:14px; right:14px; top:14px; z-index:3; color:#fff"><span>9:41</span><span><i class="ms">wifi</i><i class="ms">battery_full</i></span></div>
+        <div class="scr home">
+          <div class="clock">9:41</div><div class="date">Wednesday, 15 October</div>
+          <div class="apps longpress" style="left:56px; top:250px" data-apps></div>
+          <div class="ui-menu sc-menu" style="left:690px; top:236px">
+            <div class="ui-mi hot"><i class="ms">bolt</i>Quicknote</div>
+            <div class="ui-mi"><i class="ms">add_notes</i>New notebook</div>
+            <div class="ui-mi"><i class="ms">search</i>Search notes</div>
+            <div class="ui-mi"><i class="ms">document_scanner</i>Smart Board</div>
+            <div class="row-icons"><span><i class="ms">info</i>App info</span><span><i class="ms">widgets</i>Widgets</span><span><i class="ms">select</i>Select</span></div>
+          </div>
+          <div class="touch" style="left:611px; top:255px"></div>
+          <div class="dock" data-dock></div>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div class="variant-label">3 · Quicknote opens in under half a second: blank page, pen ready, saved automatically</div>
+      <div class="device tablet">
+        <div class="status"><span>9:41</span><span><i class="ms">wifi</i><i class="ms">battery_full</i></span></div>
+        <div class="scr qn">
+          <div class="qn-top">
+            <span class="ui-ib"><i class="ms">close</i></span>
+            <div class="tt"><b>Quicknote</b><small>Today, 9:41 · saved to Quicknotes</small></div>
+            <span class="grow"></span>
+            <span class="ui-badge"><i class="ms">check</i>Saved</span>
+            <button class="btn tonal sm"><i class="ms">drive_file_move</i>Move to notebook</button>
+            <span class="ui-ib"><i class="ms">ios_share</i></span><span class="ui-ib"><i class="ms">more_vert</i></span>
+          </div>
+          <div class="toolbar-pill mini">
+            <span class="tool on"><i class="ms">ink_pen</i><i class="dot" style="--c:#1d1d1f"></i></span><span class="tool"><i class="ms">ink_highlighter</i></span><span class="tool"><i class="ms">ink_eraser</i></span><span class="tool"><i class="ms">lasso_select</i></span><span class="sep"></span>
+            <span class="fav" style="--c:#1d1d1f"><svg viewBox="0 0 40 16"><path d="M3 12 C 12 2, 22 14, 37 4"/></svg></span><span class="fav" style="--c:#c62828"><svg viewBox="0 0 40 16"><path d="M3 12 C 12 2, 22 14, 37 4"/></svg></span><span class="sep"></span><span class="tool"><i class="ms">undo</i></span>
+          </div>
+          <div class="canvas">
+            <div class="page ruled">
+              <svg class="ink" viewBox="0 0 640 820">
+                <text x="60" y="110">Call Dr. Haddad: Thu 2pm</text>
+                <text x="60" y="152">Room B-214, bring lab report</text>
+                <path class="stroke" d="M52 168 C 160 162, 260 170, 380 164"/>
+                <text x="60" y="236" style="fill:#c62828">idea →</text>
+                <text x="160" y="236">use momentum demo w/ 2 carts</text>
+                <path class="stroke" d="M80 300 L 200 300 M 92 290 l 0 20 M 188 290 l 0 20" />
+                <rect x="104" y="272" width="30" height="24" rx="2" class="stroke"/><rect x="152" y="272" width="30" height="24" rx="2" class="stroke"/>
+                <path class="stroke" d="M138 284 l 10 0" style="stroke:#c62828"/>
+              </svg>
+            </div>
+          </div>
+          <div class="launch-chip"><span class="ic"><i class="ms">bolt</i></span>Opened from shortcut · 0.38 s</div>
+          <div class="hint-toast"><i class="ms">info</i>Quicknotes go to the Quicknotes folder. <u>Move later</u></div>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div class="variant-label">4 · Home-screen widgets: Favorites (4×2), Quicknote (2×2), Continue (3×2), 1×1 pen</div>
+      <div class="device tablet">
+        <div class="status" style="background:transparent; position:absolute; left:14px; right:14px; top:14px; z-index:3; color:#fff"><span>9:41</span><span><i class="ms">wifi</i><i class="ms">battery_full</i></span></div>
+        <div class="scr home">
+          <div class="clock">9:41</div><div class="date">Wednesday, 15 October</div>
+          <div class="wdg" style="left:56px; top:200px; width:500px; height:258px">
+            <div class="wh"><span class="lg">B</span>Favorites<i class="ms">add</i></div>
+            <div class="covers" style="grid-template-columns:repeat(4,1fr)">
+              <div class="nb" style="--cv:#29324a"><div class="cover"><span class="ttl">Physics 201</span></div><b>Physics 201</b></div>
+              <div class="nb" style="--cv:#c9a227"><div class="cover"><span class="ttl">Planner</span></div><b>Planner 2026</b></div>
+              <div class="nb" style="--cv:#26535f"><div class="cover dots"><span class="ttl">Sketchbook</span></div><b>Sketchbook</b></div>
+              <div class="nb" style="--cv:#5b3f8f"><div class="cover"><span class="ttl ar">أدب عربي</span></div><b>أدب عربي</b></div>
+            </div>
+          </div>
+          <div class="wl" style="left:56px; top:464px">BestNote · Favorites</div>
+          <div class="wdg qn-big" style="left:580px; top:200px; width:240px; height:258px">
+            <div class="write"><i class="ms">stylus_note</i><b>Quicknote</b></div>
+            <div class="last">Call Dr. Haddad: Thu 2pm<br>Room B-214</div>
+          </div>
+          <div class="wl" style="left:580px; top:464px">Quicknote</div>
+          <div class="wdg" style="left:844px; top:200px; width:290px; height:258px">
+            <div class="wh"><span class="lg">B</span>Continue</div>
+            <div class="cont">
+              <div class="pg page ruled-s"><svg viewBox="0 0 120 160"><text x="8" y="24" font-family="Caveat" font-weight="700" font-size="15" fill="#1d3c8a">Lecture 7</text><text x="8" y="44" font-family="Caveat" font-weight="600" font-size="12" fill="#1d2a4a">p = m·v</text><path d="M14 120 L 100 120 L 100 80 Z" fill="none" stroke="#1d2a4a" stroke-width="1.4"/></svg></div>
+              <div><b>Physics 201</b><small>Page 14 of 22<br>Edited 12 min ago</small><br><button class="btn primary sm"><i class="ms">edit</i>Write</button></div>
+            </div>
+          </div>
+          <div class="wl" style="left:844px; top:464px">Continue writing</div>
+          <div class="apps" style="left:56px; top:500px" data-apps="short"></div>
+          <div class="wdg mini" style="left:1036px; top:500px"><i class="ms">stylus_note</i></div>
+          <div class="dock" data-dock></div>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div class="variant-label">5 · Widget picker: what each widget looks like before you place it</div>
+      <div class="device tablet">
+        <div class="status" style="background:transparent; position:absolute; left:14px; right:14px; top:14px; z-index:3; color:#fff"><span>9:41</span><span><i class="ms">wifi</i><i class="ms">battery_full</i></span></div>
+        <div class="scr home">
+          <div class="clock">9:41</div><div class="date">Wednesday, 15 October</div>
+          <div class="ui-scrim"></div>
+          <div class="ui-sheet bottom picker">
+            <div class="ui-grab"></div>
+            <div style="display:flex; align-items:center; gap:10px; margin-top:4px"><span class="app"><span class="ic bn" style="width:40px; height:40px; border-radius:13px"><b style="font-size:22px">B</b></span></span><div><b style="font-size:17px">BestNote</b><div class="muted">4 widgets</div></div></div>
+            <div class="wrow">
+              <div><div class="wprev"><div class="wdg" style="width:260px; padding:12px 14px"><div class="wh" style="margin-bottom:8px"><span class="lg">B</span>Favorites</div><div class="covers" style="grid-template-columns:repeat(4,1fr); gap:8px"><div class="nb" style="--cv:#29324a"><div class="cover"></div></div><div class="nb" style="--cv:#c9a227"><div class="cover"></div></div><div class="nb" style="--cv:#26535f"><div class="cover dots"></div></div><div class="nb" style="--cv:#5b3f8f"><div class="cover"></div></div></div></div></div><div class="wcap"><b>Favorites</b>4 × 2 · resizable</div></div>
+              <div><div class="wprev"><div class="wdg qn-big" style="width:150px; height:150px; padding:10px"><div class="write" style="padding:10px"><i class="ms" style="font-size:26px">stylus_note</i><b style="font-size:13px">Quicknote</b></div></div></div><div class="wcap"><b>Quicknote</b>2 × 2</div></div>
+              <div><div class="wprev"><div class="wdg" style="width:210px; padding:12px"><div class="cont"><div class="pg page ruled-s" style="width:64px"></div><div><b style="font-size:13px">Physics 201</b><small>Page 14</small></div></div></div></div><div class="wcap"><b>Continue</b>3 × 2</div></div>
+              <div><div class="wprev"><div class="wdg mini" style="width:64px; height:64px"><i class="ms">stylus_note</i></div></div><div class="wcap"><b>Pen</b>1 × 1</div></div>
+            </div>
+            <p class="muted" style="margin-top:14px">Widgets follow your BestNote look and Android dynamic color. Tap a notebook on a widget to open it right at the last page.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+  <p class="note">Quicknote is a cold-start fast path: no library, no animation, the page is ready before the pen lands. Every quicknote saves on its own to the Quicknotes folder, so closing it is never destructive.</p>
+</div>
+<script>
+(function () {
+  const apps = [['#34a853', 'call', 'Phone'], ['#4285f4', 'chat', 'Messages'], ['#ea4335', 'photo_camera', 'Camera'], ['#fbbc04', 'photo_library', 'Gallery'], ['#5f6368', 'settings', 'Settings'], ['bn', '', 'BestNote'], ['#0b57d0', 'calendar_month', 'Calendar'], ['#188038', 'mail', 'Gmail'], ['#d93025', 'play_circle', 'YouTube'], ['#a142f4', 'music_note', 'Music'], ['#00897b', 'map', 'Maps'], ['#f57c00', 'edit_note', 'Samsung Notes']];
+  const ic = ([c, i, n]) => `<div class="app"><span class="ic${c === 'bn' ? ' bn' : ''}" style="${c === 'bn' ? '' : 'background:' + c}">${c === 'bn' ? '<b>B</b>' : `<i class="ms">${i}</i>`}</span>${n}</div>`;
+  document.querySelectorAll('[data-apps]').forEach(a => a.innerHTML = (a.dataset.apps === 'short' ? apps.slice(6, 11) : apps).map(ic).join(''));
+  document.querySelectorAll('[data-dock]').forEach(d => d.innerHTML = [['#34a853', 'call'], ['#4285f4', 'chat'], ['#1a73e8', 'public'], ['#ea4335', 'photo_camera'], ['bn', '']].map(([c, i]) => `<span class="ic${c === 'bn' ? ' bn' : ''}" style="${c === 'bn' ? 'background:var(--accent)' : 'background:' + c}">${c === 'bn' ? '<b style="font:600 28px var(--font-display); color:var(--on-accent)">B</b>' : `<i class="ms">${i}</i>`}</span>`).join(''));
+  const pages = [
+    ['ruled-s', 'Physics 201', 'p.14 · Momentum', '<text x="10" y="28" font-family="Caveat" font-weight="700" font-size="18" fill="#1d3c8a">Momentum</text><text x="10" y="52" font-family="Caveat" font-weight="600" font-size="15" fill="#1d2a4a">p = m · v</text><rect x="6" y="38" width="60" height="20" fill="none" stroke="#c62828" stroke-width="1.4"/><path d="M90 100 L 180 100 L 180 50 Z" fill="none" stroke="#1d2a4a" stroke-width="1.6"/>'],
+    ['grid-s', 'Calculus II', 'p.32 · Integration by parts', '<text x="10" y="30" font-family="Caveat" font-weight="700" font-size="16" fill="#1d2a4a">∫u dv = uv − ∫v du</text><path d="M20 110 C 60 40, 100 130, 180 50" fill="none" stroke="#2a4bd7" stroke-width="2"/>'],
+    ['cornell-s', 'Biology 110', 'p.8 · Enzymes', '<text x="70" y="30" font-family="Caveat" font-weight="600" font-size="14" fill="#1d2a4a">lowers activation energy</text><text x="6" y="30" font-family="Caveat" font-weight="700" font-size="13" fill="#c62828">KEY</text><circle cx="130" cy="80" r="22" fill="none" stroke="#2e7d32" stroke-width="1.6"/>'],
+    ['planner-s', 'Planner 2026', 'Week 42', '<text x="8" y="40" font-family="Caveat" font-weight="600" font-size="12" fill="#1d2a4a">Quiz!</text><text x="58" y="40" font-family="Caveat" font-weight="600" font-size="12" fill="#c62828">Lab due</text><text x="108" y="90" font-family="Caveat" font-weight="600" font-size="12" fill="#2a4bd7">Gym</text>'],
+    ['ruled-s', 'أدب عربي', 'p.3 · المعلقة', '<text x="190" y="32" text-anchor="end" font-family="IBM Plex Sans Arabic" font-size="13" fill="#1d3c8a">أمِن أمّ أوفى دمنةٌ لم تكلّمِ</text><text x="190" y="56" text-anchor="end" font-family="IBM Plex Sans Arabic" font-size="11" fill="#1d2a4a">زهير بن أبي سلمى</text>']
+  ];
+  document.getElementById('favPages').innerHTML = pages.map(([t, n, s, svg]) => `<div class="fp"><div class="pg ${t}"><svg viewBox="0 0 200 150">${svg}</svg><i class="bm"></i></div><b>${n}</b><small>${s}</small></div>`).join('');
+  document.querySelectorAll('.seg').forEach(g => g.querySelectorAll('span').forEach(s => s.onclick = () => g.querySelectorAll('span').forEach(x => x.classList.toggle('on', x === s))));
+})();
+</script>
+</body>
+</html>
