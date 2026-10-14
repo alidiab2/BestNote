@@ -1,0 +1,9 @@
+<!-- Placeholder mark: a page with a pen stroke. Replace with final brand art. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="108" android:viewportHeight="108">
+    <path android:fillColor="#FFFFFF"
+        android:pathData="M36,30 L66,30 L74,38 L74,78 L36,78 Z" />
+    <path android:strokeColor="#2D5BFF" android:strokeWidth="3" android:strokeLineCap="round"
+        android:pathData="M42,64 Q48,52 54,62 T66,56" />
+</vector>

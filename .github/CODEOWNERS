@@ -1,0 +1,12 @@
+# Assign an owner per workstream as people join. Format: <path> @github-user
+# Until then, the maintainer reviews everything.
+# *                       @maintainer
+# /engine/ink/            @ink-owner
+# /engine/stylus/         @spen-owner
+# /engine/canvas/         @canvas-owner
+# /engine/pdf/            @pdf-owner
+# /engine/recognition/    @rec-owner
+# /core/storage/ /core/database/ /core/datastore/   @doc-owner
+# /core/designsystem/ /core/ui/                     @ds-owner
+# /feature/library/       @lib-owner
+# /.github/               @qa-owner

@@ -1,0 +1,29 @@
+name: Task (from a workstream)
+description: Claim a task from docs/workstreams
+title: "[PREFIX-NN] "
+labels: ["task"]
+body:
+  - type: input
+    id: task
+    attributes:
+      label: Task ID
+      placeholder: INK-03
+    validations:
+      required: true
+  - type: dropdown
+    id: milestone
+    attributes:
+      label: Milestone
+      options: [M0, M1, M2, M3, M4]
+    validations:
+      required: true
+  - type: textarea
+    id: plan
+    attributes:
+      label: Plan
+      description: Required for L-size tasks. How will you approach it? Which modules change?
+  - type: textarea
+    id: done
+    attributes:
+      label: Done when
+      description: Copy the "Done when" criteria from the workstream file.

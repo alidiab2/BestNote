@@ -1,0 +1,27 @@
+name: Bug report
+description: Something is broken
+labels: ["bug"]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened, and what did you expect?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+    validations:
+      required: true
+  - type: input
+    id: device
+    attributes:
+      label: Device, Android/One UI version, stylus
+      placeholder: Galaxy Tab S9, One UI 8, S Pen
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: BestNote version
