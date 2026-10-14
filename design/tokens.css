@@ -55,3 +55,32 @@
   --shadow-1: 0 1px 2px rgba(0, 0, 0, .5);
   --shadow-2: 0 8px 24px rgba(0, 0, 0, .5);
 }
+
+/* ===================================================================
+   Design directions ("looks"). Switch with the top bar; persisted.
+   paper   = A. Calm Paper (default above): warm paper, quiet chrome, serif display
+   studio  = B. Midnight Studio: deep ink-black chrome, glassy floating tools, vivid violet accent
+   galaxy  = C. Galaxy Native: One UI-like, big rounded shapes, bold sans, Samsung blue
+   =================================================================== */
+[data-look="studio"] {
+  --surface: #0F1016; --surface-2: #090A0F; --chrome: rgba(28, 30, 40, .82); --chrome-solid: #1C1E28;
+  --ink: #F4F4F8; --ink-2: #B7B9C8; --ink-3: #7E8197; --outline: #2A2D3B;
+  --accent: #A78BFA; --accent-soft: #2B2450; --on-accent: #120B2E;
+  --shadow-1: 0 1px 2px rgba(0,0,0,.6); --shadow-2: 0 10px 30px rgba(0,0,0,.55); --shadow-3: 0 24px 60px rgba(0,0,0,.7);
+  --r-card: 16px; --r-sheet: 24px;
+  --font-display: "Inter", sans-serif;
+  --glass: blur(18px) saturate(1.4);
+}
+[data-look="galaxy"] {
+  --surface: #F4F5F9; --surface-2: #E9EBF1; --chrome: #FFFFFF; --chrome-solid: #FFFFFF;
+  --ink: #111318; --ink-2: #4A4F5C; --ink-3: #868B99; --outline: #DDE0E8;
+  --accent: #1A73E8; --accent-soft: #DCE8FD; --on-accent: #FFFFFF;
+  --r-card: 26px; --r-sheet: 32px;
+  --font-display: "Inter", sans-serif;
+}
+[data-look="galaxy"][data-theme="dark"] {
+  --surface: #000000; --surface-2: #0B0B0D; --chrome: #17171A; --chrome-solid: #17171A;
+  --ink: #F1F1F4; --ink-2: #AFB2BC; --ink-3: #7D808A; --outline: #2B2B30;
+  --accent: #5EA0FF; --accent-soft: #10284D; --on-accent: #00142F;
+}
+html { --chrome-solid: var(--chrome); --glass: none; }

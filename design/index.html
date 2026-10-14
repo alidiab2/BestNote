@@ -1,392 +1,70 @@
 <!doctype html>
-<html lang="en" data-theme="light" dir="ltr">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>BestNote: Design Board v1</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
+<title>BestNote · Design Board v2</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Sans+Arabic:wght@400;500;600&family=Caveat:wght@500;700&family=Material+Symbols+Rounded:opsz,wght,FILL@24,400,0..1&family=Fraunces:opsz,wght@9..144,500;9..144,600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="tokens.css">
 <link rel="stylesheet" href="board.css">
+<script src="shell.js"></script>
+<style>
+  .hub { max-width: 1100px; margin: auto; padding: 22px 14px 60px; }
+  .hub h1 { font: 600 32px var(--font-display); }
+  .hub .lead { color: var(--ink-2); margin: 6px 0 18px; }
+  .looks { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; margin-bottom: 26px; }
+  .look { border-radius: var(--r-card); padding: 14px; border: 2px solid var(--outline); cursor: pointer; background: var(--chrome-solid); }
+  .look b { display: block; margin-bottom: 4px; }
+  .look p { font-size: 13px; color: var(--ink-2); }
+  .look .sw { display: flex; gap: 5px; margin-top: 10px; }
+  .look .sw i { width: 22px; height: 22px; border-radius: 6px; }
+  .sec { font-size: 12px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); margin: 22px 0 10px; }
+  .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 12px; }
+  .cards a { display: block; background: var(--chrome-solid); border-radius: var(--r-card); padding: 14px; color: var(--ink); text-decoration: none; border: 1px solid var(--outline); transition: transform var(--dur-short) var(--spring-snappy); }
+  .cards a:hover { transform: translateY(-3px); }
+  .cards .ms { color: var(--accent); font-size: 26px; }
+  .cards b { display: block; margin: 6px 0 3px; }
+  .cards small { color: var(--ink-3); font-size: 12px; line-height: 1.35; display: block; }
+</style>
 </head>
 <body>
+<div class="hub">
+  <h1>BestNote: Design Board v2</h1>
+  <p class="lead">Every feature, every screen. Pick a design direction at the top (A / B / C). Every screen switches with it, so you can compare. ◐ = light/dark · ع = Arabic RTL.</p>
 
-<header class="board-bar">
-  <div class="brand"><span class="logo">B</span> BestNote <small>Design Board v1</small></div>
-  <nav class="tabs" id="tabs">
-    <button data-s="system" class="on">Design system</button>
-    <button data-s="library">Library</button>
-    <button data-s="editor">Editor</button>
-    <button data-s="pages">Page manager</button>
-    <button data-s="smart">Smart Board</button>
-    <button data-s="phone">Phone & Fold</button>
-  </nav>
-  <div class="toggles">
-    <button id="tTheme" title="Light / dark">◐ Theme</button>
-    <button id="tDir" title="LTR / RTL">ع RTL</button>
+  <div class="looks">
+    <div class="look" onclick="document.querySelector('.shell-looks [data-look=paper]').click()"><b>A · Calm Paper</b><p>Warm paper, quiet chrome, serif titles. Feels like a premium stationery brand.</p><div class="sw"><i style="background:#FBF9F4;border:1px solid #ddd"></i><i style="background:#1D1D1F"></i><i style="background:#2F54EB"></i></div></div>
+    <div class="look" onclick="document.querySelector('.shell-looks [data-look=studio]').click()"><b>B · Midnight Studio</b><p>Dark creative studio, glassy floating tools, violet accent. Made for long sessions.</p><div class="sw"><i style="background:#0F1016"></i><i style="background:#1C1E28"></i><i style="background:#A78BFA"></i></div></div>
+    <div class="look" onclick="document.querySelector('.shell-looks [data-look=galaxy]').click()"><b>C · Galaxy Native</b><p>Feels at home on One UI: big rounded shapes, bold type, Samsung blue.</p><div class="sw"><i style="background:#F4F5F9;border:1px solid #ddd"></i><i style="background:#111318"></i><i style="background:#1A73E8"></i></div></div>
   </div>
-</header>
 
-<main>
-
-<!-- ============ 1. DESIGN SYSTEM ============ -->
-<section class="screen on" id="s-system">
-  <div class="sheet">
-    <h1 class="display">Calm paper, sharp ink.</h1>
-    <p class="lead">The page is the hero. The chrome is quiet, warm and out of the way. Motion is physical and never sits under the pen.</p>
-
-    <div class="grid3">
-      <div class="card">
-        <h3>Color</h3>
-        <div class="swatches">
-          <i style="--c:var(--paper)">Paper</i><i style="--c:var(--surface)">Surface</i><i style="--c:var(--chrome)">Chrome</i>
-          <i style="--c:var(--ink)" class="dk">Ink</i><i style="--c:var(--accent)" class="dk">Accent</i><i style="--c:var(--accent-soft)">Accent soft</i>
-        </div>
-        <h4>Semantic ink (Smart Board + callouts)</h4>
-        <div class="swatches">
-          <i style="--c:var(--sem-essential)" class="dk">Essential</i><i style="--c:var(--sem-annotation)" class="dk">Annotation</i><i style="--c:var(--sem-emphasis)" class="dk">Emphasis</i>
-        </div>
-        <h4>Pen palette</h4>
-        <div class="pens-row">
-          <b style="--c:#1d1d1f"></b><b style="--c:#2a4bd7"></b><b style="--c:#c62828"></b><b style="--c:#2e7d32"></b><b style="--c:#7b3fe4"></b><b style="--c:#ef6c00"></b><b style="--c:#ffd54f"></b><b style="--c:#80deea"></b>
-        </div>
-      </div>
-      <div class="card">
-        <h3>Type</h3>
-        <div class="type-spec">
-          <div class="t-display">Display: Fraunces 34</div>
-          <div class="t-title">Title: Inter 20 / 600</div>
-          <div class="t-body">Body: Inter 15. Calm, legible UI text.</div>
-          <div class="t-label">LABEL: INTER 12 / 600</div>
-          <div class="t-ar">عربي: IBM Plex Sans Arabic 16</div>
-          <div class="t-hand">Handwriting preview: Caveat</div>
-        </div>
-        <h4>Shape</h4>
-        <div class="shapes"><span class="r12">12 cards</span><span class="r20">20 sheets</span><span class="rpill">pill toolbar</span></div>
-      </div>
-      <div class="card">
-        <h3>Motion tokens</h3>
-        <p class="muted">Hover a row to play it.</p>
-        <ul class="motion">
-          <li data-m="snappy"><span>Spring.Snappy</span><em>tools, toggles, popovers</em><div class="ball"></div></li>
-          <li data-m="gentle"><span>Spring.Gentle</span><em>sheets, panels, page manager</em><div class="ball"></div></li>
-          <li data-m="short"><span>Duration.Short 120ms</span><em>fades, color</em><div class="ball"></div></li>
-          <li data-m="long"><span>Duration.Long 400ms</span><em>open notebook (shared element)</em><div class="ball"></div></li>
-        </ul>
-        <div class="rule">Rule: ink never animates in. Zero latency beats polish.</div>
-      </div>
-    </div>
-
-    <div class="grid2">
-      <div class="card">
-        <h3>Core components</h3>
-        <div class="comp-row">
-          <button class="btn primary">New notebook</button>
-          <button class="btn tonal">Import PDF</button>
-          <button class="btn ghost">Cancel</button>
-          <span class="chip on">Ruled</span><span class="chip">Grid</span><span class="chip">Dotted</span>
-        </div>
-        <div class="comp-row">
-          <div class="toolbar-pill mini">
-            <span class="tool on"><i class="ms">ink_pen</i></span><span class="tool"><i class="ms">edit</i></span><span class="tool"><i class="ms">ink_highlighter</i></span><span class="tool"><i class="ms">ink_eraser</i></span><span class="tool"><i class="ms">lasso_select</i></span><span class="sep"></span><span class="tool"><i class="ms">undo</i></span><span class="tool"><i class="ms">redo</i></span>
-          </div>
-          <div class="switch on"><i></i></div><span class="muted">Stylus-only</span>
-        </div>
-      </div>
-      <div class="card">
-        <h3>Callouts & formulas (Smart Board output)</h3>
-        <div class="callout def"><b>Definition · Normal force</b>The force a surface exerts perpendicular to itself.</div>
-        <div class="formula boxed">F = m·a</div>
-        <div class="callout key"><b>Key result</b>Steeper slope → faster slide.</div>
-      </div>
-    </div>
+  <div class="sec">Foundation & app</div>
+  <div class="cards">
+    <a href="screens/00-design-system.html"><i class="ms">palette</i><b>Design system</b><small>Colors, type, icons, motion, components for each direction</small></a>
+    <a href="screens/01-onboarding.html"><i class="ms">waving_hand</i><b>Onboarding</b><small>Welcome, S Pen detection, palm test, handedness, privacy</small></a>
+    <a href="screens/02-library.html"><i class="ms">auto_stories</i><b>Library</b><small>Shelf, list, folders, multi-select, drag to folder, empty state</small></a>
+    <a href="screens/03-new-notebook.html"><i class="ms">add_notes</i><b>New notebook</b><small>Covers, paper templates, sizes, import PDF/images</small></a>
+    <a href="screens/04-search.html"><i class="ms">search</i><b>Search</b><small>Find handwriting, PDF text and typed text; jump to the match</small></a>
+    <a href="screens/05-favorites-quicknote.html"><i class="ms">star</i><b>Favorites & Quicknote</b><small>Favorites, instant Quicknote, home-screen widgets</small></a>
+    <a href="screens/06-export-backup-trash.html"><i class="ms">ios_share</i><b>Export, backup, trash</b><small>Share sheet, PDF/PNG export, full backup, 30-day trash</small></a>
+    <a href="screens/07-settings.html"><i class="ms">settings</i><b>Settings</b><small>Appearance, S Pen button, palm rejection, gestures, storage, AI key</small></a>
+    <a href="screens/08-phone-fold-dex.html"><i class="ms">devices</i><b>Phone, Fold, DeX</b><small>Compact layouts, Flex mode, desktop window with mouse</small></a>
   </div>
-</section>
 
-<!-- ============ 2. LIBRARY ============ -->
-<section class="screen" id="s-library">
-  <div class="device tablet">
-    <div class="status"><span>9:41</span><span><i class="ms">signal_cellular_alt</i><i class="ms">wifi</i><i class="ms">battery_full</i></span></div>
-    <div class="lib">
-      <aside class="rail">
-        <div class="rail-logo">B</div>
-        <a class="on"><i class="ms">auto_stories</i><small>Library</small></a>
-        <a><i class="ms">star</i><small>Favorites</small></a>
-        <a><i class="ms">search</i><small>Search</small></a>
-        <a><i class="ms">document_scanner</i><small>Board</small></a>
-        <span class="grow"></span>
-        <a><i class="ms">settings</i><small>Settings</small></a>
-      </aside>
-      <aside class="folders">
-        <h4>Folders</h4>
-        <a class="on"><i style="--c:#2a4bd7"></i>All notebooks <em>24</em></a>
-        <a><i style="--c:#c62828"></i>Physics 201 <em>8</em></a>
-        <a><i style="--c:#2e7d32"></i>Calculus II <em>6</em></a>
-        <a><i style="--c:#7b3fe4"></i>Arabic Lit <em>4</em></a>
-        <a><i style="--c:#ef6c00"></i>Planner <em>2</em></a>
-        <h4>Tags</h4>
-        <div class="tags"><span>exam</span><span>lab</span><span>ideas</span></div>
-        <div class="storage">Stored on this device · 312 MB</div>
-      </aside>
-      <div class="shelf">
-        <div class="shelf-head">
-          <div>
-            <h2>All notebooks</h2>
-            <p class="muted">24 notebooks · sorted by last opened</p>
-          </div>
-          <div class="search"><i class="ms">search</i> <span>Search titles & handwriting</span></div>
-          <button class="btn tonal">Import</button>
-          <button class="btn primary" id="newNb">＋ New</button>
-        </div>
-        <div class="recent">
-          <h4>Continue</h4>
-          <div class="covers" id="covers">
-            <div class="nb" style="--cv:#29324a"><div class="cover"><span class="ttl">Physics 201</span><span class="sub">Mechanics</span></div><b>Physics 201</b><small>Today · p.14</small></div>
-            <div class="nb" style="--cv:#7a2d2d"><div class="cover lined"><span class="ttl">Calculus II</span></div><b>Calculus II</b><small>Yesterday · p.32</small></div>
-            <div class="nb pdf"><div class="cover pdfc"><span>PDF</span><div class="lines"></div></div><b>Lecture 7 slides</b><small>Mon · 48 pages</small></div>
-            <div class="nb" style="--cv:#2f5d50"><div class="cover dots"><span class="ttl">Lab Journal</span></div><b>Lab Journal</b><small>Sun · p.6</small></div>
-            <div class="nb" style="--cv:#c9a227"><div class="cover"><span class="ttl">Planner</span><span class="sub">2026</span></div><b>Planner 2026</b><small>Oct 12</small></div>
-            <div class="nb" style="--cv:#5b3f8f"><div class="cover"><span class="ttl ar">أدب عربي</span></div><b>أدب عربي</b><small>Oct 10 · p.9</small></div>
-          </div>
-        </div>
-        <div class="grid-head"><h4>All</h4><span class="chip on">Grid</span><span class="chip">List</span></div>
-        <div class="covers small">
-          <div class="nb" style="--cv:#3b4a6b"><div class="cover"><span class="ttl">Linear Algebra</span></div><b>Linear Algebra</b></div>
-          <div class="nb" style="--cv:#8a5a2b"><div class="cover lined"><span class="ttl">History</span></div><b>History</b></div>
-          <div class="nb" style="--cv:#26535f"><div class="cover dots"><span class="ttl">Sketches</span></div><b>Sketches</b></div>
-          <div class="nb" style="--cv:#6b2d4f"><div class="cover"><span class="ttl">Chemistry</span></div><b>Chemistry</b></div>
-          <div class="nb" style="--cv:#44543a"><div class="cover lined"><span class="ttl">Biology</span></div><b>Biology</b></div>
-          <div class="nb" style="--cv:#30304a"><div class="cover"><span class="ttl">Quicknotes</span></div><b>Quicknotes</b></div>
-        </div>
-      </div>
-    </div>
-    <div class="open-anim" id="openAnim"><div class="page-fly"></div></div>
+  <div class="sec">Editor & tools</div>
+  <div class="cards">
+    <a href="screens/10-editor.html"><i class="ms">edit_note</i><b>Editor</b><small>Three toolbar layouts, page scroll, zoom, status chips</small></a>
+    <a href="screens/11-pens.html"><i class="ms">ink_pen</i><b>Pens & colors</b><small>Fountain/ball/brush, pencil, highlighter, color picker, favorites</small></a>
+    <a href="screens/12-eraser-lasso-shapes.html"><i class="ms">lasso_select</i><b>Eraser, lasso, shapes</b><small>Erase modes, selection handles, context menu, shape snapping</small></a>
+    <a href="screens/13-text-media-audio.html"><i class="ms">perm_media</i><b>Text, images, audio</b><small>Text boxes, image crop, stickers, recording synced to ink</small></a>
+    <a href="screens/14-pages-templates.html"><i class="ms">grid_view</i><b>Pages & templates</b><small>Page manager, template gallery, infinite canvas</small></a>
+    <a href="screens/15-pdf-tabs-split.html"><i class="ms">picture_as_pdf</i><b>PDF, tabs, split view</b><small>Annotate PDFs, snap highlights, outline, two notebooks side by side</small></a>
+    <a href="screens/16-layers-zoom-present.html"><i class="ms">layers</i><b>Layers, zoom window, present</b><small>Layers panel, zoom window, laser pointer, keyboard shortcuts</small></a>
+    <a href="screens/17-smart-board.html"><i class="ms">document_scanner</i><b>Smart Board</b><small>Photo → page written by hand, fast. Plus "beautify my handwriting"</small></a>
   </div>
-  <p class="note">Tap <b>＋ New</b> to preview the shared-element "open notebook" transition (Duration.Long, 400 ms). Covers are physical: paper texture, 1 dp shadow, spine.</p>
-</section>
 
-<!-- ============ 3. EDITOR ============ -->
-<section class="screen" id="s-editor">
-  <div class="device tablet">
-    <div class="status"><span>9:41</span><span><i class="ms">signal_cellular_alt</i><i class="ms">wifi</i><i class="ms">battery_full</i></span></div>
-    <div class="editor">
-      <div class="ed-top">
-        <span class="back"><i class="ms">arrow_back</i></span>
-        <div class="doc-tabs"><span class="on">Physics 201</span><span>Lecture 7 slides</span><span class="plus">＋</span></div>
-        <span class="grow"></span>
-        <span class="icon"><i class="ms">search</i></span><span class="icon"><i class="ms">grid_view</i></span><span class="icon"><i class="ms">more_horiz</i></span>
-      </div>
-      <div class="toolbar-pill" id="toolbar">
-        <span class="tool on" data-pop="pen"><i class="ms">ink_pen</i><i class="dot" style="--c:#1d1d1f"></i></span>
-        <span class="tool"><i class="ms">edit</i></span>
-        <span class="tool"><i class="ms">ink_highlighter</i><i class="dot" style="--c:#ffd54f"></i></span>
-        <span class="tool"><i class="ms">ink_eraser</i></span>
-        <span class="tool"><i class="ms">lasso_select</i></span>
-        <span class="tool"><i class="ms">category</i></span>
-        <span class="tool">T</span>
-        <span class="tool"><i class="ms">add_photo_alternate</i></span>
-        <span class="sep"></span>
-        <span class="fav" style="--c:#1d1d1f"><svg viewBox="0 0 40 16"><path d="M3 12 C 12 2, 22 14, 37 4" /></svg></span>
-        <span class="fav" style="--c:#2a4bd7"><svg viewBox="0 0 40 16"><path d="M3 12 C 12 2, 22 14, 37 4" /></svg></span>
-        <span class="fav" style="--c:#c62828"><svg viewBox="0 0 40 16"><path d="M3 12 C 12 2, 22 14, 37 4" /></svg></span>
-        <span class="sep"></span>
-        <span class="tool"><i class="ms">undo</i></span><span class="tool dim"><i class="ms">redo</i></span>
-      </div>
-
-      <div class="popover" id="penPop">
-        <div class="pop-head"><b>Fountain pen</b><span class="muted">tap again to close</span></div>
-        <div class="seg"><span class="on">Fountain</span><span>Ball</span><span>Brush</span></div>
-        <div class="preview-stroke"><svg viewBox="0 0 260 60"><path class="var" d="M10 40 C 60 5, 100 55, 150 25 S 230 15, 250 35"/></svg></div>
-        <label>Thickness <input type="range" value="40"></label>
-        <label>Pressure sensitivity <input type="range" value="70"></label>
-        <label>Stabilization <input type="range" value="30"></label>
-        <div class="pens-row">
-          <b style="--c:#1d1d1f" class="on"></b><b style="--c:#2a4bd7"></b><b style="--c:#c62828"></b><b style="--c:#2e7d32"></b><b style="--c:#7b3fe4"></b><b style="--c:#ef6c00"></b><b class="add">＋</b>
-        </div>
-        <button class="btn ghost full">☆ Save as favorite pen</button>
-      </div>
-
-      <div class="canvas">
-        <div class="page ruled">
-          <div class="margin-line"></div>
-          <svg class="ink" viewBox="0 0 700 900">
-            <path class="hl" d="M70 112 L 330 112"/>
-            <text x="78" y="120" class="hand big">Inclined plane</text>
-            <text x="78" y="190" class="hand">Forces on a block of mass m:</text>
-            <text x="100" y="236" class="hand">• weight  mg  (down)</text>
-            <text x="100" y="278" class="hand">• normal force  N  (⊥ surface)</text>
-            <text x="100" y="320" class="hand">• friction  f  (opposes motion)</text>
-            <g class="sketch">
-              <path d="M90 560 L 420 560 L 420 400 Z"/>
-              <rect x="250" y="440" width="50" height="34" transform="rotate(-26 275 457)"/>
-              <path class="red" d="M275 460 L 275 540"/><path class="red" d="M268 530 L 275 542 L 282 530"/>
-              <text x="282" y="540" class="hand sm red">mg</text>
-              <path class="arc" d="M150 560 A 60 60 0 0 0 146 538"/><text x="160" y="552" class="hand sm">θ</text>
-            </g>
-            <text x="470" y="470" class="hand red">a = g sin θ</text>
-            <path class="red box" d="M462 438 L 610 436 L 612 484 L 460 486 Z"/>
-            <text x="78" y="650" class="hand green">note: ignore friction for now</text>
-          </svg>
-          <div class="hover-cursor"></div>
-        </div>
-        <div class="page-chip">Page 14 of 22</div>
-        <div class="zoom-chip">100%</div>
-      </div>
-      <div class="hint-toast">S Pen detected: fingers now scroll. <u>Change</u></div>
-    </div>
-  </div>
-  <p class="note">The toolbar is a floating pill (it collapses while you write near it and docks left/right/top). Tap the active pen again to open the popover anchored to it. The hover cursor matches brush size. Hold the S Pen button to get a temporary eraser.</p>
-</section>
-
-<!-- ============ 4. PAGE MANAGER ============ -->
-<section class="screen" id="s-pages">
-  <div class="device tablet">
-    <div class="status"><span>9:41</span><span><i class="ms">signal_cellular_alt</i><i class="ms">wifi</i><i class="ms">battery_full</i></span></div>
-    <div class="pm">
-      <div class="pm-head"><span class="back"><i class="ms">arrow_back</i></span><b>Physics 201</b><span class="muted">22 pages · 3 selected</span><span class="grow"></span>
-        <button class="btn ghost">Duplicate</button><button class="btn ghost">Rotate</button><button class="btn ghost danger">Delete</button><button class="btn primary">＋ Insert</button></div>
-      <div class="pm-grid">
-        <div class="thumb"><div class="pg ruled-s"></div><small>1</small></div>
-        <div class="thumb"><div class="pg ruled-s w"></div><small>2</small></div>
-        <div class="thumb sel"><div class="pg grid-s"></div><small>3</small></div>
-        <div class="thumb sel"><div class="pg ruled-s w"></div><small>4</small></div>
-        <div class="thumb lifting"><div class="pg pdf-s"></div><small>5</small></div>
-        <div class="thumb sel"><div class="pg ruled-s"></div><small>6</small></div>
-        <div class="thumb"><div class="pg cornell-s"></div><small>7</small></div>
-        <div class="thumb"><div class="pg dots-s"></div><small>8</small></div>
-        <div class="thumb"><div class="pg ruled-s w"></div><small>9</small></div>
-        <div class="thumb"><div class="pg ruled-s"></div><small>10</small></div>
-        <div class="thumb"><div class="pg grid-s w"></div><small>11</small></div>
-        <div class="thumb add"><div class="pg">＋</div><small>New page</small></div>
-      </div>
-      <div class="templates">
-        <b>Insert page</b>
-        <div class="tpl"><div class="pg"></div>Blank</div>
-        <div class="tpl on"><div class="pg ruled-s"></div>Ruled</div>
-        <div class="tpl"><div class="pg grid-s"></div>Grid</div>
-        <div class="tpl"><div class="pg dots-s"></div>Dotted</div>
-        <div class="tpl"><div class="pg cornell-s"></div>Cornell</div>
-        <div class="tpl"><div class="pg music-s"></div>Music</div>
-        <div class="tpl"><div class="pg dark-s"></div>Dark paper</div>
-      </div>
-    </div>
-  </div>
-  <p class="note">Opens by zooming <i>out</i> from the current page (Spring.Gentle). Drag a page to reorder it: it lifts with a shadow and its neighbors spring aside.</p>
-</section>
-
-<!-- ============ 5. SMART BOARD ============ -->
-<section class="screen" id="s-smart">
-  <div class="flow">
-    <div class="device tablet half">
-      <div class="status"><span>9:41</span><span><i class="ms">signal_cellular_alt</i><i class="ms">wifi</i><i class="ms">battery_full</i></span></div>
-      <div class="capture">
-        <div class="board-photo">
-          <svg viewBox="0 0 600 380">
-            <rect width="600" height="380" fill="#f2f2ee"/>
-            <text x="200" y="40" class="chalk blk" transform="rotate(-2 200 40)">Inclined Plane</text>
-            <text x="380" y="300" class="chalk blk sm" transform="rotate(3 380 300)">Def: N ⟂ surface</text>
-            <path class="chalk-l blk" d="M40 320 Q 150 318 260 322 Q 262 250 255 180 Q 150 250 40 320"/>
-            <path class="chalk-l red" d="M160 250 Q 162 280 158 305 M150 295 L158 308 L166 294"/>
-            <text x="350" y="120" class="chalk red" transform="rotate(-4 350 120)">a = g sinθ</text>
-            <ellipse cx="410" cy="112" rx="85" ry="30" class="chalk-l red"/>
-            <text x="40" y="100" class="chalk grn sm" transform="rotate(-6 40 100)">(no friction!)</text>
-            <text x="300" y="200" class="chalk blk sm">F∥ = mg sinθ</text>
-          </svg>
-          <div class="crop"><i></i><i></i><i></i><i></i></div>
-        </div>
-        <div class="cap-bar">
-          <div class="seg"><span>Cornell</span><span class="on">Lecture</span><span>Cheat sheet</span><span>Minimal</span></div>
-          <button class="shutter"></button>
-        </div>
-        <div class="privacy">Sent directly from your device to the AI provider <b>you</b> chose, using your own key.</div>
-      </div>
-    </div>
-    <div class="arrow-big">→<small>expert student<br>transcription</small></div>
-    <div class="device tablet half">
-      <div class="status"><span>9:41</span><span><i class="ms">signal_cellular_alt</i><i class="ms">wifi</i><i class="ms">battery_full</i></span></div>
-      <div class="result">
-        <div class="res-head"><b>Review</b><span class="muted">written in 3 s · editable ink</span><span class="grow"></span><button class="btn ghost">Retake</button><button class="btn primary">Insert 1 page</button></div>
-        <div class="nb-page" id="handPage">
-          <svg viewBox="0 0 520 330" class="hp">
-            <defs><pattern id="rl" width="520" height="22" patternUnits="userSpaceOnUse"><line x1="0" y1="21.5" x2="520" y2="21.5" stroke="#d6dfec" stroke-width="1"/></pattern></defs>
-            <rect width="520" height="330" fill="#FBF9F4"/><rect y="40" width="520" height="290" fill="url(#rl)"/>
-            <line x1="404" y1="0" x2="404" y2="330" stroke="#f2b8b5" stroke-width="1.2"/>
-            <!-- title + hand underline -->
-            <text x="22" y="34" class="w h-title" style="--d:0s">Inclined Plane</text>
-            <path class="w ln blue" pathLength="1" style="--d:.35s" d="M22 41 C 90 39, 150 42, 196 40"/>
-            <!-- definition with bracket -->
-            <text x="22" y="72" class="w h-txt" style="--d:.5s"><tspan class="u">Def.</tspan> Normal force N = force ⊥ to the surface</text>
-            <!-- bullets -->
-            <text x="22" y="94" class="w h-txt" style="--d:.8s">• weight mg acts straight down</text>
-            <text x="22" y="116" class="w h-txt" style="--d:1s">• split it: along the slope + across the slope</text>
-            <!-- diagram, ruler-neat -->
-            <g transform="translate(250 128)">
-              <path class="w ln" pathLength="1" style="--d:1.2s" d="M0 100 H 150 V 20 Z"/>
-              <path class="w ln" pathLength="1" style="--d:1.45s" d="M70 52 l 26 -14 l 10 18 l -26 14 z"/>
-              <path class="w ln red" pathLength="1" style="--d:1.6s" d="M88 61 V 96 M 83 89 L 88 97 L 93 89"/>
-              <text x="94" y="94" class="w h-sm red" style="--d:1.75s">mg</text>
-              <path class="w ln" pathLength="1" style="--d:1.8s" d="M30 100 A 30 30 0 0 0 28 88"/>
-              <text x="36" y="97" class="w h-sm" style="--d:1.85s">θ</text>
-            </g>
-            <!-- derivation -->
-            <text x="22" y="160" class="w h-txt" style="--d:1.95s">F<tspan dy="4" font-size="13">∥</tspan><tspan dy="-4"> = mg sin θ</tspan></text>
-            <text x="140" y="160" class="w h-note" style="--d:2.05s">(component of gravity)</text>
-            <text x="22" y="190" class="w h-txt" style="--d:2.15s">ma = mg sin θ</text>
-            <path class="w ln" pathLength="1" style="--d:2.25s" d="M30 198 l 6 8 l 6 -8"/>
-            <!-- boxed key formula -->
-            <text x="34" y="238" class="w h-big red" style="--d:2.35s">a = g sin θ</text>
-            <path class="w ln red" pathLength="1" style="--d:2.55s" d="M26 212 H 168 V 248 H 26 Z"/>
-            <!-- fraction example -->
-            <text x="22" y="290" class="w h-txt" style="--d:2.7s">so  a  =</text>
-            <text x="98" y="280" class="w h-txt" style="--d:2.8s">F</text>
-            <path class="w ln" pathLength="1" style="--d:2.85s" d="M92 286 H 116"/>
-            <text x="97" y="304" class="w h-txt" style="--d:2.9s">m</text>
-            <!-- margin note in green -->
-            <text x="412" y="72" class="w h-note green" style="--d:3s">no friction</text>
-            <text x="412" y="90" class="w h-note green" style="--d:3.05s">for now!</text>
-            <path class="w ln green" pathLength="1" style="--d:3.15s" d="M412 98 C 390 120, 360 150, 300 150"/>
-          </svg>
-        </div>
-        <div class="legend"><button class="btn tonal" id="replay">▶ Replay writing</button><span class="lg">in your own handwriting style</span><span class="lg">ruler-straight drawings</span><span class="lg">red = boxed key formula</span><span class="lg">green = margin note</span></div>
-      </div>
-    </div>
-  </div>
-  <p class="note">Left: the real board, messy and written wherever there was space. Right: what the "expert student" writes. It follows the order things were taught, uses a ruler and compass for drawings, gives colors meaning, and uses proper math notation.</p>
-</section>
-
-<!-- ============ 6. PHONE & FOLD ============ -->
-<section class="screen" id="s-phone">
-  <div class="flow">
-    <div class="device phone">
-      <div class="status"><span>9:41</span><span><i class="ms">battery_full</i></span></div>
-      <div class="ph-lib">
-        <h2>Library</h2>
-        <div class="search"><i class="ms">search</i> <span>Search</span></div>
-        <div class="covers two">
-          <div class="nb" style="--cv:#29324a"><div class="cover"><span class="ttl">Physics</span></div><b>Physics 201</b></div>
-          <div class="nb" style="--cv:#7a2d2d"><div class="cover lined"><span class="ttl">Calc II</span></div><b>Calculus II</b></div>
-          <div class="nb" style="--cv:#2f5d50"><div class="cover dots"><span class="ttl">Lab</span></div><b>Lab Journal</b></div>
-          <div class="nb" style="--cv:#5b3f8f"><div class="cover"><span class="ttl ar">أدب</span></div><b>أدب عربي</b></div>
-        </div>
-        <button class="fab">＋</button>
-        <div class="bottom-nav"><span class="on"><i class="ms">auto_stories</i></span><span><i class="ms">star</i></span><span><i class="ms">search</i></span><span><i class="ms">add_photo_alternate</i></span></div>
-      </div>
-    </div>
-    <div class="device fold">
-      <div class="fold-top">
-        <div class="page ruled mini-page"><svg class="ink" viewBox="0 0 400 200"><text x="20" y="50" class="hand">Flex mode: canvas on top</text><path class="sk" d="M20 120 C 90 60, 160 160, 240 100 S 360 90, 380 130"/></svg></div>
-      </div>
-      <div class="hinge"></div>
-      <div class="fold-bottom">
-        <div class="toolbar-pill wide"><span class="tool on"><i class="ms">ink_pen</i></span><span class="tool"><i class="ms">edit</i></span><span class="tool"><i class="ms">ink_highlighter</i></span><span class="tool"><i class="ms">ink_eraser</i></span><span class="tool"><i class="ms">lasso_select</i></span><span class="sep"></span><span class="tool"><i class="ms">undo</i></span><span class="tool"><i class="ms">redo</i></span></div>
-        <div class="pens-row big"><b style="--c:#1d1d1f" class="on"></b><b style="--c:#2a4bd7"></b><b style="--c:#c62828"></b><b style="--c:#2e7d32"></b><b style="--c:#ffd54f"></b></div>
-      </div>
-    </div>
-  </div>
-  <p class="note">Phone: 2-column shelf with a bottom bar. Galaxy Fold in Flex mode: canvas on the top half, tools on the bottom half.</p>
-</section>
-
-</main>
-<script src="board.js"></script>
+  <div class="sec">Archive</div>
+  <div class="cards"><a href="screens/v1-board.html"><i class="ms">history</i><b>Board v1</b><small>The first single-page board</small></a></div>
+</div>
 </body>
 </html>
