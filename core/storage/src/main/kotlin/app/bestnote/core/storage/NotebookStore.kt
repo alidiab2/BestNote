@@ -1,23 +1,16 @@
 /**
  * :core:storage — persistence of notebook *content*, independent of Android.
  *
- * ## The planned `.bnote` container
- * One notebook = one `.bnote` file, a ZIP archive so it can be shared, backed up and
- * inspected with standard tools:
+ * The `.bnote` v1 format is specified in `docs/architecture/file-format.md`:
  * ```
- * manifest.json              format version, notebook metadata, ordered page list
- *                            (id, template, size), asset index, app version that wrote it
- * pages/<pageId>.strokes     per-page binary stroke data (androidx.ink-encoded input batches
- *                            + brush parameters), one file per page so saving a page
- *                            rewrites only that entry
- * assets/<sha256>.<ext>      images, PDFs and audio, content-addressed and de-duplicated
- * thumbnails/<pageId>.webp   optional, regenerated on demand
+ * manifest.json          format version, notebook metadata, ordered page ids, asset list
+ * pages/<pageId>.json    page metadata (index, template, size)
+ * pages/<pageId>.ink     binary strokes: `BNIK` header (version + CRC32) + samples, see [InkChunkCodec]
+ * assets/<name>          images, PDFs and audio
  * ```
- * Writers produce a new archive next to the old one and atomically rename it, so a crash
- * never leaves a half-written notebook. Unknown entries are preserved for forward compatibility.
- *
- * This module defines the [NotebookStore] contract and an [InMemoryNotebookStore]; the
- * ZIP-backed implementation lands with the editor's save pipeline.
+ * [FileNotebookStore] keeps each notebook unpacked as a directory with that layout (atomic
+ * temp + rename writes, manifest last); [BnoteArchive] produces/reads the single-file `.bnote` zip.
+ * [InMemoryNotebookStore] is the volatile implementation for tests and previews.
  */
 package app.bestnote.core.storage
 
@@ -25,8 +18,20 @@ import app.bestnote.core.model.Notebook
 import app.bestnote.core.model.NotebookId
 import app.bestnote.core.model.Page
 
-/** Binary stroke payload of one page, as it will be stored at `pages/<pageId>.strokes`. */
-class PageContent(val page: Page, val strokes: ByteArray)
+/**
+ * One page and its binary stroke chunk, stored at `pages/<id>.ink`. [strokes] is normally produced by
+ * [InkChunkCodec.encode]; stores treat it as opaque bytes. [id] is stable across reorders and must
+ * match [PAGE_ID_PATTERN] because it becomes a file name.
+ */
+class PageContent(val page: Page, val strokes: ByteArray, val id: String = "page-${page.index}") {
+    init {
+        require(PAGE_ID_PATTERN.matches(id)) { "Invalid page id '$id'" }
+    }
+
+    companion object {
+        val PAGE_ID_PATTERN = Regex("[A-Za-z0-9_-]{1,64}")
+    }
+}
 
 /** Everything inside one `.bnote` container. Asset keys are their archive paths. */
 class NotebookPackage(
@@ -36,6 +41,7 @@ class NotebookPackage(
 ) {
     init {
         require(pages.all { it.page.notebookId == notebook.id }) { "Pages must belong to ${notebook.id}" }
+        require(pages.map { it.id }.toSet().size == pages.size) { "Page ids must be unique" }
     }
 }
 

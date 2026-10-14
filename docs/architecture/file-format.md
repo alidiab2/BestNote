@@ -16,7 +16,7 @@ notebook.bnote
 ├── manifest.json            format version, notebook id, title, created/modified, page order, cover
 ├── pages/
 │   ├── <pageId>.json        page metadata: size, template, background ref, layer list, element list
-│   └── <pageId>.ink         binary strokes for the page (androidx.ink storage encoding + our header)
+│   └── <pageId>.ink         binary strokes for the page (our sample encoding + header, see below)
 ├── assets/
 │   ├── <sha256>.pdf         imported PDFs (stored once, referenced by pages)
 │   ├── <sha256>.webp        images
@@ -34,6 +34,17 @@ On disk inside the app, a notebook lives **unpacked** as a directory with the sa
 - Write to `<file>.tmp`, `fsync`, then atomic rename.
 - `manifest.json` is written last, so a crash leaves the previous manifest pointing at valid pages.
 - Each `.ink` chunk has a header with magic bytes `BNIK`, the chunk version and a CRC32.
+
+## `.ink` chunk v1 (implemented in `InkChunkCodec`)
+Big-endian; floats are raw IEEE-754 bits, so round-trips are bit-exact.
+```
+header   "BNIK" | u16 version | u16 flags (0) | u32 payload length | u32 CRC32(payload)
+payload  u32 strokeCount, then per stroke:
+           u8 tool (0 Pen, 1 Pencil, 2 Highlighter) | u8 penStyle (0 Fountain, 1 Ball, 2 Brush)
+           i32 colorArgb | f32 size | u32 sampleCount
+           sampleCount x (f32 x | f32 y | f32 pressure | f32 tiltRad | f32 orientationRad | i64 timeMillis)
+```
+An androidx.ink storage encoding can be added later as a new chunk version behind `StrokeChunkCodec`.
 
 ## Open questions
 - Store per-stroke timestamps relative to an audio recording (needed for MEDIA-05)?

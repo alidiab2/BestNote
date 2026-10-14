@@ -24,7 +24,7 @@ class InMemoryNotebookStore : NotebookStore {
 
     private fun NotebookPackage.deepCopy() = NotebookPackage(
         notebook = notebook,
-        pages = pages.map { PageContent(it.page, it.strokes.copyOf()) },
+        pages = pages.map { PageContent(it.page, it.strokes.copyOf(), it.id) },
         assets = assets.mapValues { it.value.copyOf() },
     )
 }
