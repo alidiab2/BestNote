@@ -19,6 +19,9 @@ scripts/agent/device.sh install && scripts/agent/device.sh shot ink-03   # share
 git push -u origin HEAD && gh pr create --fill          # PR title: "[INK-03] Highlighter"
 ```
 
+## Design gate
+UI tasks (DS, LIB, PAGES, editor chrome, AI-05/07) start only after the [design board](../../design/) is approved. They implement it exactly. Non-UI tasks (storage, stylus pipeline, layout engine) can run before approval.
+
 ## Waves (tasks in a wave touch different modules → safe in parallel)
 | Wave | Tasks (module) | Notes |
 |---|---|---|

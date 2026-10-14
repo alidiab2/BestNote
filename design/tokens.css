@@ -1,0 +1,57 @@
+/* BestNote design tokens v1. These map 1:1 to :core:designsystem (Color, Type, Shape, Motion). */
+:root {
+  --paper: #FBF9F4;
+  --paper-line: #DCE3EE;
+  --paper-margin: #F2B8B5;
+  --surface: #F3F1EC;
+  --surface-2: #ECE9E2;
+  --chrome: #FFFFFF;
+  --ink: #1D1D1F;
+  --ink-2: #5C5C63;
+  --ink-3: #8E8E96;
+  --outline: #E2DFD8;
+  --accent: #2F54EB;
+  --accent-soft: #E3E9FF;
+  --on-accent: #FFFFFF;
+  --danger: #C62828;
+
+  --sem-essential: #C62828;
+  --sem-annotation: #2E7D32;
+  --sem-emphasis: #1565C0;
+
+  --shadow-1: 0 1px 2px rgba(20, 20, 30, .08), 0 1px 1px rgba(20, 20, 30, .04);
+  --shadow-2: 0 8px 24px rgba(20, 20, 30, .12), 0 2px 6px rgba(20, 20, 30, .06);
+  --shadow-3: 0 18px 50px rgba(20, 20, 30, .22);
+
+  --r-card: 12px;
+  --r-sheet: 20px;
+
+  --font-ui: "Inter", "IBM Plex Sans Arabic", system-ui, sans-serif;
+  --font-display: "Fraunces", Georgia, serif;
+  --font-hand: "Caveat", cursive;
+
+  /* Motion */
+  --spring-snappy: cubic-bezier(.2, 1.35, .4, 1);   /* dampingRatio ~0.8 */
+  --spring-gentle: cubic-bezier(.22, 1.08, .36, 1);  /* dampingRatio ~0.9 */
+  --ease-standard: cubic-bezier(.2, 0, 0, 1);
+  --dur-short: 120ms;
+  --dur-medium: 250ms;
+  --dur-long: 400ms;
+}
+
+[data-theme="dark"] {
+  --paper: #FBF9F4;            /* paper stays light by default; "dark paper" is a template */
+  --paper-line: #DCE3EE;
+  --surface: #17171A;
+  --surface-2: #1F1F23;
+  --chrome: #222226;
+  --ink: #F2F2F5;
+  --ink-2: #B4B4BC;
+  --ink-3: #85858E;
+  --outline: #333338;
+  --accent: #7C97FF;
+  --accent-soft: #2A3260;
+  --on-accent: #0B1030;
+  --shadow-1: 0 1px 2px rgba(0, 0, 0, .5);
+  --shadow-2: 0 8px 24px rgba(0, 0, 0, .5);
+}
