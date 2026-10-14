@@ -26,6 +26,7 @@ Read the full [product vision](docs/product/vision.md).
 | [`docs/design/`](docs/design/) | UI, motion and haptics principles |
 | [`docs/research/goodnotes/`](docs/research/goodnotes/) | Goodnotes feature research (source material) |
 | [`CONTRIBUTING.md`](CONTRIBUTING.md) | Workflow, branches, definition of done |
+| [`docs/agents/`](docs/agents/) | Running many AI agents in parallel: waves, worktrees, scripts |
 
 ## Modules
 
