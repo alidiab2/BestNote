@@ -355,8 +355,8 @@ svg.ink { position: absolute; inset: 0; width: 100%; height: 100%; }
 .demo-bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: center; margin: 12px auto 0; max-width: 1230px; }
 .demo-bar .muted { font-size: 12px; }
 .demo-bar .btn .ms, .btn .ms { font-size: 17px; margin-inline-end: 4px; vertical-align: -3px; }
-.row { display: flex; gap: 24px; justify-content: center; flex-wrap: wrap; align-items: flex-start; }
-.row > div { min-width: 0; max-width: 100%; }
+.ed-row { display: flex; gap: 24px; justify-content: center; flex-wrap: wrap; align-items: flex-start; }
+.ed-row > div { min-width: 0; max-width: 100%; }
 
 /* Editor frame (desk + chrome + canvas) */
 .ed { position: relative; display: flex; flex-direction: column; background: var(--surface-2) !important; overflow: hidden; }
@@ -469,8 +469,6 @@ svg .hl-stroke { fill: none; stroke: var(--hl-yellow); stroke-linecap: butt; str
 .anno::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 4px var(--accent-soft); flex: none; }
 .toast-edge { position: absolute; z-index: 7; bottom: 18px; inset-inline-start: 18px; display: flex; align-items: center; gap: 10px; padding: 9px 14px; border-radius: 14px; background: var(--ink); color: var(--chrome-solid); font-size: 12.5px; box-shadow: var(--shadow-2); }
 .toast-edge u { text-decoration: none; color: var(--accent-soft); font-weight: 600; cursor: pointer; }
-.sel-box { position: absolute; border: 1.5px dashed var(--accent); border-radius: 4px; pointer-events: none; }
-.sel-box i { position: absolute; width: 12px; height: 12px; background: var(--chrome-solid); border: 2px solid var(--accent); border-radius: 50%; pointer-events: auto; }
 .marching { stroke-dasharray: 6 5; animation: march 0.8s linear infinite; }
 @keyframes march { to { stroke-dashoffset: -11; } }
 .kbd { display: inline-grid; place-items: center; min-width: 26px; height: 26px; padding: 0 7px; border-radius: 7px; background: var(--chrome-solid); border: 1px solid var(--outline); box-shadow: 0 2px 0 var(--outline); font: 600 11.5px var(--font-ui); color: var(--ink); }
@@ -624,6 +622,7 @@ svg .hl-stroke { fill: none; stroke: var(--hl-yellow); stroke-linecap: butt; str
 .device.desktop { width: 1280px; height: 800px; border-radius: 18px; padding: 12px; display: flex; flex-direction: column; }
 .device.desktop > * { border-radius: 8px; }
 .device.desktop > .scr { flex: 1; overflow: hidden; }
+/* agent: editor screens (continued) */
 /* "Writes itself" ink (timings set by editor-kit.js BN.writeOn). Text reveals in the writing direction, lines draw. */
 svg text.wr { clip-path: inset(-40% 102% -40% -4%); animation: bnWrite var(--dur, .3s) steps(12, end) var(--d, 0s) forwards; }
 svg text.wr.rtl { clip-path: inset(-40% -4% -40% 102%); animation-name: bnWriteRtl; }

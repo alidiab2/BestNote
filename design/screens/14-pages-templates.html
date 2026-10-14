@@ -1,0 +1,326 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BestNote · Pages & templates</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Sans+Arabic:wght@400;500;600&family=Caveat:wght@500;700&family=Material+Symbols+Rounded:opsz,wght,FILL@24,400,0..1&family=Fraunces:opsz,wght@9..144,500;9..144,600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../tokens.css">
+<link rel="stylesheet" href="../board.css">
+<script src="../shell.js"></script>
+<script src="../editor-kit.js"></script>
+<style>
+  /* ---- page manager ---- */
+  .pm2 { display: flex; flex-direction: column; background: var(--surface-2) !important; }
+  .pm-top { height: 56px; display: flex; align-items: center; gap: 8px; padding: 0 14px; background: var(--chrome-solid); border-bottom: 1px solid var(--outline); flex: none; }
+  .pm-top .ttl { display: flex; flex-direction: column; line-height: 1.15; }
+  .pm-top .ttl b { font-size: 15px; } .pm-top .ttl small { font-size: 12px; color: var(--ink-3); }
+  .pm-actions { display: flex; gap: 4px; align-items: center; }
+  .pm-actions .btn { display: inline-flex; align-items: center; gap: 2px; }
+  .pm-actions .btn[disabled] { opacity: .4; pointer-events: none; }
+  .pm-grid2 { flex: 1; overflow: auto; display: grid; grid-template-columns: repeat(6, 1fr); gap: 26px 26px; padding: 24px 34px 30px; align-content: start; }
+  .th { position: relative; text-align: center; font-size: 12px; color: var(--ink-3); cursor: grab; touch-action: none; user-select: none; transition: transform var(--dur-medium) var(--spring-gentle); }
+  .th .pv { aspect-ratio: 600 / 776; border-radius: 6px; background-color: var(--paper); box-shadow: var(--shadow-1); overflow: hidden; position: relative; transition: transform var(--dur-medium) var(--spring-snappy), box-shadow var(--dur-medium); }
+  .th .pv svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .th small { display: block; margin-top: 7px; font-weight: 600; }
+  .th.cur small { color: var(--accent); }
+  .th.cur .pv { box-shadow: 0 0 0 2px var(--accent-soft), var(--shadow-1); }
+  .th .ck { position: absolute; top: 8px; inset-inline-end: 8px; width: 24px; height: 24px; border-radius: 50%; background: rgba(255,255,255,.85); border: 1.5px solid #b9bec8; display: grid; place-items: center; color: transparent; z-index: 2; transition: background var(--dur-short), transform var(--dur-short) var(--spring-snappy); }
+  .th .ck .ms { font-size: 17px; }
+  .th.sel .ck { background: var(--accent); border-color: var(--accent); color: var(--on-accent); transform: scale(1.06); }
+  .th.sel .pv { box-shadow: 0 0 0 3px var(--accent), var(--shadow-1); }
+  .th .bm { position: absolute; top: -2px; inset-inline-start: 12px; width: 14px; height: 24px; background: var(--danger); clip-path: polygon(0 0, 100% 0, 100% 100%, 50% 76%, 0 100%); z-index: 2; }
+  .th.lifting { cursor: grabbing; }
+  .th.lifting .pv { transform: rotate(-3deg) scale(1.08); box-shadow: var(--shadow-3); }
+  .th.add .pv { background: transparent; border: 2px dashed var(--outline); box-shadow: none; display: grid; place-items: center; color: var(--ink-3); }
+  .th.add .pv .ms { font-size: 34px; }
+  .pm-foot { display: flex; align-items: center; gap: 10px; padding: 10px 18px; background: var(--chrome-solid); border-top: 1px solid var(--outline); font-size: 12px; color: var(--ink-3); flex: none; }
+  .zoom-slider { display: flex; align-items: center; gap: 6px; margin-inline-start: auto; }
+  .zoom-slider input { accent-color: var(--accent); width: 120px; }
+
+  /* ---- template gallery ---- */
+  .tg { display: grid; grid-template-columns: 190px 1fr 330px; background: var(--surface) !important; }
+  .tg-cats { background: var(--chrome-solid); border-inline-end: 1px solid var(--outline); padding: 14px 10px; display: flex; flex-direction: column; gap: 2px; }
+  .tg-cats b { font-size: 16px; padding: 4px 10px 12px; font-family: var(--font-display); }
+  .tg-cats a { display: flex; align-items: center; gap: 10px; padding: 9px 10px; border-radius: 12px; font-size: 13px; color: var(--ink-2); cursor: pointer; }
+  .tg-cats a .ms { font-size: 19px; }
+  .tg-cats a.on { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+  .tg-cats a em { margin-inline-start: auto; font-style: normal; font-size: 11px; color: var(--ink-3); }
+  .tg-main { overflow: auto; padding: 16px 20px 24px; }
+  .tg-main .hd { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+  .tg-main .hd h3 { font-size: 18px; flex: 1; }
+  .tg-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 18px 16px; }
+  .tpl2 { cursor: pointer; text-align: center; font-size: 12.5px; color: var(--ink-2); }
+  .tpl2 .pv { aspect-ratio: 600 / 776; border-radius: 6px; box-shadow: var(--shadow-1); position: relative; overflow: hidden; transition: transform var(--dur-medium) var(--spring-snappy), box-shadow var(--dur-short); }
+  .tpl2:hover .pv { transform: translateY(-3px); box-shadow: var(--shadow-2); }
+  .tpl2.on .pv { box-shadow: 0 0 0 3px var(--accent), var(--shadow-2); }
+  .tpl2.on span { color: var(--accent); font-weight: 600; }
+  .tpl2 span { display: block; margin-top: 7px; }
+  .tpl2 .badge { position: absolute; top: 6px; inset-inline-end: 6px; font: 700 9.5px var(--font-ui); padding: 2px 6px; border-radius: 6px; background: var(--accent); color: var(--on-accent); }
+  .tpl2.upload .pv { background: var(--chrome-solid) !important; border: 2px dashed var(--outline); box-shadow: none; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; color: var(--ink-2); font-size: 12px; padding: 10px; }
+  .tpl2.upload .ms { font-size: 30px; color: var(--accent); }
+  .tg-side { background: var(--chrome-solid); border-inline-start: 1px solid var(--outline); padding: 16px; display: flex; flex-direction: column; gap: 12px; overflow: auto; }
+  .tg-side .big { width: 200px; margin: 0 auto; aspect-ratio: 600 / 776; border-radius: 6px; box-shadow: var(--shadow-2); position: relative; overflow: hidden; transition: background-color var(--dur-medium); }
+  .tg-side h4 { margin: 2px 0 6px; }
+  .paper-sw { display: flex; gap: 8px; }
+  .paper-sw i { width: 30px; height: 30px; border-radius: 50%; background: var(--c); box-shadow: inset 0 0 0 1px rgba(0,0,0,.15); cursor: pointer; }
+  .paper-sw i.on { box-shadow: 0 0 0 2px var(--chrome-solid), 0 0 0 4px var(--accent); }
+  .opts-row { display: flex; gap: 6px; flex-wrap: wrap; }
+  .opts-row .chip { cursor: pointer; }
+  .tpl-bg { position: absolute; inset: 0; }
+  .tpl-bg svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+
+  /* ---- infinite canvas ---- */
+  .inf { position: relative; overflow: hidden; background: var(--surface-2) !important; }
+  .inf-world { position: absolute; inset: 0; overflow: hidden; background-color: var(--paper); background-image: radial-gradient(var(--paper-dot) 1.2px, transparent 1.7px); cursor: grab; touch-action: none; direction: ltr; }
+  .inf-world.grabbing { cursor: grabbing; }
+  .inf-world > svg { position: absolute; left: 0; top: 0; transform-origin: 0 0; overflow: visible; }
+  .inf .tb { position: absolute; top: 12px; left: 50%; transform: translateX(-50%); z-index: 5; }
+  .inf .tb.topl { left: auto; transform: none; }
+  .inf .topl { position: absolute; top: 12px; inset-inline-start: 12px; z-index: 5; display: flex; align-items: center; gap: 8px; padding: 4px 14px 4px 4px; }
+  .minimap { position: absolute; z-index: 5; bottom: 16px; inset-inline-end: 16px; width: 240px; padding: 8px; border-radius: 16px; }
+  .minimap .mm { position: relative; height: 150px; border-radius: 10px; background-color: var(--paper); overflow: hidden; touch-action: none; cursor: pointer; direction: ltr; }
+  .minimap .mm svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .minimap .vp { position: absolute; border: 2px solid var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); border-radius: 4px; cursor: grab; }
+  .minimap .mm-h { display: flex; align-items: center; justify-content: space-between; font-size: 11.5px; font-weight: 600; color: var(--ink-2); padding: 0 4px 6px; }
+  .inf .fchip.zoom { bottom: 16px; inset-inline-end: auto; inset-inline-start: 16px; }
+  .sticky { font-family: var(--font-hand); }
+  .caption { font-size: 12.5px; color: var(--ink-2); margin: 10px auto 0; max-width: 640px; text-align: center; }
+</style>
+</head>
+<body>
+<div class="page-wrap">
+  <h1>Pages & templates</h1>
+  <p class="lead muted">Organise pages like paper on a desk, choose paper that fits the class, or go endless with an infinite canvas.</p>
+
+  <div class="variants">
+    <!-- ============ PAGE MANAGER ============ -->
+    <div>
+      <div class="variant-label">State 1 · Page manager · multi-select · drag a page (it lifts, neighbours make room)</div>
+      <div class="device tablet">
+        <div class="status"><span>9:41</span><span><i class="ms">signal_cellular_alt</i><i class="ms">wifi</i><i class="ms">battery_full</i></span></div>
+        <div class="pm2">
+          <div class="pm-top">
+            <span class="ib"><i class="ms">close</i></span>
+            <div class="ttl"><b>Physics 201</b><small id="selCount">22 pages · 3 selected</small></div>
+            <span class="grow"></span>
+            <div class="pm-actions" id="pmActions">
+              <button class="btn ghost" id="selAll">Select all</button>
+              <button class="btn ghost"><i class="ms">content_copy</i>Duplicate</button>
+              <button class="btn ghost"><i class="ms">rotate_right</i>Rotate</button>
+              <button class="btn ghost"><i class="ms">drive_file_move</i>Move to…</button>
+              <button class="btn ghost"><i class="ms">ios_share</i>Export</button>
+              <button class="btn ghost danger" id="delSel"><i class="ms">delete</i>Delete</button>
+              <button class="btn primary"><i class="ms">add</i>Insert page</button>
+            </div>
+          </div>
+          <div class="pm-grid2" id="pmGrid"></div>
+          <div class="pm-foot"><i class="ms" style="font-size:16px">touch_app</i>Tap to select · long-press and drag to reorder · pinch out to go back to page 14<div class="zoom-slider"><i class="ms" style="font-size:16px">photo_size_select_small</i><input type="range" id="thSize" min="4" max="8" value="6" style="direction:rtl"><i class="ms" style="font-size:18px">photo_size_select_large</i></div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ TEMPLATE GALLERY ============ -->
+    <div>
+      <div class="variant-label">State 2 · Template gallery</div>
+      <div class="device tablet">
+        <div class="status"><span>9:41</span><span><i class="ms">signal_cellular_alt</i><i class="ms">wifi</i><i class="ms">battery_full</i></span></div>
+        <div class="tg">
+          <nav class="tg-cats" id="cats">
+            <b>Paper</b>
+            <a class="on" data-c="all"><i class="ms">apps</i>All<em>11</em></a>
+            <a data-c="basic"><i class="ms">description</i>Basic<em>5</em></a>
+            <a data-c="study"><i class="ms">school</i>Study<em>2</em></a>
+            <a data-c="plan"><i class="ms">event_note</i>Planner<em>2</em></a>
+            <a data-c="dark"><i class="ms">dark_mode</i>Dark<em>1</em></a>
+            <a data-c="custom"><i class="ms">add_photo_alternate</i>Custom<em>1</em></a>
+          </nav>
+          <div class="tg-main">
+            <div class="hd"><h3>All templates</h3><div class="search" style="width:220px"><i class="ms">search</i><span>Search templates</span></div></div>
+            <div class="tg-grid" id="tgGrid"></div>
+          </div>
+          <aside class="tg-side">
+            <div class="big" id="bigPrev"></div>
+            <div style="text-align:center"><b id="tplName">Cornell</b><div class="muted" id="tplDesc">Cue column, notes and a summary strip.</div></div>
+            <div><h4>Paper color</h4><div class="paper-sw" id="paperSw"><i class="on" style="--c:#FFFFFF" data-v="#FFFFFF"></i><i style="--c:#FBF9F4" data-v="#FBF9F4"></i><i style="--c:#F3EBD9" data-v="#F3EBD9"></i><i style="--c:#1f2329" data-v="#1f2329"></i></div></div>
+            <div><h4>Line spacing</h4><div class="opts-row" id="spacing"><span class="chip" data-v="24">Narrow</span><span class="chip on" data-v="32">Medium</span><span class="chip" data-v="42">Wide</span></div></div>
+            <div><h4>Size</h4><div class="opts-row" id="sizes"><span class="chip on">A4</span><span class="chip">Letter</span><span class="chip">A5</span><span class="chip">Infinite</span></div></div>
+            <div><h4>Apply to</h4><div class="seg2"><span class="on">This page</span><span>New pages</span><span>All</span></div></div>
+            <button class="btn primary" style="margin-top:auto">Use template</button>
+          </aside>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ INFINITE CANVAS ============ -->
+    <div>
+      <div class="variant-label">State 3 · Infinite canvas notebook · minimap</div>
+      <div class="device tablet">
+        <div class="status"><span>9:41</span><span><i class="ms">signal_cellular_alt</i><i class="ms">wifi</i><i class="ms">battery_full</i></span></div>
+        <div class="inf" id="inf">
+          <div class="inf-world" id="world"></div>
+          <div class="tb topl"><span class="ib" style="width:34px;height:34px"><i class="ms flip-rtl">arrow_back</i></span><b style="font-size:13px">Thermo mind map</b><span class="tag" style="display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:600;padding:3px 8px;border-radius:999px;background:var(--accent-soft);color:var(--accent)"><i class="ms" style="font-size:14px">all_inclusive</i>Infinite</span></div>
+          <div class="tb">
+            <span class="t"><i class="ms">ink_pen</i></span><span class="t"><i class="ms">ink_highlighter</i></span><span class="t"><i class="ms">ink_eraser</i></span><span class="t"><i class="ms">lasso_select</i></span><span class="t"><i class="ms">sticky_note_2</i></span><span class="t on" title="Pan"><i class="ms">pan_tool</i></span><span class="sep"></span><span class="t"><i class="ms">undo</i></span>
+          </div>
+          <div class="fchip zoom"><button id="zo"><i class="ms">remove</i></button><b id="zv">60%</b><button id="zi"><i class="ms">add</i></button><button id="fit" title="Fit all"><i class="ms">fit_screen</i></button></div>
+          <div class="panel minimap"><div class="mm-h"><span>Map</span><span class="muted" style="font-size:11px">drag the box</span></div><div class="mm" id="mm"><div class="vp" id="vp"></div></div></div>
+        </div>
+      </div>
+      <p class="caption">Drag the canvas (one finger) or the box in the minimap to move around; zoom with the chip. The minimap fades in only while you pan or zoom, and stays put if you pin it.</p>
+    </div>
+  </div>
+</div>
+
+<template id="worldTpl">
+  <svg width="2400" height="1500" viewBox="0 0 2400 1500">
+    <g class="hw-world">
+      <ellipse class="stroke c-navy" cx="1200" cy="740" rx="190" ry="78" stroke-width="3"/>
+      <text class="hw c-navy" x="1200" y="756" font-size="50" text-anchor="middle">Thermodynamics</text>
+      <path class="stroke" d="M1030 700 C 950 640, 880 600, 820 560 M 832 572 L 818 558 L 836 556"/>
+      <text class="hw" x="520" y="520" font-size="40">1st law</text>
+      <text class="hw" x="520" y="570" font-size="34">ΔU = Q − W</text>
+      <path class="stroke c-red" stroke-width="2.2" d="M508 540 L 760 536 L 762 586 L 506 590 Z"/>
+      <path class="stroke" d="M1370 700 C 1450 640, 1530 600, 1600 560 M 1586 560 L 1602 558 L 1596 574"/>
+      <text class="hw" x="1620" y="520" font-size="40">2nd law</text>
+      <text class="hw" x="1620" y="570" font-size="32">entropy of an isolated</text>
+      <text class="hw" x="1620" y="610" font-size="32">system never decreases</text>
+      <path class="stroke c-blue" stroke-width="2" d="M1620 620 C 1700 616, 1820 622, 1900 618"/>
+      <path class="stroke" d="M1360 800 C 1450 880, 1540 940, 1620 980 M 1604 982 L 1622 981 L 1612 966"/>
+      <text class="hw" x="1640" y="1000" font-size="40">heat engines</text>
+      <text class="hw c-red" x="1640" y="1056" font-size="36">η = 1 − T<tspan font-size="24" dy="8">c</tspan><tspan dy="-8"> / T</tspan><tspan font-size="24" dy="8">h</tspan></text>
+      <g transform="translate(1680 1100)"><rect class="stroke" x="0" y="0" width="80" height="40" rx="6"/><text class="hw" x="18" y="28" font-size="22">T<tspan font-size="15" dy="5">h</tspan></text><path class="stroke c-red" d="M40 40 V 110 M 32 98 L 40 111 L 48 98"/><circle class="stroke" cx="40" cy="140" r="28"/><text class="hw" x="28" y="148" font-size="22">W</text><path class="stroke c-blue" d="M40 168 V 230 M 32 218 L 40 231 L 48 218"/><rect class="stroke" x="0" y="232" width="80" height="40" rx="6"/><text class="hw" x="18" y="260" font-size="22">T<tspan font-size="15" dy="5">c</tspan></text></g>
+      <path class="stroke" d="M1040 800 C 960 880, 880 940, 800 980 M 814 984 L 798 981 L 806 966"/>
+      <text class="hw" x="430" y="1010" font-size="40">ideal gas</text>
+      <text class="hw" x="430" y="1060" font-size="34">PV = nRT</text>
+      <g transform="translate(440 1100)"><path class="stroke" d="M0 0 V 260 H 300"/><text class="hw" x="-30" y="20" font-size="24">P</text><text class="hw" x="290" y="290" font-size="24">V</text><path class="stroke c-blue" stroke-width="2.6" d="M30 30 C 60 160, 140 220, 280 236"/><path class="stroke c-red" stroke-width="2.6" d="M30 80 C 70 180, 160 230, 280 246"/><text class="hw c-blue" x="200" y="200" font-size="22">isotherm</text></g>
+      <g transform="translate(160 160) rotate(-4)"><rect x="0" y="0" width="220" height="160" fill="#fff59d"/><text class="hw" x="20" y="54" font-size="32" style="fill:#5d4b00">exam Friday!</text><text class="hw" x="20" y="100" font-size="28" style="fill:#5d4b00">ch. 18–20</text></g>
+      <g transform="translate(2000 160) rotate(3)"><rect x="0" y="0" width="230" height="150" fill="#cdeffd"/><text class="hw" x="18" y="52" font-size="30" style="fill:#0b4a66">Q: why can't</text><text class="hw" x="18" y="92" font-size="30" style="fill:#0b4a66">η reach 100%?</text></g>
+      <path class="stroke c-green" stroke-width="2" d="M1990 260 C 1900 300, 1880 400, 1880 470"/>
+      <text class="hw c-green" x="1060" y="1300" font-size="32">→ connect to Ch. 21 (statistical view)</text>
+    </g>
+  </svg>
+</template>
+
+<script>
+const { $, $$ } = BN;
+// ---------- mini page renderers ----------
+const L = (y, w, c = '') => `<text class="hw ${c}" x="80" y="${y}" font-size="27">${w}</text>`;
+const PAGES = [
+  { bg: 'ruled', svg: `<text class="hw c-navy" x="80" y="80" font-size="42">Kinematics</text>${L(123, 'x = x₀ + v₀t + ½at²')}${L(155, 'v² = v₀² + 2aΔx')}${L(219, 'free fall: a = −g')}` },
+  { bg: 'ruled', svg: `<text class="hw c-navy" x="80" y="80" font-size="42">Vectors</text><path class="stroke c-red" stroke-width="3" d="M120 400 L 380 220"/><path class="stroke c-blue" stroke-width="3" d="M120 400 L 380 400 L 380 220"/>${L(123, 'A = Aₓ î + A<tspan font-size="18" dy="5">y</tspan><tspan dy="-5"> ĵ</tspan>')}` },
+  { bg: 'grid', svg: `<path class="stroke c-blue" stroke-width="3" d="M80 600 C 200 200, 400 200, 520 600"/><text class="hw c-navy" x="80" y="80" font-size="42">Projectiles</text>` },
+  { bg: 'ruled', svg: `<text class="hw c-navy" x="80" y="80" font-size="42">Newton's laws</text>${L(123, '1. inertia')}${L(155, '2. ΣF = ma')}${L(187, '3. pairs')}`, bm: true },
+  { bg: 'pdf', svg: `<rect x="0" y="0" width="600" height="120" fill="#2f54eb"/><text x="40" y="76" font-family="Inter" font-weight="700" font-size="40" fill="#fff">Lecture 7 · Friction</text><g fill="#c9cdd6"><rect x="40" y="170" width="460" height="16" rx="4"/><rect x="40" y="210" width="380" height="16" rx="4"/><rect x="40" y="250" width="420" height="16" rx="4"/></g><path d="M40 196 H 330" stroke="#ffd54f" stroke-width="20" opacity=".6"/>` },
+  { bg: 'ruled', svg: `<text class="hw c-navy" x="80" y="80" font-size="42">Friction</text>${L(123, 'f ≤ μₛN (static)')}${L(155, 'f = μₖN (kinetic)')}<text class="hw c-red" x="96" y="250" font-size="32">μₖ &lt; μₛ</text>` },
+  { bg: 'cornell', svg: `<text class="hw c-navy" x="20" y="80" font-size="30">Q: work?</text><text class="hw" x="200" y="80" font-size="28">W = F·d·cos θ</text><text class="hw" x="200" y="120" font-size="28">units: joules</text>` },
+  { bg: 'dots', svg: `<circle class="stroke" cx="300" cy="380" r="120"/><path class="stroke c-red" d="M300 380 L 400 310"/><text class="hw c-navy" x="80" y="80" font-size="42">Circular</text>` },
+  { bg: 'ruled', svg: `<text class="hw c-navy" x="80" y="80" font-size="42">Energy</text>${L(123, 'K = ½mv²')}${L(155, 'U = mgh')}${L(187, 'E = K + U  (conserved)')}` },
+  { bg: 'ruled', svg: `<text class="hw c-navy" x="80" y="80" font-size="42">Momentum</text>${L(123, 'p = mv')}${L(155, 'J = Δp = F Δt')}` },
+  { bg: 'grid', svg: `<text class="hw c-navy" x="80" y="80" font-size="42">Collisions</text><circle class="stroke c-blue" cx="200" cy="360" r="50"/><circle class="stroke c-red" cx="400" cy="360" r="50"/>` },
+];
+function bgStyle(kind, color = 'var(--paper)', lh = 32) {
+  const line = color === '#1f2329' ? 'var(--paper-dark-line)' : 'var(--paper-line)';
+  const m = 'linear-gradient(90deg, transparent 10.5%, var(--paper-margin) 10.5%, var(--paper-margin) calc(10.5% + 1px), transparent calc(10.5% + 1px))';
+  const ruled = (s) => `repeating-linear-gradient(transparent 0 calc(${s / 776 * 100}% - 1px), ${line} calc(${s / 776 * 100}% - 1px) ${s / 776 * 100}%)`;
+  switch (kind) {
+    case 'ruled': return `background:${m}, ${ruled(lh)} 0 12% / 100% 88% no-repeat; background-color:${color}`;
+    case 'wide': return `background:${m}, ${ruled(lh * 1.35)} 0 12% / 100% 88% no-repeat; background-color:${color}`;
+    case 'grid': return `background-image:linear-gradient(${line} 1px, transparent 1px), linear-gradient(90deg, ${line} 1px, transparent 1px); background-size:${lh / 6}% ${lh / 7.76}%; background-color:${color}`;
+    case 'dots': return `background-image:radial-gradient(var(--paper-dot) 1px, transparent 1.5px); background-size:${lh / 6}% ${lh / 7.76}%; background-color:${color}`;
+    case 'cornell': return `background:linear-gradient(90deg, transparent 28%, var(--paper-margin) 28%, var(--paper-margin) calc(28% + 1.5px), transparent calc(28% + 1.5px)) 0 0 / 100% 80% no-repeat, linear-gradient(transparent 80%, var(--paper-margin) 80%, var(--paper-margin) calc(80% + 1.5px), transparent calc(80% + 1.5px)), ${ruled(lh)} 0 6% / 100% 74% no-repeat; background-color:${color}`;
+    case 'music': return `background-color:${color}`;
+    case 'pdf': return `background-color:#fff`;
+    default: return `background-color:${color}`;
+  }
+}
+function thumb(p, i) {
+  return `<div class="th${p.cur ? ' cur' : ''}${p.sel ? ' sel' : ''}" data-i="${i}">${p.bm ? '<i class="bm"></i>' : ''}<span class="ck" data-nodrag><i class="ms">check</i></span><div class="pv" style="${bgStyle(p.bg)}"><svg viewBox="0 0 600 776">${p.svg}</svg></div><small>${i + 1}</small></div>`;
+}
+// 22 pages: reuse the samples
+const all = Array.from({ length: 22 }, (_, i) => ({ ...PAGES[i % PAGES.length] }));
+all[13] = { bg: 'ruled', svg: `<text class="hw c-navy" x="80" y="80" font-size="42">Circular motion</text>${L(123, 'speed constant, a ≠ 0')}<text class="hw c-red" x="96" y="282" font-size="33">a = v² / r</text><circle class="stroke" cx="460" cy="320" r="74"/>`, cur: true };
+[2, 3, 5].forEach(i => all[i].sel = true);
+const grid = $('#pmGrid');
+function renderPM() {
+  grid.innerHTML = all.slice(0, 17).map(thumb).join('') + `<div class="th add" data-nodrag><div class="pv"><i class="ms">add</i></div><small>New page</small></div>`;
+  $$('.th:not(.add)', grid).forEach(t => t.querySelector('.ck').addEventListener('click', e => { e.stopPropagation(); t.classList.toggle('sel'); count(); }));
+  count();
+}
+function count() { const n = $$('.th.sel', grid).length; $('#selCount').textContent = `22 pages · ${n ? n + ' selected' : 'none selected'}`; $$('#pmActions .btn:not(#selAll):not(.primary)').forEach(b => n ? b.removeAttribute('disabled') : b.setAttribute('disabled', '')); }
+renderPM();
+grid.addEventListener('click', e => { const t = e.target.closest('.th:not(.add)'); if (t && !t.dataset.moved) { t.classList.toggle('sel'); count(); } if (t) delete t.dataset.moved; });
+BN.sortable(grid, '.th:not(.add)', (d, moved) => { $$('.th:not(.add)', grid).forEach((t, i) => t.querySelector('small').textContent = i + 1); if (moved) { d.dataset.moved = 1; setTimeout(() => delete d.dataset.moved, 50); } });
+$('#selAll').onclick = () => { const on = $$('.th.sel', grid).length < 17; $$('.th:not(.add)', grid).forEach(t => t.classList.toggle('sel', on)); count(); };
+$('#delSel').onclick = () => { $$('.th.sel', grid).forEach(t => { t.style.transition = 'transform var(--dur-medium), opacity var(--dur-medium)'; t.style.transform = 'scale(.6)'; t.style.opacity = 0; setTimeout(() => t.remove(), 260); }); setTimeout(count, 300); };
+$('#thSize').oninput = e => grid.style.gridTemplateColumns = `repeat(${12 - e.target.value}, 1fr)`;
+
+// ---------- templates ----------
+const MUSIC = () => { let s = ''; for (let st = 0; st < 9; st++) for (let l = 0; l < 5; l++) { const y = 90 + st * 76 + l * 9; s += `<line x1="40" x2="560" y1="${y}" y2="${y}" stroke="#9aa3ad" stroke-width="1.2"/>`; } return s; };
+const DAILY = () => `<text x="40" y="70" font-family="Fraunces, serif" font-size="38" fill="#2b3240">Thursday</text><text x="40" y="100" font-family="Inter" font-size="16" fill="#8a8f99">October 16</text>` + Array.from({ length: 12 }, (_, i) => `<text x="40" y="${160 + i * 48}" font-family="Inter" font-size="14" fill="#8a8f99">${7 + i}:00</text><line x1="96" x2="380" y1="${164 + i * 48}" y2="${164 + i * 48}" stroke="#d8dee8"/>`).join('') + `<rect x="400" y="140" width="160" height="200" rx="10" fill="none" stroke="#d8dee8"/><text x="414" y="166" font-family="Inter" font-weight="600" font-size="14" fill="#2b3240">Top 3</text>` + [0, 1, 2].map(i => `<rect x="414" y="${186 + i * 44}" width="16" height="16" rx="4" fill="none" stroke="#9aa3ad"/>`).join('') + `<rect x="400" y="360" width="160" height="200" rx="10" fill="none" stroke="#d8dee8"/><text x="414" y="386" font-family="Inter" font-weight="600" font-size="14" fill="#2b3240">Notes</text>`;
+const WEEKLY = () => `<text x="40" y="70" font-family="Fraunces, serif" font-size="34" fill="#2b3240">Week 42</text>` + ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun', 'Notes'].map((d, i) => { const x = 40 + (i % 2) * 265, y = 100 + Math.floor(i / 2) * 165; return `<rect x="${x}" y="${y}" width="255" height="155" rx="10" fill="none" stroke="#d8dee8"/><text x="${x + 12}" y="${y + 26}" font-family="Inter" font-weight="600" font-size="15" fill="${i === 7 ? '#8a8f99' : '#2b3240'}">${d}</text>`; }).join('');
+const CUSTOM = () => `<defs><linearGradient id="cg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#e9f3ee"/><stop offset="1" stop-color="#d7e8f3"/></linearGradient></defs><rect width="600" height="776" fill="url(#cg)"/><rect x="40" y="40" width="520" height="120" rx="14" fill="#fff" opacity=".8"/><text x="60" y="92" font-family="Fraunces, serif" font-size="30" fill="#2f5d50">Lab Journal · Exp.</text><text x="60" y="128" font-family="Inter" font-size="15" fill="#5b7d72">Date ____  Goal ____________</text>` + Array.from({ length: 16 }, (_, i) => `<line x1="40" x2="560" y1="${210 + i * 34}" y2="${210 + i * 34}" stroke="#b9d3c9"/>`).join('');
+const TPL = [
+  { id: 'blank', name: 'Blank', cat: 'basic', bg: 'blank', desc: 'Nothing but paper.' },
+  { id: 'ruled', name: 'Ruled', cat: 'basic', bg: 'ruled', desc: 'Lines with a margin. The classic.' },
+  { id: 'wide', name: 'Ruled · wide', cat: 'basic', bg: 'wide', desc: 'Roomier lines for big handwriting.' },
+  { id: 'grid', name: 'Grid', cat: 'basic', bg: 'grid', desc: 'Squares for math, graphs and diagrams.' },
+  { id: 'dots', name: 'Dotted', cat: 'basic', bg: 'dots', desc: 'Quiet guides for sketching and bullet journals.' },
+  { id: 'cornell', name: 'Cornell', cat: 'study', bg: 'cornell', desc: 'Cue column, notes and a summary strip.', badge: 'Popular' },
+  { id: 'music', name: 'Music', cat: 'study', bg: 'music', svg: MUSIC, desc: 'Nine staves per page.' },
+  { id: 'daily', name: 'Planner · daily', cat: 'plan', bg: 'blank', svg: DAILY, desc: 'Hourly schedule, top 3, notes.' },
+  { id: 'weekly', name: 'Planner · weekly', cat: 'plan', bg: 'blank', svg: WEEKLY, desc: 'Seven days and a notes box.' },
+  { id: 'dark', name: 'Dark paper', cat: 'dark', bg: 'ruled', dark: true, desc: 'Ink colors invert smartly: black ↔ white, colors keep their hue.' },
+  { id: 'custom', name: 'Lab journal', cat: 'custom', bg: 'blank', svg: CUSTOM, desc: 'Made from your own image or PDF page.', badge: 'Mine' },
+];
+let curTpl = TPL[5], paper = '#FFFFFF', lh = 32;
+function tplHTML(t, color, spacing) {
+  const c = t.dark ? '#1f2329' : color;
+  const ink = t.dark ? `<text x="80" y="140" font-family="Caveat" font-weight="700" font-size="40" fill="#f2f2f5">dark mode notes</text><text x="80" y="190" font-family="Caveat" font-weight="700" font-size="34" fill="#ff8a80">a = v²/r</text>` : '';
+  return `<div class="tpl-bg" style="${bgStyle(t.bg, c, spacing)}"><svg viewBox="0 0 600 776">${t.svg ? t.svg() : ''}${ink}</svg></div>`;
+}
+function renderTG(cat = 'all') {
+  const list = TPL.filter(t => cat === 'all' || t.cat === cat);
+  $('#tgGrid').innerHTML = list.map(t => `<div class="tpl2${t === curTpl ? ' on' : ''}" data-id="${t.id}"><div class="pv">${tplHTML(t, paper, lh)}${t.badge ? `<i class="badge">${t.badge}</i>` : ''}</div><span>${t.name}</span></div>`).join('') + (cat === 'all' || cat === 'custom' ? `<div class="tpl2 upload"><div class="pv"><i class="ms">add_photo_alternate</i><b>Custom</b>From an image or PDF page</div><span>New from image…</span></div>` : '');
+  $$('#tgGrid .tpl2[data-id]').forEach(el => el.onclick = () => { curTpl = TPL.find(t => t.id === el.dataset.id); renderTG(cat); renderBig(); });
+}
+function renderBig() { $('#bigPrev').innerHTML = tplHTML(curTpl, paper, lh); $('#tplName').textContent = curTpl.name; $('#tplDesc').textContent = curTpl.desc; }
+$$('#cats a').forEach(a => a.onclick = () => { $$('#cats a').forEach(x => x.classList.toggle('on', x === a)); renderTG(a.dataset.c); });
+BN.seg($('#paperSw'), (v, el) => { paper = el.dataset.v; renderTG($('#cats a.on').dataset.c); renderBig(); });
+BN.seg($('#spacing'), (v, el) => { lh = +el.dataset.v; renderTG($('#cats a.on').dataset.c); renderBig(); });
+BN.seg($('#sizes'));
+renderTG(); renderBig();
+
+// ---------- infinite canvas ----------
+const world = $('#world'), W = 2400, H = 1500;
+world.innerHTML = $('#worldTpl').innerHTML;
+const wsvg = world.querySelector('svg');
+const mm = $('#mm'); mm.insertAdjacentHTML('afterbegin', $('#worldTpl').innerHTML);
+const mmsvg = mm.querySelector('svg'); mmsvg.setAttribute('width', '100%'); mmsvg.setAttribute('height', '100%'); mmsvg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+let V = { x: 300, y: 260, z: .6 };
+function render() {
+  const vw = world.offsetWidth / V.z, vh = world.offsetHeight / V.z;
+  V.x = Math.max(-200, Math.min(W - vw + 200, V.x)); V.y = Math.max(-200, Math.min(H - vh + 200, V.y));
+  wsvg.style.transform = `scale(${V.z}) translate(${-V.x}px, ${-V.y}px)`;
+  world.style.backgroundSize = `${24 * V.z}px ${24 * V.z}px`; world.style.backgroundPosition = `${-V.x * V.z}px ${-V.y * V.z}px`;
+  const mw = mm.offsetWidth, mh = mm.offsetHeight, k = Math.min(mw / W, mh / H), ox = (mw - W * k) / 2, oy = (mh - H * k) / 2;
+  Object.assign($('#vp').style, { left: ox + V.x * k + 'px', top: oy + V.y * k + 'px', width: vw * k + 'px', height: vh * k + 'px' });
+  $('#zv').textContent = Math.round(V.z * 100) + '%';
+  return { k, ox, oy };
+}
+let pan = null;
+world.addEventListener('pointerdown', e => { world.setPointerCapture(e.pointerId); world.classList.add('grabbing'); pan = { p: BN.local(world, e), x: V.x, y: V.y }; });
+world.addEventListener('pointermove', e => { if (!pan) return; const p = BN.local(world, e); V.x = pan.x - (p.x - pan.p.x) / V.z; V.y = pan.y - (p.y - pan.p.y) / V.z; render(); });
+world.addEventListener('pointerup', () => { pan = null; world.classList.remove('grabbing'); });
+let mmd = false;
+const mmMove = e => { const { k, ox, oy } = render(), p = BN.local(mm, e), vw = world.offsetWidth / V.z, vh = world.offsetHeight / V.z; V.x = (p.x - ox) / k - vw / 2; V.y = (p.y - oy) / k - vh / 2; render(); };
+mm.addEventListener('pointerdown', e => { mm.setPointerCapture(e.pointerId); mmd = true; mmMove(e); });
+mm.addEventListener('pointermove', e => mmd && mmMove(e));
+mm.addEventListener('pointerup', () => mmd = false);
+function zoom(f) { const cx = V.x + world.offsetWidth / V.z / 2, cy = V.y + world.offsetHeight / V.z / 2; V.z = Math.max(.25, Math.min(2, V.z * f)); V.x = cx - world.offsetWidth / V.z / 2; V.y = cy - world.offsetHeight / V.z / 2; render(); }
+$('#zi').onclick = () => zoom(1.25); $('#zo').onclick = () => zoom(.8);
+$('#fit').onclick = () => { V.z = Math.min(world.offsetWidth / W, world.offsetHeight / H) * .95; V.x = (W - world.offsetWidth / V.z) / 2; V.y = (H - world.offsetHeight / V.z) / 2; render(); };
+document.fonts.ready.then(render); render();
+</script>
+</body>
+</html>

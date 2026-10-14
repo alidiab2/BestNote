@@ -1,0 +1,385 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BestNote · Layers, zoom window, present</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Sans+Arabic:wght@400;500;600&family=Caveat:wght@500;700&family=Material+Symbols+Rounded:opsz,wght,FILL@24,400,0..1&family=Fraunces:opsz,wght@9..144,500;9..144,600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../tokens.css">
+<link rel="stylesheet" href="../board.css">
+<script src="../shell.js"></script>
+<script src="../editor-kit.js"></script>
+<style>
+  .pg { width: 600px; height: 776px; --lh: 32px; --top: 96px; --ml: 64px; }
+  .ed .tb.top { position: absolute; top: 12px; left: 50%; transform: translateX(-50%); z-index: 5; }
+  .ed-pages.side { align-items: flex-start; padding: 22px 0 40px 120px; }
+  [dir="rtl"] .ed-pages.side { align-items: flex-end; padding: 22px 120px 40px 0; }
+  /* layers */
+  .layers { position: absolute; z-index: 6; top: 70px; inset-inline-end: 20px; width: 330px; padding-bottom: 10px; }
+  .ly-list { list-style: none; padding: 0 8px; display: flex; flex-direction: column; gap: 6px; }
+  .ly { display: flex; align-items: center; gap: 10px; padding: 7px 8px; border-radius: 14px; background: var(--chrome-solid); border: 1px solid var(--outline); cursor: grab; touch-action: none; transition: transform var(--dur-medium) var(--spring-gentle), box-shadow var(--dur-medium), opacity var(--dur-short); }
+  .ly.on { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); background: color-mix(in srgb, var(--accent-soft) 45%, var(--chrome-solid)); }
+  .ly.lifting { box-shadow: var(--shadow-3); cursor: grabbing; }
+  .ly .lth { width: 44px; height: 56px; flex: none; border-radius: 5px; background-color: var(--paper); box-shadow: var(--shadow-1); overflow: hidden; position: relative; }
+  .ly .lth svg { width: 100%; height: 100%; }
+  .ly .nm { flex: 1; min-width: 0; font-size: 13px; font-weight: 600; line-height: 1.25; }
+  .ly .nm small { display: block; font-weight: 400; font-size: 11px; color: var(--ink-3); }
+  .ly .ib { width: 32px; height: 32px; }
+  .ly .ib .ms { font-size: 19px; }
+  .ly.hidden-l .lth, .ly.hidden-l .nm { opacity: .4; }
+  .ly .grip { color: var(--ink-3); font-size: 18px; }
+  .ly-op { padding: 8px 16px 0; }
+  .ly-foot { display: flex; gap: 6px; padding: 10px 12px 0; }
+  .ly-foot .btn { flex: 1; display: inline-flex; justify-content: center; align-items: center; }
+  .lock-pill { position: absolute; z-index: 7; bottom: 18px; left: 50%; transform: translateX(-50%); }
+
+  /* zoom window */
+  .zw-ed { display: flex; flex-direction: column; background: var(--surface-2) !important; }
+  .zw-top { flex: 1; position: relative; overflow: hidden; display: flex; justify-content: center; padding-top: 14px; }
+  .zw-top .paper { width: 600px; height: 776px; }
+  .zbox { fill: color-mix(in srgb, var(--accent) 8%, transparent); stroke: var(--accent); stroke-width: 1.6; vector-effect: non-scaling-stroke; }
+  .zw-panel { height: 268px; flex: none; background: var(--chrome-solid); border-top: 1px solid var(--outline); display: grid; grid-template-columns: 64px 1fr 64px; gap: 10px; padding: 10px 12px 12px; position: relative; box-shadow: 0 -8px 24px rgba(0,0,0,.06); }
+  .zw-side { display: flex; flex-direction: column; gap: 8px; align-items: center; justify-content: center; }
+  .zw-side .ib { width: 46px; height: 46px; background: var(--surface); }
+  .zw-strip { position: relative; border-radius: 12px; overflow: hidden; background-color: var(--paper); border: 1px solid var(--outline); direction: ltr; }
+  .zw-strip svg { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: none; cursor: crosshair; }
+  .adv { position: absolute; top: 0; bottom: 0; right: 0; width: 25%; background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--accent) 14%, transparent)); border-left: 1.5px dashed color-mix(in srgb, var(--accent) 55%, transparent); pointer-events: none; display: flex; align-items: flex-end; justify-content: flex-end; padding: 8px; }
+  .adv span { font: 600 11px var(--font-ui); color: var(--accent); display: flex; align-items: center; gap: 4px; }
+  .adv .ms { font-size: 16px; }
+  .zw-head { position: absolute; top: -40px; inset-inline-start: 50%; transform: translateX(-50%); display: flex; gap: 6px; }
+
+  /* presentation */
+  .pres { display: grid; grid-template-columns: 1fr 300px; gap: 14px; padding: 14px; background: #121318 !important; color: #e9eaee; }
+  .pres-main { position: relative; display: flex; flex-direction: column; gap: 10px; min-height: 0; }
+  .pres-bar { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+  .pres-bar .live { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; background: #c62828; color: #fff; font-weight: 600; font-size: 11.5px; }
+  .pres-bar .live i { width: 7px; height: 7px; border-radius: 50%; background: #fff; animation: blink 1.2s infinite; }
+  @keyframes blink { 50% { opacity: .3; } }
+  .pres-bar .pb { width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; background: #23252d; color: #e9eaee; cursor: pointer; }
+  .pres-bar .pb.on { background: #c62828; }
+  .stage { position: relative; flex: 1; border-radius: 10px; overflow: hidden; background: #fff; cursor: none; touch-action: none; }
+  .stage canvas, .proj canvas { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+  .pslide { position: absolute; inset: 0; direction: ltr; font-family: Inter, sans-serif; color: #1f2430; background: #fff; }
+  .pslide .bar { height: 15%; background: linear-gradient(90deg, #1b5e20, #2e7d32); color: #fff; display: flex; align-items: center; padding: 0 5%; font-weight: 700; font-size: 1.9em; }
+  .pslide .body { display: grid; grid-template-columns: 1.2fr 1fr; gap: 4%; padding: 4% 5%; font-size: 1.15em; line-height: 1.5; }
+  .pslide li { margin-bottom: .5em; }
+  .pslide svg { width: 100%; }
+  .pres-side { display: flex; flex-direction: column; gap: 10px; min-height: 0; font-size: 12px; color: #a9acb8; }
+  .proj { position: relative; aspect-ratio: 16 / 10; border-radius: 8px; overflow: hidden; border: 6px solid #2a2c35; background: #fff; }
+  .proj .pslide { font-size: 4.4px; }
+  .nextp { aspect-ratio: 16 / 10; border-radius: 8px; background: #fff; position: relative; overflow: hidden; opacity: .8; }
+  .nextp .pslide { font-size: 4.4px; }
+  .notes { flex: 1; background: #1c1e25; border-radius: 10px; padding: 10px 12px; color: #d5d7df; font-size: 12.5px; line-height: 1.5; overflow: auto; }
+  .timer { font: 600 24px var(--font-ui); color: #fff; font-variant-numeric: tabular-nums; }
+  .laser-dot { position: absolute; width: 14px; height: 14px; margin: -7px 0 0 -7px; border-radius: 50%; background: #ff3b30; box-shadow: 0 0 10px 4px rgba(255,59,48,.6); pointer-events: none; opacity: 0; z-index: 3; }
+
+  /* shortcuts */
+  .ks-ed { position: relative; }
+  .ks-scrim { position: absolute; inset: 0; background: var(--scrim); z-index: 6; }
+  .ks { position: absolute; z-index: 7; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 900px; padding: 18px 22px 20px; }
+  .ks-head { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+  .ks-head b { font-size: 18px; flex: 1; font-family: var(--font-display); }
+  .ks-cols { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px 26px; }
+  .ks-cols h4 { margin: 4px 0 6px; }
+  .kr { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 5px 8px; margin: 0 -8px; border-radius: 8px; font-size: 13px; transition: background var(--dur-short); }
+  .kr span:last-child { display: flex; gap: 4px; direction: ltr; }
+  .kr.hit { background: var(--accent-soft); color: var(--accent); }
+  .kr.hit .kbd { border-color: var(--accent); box-shadow: 0 1px 0 var(--accent); transform: translateY(1px); }
+  .ks-foot { margin-top: 14px; font-size: 12px; color: var(--ink-3); display: flex; gap: 8px; align-items: center; }
+  .caption { font-size: 12.5px; color: var(--ink-2); margin: 10px auto 0; max-width: 640px; text-align: center; }
+</style>
+</head>
+<body>
+<div class="page-wrap">
+  <h1>Layers, zoom window & presenting</h1>
+  <p class="lead muted">Power tools that stay out of the way until you need them: layers for clean diagrams, a zoom window for small neat writing, a laser pointer for presenting, and full keyboard control on the Book Cover Keyboard.</p>
+
+  <div class="variants">
+    <!-- ============ LAYERS ============ -->
+    <div>
+      <div class="variant-label">State 1 · Layers panel · show/hide · lock · reorder</div>
+      <div class="device tablet">
+        <div class="status"><span>9:41</span><span><i class="ms">signal_cellular_alt</i><i class="ms">wifi</i><i class="ms">battery_full</i></span></div>
+        <div class="ed" id="edL">
+          <div class="ed-bar"><span class="ib"><i class="ms flip-rtl">arrow_back</i></span><div class="ed-title"><b>Chemistry 101</b><small>Covalent bonds · p.4</small></div><span class="grow"></span><span class="ib on"><i class="ms">layers</i></span><span class="ib"><i class="ms">more_vert</i></span></div>
+          <div class="ed-canvas" id="cvL">
+            <div class="tb top"><span class="t on"><i class="ms">ink_pen</i></span><span class="t"><i class="ms">ink_highlighter</i></span><span class="t"><i class="ms">ink_eraser</i></span><span class="t"><i class="ms">lasso_select</i></span><span class="sep"></span><span class="t"><i class="ms">undo</i></span></div>
+            <div class="ed-scroll"><div class="ed-pages side">
+              <div class="paper pg p-ruled p-margin" id="lyPage">
+                <svg viewBox="0 0 600 776" id="lySvg">
+                  <g id="L-hl" data-l="hl"><path class="hl-stroke" d="M78 147 H 300"/><path class="hl-stroke" style="stroke:var(--hl-green)" d="M78 539 H 372"/></g>
+                  <g id="L-diagram" data-l="diagram">
+                    <g transform="translate(330 250)">
+                      <circle cx="0" cy="0" r="40" fill="#e3f2fd" stroke="var(--pen-blue)" stroke-width="2.4"/><text class="hw c-blue" x="-12" y="10" font-size="32">O</text>
+                      <path class="stroke" d="M-30 26 L -86 92"/><path class="stroke" d="M30 26 L 86 92"/>
+                      <circle cx="-100" cy="108" r="26" fill="#fff" stroke="var(--pen-black)" stroke-width="2.2"/><text class="hw" x="-110" y="117" font-size="26">H</text>
+                      <circle cx="100" cy="108" r="26" fill="#fff" stroke="var(--pen-black)" stroke-width="2.2"/><text class="hw" x="90" y="117" font-size="26">H</text>
+                      <path class="stroke" stroke-width="1.5" d="M-30 50 A 50 50 0 0 0 30 50"/><text class="hw" x="-22" y="84" font-size="20">104.5°</text>
+                      <text class="hw c-red" x="44" y="-30" font-size="24">δ−</text><text class="hw c-red" x="-150" y="150" font-size="24">δ+</text><text class="hw c-red" x="124" y="150" font-size="24">δ+</text>
+                    </g>
+                  </g>
+                  <g id="L-ink" data-l="ink">
+                    <text class="hw c-navy" x="80" y="80" font-size="42">Covalent bonds</text>
+                    <path class="stroke c-navy" stroke-width="2.6" d="M80 91 C 160 87, 250 93, 330 88"/>
+                    <text class="hw" x="80" y="155" font-size="27">atoms SHARE electron pairs</text>
+                    <text class="hw" x="80" y="443" font-size="27">water is bent (2 lone pairs on O)</text>
+                    <text class="hw" x="80" y="475" font-size="27">→ polar molecule, dipole moment</text>
+                    <text class="hw" x="80" y="539" font-size="27">polar + H-bonds → high boiling pt</text>
+                  </g>
+                  <g id="L-annot" data-l="annot">
+                    <text class="hw c-red" x="420" y="150" font-size="22">≠ ionic (transfer)</text>
+                    <path class="stroke c-red" stroke-width="2" d="M400 470 l 8 10 l 16 -22"/>
+                    <text class="hw c-green" x="400" y="603" font-size="22">ask TA about VSEPR</text>
+                  </g>
+                </svg>
+              </div>
+            </div></div>
+            <div class="panel layers">
+              <div class="panel-head"><b>Layers</b><span class="ib" style="width:30px;height:30px"><i class="ms">close</i></span></div>
+              <ul class="ly-list" id="lyList"></ul>
+              <div class="ly-op"><label class="slider" style="margin:4px 0 0"><span>Opacity of “<span id="opName">Ink</span>”</span> <output id="opV">100%</output><input type="range" id="op" min="10" max="100" value="100"></label></div>
+              <div class="ly-foot"><button class="btn tonal" id="addL"><i class="ms">add</i>New layer</button><button class="btn ghost"><i class="ms">merge</i>Merge down</button></div>
+            </div>
+            <div class="toast-edge lock-pill" id="lockPill" style="opacity:0;transition:opacity var(--dur-medium)"><i class="ms">lock</i><span>Layer is locked</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="demo-bar"><span class="muted">Tap a layer to make it active. Eye hides, lock protects (try writing on a locked layer). Drag rows to reorder; the page re-stacks instantly. Paper template is its own locked layer.</span></div>
+    </div>
+
+    <!-- ============ ZOOM WINDOW ============ -->
+    <div>
+      <div class="variant-label">State 2 · Zoom window · write big, lands small · auto-advance</div>
+      <div class="device tablet">
+        <div class="status"><span>9:41</span><span><i class="ms">signal_cellular_alt</i><i class="ms">wifi</i><i class="ms">battery_full</i></span></div>
+        <div class="zw-ed">
+          <div class="ed-bar"><span class="ib"><i class="ms flip-rtl">arrow_back</i></span><div class="ed-title"><b>Calculus II</b><small>Exam prep · p.40</small></div><span class="grow"></span><span class="ib on"><i class="ms">zoom_in</i></span><span class="ib"><i class="ms">more_vert</i></span></div>
+          <div class="zw-top">
+            <div class="paper">
+              <svg viewBox="0 0 600 776" id="zPage">
+                <g id="zContent">
+                  <rect width="600" height="776" fill="var(--paper)"/>
+                  <g stroke="var(--paper-line)" stroke-width="1">
+                    <line x1="0" x2="600" y1="127" y2="127"/><line x1="0" x2="600" y1="159" y2="159"/><line x1="0" x2="600" y1="191" y2="191"/><line x1="0" x2="600" y1="223" y2="223"/><line x1="0" x2="600" y1="255" y2="255"/><line x1="0" x2="600" y1="287" y2="287"/><line x1="0" x2="600" y1="319" y2="319"/><line x1="0" x2="600" y1="351" y2="351"/><line x1="0" x2="600" y1="383" y2="383"/><line x1="0" x2="600" y1="415" y2="415"/><line x1="0" x2="600" y1="447" y2="447"/><line x1="0" x2="600" y1="479" y2="479"/>
+                  </g>
+                  <line x1="64" x2="64" y1="0" y2="776" stroke="var(--paper-margin)" stroke-width="1.5"/>
+                  <text class="hw c-navy" x="80" y="80" font-size="40">Series: tests to know</text>
+                  <path class="stroke c-navy" stroke-width="2.4" d="M80 90 C 170 86, 270 92, 360 87"/>
+                  <text class="hw" x="80" y="123" font-size="22">ratio: L = lim |aₙ₊₁ / aₙ|, conv. if L &lt; 1</text>
+                  <text class="hw" x="80" y="155" font-size="22">root: L = lim ⁿ√|aₙ|, same rule</text>
+                  <text class="hw" x="80" y="187" font-size="22">p-series Σ 1/nᵖ conv. iff p &gt; 1</text>
+                  <text class="hw" x="80" y="219" font-size="22">integral test: f positive,</text>
+                  <g id="zUser"></g>
+                </g>
+                <rect class="zbox" id="zbox" rx="3"/>
+              </svg>
+            </div>
+          </div>
+          <div class="zw-panel">
+            <div class="zw-side"><span class="ib" id="zPrev" title="Back"><i class="ms flip-rtl">chevron_left</i></span><span class="ib" id="zNl" title="New line"><i class="ms flip-rtl">keyboard_return</i></span></div>
+            <div class="zw-strip">
+              <svg id="zStrip" preserveAspectRatio="xMinYMin meet"><use href="#zContent"/></svg>
+              <div class="adv"><span><i class="ms">double_arrow</i>auto-advance</span></div>
+            </div>
+            <div class="zw-side"><span class="ib" id="zNext" title="Forward"><i class="ms flip-rtl">chevron_right</i></span><span class="ib" title="Zoom window settings"><i class="ms">tune</i></span></div>
+          </div>
+        </div>
+      </div>
+      <div class="demo-bar"><span class="muted">Write in the big strip at the bottom: your ink lands at normal size inside the blue box. End a word in the shaded zone and the box slides on; at the margin it drops to the next line.</span></div>
+    </div>
+
+    <!-- ============ PRESENT ============ -->
+    <div>
+      <div class="variant-label">State 3 · Presentation mode · laser pointer trail · presenter view</div>
+      <div class="device tablet">
+        <div class="status" style="background:#121318;color:#a9acb8"><span>9:41</span><span><i class="ms">cast</i><i class="ms">battery_full</i></span></div>
+        <div class="pres">
+          <div class="pres-main">
+            <div class="pres-bar">
+              <span class="live"><i></i>Presenting to “Room 204 projector”</span>
+              <span class="grow"></span>
+              <span class="pb on" id="laserBtn" title="Laser pointer"><i class="ms">highlight_mouse_cursor</i></span>
+              <span class="pb" title="Pen (ink is shown live)"><i class="ms">ink_pen</i></span>
+              <span class="pb" title="Spotlight"><i class="ms">flare</i></span>
+              <span class="pb" title="Blank the screen"><i class="ms">visibility_off</i></span>
+              <span class="pb" title="Stop" style="background:#3a3d48"><i class="ms">stop_screen_share</i></span>
+            </div>
+            <div class="stage" id="stage">
+              <div class="pslide" id="pslide">
+                <div class="bar">Photosynthesis in two stages</div>
+                <div class="body">
+                  <ul style="padding-left:1.1em">
+                    <li><b>Light reactions</b> (thylakoid): water is split, O₂ released, ATP + NADPH made</li>
+                    <li><b>Calvin cycle</b> (stroma): CO₂ fixed into sugar using ATP + NADPH</li>
+                    <li>6 CO₂ + 6 H₂O → C₆H₁₂O₆ + 6 O₂</li>
+                  </ul>
+                  <svg viewBox="0 0 260 200">
+                    <ellipse cx="130" cy="100" rx="120" ry="80" fill="#e8f5e9" stroke="#2e7d32" stroke-width="3"/>
+                    <g fill="#81c784" stroke="#2e7d32" stroke-width="2"><rect x="50" y="70" width="40" height="12" rx="6"/><rect x="50" y="86" width="40" height="12" rx="6"/><rect x="50" y="102" width="40" height="12" rx="6"/><rect x="160" y="80" width="40" height="12" rx="6"/><rect x="160" y="96" width="40" height="12" rx="6"/><rect x="160" y="112" width="40" height="12" rx="6"/></g>
+                    <text x="40" y="150" font-family="Inter" font-size="12" fill="#1b5e20">thylakoid stacks</text><text x="150" y="60" font-family="Inter" font-size="12" fill="#1b5e20">stroma</text>
+                  </svg>
+                </div>
+              </div>
+              <canvas id="laserC"></canvas>
+              <div class="laser-dot" id="ldot"></div>
+            </div>
+          </div>
+          <div class="pres-side">
+            <div style="display:flex;justify-content:space-between;align-items:flex-end"><span class="timer" id="ptimer">12:04</span><span>Slide 13 of 20</span></div>
+            <div>On the projector</div>
+            <div class="proj" id="proj"></div>
+            <div>Next</div>
+            <div class="nextp"><div class="pslide"><div class="bar" style="background:#1565c0">Limiting factors</div><div class="body"><ul style="padding-left:1.1em"><li>light intensity</li><li>CO₂ level</li><li>temperature</li></ul></div></div></div>
+            <div class="notes"><b style="color:#fff">Speaker notes</b><br>Point at the thylakoid stacks first, then the stroma. Ask: where does the O₂ come from? (water, not CO₂!)</div>
+            <div style="display:flex;gap:6px;align-items:center"><i class="ms" style="font-size:16px">stylus</i>S Pen click = next slide · double-click = back</div>
+          </div>
+        </div>
+      </div>
+      <div class="demo-bar"><span class="muted">Move over the slide: a laser dot with a short glowing trail, mirrored live on the projector preview. Press and drag to leave a longer trail that fades on its own; nothing is written to the page.</span></div>
+    </div>
+
+    <!-- ============ SHORTCUTS ============ -->
+    <div>
+      <div class="variant-label">State 4 · Keyboard shortcuts overlay · Book Cover Keyboard</div>
+      <div class="device tablet">
+        <div class="status"><span>9:41</span><span><i class="ms">keyboard</i><i class="ms">wifi</i><i class="ms">battery_full</i></span></div>
+        <div class="ed ks-ed">
+          <div class="ed-bar"><span class="ib"><i class="ms flip-rtl">arrow_back</i></span><div class="ed-title"><b>Physics 201</b><small>p.14</small></div><span class="grow"></span><span class="ib"><i class="ms">keyboard</i></span><span class="ib"><i class="ms">more_vert</i></span></div>
+          <div class="ed-canvas"><div class="ed-scroll"><div class="ed-pages" style="padding-top:22px"><div class="paper pg p-ruled p-margin"></div></div></div></div>
+          <div class="ks-scrim"></div>
+          <div class="panel ks">
+            <div class="ks-head"><i class="ms" style="color:var(--accent)">keyboard</i><b>Keyboard shortcuts</b><span class="muted">Galaxy Tab Book Cover Keyboard detected</span><span class="ib"><i class="ms">close</i></span></div>
+            <div class="ks-cols" id="ksCols"></div>
+            <div class="ks-foot"><i class="ms" style="font-size:16px">info</i>Hold <span class="kbd">⊞ Meta</span> anywhere to show this. Shortcuts work in every language layout (Arabic keyboard too). Try pressing keys now.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const { $, $$, el } = BN;
+// ---------------- LAYERS ----------------
+let LAYERS = [
+  { id: 'annot', name: 'Annotations', sub: 'red + green notes' },
+  { id: 'ink', name: 'Ink', sub: 'handwriting' },
+  { id: 'diagram', name: 'Diagram', sub: 'H₂O molecule' },
+  { id: 'hl', name: 'Highlights', sub: 'always under ink' },
+  { id: 'paper', name: 'Paper · ruled', sub: 'template', locked: true },
+];
+let active = 'ink';
+const state = { };
+function lyThumb(id) {
+  if (id === 'paper') return `<svg viewBox="0 0 600 776"><g stroke="var(--paper-line)" stroke-width="12">${[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20].map(i => `<line x1="0" x2="600" y1="${96 + i * 32}" y2="${96 + i * 32}" stroke-width="3"/>`).join('')}</g></svg>`;
+  return `<svg viewBox="0 0 600 776"><use href="#L-${id}"/></svg>`;
+}
+function renderLayers() {
+  $('#lyList').innerHTML = LAYERS.map(l => {
+    const s = state[l.id] || {}; const locked = l.locked || s.locked;
+    return `<li class="ly${l.id === active ? ' on' : ''}${s.hidden ? ' hidden-l' : ''}" data-id="${l.id}"><span class="lth">${lyThumb(l.id)}</span><span class="nm">${l.name}<small>${l.sub}</small></span>
+      <span class="ib" data-nodrag data-act="eye"><i class="ms">${s.hidden ? 'visibility_off' : 'visibility'}</i></span>
+      <span class="ib" data-nodrag data-act="lock"><i class="ms" style="${locked ? 'color:var(--accent)' : ''}">${locked ? 'lock' : 'lock_open'}</i></span>
+      <i class="ms grip">drag_indicator</i></li>`;
+  }).join('');
+  $('#opName').textContent = LAYERS.find(l => l.id === active).name;
+}
+function applyLayers() {
+  const svg = $('#lySvg');
+  [...LAYERS].reverse().forEach(l => { if (l.id === 'paper') return; const g = $('#L-' + l.id); svg.append(g); g.style.display = state[l.id]?.hidden ? 'none' : ''; g.style.opacity = (state[l.id]?.op ?? 100) / 100; });
+  $('#lyPage').classList.toggle('p-ruled', !state.paper?.hidden); $('#lyPage').classList.toggle('p-margin', !state.paper?.hidden);
+}
+renderLayers();
+$('#lyList').addEventListener('click', e => {
+  const li = e.target.closest('.ly'); if (!li) return; const id = li.dataset.id, act = e.target.closest('[data-act]')?.dataset.act;
+  state[id] = state[id] || {};
+  if (act === 'eye') state[id].hidden = !state[id].hidden;
+  else if (act === 'lock') { const L = LAYERS.find(l => l.id === id); if (L.locked) { L.locked = false; state[id].locked = false; } else state[id].locked = !state[id].locked; }
+  else if (!li.dataset.moved) { active = id; $('#op').value = state[id].op ?? 100; $('#opV').textContent = $('#op').value + '%'; }
+  delete li.dataset.moved;
+  renderLayers(); applyLayers();
+});
+BN.sortable($('#lyList'), '.ly', (d, moved) => { if (moved) d.dataset.moved = 1; LAYERS = $$('#lyList .ly').map(li => LAYERS.find(l => l.id === li.dataset.id)); applyLayers(); });
+$('#op').oninput = e => { (state[active] = state[active] || {}).op = +e.target.value; $('#opV').textContent = e.target.value + '%'; applyLayers(); };
+let nl = 1;
+$('#addL').onclick = () => { const id = 'new' + nl++; const g = el('g', { id: 'L-' + id }); $('#lySvg').append(g); LAYERS.unshift({ id, name: 'Layer ' + (nl + 3), sub: 'empty' }); active = id; renderLayers(); applyLayers(); };
+BN.ink($('#lySvg'), () => {
+  const L = LAYERS.find(l => l.id === active); const s = state[active] || {};
+  if (L.locked || s.locked || s.hidden || active === 'paper') { const p = $('#lockPill'); p.querySelector('span').textContent = s.hidden ? 'Layer is hidden' : 'Layer is locked'; p.style.opacity = 1; setTimeout(() => p.style.opacity = 0, 1300); return false; }
+  return { color: active === 'annot' ? 'var(--pen-red)' : active === 'hl' ? 'var(--hl-yellow)' : 'var(--pen-navy)', width: active === 'hl' ? 22 : 2.4, opacity: active === 'hl' ? .55 : '', layer: $('#L-' + active) };
+});
+
+// ---------------- ZOOM WINDOW ----------------
+const zStrip = $('#zStrip'), zbox = $('#zbox');
+const ZB = { x: 286, y: 192, w: 280, h: 0 };
+function stripRatio() { const r = zStrip.getBoundingClientRect(); return r.height / r.width || .24; }
+function setBox(nx, ny, anim) {
+  ZB.h = ZB.w * stripRatio();
+  const from = { x: ZB.x, y: ZB.y };
+  const go = t => { const x = from.x + (nx - from.x) * t, y = from.y + (ny - from.y) * t; zbox.setAttribute('x', x); zbox.setAttribute('y', y); zbox.setAttribute('width', ZB.w); zbox.setAttribute('height', ZB.h); zStrip.setAttribute('viewBox', `${x} ${y} ${ZB.w} ${ZB.h}`); };
+  ZB.x = nx; ZB.y = ny;
+  if (anim) BN.tween(320, go); else go(1);
+}
+function advance() { let nx = ZB.x + ZB.w * .6, ny = ZB.y; if (nx + ZB.w * .4 > 590) { nx = 72; ny = ZB.y + 32; } setBox(nx, ny, true); }
+BN.ink(zStrip, () => ({ color: 'var(--pen-black)', width: 1.3, layer: $('#zUser') }), (p, pts) => { const mx = Math.max(...pts.map(q => q.x)); if (mx > ZB.x + ZB.w * .75) setTimeout(advance, 250); });
+$('#zNext').onclick = advance;
+$('#zPrev').onclick = () => setBox(Math.max(64, ZB.x - ZB.w * .6), ZB.y, true);
+$('#zNl').onclick = () => setBox(72, ZB.y + 32, true);
+requestAnimationFrame(() => setBox(ZB.x, ZB.y));
+addEventListener('resize', () => setTimeout(() => setBox(ZB.x, ZB.y), 80));
+// a little pre-written ink in the box, as if written through the zoom window
+(function () {
+  const g = $('#zUser'); const t = el('text', { class: 'hw', x: 300, y: 219, 'font-size': 22 }, g); t.textContent = 'decreasing, then';
+})();
+
+// ---------------- PRESENT / LASER ----------------
+const stage = $('#stage'), proj = $('#proj');
+proj.innerHTML = $('#pslide').outerHTML.replace('id="pslide"', '') + '<canvas id="projC"></canvas>';
+const LC = $('#laserC'), PC = $('#projC');
+let trail = [], last = 0;
+function sizeC() { [LC, PC].forEach(c => { c.width = c.offsetWidth * 2; c.height = c.offsetHeight * 2; }); }
+sizeC(); addEventListener('resize', () => setTimeout(sizeC, 80));
+stage.addEventListener('pointermove', e => {
+  const p = BN.local(stage, e), u = { x: p.x / stage.offsetWidth, y: p.y / stage.offsetHeight, t: performance.now(), long: e.buttons > 0 };
+  trail.push(u); const d = $('#ldot'); d.style.left = p.x + 'px'; d.style.top = p.y + 'px'; d.style.opacity = 1;
+});
+stage.addEventListener('pointerleave', () => $('#ldot').style.opacity = 0);
+function drawTrail(c, now) {
+  const x = c.getContext('2d'); x.clearRect(0, 0, c.width, c.height);
+  x.lineCap = 'round'; x.lineJoin = 'round';
+  for (let i = 1; i < trail.length; i++) {
+    const a = trail[i - 1], b = trail[i], life = b.long ? 1800 : 450, age = (now - b.t) / life;
+    if (age > 1) continue;
+    const alpha = 1 - age;
+    x.strokeStyle = `rgba(255,59,48,${alpha * .9})`; x.shadowColor = 'rgba(255,59,48,.9)'; x.shadowBlur = 14 * (c.width / 1000 + .4);
+    x.lineWidth = (b.long ? 6 : 4) * (c.width / 1400 + .3) * alpha + 1;
+    x.beginPath(); x.moveTo(a.x * c.width, a.y * c.height); x.lineTo(b.x * c.width, b.y * c.height); x.stroke();
+  }
+  const l = trail[trail.length - 1];
+  if (c === PC && l && now - l.t < 1500) { x.shadowBlur = 8; x.fillStyle = '#ff3b30'; x.beginPath(); x.arc(l.x * c.width, l.y * c.height, 4, 0, 7); x.fill(); }
+}
+(function loop(now) { trail = trail.filter(p => now - p.t < 2000); drawTrail(LC, now); drawTrail(PC, now); requestAnimationFrame(loop); })(performance.now());
+// demo path so the trail is visible before you touch it
+let demoT = 0; const demo = setInterval(() => {
+  demoT += .05; if (demoT > 6.2) { clearInterval(demo); return; }
+  trail.push({ x: .62 + .17 * Math.cos(demoT * 1.3), y: .55 + .2 * Math.sin(demoT * 1.3), t: performance.now(), long: false });
+}, 30);
+let secs = 724; setInterval(() => { secs++; $('#ptimer').textContent = `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, '0')}`; }, 1000);
+
+// ---------------- SHORTCUTS ----------------
+const KS = [
+  ['Tools', [['Pen', ['P'], 'p'], ['Highlighter', ['H'], 'h'], ['Eraser', ['E'], 'e'], ['Lasso', ['L'], 'l'], ['Text box', ['T'], 't'], ['Shapes', ['S'], 's'], ['Previous tool', ['Tab'], 'tab']]],
+  ['Edit', [['Undo', ['Ctrl', 'Z'], 'ctrl+z'], ['Redo', ['Ctrl', 'Shift', 'Z'], 'ctrl+shift+z'], ['Copy / paste', ['Ctrl', 'C / V'], 'ctrl+c'], ['Duplicate', ['Ctrl', 'D'], 'ctrl+d'], ['Delete selection', ['Del'], 'delete'], ['Select all on page', ['Ctrl', 'A'], 'ctrl+a']]],
+  ['Navigate', [['Search', ['Ctrl', 'F'], 'ctrl+f'], ['New page', ['Ctrl', 'N'], 'ctrl+n'], ['Next / previous page', ['PgDn', 'PgUp'], 'pagedown'], ['Zoom in / out', ['Ctrl', '+ / −'], 'ctrl+='], ['Fit page', ['Ctrl', '0'], 'ctrl+0'], ['Page manager', ['Ctrl', 'G'], 'ctrl+g'], ['Switch tab', ['Ctrl', 'Tab'], 'ctrl+tab']]],
+];
+$('#ksCols').innerHTML = KS.map(([g, rows]) => `<div><h4>${g}</h4>${rows.map(([n, keys, id]) => `<div class="kr" data-k="${id}"><span>${n}</span><span>${keys.map(k => `<span class="kbd">${k}</span>`).join('')}</span></div>`).join('')}</div>`).join('');
+addEventListener('keydown', e => {
+  const k = (e.ctrlKey || e.metaKey ? 'ctrl+' : '') + (e.shiftKey && (e.ctrlKey || e.metaKey) ? 'shift+' : '') + (e.key === '-' ? '=' : e.key.toLowerCase());
+  const row = $(`.kr[data-k="${CSS.escape(k)}"]`) || $(`.kr[data-k="${CSS.escape(e.key.toLowerCase())}"]`) || (e.key === 'PageUp' ? $('.kr[data-k="pagedown"]') : null);
+  if (!row) return;
+  if (e.ctrlKey || e.metaKey) e.preventDefault();
+  row.classList.add('hit'); setTimeout(() => row.classList.remove('hit'), 600);
+});
+</script>
+</body>
+</html>

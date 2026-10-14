@@ -1,0 +1,517 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BestNote · Eraser, lasso, shapes</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Sans+Arabic:wght@400;500;600&family=Caveat:wght@500;700&family=Material+Symbols+Rounded:opsz,wght,FILL@24,400,0..1&family=Fraunces:opsz,wght@9..144,500;9..144,600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../tokens.css">
+<link rel="stylesheet" href="../board.css">
+<script src="../shell.js"></script>
+<script src="../editor-kit.js"></script>
+<style>
+  .pg { width: 600px; height: 776px; --lh: 32px; --top: 96px; --ml: 64px; }
+  .ed .tb.top { position: absolute; top: 12px; left: 50%; transform: translateX(-50%); z-index: 5; }
+  .ed-pages.side { align-items: flex-end; padding: 22px 120px 40px 0; }
+  [dir="rtl"] .ed-pages.side { align-items: flex-start; padding: 22px 0 40px 120px; }
+  .erpop { position: absolute; top: 70px; inset-inline-start: 24px; width: 300px; z-index: 6; padding: 14px; --ax: 92px; }
+  .ed .tb.left { position: absolute; top: 12px; inset-inline-start: 24px; z-index: 5; }
+  .size-prev { height: 92px; border-radius: 14px; background-color: var(--paper); border: 1px solid var(--outline); display: grid; place-items: center; margin: 10px 0 4px; position: relative; overflow: hidden; }
+  .size-prev i { display: block; border-radius: 50%; border: 1.5px dashed var(--ink-2); background: rgba(255,255,255,.5); transition: width var(--dur-short), height var(--dur-short); }
+  .size-prev span { position: absolute; bottom: 6px; inset-inline-end: 10px; font-size: 10.5px; color: #8a8f99; }
+  .opt { display: flex; align-items: center; justify-content: space-between; font-size: 12.5px; color: var(--ink-2); padding: 7px 2px; gap: 10px; }
+  .erpop .btn.ghost { width: 100%; margin-top: 6px; }
+  .mode-note { font-size: 11.5px; color: var(--ink-3); margin-top: 8px; min-height: 30px; }
+  .w-fade { transition: opacity var(--dur-medium) var(--ease-standard), transform var(--dur-medium) var(--ease-standard); }
+  .gone { opacity: 0 !important; }
+
+  /* lasso */
+  .sel-ui rect.bb { fill: color-mix(in srgb, var(--accent) 5%, transparent); stroke: var(--accent); stroke-width: 1.4; stroke-dasharray: 5 4; vector-effect: non-scaling-stroke; cursor: move; }
+  .sel-ui .h { fill: var(--chrome-solid); stroke: var(--accent); stroke-width: 2; vector-effect: non-scaling-stroke; cursor: nwse-resize; }
+  .sel-ui .rot { fill: var(--accent); stroke: var(--chrome-solid); stroke-width: 2; vector-effect: non-scaling-stroke; cursor: grab; }
+  .sel-ui line { stroke: var(--accent); stroke-width: 1.4; vector-effect: non-scaling-stroke; }
+  .lasso-path { fill: color-mix(in srgb, var(--accent) 6%, transparent); stroke: var(--accent); stroke-width: 1.6; }
+  .ctx { position: absolute; z-index: 6; transform: translate(-50%, 0); transition: opacity var(--dur-short); }
+  .ctx.lockd > span:not(.lk) { opacity: .35; pointer-events: none; }
+  .sub { position: absolute; z-index: 7; padding: 10px; display: none; gap: 8px; align-items: center; transform: translateX(-50%); }
+  .sub.on { display: flex; }
+  .sub b { width: 26px; height: 26px; border-radius: 50%; background: var(--c); cursor: pointer; box-shadow: inset 0 0 0 1px rgba(0,0,0,.12); }
+  .lock-badge { position: absolute; z-index: 6; display: none; align-items: center; gap: 4px; font-size: 11px; font-weight: 600; padding: 3px 8px; border-radius: 999px; background: var(--ink); color: var(--chrome-solid); transform: translate(-50%, 0); }
+  .lock-badge .ms { font-size: 14px; }
+  .typed { font: 500 19px var(--font-ui); fill: var(--pen-black); }
+  .angle-tip { position: absolute; z-index: 7; font: 600 11px var(--font-ui); background: var(--ink); color: var(--chrome-solid); padding: 3px 8px; border-radius: 8px; display: none; transform: translate(-50%, -150%); }
+
+  /* shapes + scribble */
+  .half-ed { display: flex; flex-direction: column; background: var(--surface-2) !important; }
+  .half-ed .hd { height: 40px; display: flex; align-items: center; gap: 8px; padding: 0 12px; background: var(--chrome-solid); border-bottom: 1px solid var(--outline); font-size: 13px; font-weight: 600; flex: none; }
+  .half-ed .hd .ms { font-size: 19px; color: var(--accent); }
+  .half-ed .hd .btn { padding: 4px 10px; font-size: 11px; }
+  .sheet-paper { position: relative; flex: 1; margin: 12px; background-color: var(--paper); box-shadow: var(--shadow-1); border-radius: 4px; overflow: hidden; direction: ltr; }
+  .sheet-paper > svg { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: none; }
+  .snap-chip { font: 600 11px var(--font-ui); fill: var(--on-accent); }
+  .snap-bg { fill: var(--accent); }
+  .snapping { opacity: 0; transform-box: fill-box; transform-origin: center; }
+  .snapping.on { animation: pop var(--dur-long) var(--spring-snappy) forwards; }
+  @keyframes pop { 0% { opacity: 0; transform: scale(.6); } 25% { opacity: 1; transform: scale(1.06); } 80% { opacity: 1; transform: none; } 100% { opacity: 0; } }
+  .hold-ring { fill: none; stroke: var(--accent); stroke-width: 2; opacity: 0; }
+  .hold-ring.on { animation: holdR 420ms linear forwards; }
+  @keyframes holdR { from { opacity: .9; stroke-dasharray: 0 100; } to { opacity: .9; stroke-dasharray: 100 0; } }
+  .dissolve { animation: dissolve 520ms var(--ease-standard) forwards; transform-box: fill-box; transform-origin: center; }
+  @keyframes dissolve { to { opacity: 0; transform: scale(.96) translateY(-3px); filter: blur(2px); } }
+  .puff circle { fill: var(--ink-3); animation: puff 600ms var(--ease-standard) forwards; }
+  @keyframes puff { from { opacity: .7; } to { opacity: 0; transform: translate(var(--dx), var(--dy)); } }
+  .caption { font-size: 12.5px; color: var(--ink-2); margin: 10px auto 0; max-width: 540px; text-align: center; }
+  .hint-sm { position: absolute; bottom: 8px; inset-inline-end: 12px; font: 500 11px var(--font-ui); color: #8a8f99; pointer-events: none; }
+</style>
+</head>
+<body>
+<div class="page-wrap">
+  <h1>Eraser, lasso & shapes</h1>
+  <p class="lead muted">Erase the way you mean it, select and transform anything, and let rough shapes snap into clean ones. Everything here is live: erase the page, drag the selection and its handles, draw a circle, scribble over a word.</p>
+
+  <div class="variants">
+    <!-- ============ ERASER ============ -->
+    <div>
+      <div class="variant-label">State 1 · Eraser · pixel / stroke / highlighter only · size preview</div>
+      <div class="device tablet">
+        <div class="status"><span>9:41</span><span><i class="ms">signal_cellular_alt</i><i class="ms">wifi</i><i class="ms">battery_full</i></span></div>
+        <div class="ed" id="ed1">
+          <div class="ed-bar"><span class="ib"><i class="ms flip-rtl">arrow_back</i></span><div class="ed-title"><b>Biology 110</b><small>Cell respiration · p.6</small></div><span class="grow"></span><span class="ib"><i class="ms">more_vert</i></span></div>
+          <div class="ed-canvas pen-cursor" id="cv1">
+            <div class="tb left">
+              <span class="t"><i class="ms">ink_pen</i></span><span class="t"><i class="ms">ink_highlighter</i></span><span class="t on"><i class="ms">ink_eraser</i></span><span class="t"><i class="ms">lasso_select</i></span><span class="t"><i class="ms">category</i></span>
+              <span class="sep"></span><span class="t" id="undoEr"><i class="ms">undo</i></span>
+            </div>
+            <div class="panel erpop pop-arrow">
+              <div class="seg2" id="erModes">
+                <span data-v="pixel"><i class="ms">blur_on</i>Pixel</span>
+                <span class="on" data-v="stroke"><i class="ms">gesture</i>Whole stroke</span>
+                <span data-v="hl"><i class="ms">ink_highlighter</i>Highlighter only</span>
+              </div>
+              <div class="mode-note" id="modeNote">Removes a whole stroke the moment you touch it.</div>
+              <div class="size-prev p-ruled" style="--lh:22px;--top:0px"><i id="sizeDot" style="width:28px;height:28px"></i><span id="sizeTxt">Medium · 28 px</span></div>
+              <label class="slider">Size <output id="oSz">28 px</output><input type="range" id="sz" min="8" max="80" value="28"></label>
+              <div class="opt">Switch back to pen after erasing<span class="switch on"><i></i></span></div>
+              <div class="opt">S Pen button is the eraser<span class="switch on"><i></i></span></div>
+              <button class="btn ghost danger" id="clearPg"><i class="ms">delete_sweep</i>Erase entire page…</button>
+            </div>
+            <div class="ed-scroll"><div class="ed-pages side">
+              <div class="paper pg p-ruled p-margin">
+                <svg viewBox="0 0 600 776" id="erSvg">
+                  <defs><mask id="pxMask" maskUnits="userSpaceOnUse" x="0" y="0" width="600" height="776"><rect width="600" height="776" fill="#fff"/><g id="pxCuts"></g></mask></defs>
+                  <g mask="url(#pxMask)">
+                    <g id="erHl"></g>
+                    <g id="erInk"></g>
+                  </g>
+                </svg>
+              </div>
+            </div></div>
+            <div class="hcur eraser" id="cur1" style="--s:28px"></div>
+          </div>
+        </div>
+      </div>
+      <div class="demo-bar"><button class="btn tonal" id="resetEr"><i class="ms">restart_alt</i>Reset page</button><span class="muted">Try each mode. Highlighter-only leaves the ink untouched, even when you rub right over it.</span></div>
+    </div>
+
+    <!-- ============ LASSO ============ -->
+    <div>
+      <div class="variant-label">State 2 · Lasso selection · move, resize, rotate · context menu</div>
+      <div class="device tablet">
+        <div class="status"><span>9:41</span><span><i class="ms">signal_cellular_alt</i><i class="ms">wifi</i><i class="ms">battery_full</i></span></div>
+        <div class="ed" id="ed2">
+          <div class="ed-bar"><span class="ib"><i class="ms flip-rtl">arrow_back</i></span><div class="ed-title"><b>Physics 201</b><small>Projectile motion · p.9</small></div><span class="grow"></span><span class="ib"><i class="ms">more_vert</i></span></div>
+          <div class="ed-canvas" id="cv2">
+            <div class="tb top">
+              <span class="t"><i class="ms">ink_pen</i></span><span class="t"><i class="ms">ink_highlighter</i></span><span class="t"><i class="ms">ink_eraser</i></span><span class="t on"><i class="ms">lasso_select</i></span><span class="t"><i class="ms">category</i></span>
+              <span class="sep"></span><span class="t"><i class="ms">undo</i></span>
+            </div>
+            <div class="ed-scroll" style="overflow:hidden"><div class="ed-pages" style="padding-top:22px">
+              <div class="paper pg p-ruled p-margin" id="lassoPage">
+                <svg viewBox="0 0 600 776" id="lsSvg">
+                  <text class="hw c-navy" x="80" y="80" font-size="42">Projectile motion</text>
+                  <path class="stroke c-navy" stroke-width="2.6" d="M80 91 C 160 87, 250 93, 330 88"/>
+                  <text class="hw" x="80" y="123" font-size="27">horizontal: v cos θ, constant (no air)</text>
+                  <text class="hw" x="80" y="155" font-size="27">vertical: v sin θ − g t</text>
+                  <g id="selG">
+                    <g id="selInk">
+                      <path class="stroke" d="M110 380 L 470 380"/>
+                      <path class="stroke" d="M110 380 L 110 214"/>
+                      <path class="stroke c-blue" stroke-width="2.6" d="M110 380 C 180 210, 360 210, 440 380"/>
+                      <path class="stroke c-red" d="M110 380 L 160 318 M 148 322 L 161 317 L 158 331"/>
+                      <path class="stroke" stroke-width="1.6" d="M140 380 A 30 30 0 0 0 130 357"/>
+                      <text class="hw" x="146" y="368" font-size="20">θ</text>
+                      <text class="hw c-red" x="165" y="318" font-size="22">v₀</text>
+                      <path class="stroke" stroke-dasharray="4 5" stroke-width="1.5" d="M275 252 V 380"/>
+                      <text class="hw" x="282" y="318" font-size="20">H</text>
+                      <path class="stroke" stroke-width="1.6" d="M112 398 H 438 M 120 392 L 112 398 L 120 404 M 430 392 L 438 398 L 430 404"/>
+                      <text class="hw" x="262" y="424" font-size="22">R</text>
+                      <text class="hw sel-txt" x="96" y="475" font-size="28">R = v² sin 2θ / g</text>
+                    </g>
+                    <g class="sel-ui" id="selUi">
+                      <rect class="bb" id="bb"/>
+                      <line id="rotLine"/>
+                      <circle class="h" data-h="nw" r="6"/><circle class="h" data-h="ne" r="6"/><circle class="h" data-h="se" r="6"/><circle class="h" data-h="sw" r="6"/>
+                      <circle class="rot" id="rotH" r="7"/>
+                    </g>
+                  </g>
+                  <text class="hw c-green" x="360" y="155" font-size="23">→ max range at 45°</text>
+                  <text class="hw" x="80" y="539" font-size="27">time of flight: T = 2 v sin θ / g</text>
+                  <path id="lassoTrace" class="lasso-path marching" d="M90 200 C 60 300, 70 470, 140 500 C 300 520, 420 500, 490 420 C 520 330, 480 200, 380 196 C 260 190, 140 180, 90 200 Z" style="pointer-events:none"/>
+                </svg>
+              </div>
+            </div></div>
+            <div class="panel hmenu ctx" id="ctx">
+              <span data-a="copy"><i class="ms">content_copy</i>Copy</span>
+              <span data-a="cut"><i class="ms">content_cut</i>Cut</span>
+              <span data-a="dup"><i class="ms">library_add</i>Duplicate</span>
+              <i class="sep"></i>
+              <span data-a="color"><i class="ms">palette</i>Recolor</span>
+              <span data-a="thick"><i class="ms">line_weight</i>Thickness</span>
+              <span data-a="text"><i class="ms">text_fields</i>To text</span>
+              <span data-a="ai" class="ai"><i class="ms">auto_awesome</i>Beautify</span>
+              <i class="sep"></i>
+              <span data-a="lock" class="lk"><i class="ms">lock</i>Lock</span>
+              <span data-a="front"><i class="ms">flip_to_front</i>To front</span>
+              <span data-a="del" style="color:var(--danger)"><i class="ms">delete</i>Delete</span>
+            </div>
+            <div class="panel sub" id="subColor"><b style="--c:var(--pen-black)"></b><b style="--c:var(--pen-navy)"></b><b style="--c:var(--pen-red)"></b><b style="--c:var(--pen-green)"></b><b style="--c:var(--pen-violet)"></b><b style="--c:var(--pen-orange)"></b></div>
+            <div class="panel sub" id="subThick" style="width:220px"><label class="slider" style="margin:0;flex:1">Thickness <output id="oTh">100%</output><input type="range" id="th" min="40" max="250" value="100"></label></div>
+            <div class="lock-badge" id="lockBadge"><i class="ms">lock</i>Locked · tap to unlock</div>
+            <div class="angle-tip" id="angTip">0°</div>
+            <div class="toast-edge" id="ltoast" style="opacity:0;transition:opacity var(--dur-medium)"><i class="ms">check_circle</i><span>Copied</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="demo-bar"><button class="btn tonal" id="resetSel"><i class="ms">restart_alt</i>Reset selection</button><span class="muted">Drag inside to move (spring on release), corners to resize, the top knob to rotate (snaps at 0/45/90°). Try Recolor, Thickness, To text, Beautify, Lock, Duplicate.</span></div>
+    </div>
+
+    <!-- ============ SHAPES + SCRIBBLE ============ -->
+    <div>
+      <div class="variant-label">State 3 · Shape snapping · scribble to erase</div>
+      <div class="ed-row">
+        <div>
+          <div class="device tablet half">
+            <div class="status"><span>9:41</span><span><i class="ms">battery_full</i></span></div>
+            <div class="half-ed">
+              <div class="hd"><i class="ms">category</i>Draw and hold to snap<span class="grow"></span><button class="btn tonal" id="shReplay"><i class="ms">replay</i>Replay</button><button class="btn ghost" id="shClear">Clear</button></div>
+              <div class="sheet-paper p-dots" style="--g:22px">
+                <svg viewBox="0 0 516 318" id="shSvg"><g id="shDemo"></g><g id="shUser"></g></svg>
+                <span class="hint-sm">draw a circle, an ellipse or a line here</span>
+              </div>
+            </div>
+          </div>
+          <p class="caption">A hand-drawn circle becomes a perfect one with a small spring settle and a tick haptic. Lines go straight, triangles close their corners. Release without pausing to keep your own stroke.</p>
+        </div>
+        <div>
+          <div class="device tablet half">
+            <div class="status"><span>9:41</span><span><i class="ms">battery_full</i></span></div>
+            <div class="half-ed">
+              <div class="hd"><i class="ms">gesture</i>Scribble to erase<span class="grow"></span><button class="btn tonal" id="scReplay"><i class="ms">replay</i>Replay</button></div>
+              <div class="sheet-paper p-ruled" style="--lh:38px;--top:12px">
+                <svg viewBox="0 0 516 318" id="scSvg">
+                  <g id="scWords"></g>
+                  <path id="scDemo" class="stroke" stroke-width="2.4" style="stroke:var(--pen-black)"/>
+                  <g id="scFix"></g>
+                </svg>
+                <span class="hint-sm">scribble over any word</span>
+              </div>
+            </div>
+          </div>
+          <p class="caption">Scribble back and forth over a word with the pen: the word and the scribble dissolve together. No tool switch, one undo step.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const { $, $$, el } = BN;
+function rng(seed) { return () => (seed = (seed * 16807) % 2147483647) / 2147483647; }
+// Lay out handwriting words as separate "strokes" so stroke-erasing works per word.
+function writeWords(g, lines, opts = {}) {
+  const meas = el('text', { class: 'hw', 'font-size': opts.size || 27 }, g);
+  lines.forEach(([y, str, cls = '', x0 = 80, size]) => {
+    let x = x0;
+    str.split(' ').forEach(w => {
+      meas.textContent = w; meas.setAttribute('font-size', size || opts.size || 27);
+      const t = el('text', { class: 'hw w-fade stk ' + cls, x, y, 'font-size': size || opts.size || 27 }, g);
+      t.textContent = w; x += meas.getComputedTextLength() + (size || opts.size || 27) * .28;
+    });
+  });
+  meas.remove();
+}
+
+// ---------------- ERASER ----------------
+let erMode = 'stroke', erSize = 28, erUndo = [];
+function buildEraserPage() {
+  $('#erInk').innerHTML = ''; $('#erHl').innerHTML = ''; $('#pxCuts').innerHTML = '';
+  const hl = [[78, 147, 330, 'var(--hl-yellow)'], [78, 243, 270, 'var(--hl-green)'], [78, 371, 380, 'var(--hl-yellow)'], [78, 467, 200, 'var(--hl-pink)']];
+  hl.forEach(([x, y, w, c]) => { const p = el('path', { class: 'hl-stroke w-fade', d: `M${x} ${y} H ${x + w}` }, $('#erHl')); p.style.stroke = c; });
+  const ink = $('#erInk');
+  const t = el('text', { class: 'hw c-navy stk w-fade', x: 80, y: 80, 'font-size': 42 }, ink); t.textContent = 'Cellular respiration';
+  el('path', { class: 'stroke c-navy stk w-fade', 'stroke-width': 2.6, d: 'M80 91 C 170 87, 280 93, 382 88' }, ink);
+  writeWords(ink, [
+    [155, 'glucose + 6 O₂ → 6 CO₂ + 6 H₂O + ATP'],
+    [187, '3 stages, all in the cell:'],
+    [251, '1. glycolysis (cytoplasm) → 2 ATP'],
+    [283, '2. Krebs cycle (matrix) → 2 ATP'],
+    [315, '3. electron transport chain → ~34 ATP'],
+    [379, 'total ≈ 38 ATP per glucose (max)'],
+    [475, 'no O₂ → fermentation, only 2 ATP', 'c-red'],
+  ]);
+  // mitochondrion sketch
+  const g = el('g', { class: 'stk w-fade' }, ink);
+  el('ellipse', { class: 'stroke', cx: 495, cy: 205, rx: 62, ry: 34 }, g);
+  el('path', { class: 'stroke', 'stroke-width': 1.8, d: 'M445 207 c 9 -20 16 20 25 0 s 16 20 25 0 s 16 20 25 0 s 16 20 25 0' }, g);
+  const lb = el('text', { class: 'hw c-green stk w-fade', x: 448, y: 266, 'font-size': 21 }, ink); lb.textContent = 'mitochondrion';
+}
+const notes = { pixel: 'Erases only the pixels under the eraser, like a real rubber.', stroke: 'Removes a whole stroke the moment you touch it.', hl: 'Only removes highlighter. Ink underneath is never touched.' };
+BN.seg($('#erModes'), v => { erMode = v; $('#modeNote').textContent = notes[v]; });
+$('#sz').oninput = e => {
+  erSize = +e.target.value; $('#oSz').textContent = erSize + ' px';
+  $('#sizeDot').style.width = $('#sizeDot').style.height = erSize + 'px';
+  $('#sizeTxt').textContent = (erSize < 20 ? 'Fine' : erSize < 44 ? 'Medium' : 'Large') + ' · ' + erSize + ' px';
+  $('#cur1').style.setProperty('--s', erSize + 'px');
+};
+BN.hover($('#cv1'), $('#cur1'));
+const erSvg = $('#erSvg'); erSvg.style.touchAction = 'none';
+let erPath = null, erPts = [], erBatch = [];
+function hitAt(e) {
+  const r = erSize / 2 * (erSvg.getBoundingClientRect().width / 600), hits = new Set();
+  for (let k = 0; k < 9; k++) {
+    const a = k / 8 * Math.PI * 2, rr = k === 8 ? 0 : r;
+    document.elementsFromPoint(e.clientX + Math.cos(a) * rr, e.clientY + Math.sin(a) * rr).forEach(x => {
+      const s = x.closest?.('.stk, .hl-stroke'); if (s && erSvg.contains(s)) hits.add(s);
+    });
+  }
+  return [...hits];
+}
+function erase(e) {
+  if (erMode === 'pixel') { erPts.push(BN.svgPt(erSvg, e)); erPath.setAttribute('d', BN.smooth(erPts)); return; }
+  hitAt(e).forEach(s => {
+    const isHl = s.classList.contains('hl-stroke');
+    if (erMode === 'hl' && !isHl) return;
+    if (s.classList.contains('gone')) return;
+    s.classList.add('gone'); erBatch.push(s);
+  });
+}
+erSvg.addEventListener('pointerdown', e => {
+  erSvg.setPointerCapture(e.pointerId); $('#ed1').classList.add('writing'); erBatch = [];
+  if (erMode === 'pixel') { erPts = [BN.svgPt(erSvg, e)]; erPath = el('path', { d: '', fill: 'none', stroke: '#000', 'stroke-width': erSize, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }, $('#pxCuts')); erPts.push({ x: erPts[0].x + .1, y: erPts[0].y }); erPath.setAttribute('d', BN.smooth(erPts)); }
+  else erase(e);
+  erSvg.dataset.down = 1;
+});
+erSvg.addEventListener('pointermove', e => { if (erSvg.dataset.down) erase(e); });
+const erUp = () => { if (!erSvg.dataset.down) return; delete erSvg.dataset.down; $('#ed1').classList.remove('writing'); if (erMode === 'pixel') erUndo.push([erPath]); else if (erBatch.length) erUndo.push(erBatch); erPath = null; };
+erSvg.addEventListener('pointerup', erUp); erSvg.addEventListener('pointercancel', erUp);
+$('#undoEr').onclick = () => { const b = erUndo.pop(); if (!b) return; b.forEach(x => x.parentNode?.id === 'pxCuts' ? x.remove() : x.classList.remove('gone')); };
+$('#clearPg').onclick = () => { const all = $$('#erSvg .stk, #erSvg .hl-stroke').filter(x => !x.classList.contains('gone')); all.forEach(x => x.classList.add('gone')); erUndo.push(all); };
+$('#resetEr').onclick = () => { buildEraserPage(); erUndo = []; };
+
+// ---------------- LASSO ----------------
+const lsSvg = $('#lsSvg'), selG = $('#selG'), selInk = $('#selInk');
+let T, bb0, locked = false;
+function resetSel() { T = { tx: 0, ty: 0, s: 1, r: 0 }; locked = false; $('#ctx').classList.remove('lockd'); $('#lockBadge').style.display = 'none'; layoutSel(); }
+function center() { return { x: bb0.x + bb0.width / 2, y: bb0.y + bb0.height / 2 }; }
+function layoutSel() {
+  $('#selUi').style.display = 'none'; bb0 = selInk.getBBox(); $('#selUi').style.display = '';
+  const p = 10, b = { x: bb0.x - p, y: bb0.y - p, w: bb0.width + 2 * p, h: bb0.height + 2 * p }, c = center();
+  selG.setAttribute('transform', `translate(${c.x + T.tx} ${c.y + T.ty}) rotate(${T.r}) scale(${T.s}) translate(${-c.x} ${-c.y})`);
+  const bbr = $('#bb'); bbr.setAttribute('x', b.x); bbr.setAttribute('y', b.y); bbr.setAttribute('width', b.w); bbr.setAttribute('height', b.h);
+  const hs = { nw: [b.x, b.y], ne: [b.x + b.w, b.y], se: [b.x + b.w, b.y + b.h], sw: [b.x, b.y + b.h] };
+  $$('#selUi .h').forEach(h => { const [x, y] = hs[h.dataset.h]; h.setAttribute('cx', x); h.setAttribute('cy', y); h.setAttribute('r', 6 / T.s); });
+  const top = b.y - 30 / T.s;
+  $('#rotH').setAttribute('cx', c.x); $('#rotH').setAttribute('cy', top); $('#rotH').setAttribute('r', 7 / T.s);
+  const L = $('#rotLine'); L.setAttribute('x1', c.x); L.setAttribute('x2', c.x); L.setAttribute('y1', b.y); L.setAttribute('y2', top);
+  placeMenu();
+}
+function placeMenu() {
+  const cv = $('#cv2'), r = $('#bb').getBoundingClientRect(), s = BN.local(cv, { clientX: 0, clientY: 0 }).s, cr = cv.getBoundingClientRect();
+  const x = (r.left + r.width / 2 - cr.left) / s, y = (r.top - cr.top) / s;
+  const ctx = $('#ctx'); ctx.style.left = Math.max(330, Math.min(cv.offsetWidth - 330, x)) + 'px'; ctx.style.top = Math.min(cv.offsetHeight - 70, (r.bottom - cr.top) / s + 14) + 'px';
+  ['#subColor', '#subThick'].forEach(id => { $(id).style.left = ctx.style.left; $(id).style.top = (parseFloat(ctx.style.top) + 64) + 'px'; });
+  const lb = $('#lockBadge'); lb.style.left = x + 'px'; lb.style.top = y - 34 + 'px';
+}
+let dragMode = null, d0;
+lsSvg.addEventListener('pointerdown', e => {
+  const t = e.target;
+  if (locked) { if (t.closest('#selG')) { locked = false; $('#ctx').classList.remove('lockd'); $('#lockBadge').style.display = 'none'; } return; }
+  if (t.classList.contains('h')) dragMode = 'scale'; else if (t.id === 'rotH') dragMode = 'rot'; else if (t.closest('#selG')) dragMode = 'move'; else return;
+  lsSvg.setPointerCapture(e.pointerId);
+  const p = BN.svgPt(lsSvg, e), c = center();
+  const cc = { x: c.x + T.tx, y: c.y + T.ty };
+  d0 = { p, T: { ...T }, dist: Math.hypot(p.x - cc.x, p.y - cc.y), cc };
+  $('#ctx').style.opacity = 0; $$('.sub').forEach(x => x.classList.remove('on'));
+  $('#lassoTrace').style.opacity = 0;
+});
+lsSvg.addEventListener('pointermove', e => {
+  if (!dragMode) return;
+  const p = BN.svgPt(lsSvg, e);
+  if (dragMode === 'move') { T.tx = d0.T.tx + p.x - d0.p.x; T.ty = d0.T.ty + p.y - d0.p.y; }
+  if (dragMode === 'scale') T.s = Math.max(.4, Math.min(2.2, d0.T.s * Math.hypot(p.x - d0.cc.x, p.y - d0.cc.y) / d0.dist));
+  if (dragMode === 'rot') {
+    let a = Math.atan2(p.y - d0.cc.y, p.x - d0.cc.x) * 180 / Math.PI + 90;
+    const snap = [0, 45, 90, 135, 180, -45, -90, -135, -180].find(s => Math.abs(a - s) < 4);
+    if (snap !== undefined) a = snap;
+    T.r = a;
+    const tip = $('#angTip'), cv = $('#cv2'), s = BN.local(cv, e);
+    tip.style.display = 'block'; tip.style.left = s.x + 'px'; tip.style.top = s.y + 'px'; tip.textContent = Math.round(a) + '°' + (snap !== undefined ? ' · snapped' : '');
+  }
+  layoutSel();
+});
+const lsUp = () => { if (!dragMode) return; dragMode = null; $('#ctx').style.opacity = 1; $('#angTip').style.display = 'none'; layoutSel(); };
+lsSvg.addEventListener('pointerup', lsUp); lsSvg.addEventListener('pointercancel', lsUp);
+function toast(msg) { const t = $('#ltoast'); t.querySelector('span').textContent = msg; t.style.opacity = 1; clearTimeout(t._t); t._t = setTimeout(() => t.style.opacity = 0, 1600); }
+let thickBase = new Map();
+$('#ctx').addEventListener('click', e => {
+  const a = e.target.closest('[data-a]')?.dataset.a; if (!a) return;
+  $$('.sub').forEach(x => x.classList.remove('on'));
+  if (a === 'copy') toast('Copied 12 strokes · paste with a long-press');
+  if (a === 'cut') { selG.style.opacity = .25; toast('Cut · paste anywhere'); setTimeout(() => selG.style.opacity = '', 1200); }
+  if (a === 'dup') { const c = selInk.cloneNode(true); c.removeAttribute('id'); c.setAttribute('transform', 'translate(24 24)'); c.style.opacity = .55; selG.insertBefore(c, selInk); toast('Duplicated'); setTimeout(() => c.remove(), 1600); }
+  if (a === 'color') $('#subColor').classList.add('on');
+  if (a === 'thick') $('#subThick').classList.add('on');
+  if (a === 'text') {
+    const t = $('.sel-txt', selInk);
+    if (t.classList.contains('typed')) { t.setAttribute('class', 'hw sel-txt'); t.setAttribute('font-size', 28); toast('Back to ink'); }
+    else { t.setAttribute('class', 'typed sel-txt'); t.removeAttribute('font-size'); toast('Converted: “R = v² sin 2θ / g” · editable text'); }
+    layoutSel();
+  }
+  if (a === 'ai') {
+    selInk.style.transition = 'filter var(--dur-medium)'; selInk.style.filter = 'drop-shadow(0 0 6px var(--accent))';
+    setTimeout(() => { selInk.style.filter = ''; toast('Beautified: lines straightened, arrows welded'); }, 700);
+  }
+  if (a === 'lock') { locked = true; $('#ctx').classList.add('lockd'); $('#lockBadge').style.display = 'flex'; placeMenu(); toast('Locked: can\'t be moved or erased'); }
+  if (a === 'front') toast('Brought to front');
+  if (a === 'del') { selG.style.transition = 'opacity var(--dur-medium)'; selG.style.opacity = 0; $('#ctx').style.opacity = 0; toast('Deleted · Undo'); setTimeout(() => { selG.style.opacity = ''; $('#ctx').style.opacity = 1; }, 1600); }
+});
+$$('#subColor b').forEach(b => b.onclick = () => {
+  const c = getComputedStyle(b).getPropertyValue('--c');
+  $$('path, text', selInk).forEach(x => { if (x.tagName === 'text') x.style.fill = c; else x.style.stroke = c; });
+  $('#subColor').classList.remove('on');
+});
+$('#th').oninput = e => {
+  $('#oTh').textContent = e.target.value + '%';
+  $$('path', selInk).forEach(p => { if (!thickBase.has(p)) thickBase.set(p, parseFloat(getComputedStyle(p).strokeWidth)); p.style.strokeWidth = thickBase.get(p) * e.target.value / 100; });
+};
+$('#resetSel').onclick = () => { $$('path, text', selInk).forEach(x => { x.style.fill = ''; x.style.stroke = ''; x.style.strokeWidth = ''; }); $('#th').value = 100; $('#oTh').textContent = '100%'; $('#lassoTrace').style.opacity = 1; resetSel(); };
+
+// ---------------- SHAPES ----------------
+const shSvg = $('#shSvg');
+function circlePts(cx, cy, rx, ry, n, wob, seed, rot = 0) {
+  const r = rng(seed), pts = [];
+  for (let i = 0; i <= n; i++) {
+    const a = i / n * Math.PI * 2.08 + rot, k = 1 + (wob ? (Math.sin(a * 3 + 1) * .05 + (r() - .5) * .05) : 0);
+    pts.push({ x: cx + Math.cos(a) * rx * k, y: cy + Math.sin(a) * ry * k * (wob ? 1.04 : 1) });
+  }
+  if (!wob) pts[n] = { ...pts[0] }; else pts[n] = { x: pts[n].x + 6, y: pts[n].y - 8 };
+  return pts;
+}
+function polyPts(corners, per, wob, seed) {
+  const r = rng(seed), pts = [];
+  for (let c = 0; c < corners.length; c++) {
+    const a = corners[c], b = corners[(c + 1) % corners.length];
+    for (let i = 0; i < per; i++) { const t = i / per; pts.push({ x: a[0] + (b[0] - a[0]) * t + (wob ? Math.sin(t * Math.PI) * 6 * (r() - .3) : 0), y: a[1] + (b[1] - a[1]) * t + (wob ? Math.sin(t * Math.PI) * 7 * (r() - .4) : 0) }); }
+  }
+  pts.push(wob ? { x: corners[0][0] + 9, y: corners[0][1] + 5 } : { x: corners[0][0], y: corners[0][1] });
+  return pts;
+}
+function snapAnim(g, wob, clean, label, at, delay) {
+  return new Promise(res => setTimeout(() => {
+    const p = el('path', { class: 'stroke', 'stroke-width': 2.6 }, g); p.style.stroke = 'var(--pen-navy)';
+    let k = 1;
+    const draw = () => {
+      k += 2; p.setAttribute('d', BN.smooth(wob.slice(0, k)));
+      if (k < wob.length) return requestAnimationFrame(draw);
+      const end = wob[wob.length - 1];
+      const ring = el('circle', { class: 'hold-ring', cx: end.x, cy: end.y, r: 12, pathLength: 100 }, g);
+      requestAnimationFrame(() => ring.classList.add('on'));
+      setTimeout(() => {
+        ring.remove();
+        BN.tween(420, t => p.setAttribute('d', BN.smooth(wob.map((q, i) => ({ x: q.x + (clean[i].x - q.x) * t, y: q.y + (clean[i].y - q.y) * t })))), res);
+        const chip = el('g', { class: 'snapping' }, g);
+        const tw = label.length * 6.4 + 22;
+        el('rect', { class: 'snap-bg', x: at.x - tw / 2, y: at.y - 11, width: tw, height: 22, rx: 11 }, chip);
+        const tx = el('text', { class: 'snap-chip', x: at.x, y: at.y + 4, 'text-anchor': 'middle' }, chip); tx.textContent = label;
+        requestAnimationFrame(() => chip.classList.add('on'));
+      }, 440);
+    };
+    draw();
+  }, delay));
+}
+function shapesDemo() {
+  const g = $('#shDemo'); g.innerHTML = '';
+  snapAnim(g, circlePts(110, 150, 62, 62, 70, true, 3, -1.9), circlePts(110, 150, 62, 62, 70, false, 3, -1.9), 'Circle', { x: 110, y: 240 }, 100);
+  const tri = [[205, 210], [262, 92], [322, 210]];
+  snapAnim(g, polyPts(tri, 22, true, 4), polyPts(tri, 22, false, 4), 'Triangle', { x: 262, y: 240 }, 1300);
+  const ar = []; for (let i = 0; i <= 30; i++) ar.push({ x: 360 + i * 4.3, y: 190 - i * 2.6 + Math.sin(i / 3) * 4 });
+  const arC = ar.map((q, i) => ({ x: 360 + i * 4.3, y: 190 - i * 2.6 }));
+  snapAnim(g, ar, arC, 'Line', { x: 425, y: 240 }, 2500).then(() => { const h = el('path', { class: 'stroke', 'stroke-width': 2.6, d: 'M480 112 L 489 112 L 485 121' }, g); h.style.stroke = 'var(--pen-navy)'; h.setAttribute('d', 'M474 108 L 489 112 L 481 125'); });
+}
+shapesDemo(); $('#shReplay').onclick = shapesDemo; $('#shClear').onclick = () => { $('#shDemo').innerHTML = ''; $('#shUser').innerHTML = ''; };
+// Draw your own: closed → ellipse, straight → line
+BN.ink(shSvg, () => ({ color: 'var(--pen-navy)', width: 2.6, layer: $('#shUser') }), (path, pts) => {
+  const n = pts.length, a = pts[0], b = pts[n - 1];
+  let len = 0; for (let i = 1; i < n; i++) len += Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y);
+  const xs = pts.map(p => p.x), ys = pts.map(p => p.y);
+  const bx = { x: Math.min(...xs), y: Math.min(...ys), X: Math.max(...xs), Y: Math.max(...ys) };
+  const chord = Math.hypot(b.x - a.x, b.y - a.y);
+  let target, label, at;
+  if (chord < len * .22 && len > 80) {
+    const cx = (bx.x + bx.X) / 2, cy = (bx.y + bx.Y) / 2; let rx = (bx.X - bx.x) / 2, ry = (bx.Y - bx.y) / 2;
+    if (Math.abs(rx - ry) / Math.max(rx, ry) < .18) rx = ry = (rx + ry) / 2;
+    const a0 = Math.atan2(a.y - cy, a.x - cx);
+    target = pts.map((_, i) => { const t = a0 + i / (n - 1) * Math.PI * 2; return { x: cx + Math.cos(t) * rx, y: cy + Math.sin(t) * ry }; });
+    label = rx === ry ? 'Circle' : 'Ellipse'; at = { x: cx, y: bx.Y + 20 };
+  } else if (chord > len * .9 && len > 40) {
+    target = pts.map((_, i) => ({ x: a.x + (b.x - a.x) * i / (n - 1), y: a.y + (b.y - a.y) * i / (n - 1) }));
+    label = 'Line'; at = { x: (a.x + b.x) / 2, y: Math.max(a.y, b.y) + 20 };
+  } else return;
+  const ring = el('circle', { class: 'hold-ring', cx: b.x, cy: b.y, r: 12, pathLength: 100 }, $('#shUser'));
+  requestAnimationFrame(() => ring.classList.add('on'));
+  setTimeout(() => {
+    ring.remove();
+    BN.tween(420, t => path.setAttribute('d', BN.smooth(pts.map((q, i) => ({ x: q.x + (target[i].x - q.x) * t, y: q.y + (target[i].y - q.y) * t })))));
+    const chip = el('g', { class: 'snapping' }, $('#shUser')), tw = label.length * 6.4 + 22;
+    el('rect', { class: 'snap-bg', x: at.x - tw / 2, y: at.y - 11, width: tw, height: 22, rx: 11 }, chip);
+    const tx = el('text', { class: 'snap-chip', x: at.x, y: at.y + 4, 'text-anchor': 'middle' }, chip); tx.textContent = label;
+    requestAnimationFrame(() => chip.classList.add('on'));
+  }, 420);
+});
+
+// ---------------- SCRIBBLE ----------------
+function buildScribble() {
+  const g = $('#scWords'); g.innerHTML = ''; $('#scFix').innerHTML = ''; $('#scDemo').setAttribute('d', ''); $('#scDemo').classList.remove('dissolve');
+  writeWords(g, [[42, 'Powerhouse of the cell:', 'c-navy', 20, 28], [80, 'the mitochondira makes ATP', '', 20, 26], [118, 'inner membrane = cristae (folds)', '', 20, 26], [156, 'more folds → more surface → more ATP', '', 20, 26], [232, 'scribble works on drawings too', 'c-green', 20, 24]]);
+}
+function puff(g, x, y) { const pg = el('g', { class: 'puff' }, g); for (let i = 0; i < 9; i++) { const c = el('circle', { cx: x + (Math.random() - .5) * 60, cy: y + (Math.random() - .5) * 14, r: 1.2 + Math.random() * 1.6 }, pg); c.style.setProperty('--dx', (Math.random() - .5) * 30 + 'px'); c.style.setProperty('--dy', -6 - Math.random() * 16 + 'px'); } setTimeout(() => pg.remove(), 700); }
+function scribbleDemo() {
+  buildScribble();
+  const word = $$('#scWords text').find(t => t.textContent === 'mitochondira');
+  const bb = word.getBBox(), pts = [];
+  for (let i = 0; i <= 9; i++) pts.push({ x: bb.x + (i % 2 ? bb.width : 0) + (i % 2 ? -4 : 4), y: bb.y + 8 + i * (bb.height - 12) / 9 });
+  let k = 1; const p = $('#scDemo');
+  const step = () => { k++; p.setAttribute('d', BN.smooth(pts.slice(0, k))); if (k < pts.length) setTimeout(step, 45); else setTimeout(() => {
+    word.classList.add('dissolve'); p.classList.add('dissolve'); puff($('#scFix'), bb.x + bb.width / 2, bb.y + bb.height / 2);
+    setTimeout(() => { word.remove(); const t = el('text', { class: 'hw wr', x: bb.x, y: 80, 'font-size': 26 }, $('#scFix')); t.textContent = 'mitochondrion'; BN.writeOn($('#scFix'), { start: 0, cps: 30 }); }, 600);
+  }, 250); };
+  setTimeout(step, 400);
+}
+$('#scReplay').onclick = scribbleDemo;
+BN.ink($('#scSvg'), () => ({ color: 'var(--pen-black)', width: 2.4 }), (path, pts) => {
+  let rev = 0, dir = 0;
+  for (let i = 2; i < pts.length; i++) { const d = Math.sign(pts[i].x - pts[i - 2].x); if (d && dir && d !== dir) rev++; if (d) dir = d; }
+  if (rev < 4) return;
+  const pb = path.getBBox();
+  const hits = $$('#scWords text').filter(t => { const b = t.getBBox(); return b.x < pb.x + pb.width && b.x + b.width > pb.x && b.y < pb.y + pb.height && b.y + b.height > pb.y; });
+  if (!hits.length) return;
+  hits.forEach(h => h.classList.add('dissolve')); path.classList.add('dissolve');
+  puff($('#scFix'), pb.x + pb.width / 2, pb.y + pb.height / 2);
+  setTimeout(() => { hits.forEach(h => h.remove()); path.remove(); }, 560);
+});
+
+document.fonts.ready.then(() => { buildEraserPage(); resetSel(); scribbleDemo(); });
+addEventListener("resize", () => setTimeout(placeMenu, 50));
+</script>
+</body>
+</html>

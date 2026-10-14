@@ -1,0 +1,330 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BestNote · PDF, tabs, split view</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Sans+Arabic:wght@400;500;600&family=Caveat:wght@500;700&family=Material+Symbols+Rounded:opsz,wght,FILL@24,400,0..1&family=Fraunces:opsz,wght@9..144,500;9..144,600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../tokens.css">
+<link rel="stylesheet" href="../board.css">
+<script src="../shell.js"></script>
+<script src="../editor-kit.js"></script>
+<style>
+  :root { --slide-blue: #1f3fae; --slide-ink: #1f2430; --slide-mute: #5d6574; }
+  .ed-bar.tabs { height: 52px; padding-bottom: 0; align-items: stretch; gap: 8px; }
+  .ed-bar.tabs > .ib { align-self: center; }
+  .doc-tabs2 .pdf { color: var(--danger); }
+  .doc-tabs2 .ar { font-family: "IBM Plex Sans Arabic", var(--font-ui); }
+  .pdf-main { flex: 1; display: flex; min-height: 0; position: relative; }
+  .outline { width: 268px; flex: none; background: var(--chrome-solid); border-inline-end: 1px solid var(--outline); display: flex; flex-direction: column; min-height: 0; }
+  .outline .seg2 { margin: 12px; }
+  .ol-list { flex: 1; overflow: auto; padding: 0 8px 12px; }
+  .ol-item { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 10px; font-size: 13px; color: var(--ink-2); cursor: pointer; }
+  .ol-item:hover { background: var(--surface); }
+  .ol-item .ms { font-size: 18px; color: var(--ink-3); }
+  .ol-item em { margin-inline-start: auto; font-style: normal; font-size: 11px; color: var(--ink-3); }
+  .ol-item.on { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+  .ol-item.on .ms, .ol-item.on em { color: var(--accent); }
+  .ol-item.sub { padding-inline-start: 36px; font-size: 12.5px; }
+  .bm-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding: 4px 6px; }
+  .bm-grid div { position: relative; font-size: 11px; color: var(--ink-3); text-align: center; cursor: pointer; }
+  .bm-grid .mini { aspect-ratio: 16 / 10; border-radius: 6px; background: #fff; box-shadow: var(--shadow-1); margin-bottom: 4px; overflow: hidden; position: relative; }
+  .bm-grid .mini::before { content: ""; position: absolute; inset: 0 0 auto; height: 22%; background: var(--slide-blue); }
+  .bm-grid .mini::after { content: ""; position: absolute; left: 10%; right: 25%; top: 36%; height: 40%; background: repeating-linear-gradient(#d6dae2 0 3px, transparent 3px 9px); }
+  .bm-grid .rib { position: absolute; top: -3px; inset-inline-end: 8px; width: 12px; height: 20px; background: var(--danger); clip-path: polygon(0 0, 100% 0, 100% 100%, 50% 75%, 0 100%); z-index: 1; }
+  .ann-list { display: flex; flex-direction: column; gap: 8px; padding: 4px 6px; }
+  .ann-list div { display: flex; gap: 8px; align-items: flex-start; font-size: 12px; color: var(--ink-2); padding: 8px; border-radius: 10px; background: var(--surface); }
+  .ann-list i.sw { width: 12px; height: 12px; border-radius: 3px; flex: none; margin-top: 2px; }
+  .pdf-canvas { flex: 1; position: relative; overflow: hidden; }
+  .pdf-canvas .tb { position: absolute; top: 12px; left: 50%; transform: translateX(-50%); z-index: 5; }
+  .pdf-scroll { position: absolute; inset: 0; overflow: auto; display: flex; flex-direction: column; align-items: center; gap: 20px; padding: 74px 0 40px; }
+  /* the slide itself is "paper": it never mirrors */
+  .slide { position: relative; width: 760px; height: 475px; flex: none; background: #fff; box-shadow: var(--shadow-2); direction: ltr; font-family: "Inter", sans-serif; color: var(--slide-ink); overflow: hidden; }
+  .slide .bar { height: 64px; background: var(--slide-blue); color: #fff; display: flex; align-items: center; padding: 0 34px; gap: 14px; }
+  .slide .bar b { font-size: 24px; font-weight: 700; letter-spacing: -.01em; }
+  .slide .bar small { margin-left: auto; font-size: 12px; opacity: .8; }
+  .slide .content { position: relative; padding: 24px 34px; display: grid; grid-template-columns: 1fr 250px; gap: 20px; }
+  .slide .ln { position: relative; z-index: 2; display: block; font-size: 17px; line-height: 1.25; margin: 0 0 13px; width: fit-content; }
+  .slide .ln.sub { margin-left: 22px; font-size: 15.5px; color: var(--slide-mute); }
+  .slide .ln .w { display: inline; }
+  .slide .formula { font: italic 600 26px "Times New Roman", serif; margin: 6px 0 14px 22px; z-index: 2; position: relative; width: fit-content; }
+  .slide .fig { position: relative; z-index: 2; }
+  .slide .foot { position: absolute; bottom: 12px; left: 34px; right: 34px; display: flex; font-size: 11px; color: #9aa1ad; }
+  .slide .foot span:last-child { margin-left: auto; }
+  .hl-layer, .ink-layer { position: absolute; inset: 0; pointer-events: none; }
+  .hl-layer { z-index: 1; }
+  .ink-layer { z-index: 3; }
+  .ink-layer svg, .hl-layer svg { width: 100%; height: 100%; }
+  .hlr { position: absolute; background: var(--hl-yellow); opacity: .55; mix-blend-mode: multiply; border-radius: 2px; transition: left var(--dur-medium) var(--spring-snappy), top var(--dur-medium) var(--spring-snappy), width var(--dur-medium) var(--spring-snappy), height var(--dur-medium) var(--spring-snappy); }
+  .hlr.green { background: var(--hl-green); }
+  .draw-cap { position: absolute; inset: 0; z-index: 4; cursor: crosshair; touch-action: none; }
+  .snap-tag { position: absolute; z-index: 5; font: 600 11px var(--font-ui); padding: 3px 8px; border-radius: 999px; background: var(--accent); color: var(--on-accent); opacity: 0; transform: translateY(4px); transition: opacity var(--dur-short), transform var(--dur-medium) var(--spring-snappy); pointer-events: none; }
+  .snap-tag.on { opacity: 1; transform: none; }
+  .pdf-canvas .fchip.page { bottom: 14px; }
+
+  /* split view */
+  .split { flex: 1; display: grid; grid-template-columns: 1fr 12px 1fr; min-height: 0; background: #0e0e10 !important; position: relative; }
+  .pane { display: flex; flex-direction: column; background: var(--surface-2); border-radius: 0; min-width: 0; overflow: hidden; position: relative; }
+  .pane .ed-bar { height: 44px; }
+  .pane .ed-bar .ib { width: 32px; height: 32px; }
+  .pane .ed-bar .ms { font-size: 19px; }
+  .pane-body { flex: 1; position: relative; display: flex; justify-content: center; align-items: flex-start; padding-top: 20px; overflow: hidden; }
+  .divider { display: grid; place-items: center; cursor: col-resize; }
+  .divider i { width: 4px; height: 56px; border-radius: 4px; background: #6b6e76; }
+  .split .slide { transform: scale(.71); transform-origin: top center; margin-bottom: -138px; }
+  .nb-pg { width: 500px; height: 646px; --lh: 28px; --top: 80px; --ml: 54px; }
+  .lasso-ui { position: absolute; z-index: 6; pointer-events: none; }
+  .ghost { position: absolute; z-index: 30; width: 180px; height: 130px; border-radius: 10px; background: color-mix(in srgb, var(--chrome-solid) 80%, transparent); box-shadow: var(--shadow-3); border: 1.5px solid var(--accent); pointer-events: none; opacity: 0; }
+  .ghost svg { width: 100%; height: 100%; }
+  .ghost .plus { position: absolute; top: -10px; right: -10px; width: 24px; height: 24px; border-radius: 50%; background: var(--accent); color: var(--on-accent); display: grid; place-items: center; box-shadow: var(--shadow-1); }
+  .ghost .plus .ms { font-size: 16px; }
+  .drop-zone { position: absolute; border: 2px dashed var(--accent); border-radius: 10px; background: color-mix(in srgb, var(--accent) 7%, transparent); opacity: 0; transition: opacity var(--dur-short); pointer-events: none; z-index: 4; }
+  .split.go .ghost { animation: dragAcross 3.2s var(--ease-standard) forwards; }
+  .split.go .drop-zone { animation: dz 3.2s linear forwards; }
+  .split.go .dropped { animation: dropped 3.2s var(--spring-snappy) forwards; }
+  .dropped { opacity: 0; }
+  @keyframes dragAcross {
+    0% { opacity: 0; transform: translate(0, 0) scale(1); }
+    8% { opacity: 1; transform: translate(0, -8px) scale(1.06) rotate(-2deg); }
+    62% { opacity: 1; transform: translate(560px, 30px) scale(1.06) rotate(2deg); }
+    72% { opacity: 1; transform: translate(560px, 40px) scale(1); }
+    78%, 100% { opacity: 0; transform: translate(560px, 40px) scale(1); }
+  }
+  @keyframes dz { 0%, 35% { opacity: 0; } 45%, 72% { opacity: 1; } 80%, 100% { opacity: 0; } }
+  @keyframes dropped { 0%, 72% { opacity: 0; transform: scale(.94); } 82%, 100% { opacity: 1; transform: none; } }
+  .split-tag { position: absolute; z-index: 8; top: 8px; left: 50%; transform: translateX(-50%); }
+  .caption { font-size: 12.5px; color: var(--ink-2); margin: 10px auto 0; max-width: 640px; text-align: center; }
+  @media (prefers-reduced-motion: reduce) { .split.go .ghost { animation: none; } .split.go .dropped { animation: none; opacity: 1; } }
+</style>
+</head>
+<body>
+<div class="page-wrap">
+  <h1>PDF, tabs & split view</h1>
+  <p class="lead muted">Lecture slides are first-class: highlights snap to the printed text, the outline and bookmarks are one swipe away, several documents stay open as tabs, and a PDF can sit next to your notes.</p>
+
+  <div class="variants">
+    <!-- ============ PDF ============ -->
+    <div>
+      <div class="variant-label">State 1 · Annotate a PDF · highlighter snaps to text lines · outline panel · document tabs</div>
+      <div class="device tablet">
+        <div class="status"><span>9:41</span><span><i class="ms">signal_cellular_alt</i><i class="ms">wifi</i><i class="ms">battery_full</i></span></div>
+        <div class="ed">
+          <div class="ed-bar tabs">
+            <span class="ib"><i class="ms flip-rtl">arrow_back</i></span>
+            <span class="ib on" id="olToggle" title="Outline"><i class="ms">side_navigation</i></span>
+            <div class="doc-tabs2" id="docTabs">
+              <span class="on"><i class="ms pdf">picture_as_pdf</i>Lecture 7 · Rotation.pdf<i class="ms x">close</i></span>
+              <span><i class="ms">menu_book</i>Physics 201<i class="ms x">close</i></span>
+              <span><i class="ms">menu_book</i>Calculus II<i class="ms x">close</i></span>
+              <span class="ar"><i class="ms">menu_book</i>أدب عربي<i class="ms x">close</i></span>
+              <span style="background:none;padding:0 6px"><i class="ms">add</i></span>
+            </div>
+            <span class="grow"></span>
+            <span class="ib" style="align-self:center"><i class="ms">search</i></span><span class="ib" style="align-self:center"><i class="ms">more_vert</i></span>
+          </div>
+          <div class="pdf-main">
+            <aside class="outline" id="outline">
+              <div class="seg2" id="olTabs"><span class="on" data-v="ol"><i class="ms">toc</i>Outline</span><span data-v="bm"><i class="ms">bookmarks</i>Bookmarks</span><span data-v="an"><i class="ms">ink_highlighter</i>Notes</span></div>
+              <div class="ol-list" id="olBody"></div>
+            </aside>
+            <div class="pdf-canvas" id="pdfCv">
+              <div class="tb">
+                <span class="t"><i class="ms">ink_pen</i></span>
+                <span class="t on"><i class="ms">ink_highlighter</i><i class="dot" style="--c:var(--hl-yellow)"></i></span>
+                <span class="t"><i class="ms">ink_eraser</i></span><span class="t"><i class="ms">lasso_select</i></span><span class="t"><i class="ms">title</i></span>
+                <span class="sep"></span>
+                <span class="swatch on" style="--c:var(--hl-yellow)" data-c=""></span><span class="swatch" style="--c:var(--hl-green)" data-c="green"></span>
+                <span class="sep"></span>
+                <span class="tag" style="display:flex;align-items:center;gap:4px;font-size:11.5px;font-weight:600;padding:0 10px;color:var(--accent);white-space:nowrap"><i class="ms" style="font-size:16px">format_align_justify</i>Snap to text</span>
+                <span class="sep"></span><span class="t" id="hlUndo"><i class="ms">undo</i></span>
+              </div>
+              <div class="pdf-scroll">
+                <div class="slide" id="slide">
+                  <div class="bar"><b>Torque & the lever arm</b><small>PHYS 201 · Lecture 7 · Slide 12</small></div>
+                  <div class="hl-layer" id="hlLayer"></div>
+                  <div class="content" id="slideText">
+                    <div>
+                      <span class="ln">Torque measures how strongly a force rotates an object.</span>
+                      <span class="ln">It depends on <b>where</b> and <b>in which direction</b> you push.</span>
+                      <div class="formula">τ = r × F,   |τ| = r F sin φ</div>
+                      <span class="ln sub">r: from the pivot to where the force acts</span>
+                      <span class="ln sub">φ: angle between r and F</span>
+                      <span class="ln">Lever arm r⊥ = r sin φ, so τ = r⊥ F.</span>
+                      <span class="ln">Counter-clockwise torque is positive by convention.</span>
+                    </div>
+                    <div class="fig">
+                      <svg viewBox="0 0 250 220" width="250" height="220">
+                        <circle cx="40" cy="150" r="9" fill="#1f2430"/>
+                        <rect x="40" y="140" width="190" height="20" rx="6" fill="#c9d1e3" stroke="#1f2430" stroke-width="2" transform="rotate(-18 40 150)"/>
+                        <path d="M210 88 L 214 20" stroke="#d32f2f" stroke-width="4"/><path d="M204 32 L 214 16 L 222 33" fill="#d32f2f"/>
+                        <text x="222" y="40" font-family="Times New Roman" font-style="italic" font-size="20" fill="#d32f2f">F</text>
+                        <path d="M40 150 L 208 92" stroke="#1f3fae" stroke-width="2" stroke-dasharray="6 5"/>
+                        <text x="110" y="108" font-family="Times New Roman" font-style="italic" font-size="20" fill="#1f3fae">r</text>
+                        <path d="M70 140 A 32 32 0 0 0 66 120" fill="none" stroke="#1f2430" stroke-width="1.5"/>
+                        <text x="18" y="196" font-family="Inter" font-size="11" fill="#5d6574">pivot</text>
+                      </svg>
+                    </div>
+                  </div>
+                  <div class="ink-layer">
+                    <svg viewBox="0 0 760 475">
+                      <ellipse cx="694" cy="138" rx="30" ry="52" fill="none" stroke="var(--pen-red)" stroke-width="2.4" transform="rotate(6 694 138)"/>
+                      <text x="520" y="300" class="hw c-red" font-size="22">push far from the hinge</text>
+                      <text x="520" y="324" class="hw c-red" font-size="22">= easy door!</text>
+                      <path class="stroke c-red" stroke-width="2" d="M640 282 C 650 250, 662 222, 676 196 M 664 202 L 677 194 L 678 208"/>
+                    </svg>
+                  </div>
+                  <div class="draw-cap" id="drawCap"><svg style="position:absolute;inset:0;width:100%;height:100%" viewBox="0 0 760 475"><path id="rawHl" fill="none" stroke="var(--hl-yellow)" stroke-width="16" stroke-linecap="round" opacity=".55"/></svg></div>
+                  <div class="snap-tag" id="snapTag">Snapped to text</div>
+                  <div class="foot"><span>Dr. Haddad · Fall 2026</span><span>12 / 48</span></div>
+                </div>
+              </div>
+              <div class="fchip page"><i class="ms">picture_as_pdf</i>Slide 12 of 48</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="demo-bar"><button class="btn tonal" id="hlClear"><i class="ms">restart_alt</i>Clear highlights</button><span class="muted">Drag across any line of the slide, as sloppily as you like. It snaps to the words underneath. Tabs and the outline are clickable.</span></div>
+    </div>
+
+    <!-- ============ SPLIT ============ -->
+    <div>
+      <div class="variant-label">State 2 · Split view · PDF left, notes right · drag a lasso selection across</div>
+      <div class="device tablet">
+        <div class="status"><span>9:41</span><span><i class="ms">signal_cellular_alt</i><i class="ms">wifi</i><i class="ms">battery_full</i></span></div>
+        <div class="split go" id="split">
+          <div class="pane" id="paneL">
+            <div class="ed-bar"><span class="ib"><i class="ms">picture_as_pdf</i></span><div class="ed-title"><b>Lecture 7 · Rotation.pdf</b><small>Slide 12</small></div><span class="grow"></span><span class="ib on"><i class="ms">lasso_select</i></span><span class="ib"><i class="ms">more_vert</i></span></div>
+            <div class="pane-body" id="bodyL">
+              <div class="slide" style="pointer-events:none">
+                <div class="bar"><b>Torque & the lever arm</b><small>Slide 12</small></div>
+                <div class="content">
+                  <div>
+                    <span class="ln">Torque measures how strongly a force rotates an object.</span>
+                    <span class="ln">It depends on <b>where</b> and <b>in which direction</b> you push.</span>
+                    <div class="formula">τ = r × F,   |τ| = r F sin φ</div>
+                    <span class="ln sub">r: from the pivot to where the force acts</span>
+                    <span class="ln">Lever arm r⊥ = r sin φ, so τ = r⊥ F.</span>
+                  </div>
+                  <div class="fig" id="figL">
+                    <svg viewBox="0 0 250 220" width="250" height="220"><use href="#wrench"/></svg>
+                  </div>
+                </div>
+                <svg style="position:absolute;inset:0;width:100%;height:100%;z-index:5" viewBox="0 0 760 475"><path class="lasso-path marching" d="M500 92 C 470 160, 480 290, 560 312 C 660 330, 770 300, 752 200 C 745 120, 700 70, 610 76 C 560 78, 520 70, 500 92 Z" fill="color-mix(in srgb, var(--accent) 7%, transparent)" stroke="var(--accent)" stroke-width="2.2"/></svg>
+              </div>
+            </div>
+          </div>
+          <div class="divider"><i></i></div>
+          <div class="pane" id="paneR">
+            <div class="ed-bar"><span class="ib"><i class="ms">menu_book</i></span><div class="ed-title"><b>Physics 201</b><small>p.16 · Torque</small></div><span class="grow"></span><span class="ib"><i class="ms">ink_pen</i></span><span class="ib"><i class="ms">more_vert</i></span></div>
+            <div class="pane-body">
+              <div class="paper nb-pg p-ruled p-margin">
+                <svg viewBox="0 0 500 646">
+                  <text class="hw c-navy" x="66" y="64" font-size="36">Torque</text>
+                  <path class="stroke c-navy" stroke-width="2.4" d="M66 73 C 110 70, 150 74, 186 71"/>
+                  <text class="hw" x="66" y="103" font-size="24">τ = r F sin φ   (N·m)</text>
+                  <text class="hw" x="66" y="131" font-size="24">bigger lever arm → more torque</text>
+                  <g class="dropped" style="transform-box:fill-box;transform-origin:center"><g transform="translate(250 160) scale(.72)"><use href="#wrench"/></g><text class="hw c-green" x="66" y="215" font-size="22">from slide 12 →</text></g>
+                  <text class="hw" x="66" y="355" font-size="24">wrench: push at the END</text>
+                </svg>
+                <div class="drop-zone" style="left:240px;top:150px;width:200px;height:170px"></div>
+              </div>
+            </div>
+          </div>
+          <div class="ghost" id="ghost" style="left:400px;top:150px"><svg viewBox="0 0 250 220"><use href="#wrench"/></svg><span class="plus"><i class="ms">add</i></span></div>
+        </div>
+      </div>
+      <div class="demo-bar"><button class="btn tonal" id="splitReplay"><i class="ms">replay</i>Replay drag</button><span class="muted">Two editor windows side by side (Samsung multi-window). The selection lifts, shows a + copy badge, and drops as editable content; the PDF stays untouched.</span></div>
+    </div>
+  </div>
+</div>
+
+<svg width="0" height="0" style="position:absolute">
+  <defs>
+    <g id="wrench">
+      <circle cx="40" cy="150" r="9" fill="#1f2430"/>
+      <rect x="40" y="140" width="190" height="20" rx="6" fill="#c9d1e3" stroke="#1f2430" stroke-width="2" transform="rotate(-18 40 150)"/>
+      <path d="M210 88 L 214 20" stroke="#d32f2f" stroke-width="4"/><path d="M204 32 L 214 16 L 222 33" fill="#d32f2f"/>
+      <text x="222" y="40" font-family="Times New Roman" font-style="italic" font-size="20" fill="#d32f2f">F</text>
+      <path d="M40 150 L 208 92" stroke="#1f3fae" stroke-width="2" stroke-dasharray="6 5"/>
+      <text x="110" y="108" font-family="Times New Roman" font-style="italic" font-size="20" fill="#1f3fae">r</text>
+    </g>
+  </defs>
+</svg>
+
+<script>
+const { $, $$ } = BN;
+// ---------- Outline panel ----------
+const OL = `
+  <div class="ol-item"><i class="ms">chevron_right</i>1 · Rotational kinematics<em>2</em></div>
+  <div class="ol-item"><i class="ms">expand_more</i>2 · Torque<em>10</em></div>
+  <div class="ol-item sub">2.1 Definition<em>10</em></div>
+  <div class="ol-item sub on">2.2 Lever arm<em>12</em></div>
+  <div class="ol-item sub">2.3 Sign convention<em>14</em></div>
+  <div class="ol-item"><i class="ms">chevron_right</i>3 · Moment of inertia<em>17</em></div>
+  <div class="ol-item"><i class="ms">chevron_right</i>4 · Newton's 2nd law for rotation<em>25</em></div>
+  <div class="ol-item"><i class="ms">chevron_right</i>5 · Angular momentum<em>33</em></div>
+  <div class="ol-item"><i class="ms">chevron_right</i>6 · Rolling without slipping<em>41</em></div>
+  <div class="ol-item"><i class="ms">chevron_right</i>Summary & practice<em>46</em></div>`;
+const BM = `<div class="bm-grid">${[['10', 'Definition'], ['12', 'Lever arm'], ['21', 'I table'], ['33', 'L = Iω'], ['41', 'Rolling'], ['46', 'Practice']].map(([n, t], i) => `<div>${i < 3 ? '<i class="rib"></i>' : ''}<div class="mini"></div>${n} · ${t}</div>`).join('')}</div>`;
+const AN = `<div class="ann-list">
+  <div><i class="sw" style="background:var(--hl-yellow)"></i><span><b>Slide 12</b><br>“Torque measures how strongly a force rotates…”</span></div>
+  <div><i class="sw" style="background:var(--pen-red)"></i><span><b>Slide 12</b><br>Handwriting: “push far from the hinge = easy door!”</span></div>
+  <div><i class="sw" style="background:var(--hl-green)"></i><span><b>Slide 21</b><br>“Thin rod about its end: I = ⅓ M L²”</span></div></div>`;
+$('#olBody').innerHTML = OL;
+BN.seg($('#olTabs'), v => { $('#olBody').innerHTML = { ol: OL, bm: BM, an: AN }[v]; });
+$('#olBody').addEventListener('click', e => { const it = e.target.closest('.ol-item'); if (it) $$('#olBody .ol-item').forEach(x => x.classList.toggle('on', x === it)); });
+$('#olToggle').onclick = () => { const o = $('#outline'); const hide = o.style.display !== 'none'; o.style.display = hide ? 'none' : ''; $('#olToggle').classList.toggle('on', !hide); };
+BN.seg($('#docTabs'), null, 'span:not(:last-child)');
+
+// ---------- Snap-to-text highlighter ----------
+const slide = $('#slide'), cap = $('#drawCap'), raw = $('#rawHl'), layer = $('#hlLayer');
+let hlColor = '', undo = [];
+$$('#pdfCv .swatch').forEach(s => s.onclick = () => { $$('#pdfCv .swatch').forEach(x => x.classList.toggle('on', x === s)); hlColor = s.dataset.c; raw.style.stroke = hlColor ? 'var(--hl-green)' : 'var(--hl-yellow)'; });
+// wrap words so we can snap to word boundaries
+$$('#slideText .ln, #slideText .formula').forEach(l => {
+  l.querySelectorAll('b').forEach(b => b.replaceWith(Object.assign(document.createElement('span'), { className: 'bold', textContent: b.textContent })));
+  const parts = [];
+  l.childNodes.forEach(n => { const bold = n.nodeType === 1; n.textContent.split(/(\s+)/).forEach(t => { if (t) parts.push([t, bold]); }); });
+  l.innerHTML = parts.map(([t, b]) => /^\s+$/.test(t) ? t : `<span class="w"${b ? ' style="font-weight:700"' : ''}>${t}</span>`).join('');
+});
+function rel(r) { const s = slide.getBoundingClientRect(), k = s.width / slide.offsetWidth; return { x: (r.left - s.left) / k, y: (r.top - s.top) / k, w: r.width / k, h: r.height / k }; }
+let pts = null;
+cap.addEventListener('pointerdown', e => { cap.setPointerCapture(e.pointerId); pts = [BN.svgPt(cap.querySelector('svg'), e)]; });
+cap.addEventListener('pointermove', e => { if (!pts) return; pts.push(BN.svgPt(cap.querySelector('svg'), e)); raw.setAttribute('d', BN.smooth(pts)); });
+cap.addEventListener('pointerup', () => {
+  if (!pts || pts.length < 3) { pts = null; return; }
+  const ys = pts.map(p => p.y), my = ys.reduce((a, b) => a + b) / ys.length;
+  const x0 = Math.min(...pts.map(p => p.x)), x1 = Math.max(...pts.map(p => p.x));
+  // nearest text line to the stroke's average height
+  let best = null, bd = 1e9;
+  $$('#slideText .ln, #slideText .formula').forEach(l => { const r = rel(l.getBoundingClientRect()); const d = Math.abs(r.y + r.h / 2 - my); if (d < bd) { bd = d; best = l; } });
+  if (!best || bd > 40) { raw.setAttribute('d', ''); pts = null; return; }
+  const words = [...best.querySelectorAll('.w')].map(w => rel(w.getBoundingClientRect())).filter(r => r.x + r.w > x0 - 4 && r.x < x1 + 4);
+  if (!words.length) { raw.setAttribute('d', ''); pts = null; return; }
+  const lr = rel(best.getBoundingClientRect());
+  const L = Math.min(...words.map(w => w.x)) - 3, R = Math.max(...words.map(w => w.x + w.w)) + 3;
+  const d = document.createElement('i'); d.className = 'hlr ' + hlColor;
+  // start where the hand stroke was, then spring to the text line
+  Object.assign(d.style, { left: x0 + 'px', top: my - 9 + 'px', width: (x1 - x0) + 'px', height: '18px' });
+  layer.append(d); undo.push(d);
+  requestAnimationFrame(() => requestAnimationFrame(() => Object.assign(d.style, { left: L + 'px', top: lr.y - 1 + 'px', width: R - L + 'px', height: lr.h + 2 + 'px' })));
+  raw.setAttribute('d', '');
+  const tag = $('#snapTag'); tag.style.left = R + 8 + 'px'; tag.style.top = lr.y + 'px'; tag.classList.add('on'); clearTimeout(tag._t); tag._t = setTimeout(() => tag.classList.remove('on'), 1100);
+  pts = null;
+});
+$('#hlUndo').onclick = () => undo.pop()?.remove();
+$('#hlClear').onclick = () => { layer.innerHTML = ''; undo = []; seed(); };
+function seed() {
+  // two existing highlights, already snapped
+  [[0, ''], [5, 'green']].forEach(([i, c]) => {
+    const l = $$('#slideText .ln')[i]; if (!l) return; const r = rel(l.getBoundingClientRect());
+    const d = document.createElement('i'); d.className = 'hlr ' + c; Object.assign(d.style, { left: r.x - 3 + 'px', top: r.y - 1 + 'px', width: r.w + 6 + 'px', height: r.h + 2 + 'px' }); layer.append(d);
+  });
+}
+document.fonts.ready.then(seed);
+
+// ---------- Split view replay ----------
+$('#splitReplay').onclick = () => { const s = $('#split'); s.classList.remove('go'); void s.offsetWidth; s.classList.add('go'); };
+</script>
+</body>
+</html>

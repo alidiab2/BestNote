@@ -1,0 +1,423 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BestNote · Editor</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Sans+Arabic:wght@400;500;600&family=Caveat:wght@500;700&family=Material+Symbols+Rounded:opsz,wght,FILL@24,400,0..1&family=Fraunces:opsz,wght@9..144,500;9..144,600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../tokens.css">
+<link rel="stylesheet" href="../board.css">
+<script src="../shell.js"></script>
+<script src="../editor-kit.js"></script>
+<style>
+  :root { --spen-body: #2b2d33; --spen-tip: #6b6e76; }
+  .pg { width: calc(600px * var(--z, 1)); height: calc(776px * var(--z, 1)); --lh: calc(32px * var(--z, 1)); --top: calc(96px * var(--z, 1)); --ml: calc(64px * var(--z, 1)); transition: width var(--dur-medium) var(--ease-standard), height var(--dur-medium) var(--ease-standard); }
+  .pg .pn { position: absolute; bottom: 10px; right: 16px; font: 500 11px var(--font-ui); color: #9aa1ad; }
+
+  /* Layout 1: floating top pill */
+  .l1 .tb { position: absolute; top: 12px; left: 50%; transform: translateX(-50%); z-index: 5; }
+  .l1.writing .tb { transform: translateX(-50%) scale(.94); }
+  .l1 .spen-ind { top: auto; bottom: 56px; transform: translate(-50%, 180%); }
+  .l1 .spen-ind.on { transform: translate(-50%, 0); }
+
+  /* Layout 2: side dock. Handedness picks the PHYSICAL side; it does not follow RTL. */
+  .l2 .tb.vert { position: absolute; top: 50%; transform: translateY(-50%); left: 14px; z-index: 5; transition: left var(--dur-long) var(--spring-gentle), right var(--dur-long) var(--spring-gentle), opacity var(--dur-medium); }
+  .l2.lefty .tb.vert { left: calc(100% - 68px); }
+  .l2 .spread { direction: ltr; display: flex; gap: 2px; justify-content: center; align-items: flex-start; padding: 22px 0 0 0; height: 100%; }
+  .l2 .spread .pg { --z: .8; }
+  .l2 .spread .pg:first-child { box-shadow: var(--shadow-2), inset -14px 0 18px -14px rgba(0,0,0,.18); }
+  .l2 .spread .pg:last-child { box-shadow: var(--shadow-2), inset 14px 0 18px -14px rgba(0,0,0,.18); }
+  .l2 .hand-tag { position: absolute; z-index: 6; bottom: 16px; left: 14px; transition: left var(--dur-long) var(--spring-gentle); }
+  .l2.lefty .hand-tag { left: calc(100% - 196px); }
+  .tag { display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px; border-radius: 999px; font-size: 11.5px; font-weight: 600; background: var(--accent-soft); color: var(--accent); white-space: nowrap; }
+  .tag .ms { font-size: 15px; }
+  .size-dot { width: 40px; height: 30px; display: grid; place-items: center; cursor: pointer; border-radius: 10px; }
+  .size-dot i { display: block; border-radius: 50%; background: var(--ink-2); }
+  .size-dot.on { background: var(--surface); }
+  .size-dot.on i { background: var(--accent); }
+
+  /* Layout 3: minimal bottom bar */
+  .l3 .float-back { position: absolute; top: 12px; inset-inline-start: 12px; z-index: 5; display: flex; align-items: center; gap: 6px; padding: 4px 12px 4px 4px; }
+  .l3 .float-more { position: absolute; top: 12px; inset-inline-end: 12px; z-index: 5; padding: 4px; display: flex; gap: 2px; }
+  .l3 .tb.bottom { position: absolute; bottom: 14px; left: 50%; transform: translateX(-50%); z-index: 5; padding: 4px 6px; }
+  .l3 .tb.bottom .t { width: 38px; height: 38px; }
+  .l3 .ed-pages { padding-top: 20px; }
+  .l3 .fchip.page { bottom: 72px; }
+  .l3 .fchip.zoom { bottom: 72px; }
+  .chrome-meter { position: absolute; z-index: 6; top: 64px; inset-inline-start: 14px; font: 600 11px var(--font-ui); color: var(--ink-3); background: var(--chrome-solid); border: 1px solid var(--outline); padding: 6px 10px; border-radius: 10px; box-shadow: var(--shadow-1); }
+  .chrome-meter b { color: var(--accent); }
+
+  /* Mini states */
+  .mini .ed-bar { height: 40px; }
+  .mini .ed-bar .ib { width: 32px; height: 32px; }
+  .mini .ed-bar .ms { font-size: 19px; }
+  .mini .stage { flex: 1; position: relative; display: flex; justify-content: center; padding-top: 18px; overflow: hidden; }
+  .mini .pg { --z: .62; }
+  .mini .tb { position: absolute; top: 8px; left: 50%; transform: translateX(-50%); z-index: 5; }
+  .mini .tb .t { width: 34px; height: 34px; }
+  .mini .tb .ms { font-size: 19px; }
+  .tb.pillmini { opacity: .4; padding: 4px 10px 4px 4px; gap: 6px; transform: translateX(-50%) scale(.92) !important; }
+  .spen { position: absolute; pointer-events: none; z-index: 8; width: 150px; height: 150px; filter: drop-shadow(0 8px 10px rgba(0,0,0,.25)); }
+  .spen .body { stroke: var(--spen-body); stroke-width: 15; stroke-linecap: round; }
+  .spen .tip { fill: var(--spen-tip); }
+  .spen .btn-s { stroke: #44474f; stroke-width: 5; stroke-linecap: round; }
+  .spen.pressed .btn-s { stroke: var(--accent); filter: drop-shadow(0 0 4px var(--accent)); }
+  .hover-shadow { position: absolute; width: 16px; height: 16px; border-radius: 50%; border: 1.5px solid var(--pen-navy); background: color-mix(in srgb, var(--pen-navy) 12%, transparent); z-index: 7; }
+  .airview { position: absolute; z-index: 9; top: 54px; padding: 6px 10px; border-radius: 10px; background: var(--ink); color: var(--chrome-solid); font-size: 11.5px; white-space: nowrap; box-shadow: var(--shadow-2); }
+  .airview::before { content: ""; position: absolute; top: -5px; left: 50%; margin-left: -5px; width: 10px; height: 10px; background: inherit; transform: rotate(45deg); }
+  .airview .kbd { min-width: 18px; height: 18px; font-size: 10px; margin-inline-start: 6px; color: var(--ink); }
+  .erasing-word { animation: eraseWord 2.4s var(--ease-standard) infinite; }
+  @keyframes eraseWord { 0%, 30% { clip-path: inset(0 0 0 0); } 70%, 100% { clip-path: inset(0 0 0 62%); } }
+  .er-ring { position: absolute; z-index: 7; width: 34px; height: 34px; margin: -17px 0 0 -17px; border-radius: 50%; border: 1.5px dashed var(--ink-2); background: rgba(255,255,255,.4); animation: erMove 2.4s var(--ease-standard) infinite; }
+  @keyframes erMove { 0%, 30% { transform: translateX(0); } 70%, 100% { transform: translateX(-58px); } }
+  .caption { font-size: 12.5px; color: var(--ink-2); margin: 10px auto 0; max-width: 540px; text-align: center; }
+  @media (prefers-reduced-motion: reduce) { .erasing-word, .er-ring { animation: none; } }
+</style>
+</head>
+<body>
+<div class="page-wrap">
+  <h1>Editor</h1>
+  <p class="lead muted">Three toolbar layouts to compare, plus the details that make writing feel calm: continuous vertical scroll, zoom and page chips, a toolbar that steps back while you write, a hover cursor the size of your brush, and the S Pen button as a temporary eraser. Write on any page. Scroll the first one.</p>
+
+  <div class="variants">
+    <!-- ================= LAYOUT 1 ================= -->
+    <div>
+      <div class="variant-label">Layout 1 · Floating top pill (default) · continuous vertical scroll</div>
+      <div class="device tablet">
+        <div class="status"><span>9:41</span><span><i class="ms">signal_cellular_alt</i><i class="ms">wifi</i><i class="ms">battery_full</i></span></div>
+        <div class="ed l1" id="ed1">
+          <div class="ed-bar">
+            <span class="ib"><i class="ms flip-rtl">arrow_back</i></span>
+            <div class="ed-title"><b>Physics 201</b><small>Mechanics · edited just now</small></div>
+            <span class="grow"></span>
+            <span class="ib"><i class="ms">search</i></span><span class="ib"><i class="ms">grid_view</i></span><span class="ib"><i class="ms">bookmark</i></span><span class="ib"><i class="ms">ios_share</i></span><span class="ib"><i class="ms">more_vert</i></span>
+          </div>
+          <div class="ed-canvas pen-cursor" id="cv1">
+            <div class="tb" id="tb1">
+              <span class="t on" data-tool="pen" title="Fountain pen (P)"><i class="ms">ink_pen</i><i class="dot" style="--c:var(--pen-navy)"></i></span>
+              <span class="t" data-tool="pencil" title="Pencil"><i class="ms">edit</i></span>
+              <span class="t" data-tool="hl" title="Highlighter (H)"><i class="ms">ink_highlighter</i><i class="dot" style="--c:var(--hl-yellow)"></i></span>
+              <span class="t" data-tool="eraser" title="Eraser (E)"><i class="ms">ink_eraser</i></span>
+              <span class="t" data-tool="lasso" title="Lasso (L)"><i class="ms">lasso_select</i></span>
+              <span class="t" title="Shapes"><i class="ms">category</i></span>
+              <span class="t" title="Text (T)"><i class="ms">title</i></span>
+              <span class="t" title="Image"><i class="ms">add_photo_alternate</i></span>
+              <span class="t" title="Record audio"><i class="ms">mic</i></span>
+              <span class="sep"></span>
+              <span class="fav on" data-c="var(--pen-navy)" data-w="2.4" style="--c:var(--pen-navy)"><svg viewBox="0 0 40 16"><path d="M3 12 C 12 2, 22 14, 37 4"/></svg></span>
+              <span class="fav" data-c="var(--pen-red)" data-w="2.4" style="--c:var(--pen-red)"><svg viewBox="0 0 40 16"><path d="M3 12 C 12 2, 22 14, 37 4"/></svg></span>
+              <span class="fav" data-c="var(--pen-green)" data-w="1.6" style="--c:var(--pen-green);--w:2"><svg viewBox="0 0 40 16"><path d="M3 12 C 12 2, 22 14, 37 4"/></svg></span>
+              <span class="sep"></span>
+              <span class="t" id="undo1" title="Undo"><i class="ms">undo</i></span><span class="t" style="opacity:.35"><i class="ms">redo</i></span>
+            </div>
+            <div class="ed-scroll" id="sc1">
+              <div class="ed-pages" id="pages1">
+                <div class="paper pg p-ruled p-margin" data-p="13" data-tpl="pg13"></div>
+                <div class="paper pg p-ruled p-margin" data-p="14" data-tpl="pg14"></div>
+                <div class="paper pg p-ruled p-margin" data-p="15" data-tpl="pg15"></div>
+                <div class="paper pg p-ruled p-margin" data-p="16"><svg viewBox="0 0 600 776"></svg><span class="pn">16</span></div>
+              </div>
+            </div>
+            <div class="hcur" id="cur1" style="--s:9px;--c:var(--pen-navy)"></div>
+            <div class="spen-ind" id="spen1"><i class="ms">ink_eraser</i>S Pen button held: Eraser · release to go back to Fountain pen</div>
+            <div class="fchip page" id="pchip1"><i class="ms">description</i><span>Page 14 of 22</span></div>
+            <div class="fchip zoom"><button id="zOut1" title="Zoom out"><i class="ms">remove</i></button><b id="zv1">100%</b><button id="zIn1" title="Zoom in"><i class="ms">add</i></button></div>
+          </div>
+        </div>
+      </div>
+      <div class="demo-bar">
+        <button class="btn tonal" id="spenBtn"><i class="ms">stylus</i>Hold: S Pen side button</button>
+        <span class="muted">or hold <span class="kbd">B</span> while drawing. The cursor turns into the eraser outline and strokes you touch disappear.</span>
+      </div>
+    </div>
+
+    <!-- ================= LAYOUT 2 ================= -->
+    <div>
+      <div class="variant-label">Layout 2 · Side dock · two-page spread in landscape (Tab S Ultra)</div>
+      <div class="device tablet">
+        <div class="status"><span>9:41</span><span><i class="ms">signal_cellular_alt</i><i class="ms">wifi</i><i class="ms">battery_full</i></span></div>
+        <div class="ed l2" id="ed2">
+          <div class="ed-bar">
+            <span class="ib"><i class="ms flip-rtl">arrow_back</i></span>
+            <div class="ed-title"><b>Physics 201</b><small>Pages 14–15 of 22</small></div>
+            <span class="grow"></span>
+            <span class="ib"><i class="ms">search</i></span><span class="ib"><i class="ms">grid_view</i></span><span class="ib"><i class="ms">ios_share</i></span><span class="ib"><i class="ms">more_vert</i></span>
+          </div>
+          <div class="ed-canvas pen-cursor" id="cv2">
+            <span class="tag hand-tag" id="handTag"><i class="ms">back_hand</i><span>Right-handed · dock left</span></span>
+            <div class="tb vert" id="tb2">
+              <span class="t on" title="Fountain pen"><i class="ms">ink_pen</i></span>
+              <span class="t" title="Pencil"><i class="ms">edit</i></span>
+              <span class="t" title="Highlighter"><i class="ms">ink_highlighter</i></span>
+              <span class="t" title="Eraser"><i class="ms">ink_eraser</i></span>
+              <span class="t" title="Lasso"><i class="ms">lasso_select</i></span>
+              <span class="t" title="Text"><i class="ms">title</i></span>
+              <span class="t" title="More tools"><i class="ms">add_circle</i></span>
+              <span class="sep"></span>
+              <span class="swatch on" style="--c:var(--pen-navy)"></span>
+              <span class="swatch" style="--c:var(--pen-black)"></span>
+              <span class="swatch" style="--c:var(--pen-red)"></span>
+              <span class="swatch" style="--c:var(--pen-green)"></span>
+              <span class="sep"></span>
+              <span class="size-dot on"><i style="width:5px;height:5px"></i></span>
+              <span class="size-dot"><i style="width:8px;height:8px"></i></span>
+              <span class="size-dot"><i style="width:12px;height:12px"></i></span>
+              <span class="sep"></span>
+              <span class="t"><i class="ms">undo</i></span><span class="t" style="opacity:.35"><i class="ms">redo</i></span>
+            </div>
+            <div class="spread">
+              <div class="paper pg p-ruled p-margin" data-tpl="pg14"></div>
+              <div class="paper pg p-ruled p-margin" data-tpl="pg15"></div>
+            </div>
+            <div class="hcur" id="cur2" style="--s:9px;--c:var(--pen-navy)"></div>
+            <div class="fchip page"><i class="ms">auto_stories</i>14–15 of 22</div>
+            <div class="fchip zoom"><button><i class="ms">remove</i></button><b>80%</b><button><i class="ms">add</i></button></div>
+          </div>
+        </div>
+      </div>
+      <div class="demo-bar">
+        <div class="seg2" id="hand" style="width:360px">
+          <span class="on" data-v="r"><i class="ms">front_hand</i>Right-handed</span>
+          <span data-v="l"><i class="ms" style="transform:scaleX(-1)">front_hand</i>Left-handed</span>
+        </div>
+        <span class="muted">Handedness is its own setting: the dock side never flips just because the UI is in Arabic.</span>
+      </div>
+    </div>
+
+    <!-- ================= LAYOUT 3 ================= -->
+    <div>
+      <div class="variant-label">Layout 3 · Minimal bottom bar · maximum page</div>
+      <div class="device tablet">
+        <div class="status"><span>9:41</span><span><i class="ms">signal_cellular_alt</i><i class="ms">wifi</i><i class="ms">battery_full</i></span></div>
+        <div class="ed l3" id="ed3">
+          <div class="ed-canvas pen-cursor" id="cv3">
+            <div class="tb float-back fade-write"><span class="ib" style="width:32px;height:32px"><i class="ms flip-rtl">arrow_back</i></span><b style="font-size:13px">Physics 201</b><small class="muted" style="font-size:11px">p.14</small></div>
+            <div class="tb float-more fade-write"><span class="ib" style="width:32px;height:32px"><i class="ms">grid_view</i></span><span class="ib" style="width:32px;height:32px"><i class="ms">more_horiz</i></span></div>
+            <div class="chrome-meter">Chrome on screen: <b>5.8%</b> (budget ≤ 8%)</div>
+            <div class="ed-scroll">
+              <div class="ed-pages">
+                <div class="paper pg p-ruled p-margin" style="--z:1.42" data-tpl="pg14"></div>
+              </div>
+            </div>
+            <div class="hcur" id="cur3" style="--s:9px;--c:var(--pen-navy)"></div>
+            <div class="fchip page">14 / 22</div>
+            <div class="fchip zoom"><b>142%</b></div>
+            <div class="tb bottom" id="tb3">
+              <span class="t on"><i class="ms">ink_pen</i></span>
+              <span class="t"><i class="ms">ink_highlighter</i></span>
+              <span class="t"><i class="ms">ink_eraser</i></span>
+              <span class="t"><i class="ms">lasso_select</i></span>
+              <span class="sep"></span>
+              <span class="swatch on" style="--c:var(--pen-navy)"></span><span class="swatch" style="--c:var(--pen-red)"></span><span class="swatch" style="--c:var(--pen-green)"></span>
+              <span class="sep"></span>
+              <span class="t"><i class="ms">undo</i></span>
+              <span class="t" title="All tools"><i class="ms">expand_less</i></span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <p class="caption">Best for phones and for focus. Everything else lives behind <i class="ms" style="font-size:16px">expand_less</i>. Back and page actions float in the corners and fade while you write.</p>
+    </div>
+
+    <!-- ================= DETAILS ================= -->
+    <div>
+      <div class="variant-label">Details · pen down · hover · S Pen button</div>
+      <div class="ed-row">
+        <div>
+          <div class="device tablet half">
+            <div class="status"><span>9:41</span><span><i class="ms">battery_full</i></span></div>
+            <div class="ed mini">
+              <div class="ed-bar"><span class="ib"><i class="ms flip-rtl">arrow_back</i></span><div class="ed-title"><b>Physics 201</b></div><span class="grow"></span><span class="ib"><i class="ms">more_vert</i></span></div>
+              <div class="stage">
+                <div class="tb pillmini"><span class="t on"><i class="ms">ink_pen</i></span><span class="swatch" style="--c:var(--pen-navy);margin:0"></span><i class="ms" style="color:var(--ink-3)">expand_more</i></div>
+                <div class="paper pg p-ruled p-margin" data-tpl="pg14"></div>
+                <svg style="position:absolute;inset:0;width:100%;height:100%;pointer-events:none" viewBox="0 0 520 356">
+                  <path class="stroke c-navy" stroke-width="1.8" d="M246 46 c 4 -10 10 -10 9 0 c -1 8 -6 10 -3 2 c 3 -9 10 -10 11 -1 c 1 6 5 4 8 -3 c 3 -6 7 -5 7 1" />
+                </svg>
+                <svg class="spen" style="left:272px;top:-60px" viewBox="0 0 120 120"><line class="body" x1="24" y1="96" x2="118" y2="2"/><polygon class="tip" points="8,112 17,91 29,103"/><line class="btn-s" x1="44" y1="84" x2="53" y2="75"/></svg>
+              </div>
+            </div>
+          </div>
+          <p class="caption"><b>Pen down near the toolbar:</b> it fades to 40% and collapses to a pill showing just the current pen. It comes back 0.6 s after you lift.</p>
+        </div>
+        <div>
+          <div class="device tablet half">
+            <div class="status"><span>9:41</span><span><i class="ms">battery_full</i></span></div>
+            <div class="ed mini">
+              <div class="ed-bar"><span class="ib"><i class="ms flip-rtl">arrow_back</i></span><div class="ed-title"><b>Physics 201</b></div><span class="grow"></span><span class="ib"><i class="ms">more_vert</i></span></div>
+              <div class="stage">
+                <div class="tb"><span class="t on"><i class="ms">ink_pen</i></span><span class="t"><i class="ms">edit</i></span><span class="t" style="background:var(--surface)"><i class="ms">ink_highlighter</i></span><span class="t"><i class="ms">ink_eraser</i></span><span class="t"><i class="ms">lasso_select</i></span><span class="sep"></span><span class="t"><i class="ms">undo</i></span></div>
+                <div class="airview" style="left:calc(50% - 30px)">Highlighter<span class="kbd">H</span></div>
+                <div class="paper pg p-ruled p-margin" data-tpl="pg14"></div>
+                <div class="hover-shadow" style="left:300px;top:196px"></div>
+                <svg class="spen" style="left:304px;top:62px;opacity:.9" viewBox="0 0 120 120"><line class="body" x1="24" y1="96" x2="118" y2="2"/><polygon class="tip" points="8,112 17,91 29,103"/><line class="btn-s" x1="44" y1="84" x2="53" y2="75"/></svg>
+              </div>
+            </div>
+          </div>
+          <p class="caption"><b>Hovering:</b> a cursor exactly the size of the brush replaces Samsung's Air View dot. Over the toolbar, hover shows a tooltip with the shortcut.</p>
+        </div>
+        <div>
+          <div class="device tablet half">
+            <div class="status"><span>9:41</span><span><i class="ms">battery_full</i></span></div>
+            <div class="ed mini">
+              <div class="ed-bar"><span class="ib"><i class="ms flip-rtl">arrow_back</i></span><div class="ed-title"><b>Physics 201</b></div><span class="grow"></span><span class="ib"><i class="ms">more_vert</i></span></div>
+              <div class="stage">
+                <div class="spen-ind on" style="top:8px"><i class="ms">ink_eraser</i>Eraser while held</div>
+                <div class="paper pg p-ruled p-margin" data-tpl="pg14" data-erase="1"></div>
+                <div class="er-ring" style="left:330px;top:120px"></div>
+                <svg class="spen pressed" style="left:330px;top:-14px" viewBox="0 0 120 120"><line class="body" x1="24" y1="96" x2="118" y2="2"/><polygon class="tip" points="8,112 17,91 29,103"/><line class="btn-s" x1="44" y1="84" x2="53" y2="75"/></svg>
+              </div>
+            </div>
+          </div>
+          <p class="caption"><b>Hold the S Pen side button:</b> instant eraser, outline cursor, pill at the screen edge (never over the ink). Release and you're back on the same pen. Tick haptic on switch.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Reusable page content (SVG, paper coordinates 600×776, ruled 32 px from y=96, margin at x=64) -->
+<template id="pg13">
+  <svg viewBox="0 0 600 776">
+    <text class="hw c-navy" x="80" y="80" font-size="40">Newton's laws: recap</text>
+    <path class="stroke c-navy" stroke-width="2.4" d="M80 90 C 170 87, 260 91, 330 88"/>
+    <text class="hw" x="80" y="123" font-size="26">1. no net force → constant velocity</text>
+    <text class="hw" x="80" y="155" font-size="26">2. ΣF = m a</text>
+    <text class="hw" x="80" y="187" font-size="26">3. action = − reaction (pairs on different bodies)</text>
+    <text class="hw" x="80" y="251" font-size="26">Free-body diagram first, ALWAYS.</text>
+    <path class="hl-stroke" d="M78 243 H 372" style="stroke:var(--hl-green)"/>
+    <g transform="translate(150 372)"><rect class="stroke" x="0" y="0" width="90" height="60"/><path class="stroke c-red" d="M45 60 V 140 M38 128 L45 141 L52 128"/><path class="stroke c-blue" d="M45 0 V -70 M38 -58 L45 -71 L52 -58"/><text class="hw c-red" x="56" y="132" font-size="22">mg</text><text class="hw c-blue" x="56" y="-50" font-size="22">N</text></g>
+    <text class="hw" x="80" y="571" font-size="26">balanced: N = mg (table, no accel.)</text>
+  </svg><span class="pn">13</span>
+</template>
+<template id="pg14">
+  <svg viewBox="0 0 600 776">
+    <path class="hl-stroke" d="M78 147 H 322"/>
+    <text class="hw c-navy" x="80" y="80" font-size="42">Uniform circular motion</text>
+    <path class="stroke c-navy" stroke-width="2.6" d="M80 91 C 180 87, 300 93, 404 88"/>
+    <text class="hw" x="80" y="123" font-size="27">Speed stays constant, but the</text>
+    <text class="hw" x="80" y="155" font-size="27">direction keeps changing → so a ≠ 0</text>
+    <text class="hw" x="80" y="187" font-size="27">• a points to the centre (centripetal)</text>
+    <text class="hw" x="80" y="219" font-size="27">• v is tangent to the circle</text>
+    <g class="erase-me"><text class="hw c-red" x="96" y="282" font-size="33">a<tspan font-size="20" dy="5">c</tspan><tspan dy="-5"> = v² / r</tspan></text></g>
+    <path class="stroke c-red" stroke-width="2" d="M84 252 L 238 250 L 240 293 L 83 295 Z"/>
+    <text class="hw" x="80" y="347" font-size="27">F<tspan font-size="18" dy="5">c</tspan><tspan dy="-5"> = m v² / r</tspan></text>
+    <text class="hw" x="80" y="379" font-size="22" style="fill:var(--pen-graphite)">(the net force, not a new force!)</text>
+    <g transform="translate(462 318)">
+      <circle class="stroke" r="74" stroke-width="2"/>
+      <circle r="3.5" fill="var(--pen-black)"/>
+      <path class="stroke" stroke-dasharray="5 5" stroke-width="1.6" d="M0 0 L 64 -37"/>
+      <text class="hw" x="24" y="-26" font-size="20">r</text>
+      <circle cx="64" cy="-37" r="4" fill="var(--pen-black)"/>
+      <path class="stroke c-blue" d="M64 -37 L 100 25 M 90 18 L 101 27 L 102 13"/>
+      <text class="hw c-blue" x="106" y="24" font-size="22">v</text>
+      <path class="stroke c-red" d="M64 -37 L 24 -14 M 36 -24 L 22 -13 L 37 -11"/>
+      <text class="hw c-red" x="34" y="-42" font-size="22">a<tspan font-size="14" dy="4">c</tspan></text>
+    </g>
+    <text class="hw" x="80" y="443" font-size="27">Example: car on a roundabout</text>
+    <path class="stroke" stroke-width="1.8" d="M80 450 C 150 447, 230 452, 300 449"/>
+    <text class="hw" x="80" y="475" font-size="27">r = 50 m,  v = 20 m/s</text>
+    <text class="hw" x="80" y="507" font-size="27">a = 20² / 50 = 8 m/s²</text>
+    <text class="hw c-green" x="430" y="500" font-size="24">≈ 0.8 g !</text>
+    <path class="stroke c-green" stroke-width="1.8" d="M428 494 C 392 500, 350 504, 300 501 M 310 495 L 299 501 L 310 507"/>
+    <text class="hw c-navy" x="80" y="571" font-size="24">Next: banked curves → p.15</text>
+  </svg><span class="pn">14</span>
+</template>
+<template id="pg15">
+  <svg viewBox="0 0 600 776">
+    <text class="hw c-navy" x="80" y="80" font-size="42">Banked curves</text>
+    <path class="stroke c-navy" stroke-width="2.6" d="M80 91 C 150 88, 230 92, 282 89"/>
+    <text class="hw" x="80" y="123" font-size="27">Tilt the road so N does the turning.</text>
+    <g transform="translate(110 170)">
+      <path class="stroke" d="M0 120 L 220 120 L 220 30 Z"/>
+      <rect class="stroke" x="118" y="56" width="46" height="26" transform="rotate(-22 141 69)"/>
+      <path class="stroke c-blue" d="M146 66 L 118 0 M 116 14 L 117 -1 L 128 9"/>
+      <text class="hw c-blue" x="96" y="6" font-size="22">N</text>
+      <path class="stroke c-red" d="M146 72 V 140 M 139 128 L 146 141 L 153 128"/>
+      <text class="hw c-red" x="154" y="140" font-size="22">mg</text>
+      <path class="stroke" stroke-width="1.6" d="M40 120 A 40 40 0 0 0 37 104"/>
+      <text class="hw" x="48" y="114" font-size="20">θ</text>
+    </g>
+    <text class="hw" x="80" y="347" font-size="27">N cos θ = m g</text>
+    <text class="hw" x="80" y="379" font-size="27">N sin θ = m v² / r</text>
+    <text class="hw c-red" x="80" y="443" font-size="31">tan θ = v² / (r g)</text>
+    <path class="stroke c-red" stroke-width="2" d="M70 414 L 286 412 L 288 455 L 69 456 Z"/>
+  </svg><span class="pn">15</span>
+</template>
+
+<script>
+const { $, $$ } = BN;
+// Fill pages from templates
+$$('[data-tpl]').forEach(p => { p.prepend(...document.getElementById(p.dataset.tpl).content.cloneNode(true).childNodes); });
+// "erasing" demo: animate the boxed formula in the S Pen detail
+$$('[data-erase] .erase-me').forEach(g => g.classList.add('erasing-word'));
+
+// ---------- Layout 1: live editor ----------
+const ed1 = $('#ed1'), cv1 = $('#cv1'), cur1 = $('#cur1'), sc1 = $('#sc1');
+let penColor = 'var(--pen-navy)', penW = 2.4, tempEraser = false, undo = [];
+BN.hover(cv1, cur1);
+BN.writingFade(ed1, $('#pages1'));
+$$('#pages1 .paper svg').forEach(svg => BN.ink(svg, e => {
+  if (tempEraser) { eraseAt(e); return false; }
+  return { color: penColor, width: penW, cls: 'user' };
+}, p => undo.push(p)));
+function eraseAt(e) { document.elementsFromPoint(e.clientX, e.clientY).filter(x => x.classList?.contains('user')).forEach(x => x.remove()); }
+cv1.addEventListener('pointermove', e => { if (tempEraser && e.buttons) eraseAt(e); });
+$('#undo1').onclick = () => undo.pop()?.remove();
+$$('#tb1 .fav').forEach(f => f.onclick = () => {
+  $$('#tb1 .fav').forEach(x => x.classList.toggle('on', x === f));
+  penColor = f.dataset.c; penW = +f.dataset.w; cur1.style.setProperty('--c', penColor);
+  $('#tb1 [data-tool=pen] .dot').style.setProperty('--c', penColor);
+});
+$$('#tb1 .t[data-tool]').forEach(t => t.onclick = () => $$('#tb1 .t[data-tool]').forEach(x => x.classList.toggle('on', x === t)));
+// S Pen side button = temporary eraser
+function setSpen(on) {
+  if (tempEraser === on) return; tempEraser = on;
+  $('#spen1').classList.toggle('on', on);
+  cur1.classList.toggle('eraser', on); cur1.style.setProperty('--s', on ? '30px' : '9px');
+  $('#tb1 [data-tool=eraser]').classList.toggle('tmp', on);
+  $('#spenBtn').classList.toggle('primary', on);
+}
+const sb = $('#spenBtn');
+sb.addEventListener('pointerdown', () => setSpen(true));
+['pointerup', 'pointerleave'].forEach(ev => sb.addEventListener(ev, () => setSpen(false)));
+addEventListener('keydown', e => { if (e.key === 'b' || e.key === 'B') setSpen(true); });
+addEventListener('keyup', e => { if (e.key === 'b' || e.key === 'B') setSpen(false); });
+// Page chip follows scroll
+const pages1 = $$('#pages1 .paper');
+function syncChip() {
+  const mid = sc1.scrollTop + sc1.clientHeight / 2;
+  let best = pages1[0];
+  pages1.forEach(p => { if (p.offsetTop <= mid) best = p; });
+  $('#pchip1 span').textContent = `Page ${best.dataset.p} of 22`;
+}
+sc1.addEventListener('scroll', syncChip);
+setTimeout(() => { sc1.scrollTop = pages1[1].offsetTop - 64; syncChip(); }, 200);
+// Zoom chip
+const zooms = [.75, 1, 1.25, 1.5]; let zi = 1;
+function setZoom(d) {
+  const anchor = sc1.scrollTop / sc1.scrollHeight;
+  zi = Math.max(0, Math.min(zooms.length - 1, zi + d));
+  $('#pages1').style.setProperty('--z', zooms[zi]); $('#zv1').textContent = Math.round(zooms[zi] * 100) + '%';
+  setTimeout(() => { sc1.scrollTop = anchor * sc1.scrollHeight; syncChip(); }, 260);
+}
+$('#zIn1').onclick = () => setZoom(1); $('#zOut1').onclick = () => setZoom(-1);
+
+// ---------- Layout 2: side dock + handedness ----------
+BN.hover($('#cv2'), $('#cur2'));
+BN.writingFade($('#ed2'), $('#cv2 .spread'));
+$$('#cv2 .paper svg').forEach(svg => BN.ink(svg, () => ({ color: 'var(--pen-navy)', width: 2.4, cls: 'user' })));
+BN.seg($('#hand'), v => {
+  $('#ed2').classList.toggle('lefty', v === 'l');
+  $('#handTag span').textContent = v === 'l' ? 'Left-handed · dock right' : 'Right-handed · dock left';
+});
+BN.seg($('#tb2'), null, '.t'); BN.seg($('#tb2'), null, '.swatch'); BN.seg($('#tb2'), null, '.size-dot');
+
+// ---------- Layout 3 ----------
+BN.hover($('#cv3'), $('#cur3'));
+BN.writingFade($('#ed3'), $('#cv3 .ed-pages'));
+$$('#cv3 .paper svg').forEach(svg => BN.ink(svg, () => ({ color: 'var(--pen-navy)', width: 2.4, cls: 'user' })));
+BN.seg($('#tb3'), null, '.t'); BN.seg($('#tb3'), null, '.swatch');
+</script>
+</body>
+</html>

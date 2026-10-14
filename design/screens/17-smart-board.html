@@ -1,0 +1,595 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BestNote · Smart Board</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Sans+Arabic:wght@400;500;600&family=Caveat:wght@500;700&family=Material+Symbols+Rounded:opsz,wght,FILL@24,400,0..1&family=Fraunces:opsz,wght@9..144,500;9..144,600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../tokens.css">
+<link rel="stylesheet" href="../board.css">
+<script src="../shell.js"></script>
+<script src="../editor-kit.js"></script>
+<style>
+  :root { --marker-blue: #1d3c8a; --marker-red: #d32f2f; --marker-green: #2e7d32; --board: #f3f4ef; --cam-bg: #0b0c0f; }
+  /* ---------- 1. capture ---------- */
+  .cam { display: grid; grid-template-columns: 1fr 112px; background: var(--cam-bg) !important; color: #fff; }
+  .viewfinder { position: relative; overflow: hidden; }
+  .viewfinder > svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .edge { fill: rgba(94, 160, 255, .12); stroke: #8ab4ff; stroke-width: 2.5; stroke-linejoin: round; filter: drop-shadow(0 0 6px rgba(138,180,255,.8)); }
+  .edge-c { fill: #fff; stroke: #8ab4ff; stroke-width: 3; }
+  .cam-chip { position: absolute; top: 16px; left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 8px; padding: 7px 14px; border-radius: 999px; background: rgba(20,22,28,.72); backdrop-filter: blur(10px); font-size: 13px; font-weight: 500; white-space: nowrap; }
+  .cam-chip .ms { font-size: 18px; color: #8ab4ff; }
+  .cam-chip .dot { width: 8px; height: 8px; border-radius: 50%; background: #5ee08a; box-shadow: 0 0 0 4px rgba(94,224,138,.25); }
+  .tpl-strip { position: absolute; left: 16px; right: 16px; bottom: 16px; display: flex; gap: 10px; align-items: flex-end; }
+  .tcard { width: 132px; padding: 8px; border-radius: 16px; background: rgba(20,22,28,.72); backdrop-filter: blur(10px); cursor: pointer; border: 1.5px solid transparent; transition: transform var(--dur-medium) var(--spring-snappy), border-color var(--dur-short); }
+  .tcard:hover { transform: translateY(-3px); }
+  .tcard.on { border-color: #8ab4ff; }
+  .tcard svg { width: 100%; height: 70px; display: block; border-radius: 8px; background: #fbf9f4; }
+  .tcard b { display: block; font-size: 12.5px; margin-top: 6px; }
+  .tcard small { display: block; font-size: 10.5px; color: #a9adb9; line-height: 1.3; }
+  .privacy2 { margin-inline-start: auto; max-width: 300px; display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border-radius: 16px; background: rgba(20,22,28,.72); backdrop-filter: blur(10px); font-size: 11.5px; line-height: 1.4; color: #c9ccd6; }
+  .privacy2 .ms { color: #5ee08a; font-size: 20px; }
+  .privacy2 b { color: #fff; }
+  .cam-side { display: flex; flex-direction: column; align-items: center; justify-content: space-between; padding: 22px 0; background: #050507; }
+  .cam-side .cb { width: 46px; height: 46px; border-radius: 50%; display: grid; place-items: center; background: #1c1e25; color: #e9eaee; cursor: pointer; }
+  .shutter2 { width: 72px; height: 72px; border-radius: 50%; background: #fff; box-shadow: 0 0 0 4px var(--cam-bg), 0 0 0 7px #fff; cursor: pointer; display: grid; place-items: center; transition: transform var(--dur-short) var(--spring-snappy); }
+  .shutter2:active { transform: scale(.92); }
+  .shutter2 .ms { color: #111; font-size: 28px; }
+  .gal { width: 46px; height: 46px; border-radius: 12px; background: linear-gradient(135deg, #cfd8dc, #78909c); border: 2px solid #fff; }
+
+  /* ---------- 2. processing ---------- */
+  .proc { display: grid; grid-template-columns: 1fr 1fr; gap: 0; background: var(--chrome-solid) !important; }
+  .proc-img { position: relative; background: var(--surface-2); display: grid; place-items: center; padding: 18px; overflow: hidden; }
+  .proc-img .flat { position: relative; width: 100%; aspect-ratio: 600 / 380; border-radius: 6px; overflow: hidden; box-shadow: var(--shadow-2); }
+  .proc-img .flat svg { width: 100%; height: 100%; display: block; }
+  .sweep { position: absolute; inset: 0; background: linear-gradient(90deg, transparent 0%, color-mix(in srgb, var(--accent) 30%, transparent) 48%, transparent 52%); transform: translateX(-100%); }
+  .go .sweep { animation: sweep 1.1s var(--ease-standard) .1s 1 forwards; }
+  @keyframes sweep { to { transform: translateX(100%); } }
+  .found { position: absolute; border: 1.5px solid var(--accent); border-radius: 4px; background: color-mix(in srgb, var(--accent) 8%, transparent); opacity: 0; }
+  .go .found { animation: found .3s var(--ease-standard) forwards; }
+  @keyframes found { to { opacity: 1; } }
+  .proc-steps { padding: 22px 22px 18px; display: flex; flex-direction: column; gap: 4px; }
+  .proc-steps h3 { font: 600 19px var(--font-display); margin-bottom: 2px; }
+  .proc-steps .muted { margin-bottom: 10px; }
+  .step { display: flex; gap: 10px; align-items: center; padding: 7px 0; font-size: 13px; color: var(--ink-3); }
+  .step i.st { width: 22px; height: 22px; border-radius: 50%; border: 2px solid var(--outline); display: grid; place-items: center; flex: none; position: relative; }
+  .step i.st .ms { font-size: 15px; color: var(--on-accent); opacity: 0; }
+  .go .step { animation: stepOn .25s var(--ease-standard) forwards; animation-delay: var(--t); }
+  .go .step i.st { animation: stepDot .25s var(--spring-snappy) forwards; animation-delay: var(--t); }
+  .go .step i.st .ms { animation: bnFade .2s forwards; animation-delay: var(--t); }
+  @keyframes stepOn { to { color: var(--ink); } }
+  @keyframes stepDot { to { background: var(--accent); border-color: var(--accent); } }
+  .step small { margin-inline-start: auto; font-variant-numeric: tabular-nums; color: var(--ink-3); font-size: 11px; }
+  .bar2 { height: 4px; border-radius: 4px; background: var(--surface); overflow: hidden; margin-top: auto; }
+  .bar2 i { display: block; height: 100%; width: 0; background: var(--accent); border-radius: 4px; }
+  .go .bar2 i { animation: barFill 1.7s cubic-bezier(.3,.6,.4,1) forwards; }
+  @keyframes barFill { to { width: 100%; } }
+  .elapsed { display: flex; justify-content: space-between; font-size: 11.5px; color: var(--ink-3); margin-top: 6px; font-variant-numeric: tabular-nums; }
+
+  /* ---------- 3. review ---------- */
+  .rv { display: flex; flex-direction: column; background: var(--surface-2) !important; }
+  .rv-top { height: 52px; flex: none; display: flex; align-items: center; gap: 8px; padding: 0 14px; background: var(--chrome-solid); border-bottom: 1px solid var(--outline); }
+  .rv-top .ttl { display: flex; flex-direction: column; line-height: 1.15; margin-inline-end: 8px; }
+  .rv-top .ttl b { font-size: 14px; } .rv-top .ttl small { font-size: 11px; color: var(--ink-3); }
+  .rv-top .btn { display: inline-flex; align-items: center; }
+  .rv-body { flex: 1; display: grid; grid-template-columns: 250px 1fr 270px; gap: 0; min-height: 0; }
+  .rv-left, .rv-right { padding: 14px; display: flex; flex-direction: column; gap: 10px; overflow: auto; }
+  .orig { border-radius: var(--r-card); overflow: hidden; background: var(--chrome-solid); border: 1px solid var(--outline); }
+  .orig svg { display: block; width: 100%; height: auto; }
+  .orig div { padding: 8px 10px; font-size: 11.5px; color: var(--ink-3); display: flex; justify-content: space-between; }
+  .rv-center { display: flex; justify-content: center; align-items: flex-start; padding: 12px 0; overflow: hidden; }
+  .nbp { width: 504px; height: 630px; flex: none; }
+  .nbp > svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .did { background: var(--chrome-solid); border: 1px solid var(--outline); border-radius: var(--r-card); padding: 10px 12px; font-size: 12px; color: var(--ink-2); line-height: 1.4; display: flex; gap: 10px; }
+  .did .ms { font-size: 20px; flex: none; }
+  .did b { display: block; color: var(--ink); font-size: 12.5px; }
+  .tplseg { display: flex; gap: 4px; flex-wrap: wrap; }
+  .tplseg .chip { cursor: pointer; }
+  /* page ink look */
+  .sb text.hw { fill: var(--pen-black); }
+  .sb .ttl { fill: var(--pen-navy); }
+  .sb .grey { fill: #6b7280; }
+
+  /* ---------- 4. inserted ---------- */
+  .ins-thumbs { width: 120px; flex: none; background: var(--chrome-solid); border-inline-end: 1px solid var(--outline); padding: 12px 14px; display: flex; flex-direction: column; gap: 14px; overflow: hidden; }
+  .ins-thumbs .tt { font-size: 11px; color: var(--ink-3); text-align: center; position: relative; }
+  .ins-thumbs .tt .pv { aspect-ratio: 560 / 700; border-radius: 4px; background-color: var(--paper); box-shadow: var(--shadow-1); margin-bottom: 4px; overflow: hidden; position: relative; }
+  .ins-thumbs .tt .pv svg { width: 100%; height: 100%; display: block; }
+  .ins-thumbs .tt.new .pv { box-shadow: 0 0 0 2.5px var(--accent), var(--shadow-1); animation: slideNew 700ms var(--spring-gentle) 300ms backwards; }
+  .ins-thumbs .tt.new::after { content: "NEW"; position: absolute; top: -6px; inset-inline-end: -6px; font: 700 9px var(--font-ui); padding: 2px 5px; border-radius: 6px; background: var(--accent); color: var(--on-accent); }
+  @keyframes slideNew { from { transform: translateY(40px) scale(.8); opacity: 0; } }
+  .ins-main { flex: 1; position: relative; display: flex; justify-content: center; padding-top: 64px; overflow: hidden; }
+  .ins-main .tb { position: absolute; top: 12px; left: 50%; transform: translateX(-50%); z-index: 5; }
+  .ins-main .nbp { width: 560px; height: 700px; }
+  .ins-ctx { position: absolute; z-index: 6; }
+  .ink-badge { position: absolute; z-index: 6; display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; padding: 6px 10px; border-radius: 10px; background: var(--chrome-solid); color: var(--ink); border: 1px solid var(--outline); box-shadow: var(--shadow-2); }
+  .ink-badge .ms { font-size: 17px; color: var(--accent); }
+
+  /* ---------- 5. beautify ---------- */
+  .bf { display: grid; grid-template-columns: 1fr 250px; background: var(--surface-2) !important; }
+  .bf-stage { position: relative; display: flex; justify-content: center; align-items: center; overflow: hidden; }
+  .bf-paper { width: 640px; height: 520px; }
+  .bf-paper > svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .gl { transform-box: fill-box; transform-origin: 50% 70%; transition: transform 700ms var(--spring-gentle); }
+  .bf .lasso-path { transition: opacity var(--dur-medium); }
+  .bf-side { background: var(--chrome-solid); border-inline-start: 1px solid var(--outline); padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+  .bf-side h3 { font: 600 17px var(--font-display); }
+  .bf-menu { position: absolute; z-index: 6; top: 26px; left: 50%; transform: translateX(-50%); }
+  .bf-menu .ai { position: relative; }
+  .bf-menu .ai::after { content: ""; position: absolute; inset: 2px; border-radius: 10px; box-shadow: 0 0 0 2px var(--accent); animation: aiPulse 1.6s ease-in-out infinite; }
+  @keyframes aiPulse { 50% { box-shadow: 0 0 0 5px color-mix(in srgb, var(--accent) 25%, transparent); } }
+  .shimmer { position: absolute; inset: 0; pointer-events: none; background: linear-gradient(100deg, transparent 30%, color-mix(in srgb, var(--accent) 22%, transparent) 50%, transparent 70%); transform: translateX(-100%); }
+  .shimmer.on { animation: sweep 700ms var(--ease-standard) forwards; }
+  .bf-chip { position: absolute; z-index: 6; bottom: 22px; left: 50%; transform: translate(-50%, 20px); opacity: 0; transition: opacity var(--dur-medium), transform var(--dur-medium) var(--spring-snappy); white-space: nowrap; }
+  .bf-chip.on { opacity: 1; transform: translate(-50%, 0); }
+  .cmp { display: flex; flex-direction: column; gap: 6px; font-size: 12px; color: var(--ink-2); }
+  .cmp div { display: flex; gap: 8px; align-items: center; }
+  .cmp .ms { font-size: 18px; color: var(--pen-green); }
+
+  .caption { font-size: 12.5px; color: var(--ink-2); margin: 10px auto 0; max-width: 680px; text-align: center; }
+  .flowarrow { display: flex; justify-content: center; color: var(--accent); margin: -8px 0; }
+  .flowarrow .ms { font-size: 30px; }
+</style>
+</head>
+<body>
+<div class="page-wrap">
+  <h1>Smart Board</h1>
+  <p class="lead muted">Photograph a whiteboard and get the page the best student in the room would have written: in teaching order, with ruler-straight drawings, colors that mean something and proper math. It is written by hand, on your paper, as real ink you can erase and lasso. Never typeset, never markdown cards.</p>
+
+  <!-- shared board photos -->
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <defs>
+      <symbol id="boardEN" viewBox="0 0 600 380">
+        <rect width="600" height="380" fill="var(--board)"/>
+        <ellipse cx="470" cy="330" rx="110" ry="26" fill="#dfe2da" opacity=".7"/>
+        <ellipse cx="120" cy="40" rx="90" ry="16" fill="#e2e5dd" opacity=".8"/>
+        <text x="380" y="352" font-family="Caveat" font-size="18" fill="#9aa3b5" opacity=".6" transform="rotate(-2 380 352)">L6: projectile ...</text>
+        <g font-family="Caveat" font-weight="700">
+          <text x="205" y="44" font-size="34" fill="var(--marker-blue)" transform="rotate(-3 205 44)">Inclined Plane</text>
+          <path d="M200 52 Q 280 46 360 50" stroke="var(--marker-blue)" stroke-width="2.5" fill="none" opacity=".8"/>
+          <text x="24" y="100" font-size="21" fill="var(--marker-green)" transform="rotate(-7 24 100)">(no friction yet!)</text>
+          <path d="M30 316 Q 140 314 252 320 Q 254 262 247 192 Q 150 258 33 314" stroke="var(--marker-blue)" stroke-width="3" fill="none" stroke-linecap="round"/>
+          <path d="M150 250 l 30 -16 l 12 20 l -30 16 z" stroke="var(--marker-blue)" stroke-width="2.5" fill="none" transform="rotate(4 165 255)"/>
+          <path d="M170 262 Q 171 290 168 312 M160 302 L168 314 L176 300" stroke="var(--marker-red)" stroke-width="3" fill="none" stroke-linecap="round"/>
+          <text x="178" y="306" font-size="20" fill="var(--marker-red)">mg</text>
+          <path d="M162 246 Q 150 226 142 212 M 136 224 L 141 210 L 152 220" stroke="var(--marker-blue)" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+          <text x="124" y="208" font-size="20" fill="var(--marker-blue)">N</text>
+          <path d="M70 314 Q 74 302 66 296" stroke="var(--marker-blue)" stroke-width="2" fill="none"/><text x="78" y="306" font-size="18" fill="var(--marker-blue)">θ</text>
+          <text x="300" y="140" font-size="25" fill="var(--marker-blue)" transform="rotate(2 300 140)">F∥ = mg sinθ</text>
+          <text x="318" y="190" font-size="24" fill="var(--marker-blue)" transform="rotate(-2 318 190)">ma = mg sinθ</text>
+          <text x="420" y="88" font-size="30" fill="var(--marker-red)" transform="rotate(-4 420 88)">a = g sinθ</text>
+          <ellipse cx="474" cy="78" rx="78" ry="28" stroke="var(--marker-red)" stroke-width="2.5" fill="none" transform="rotate(-4 474 78)"/>
+          <text x="300" y="260" font-size="21" fill="var(--marker-blue)" transform="rotate(3 300 260)">Def: N ⟂ surface</text>
+          <text x="310" y="300" font-size="20" fill="var(--marker-blue)" transform="rotate(-3 310 300)">30° → a = 4.9</text>
+          <path d="M400 100 Q 380 120 350 128" stroke="var(--marker-red)" stroke-width="2" fill="none"/>
+        </g>
+      </symbol>
+      <symbol id="boardAR" viewBox="0 0 600 380">
+        <rect width="600" height="380" fill="var(--board)"/>
+        <ellipse cx="140" cy="330" rx="110" ry="24" fill="#dfe2da" opacity=".7"/>
+        <g font-family="IBM Plex Sans Arabic" font-weight="600">
+          <text x="560" y="50" font-size="30" fill="var(--marker-blue)" direction="rtl" transform="rotate(2 560 50)">قانون نيوتن الثاني</text>
+          <text x="330" y="96" font-size="26" fill="var(--marker-red)" transform="rotate(-3 330 96)" direction="rtl">ق = ك × ت</text>
+          <rect x="196" y="66" width="150" height="44" rx="8" stroke="var(--marker-red)" stroke-width="2.5" fill="none" transform="rotate(-3 270 88)"/>
+          <text x="560" y="150" font-size="19" fill="var(--marker-blue)" direction="rtl" transform="rotate(-2 560 150)">كلما زادت الكتلة قل التسارع</text>
+          <text x="140" y="190" font-size="18" fill="var(--marker-green)" direction="rtl" transform="rotate(-6 140 190)">مهم للامتحان!!</text>
+          <rect x="300" y="226" width="70" height="46" stroke="var(--marker-blue)" stroke-width="2.5" fill="none" transform="rotate(2 335 249)"/>
+          <path d="M372 248 Q 420 246 452 250 M440 240 L454 250 L440 258" stroke="var(--marker-red)" stroke-width="3" fill="none" stroke-linecap="round"/>
+          <text x="470" y="256" font-size="20" fill="var(--marker-red)">ق = ٢٠</text>
+          <path d="M298 250 Q 260 252 236 249 M248 240 L234 249 L248 258" stroke="var(--marker-blue)" stroke-width="2.5" fill="none"/>
+          <text x="226" y="256" font-size="20" fill="var(--marker-blue)" direction="rtl">ح = ٤</text>
+          <text x="340" y="320" font-size="21" fill="var(--marker-blue)" direction="rtl" transform="rotate(2 340 320)">٢٠ − ٤ = ٤ × ت</text>
+          <text x="140" y="300" font-size="20" fill="var(--marker-blue)" direction="rtl">ت = ٤ م/ث²</text>
+          <text x="330" y="282" font-size="14" fill="var(--marker-blue)">ك = ٤ كغ</text>
+        </g>
+      </symbol>
+    </defs>
+  </svg>
+
+  <div class="variants">
+    <!-- ============ 1. CAPTURE ============ -->
+    <div>
+      <div class="variant-label">1 · Capture · live edge detection · pick a template · privacy</div>
+      <div class="device tablet">
+        <div class="status" style="background:var(--cam-bg);color:#a9acb8"><span>9:41</span><span><i class="ms">wifi</i><i class="ms">battery_full</i></span></div>
+        <div class="cam">
+          <div class="viewfinder">
+            <svg viewBox="0 0 1060 708" preserveAspectRatio="xMidYMid slice">
+              <defs><linearGradient id="wallG" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#4a4f58"/><stop offset="1" stop-color="#2f333a"/></linearGradient><radialGradient id="vign" cx=".5" cy=".45" r=".75"><stop offset=".6" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity=".55"/></radialGradient></defs>
+              <rect width="1060" height="708" fill="url(#wallG)"/>
+              <rect x="0" y="560" width="1060" height="148" fill="#23262c"/>
+              <g transform="matrix(1.18 0.07 -0.04 1.2 160 36)">
+                <rect x="-14" y="-14" width="628" height="408" rx="6" fill="#b8bcc2"/>
+                <use href="#boardEN" width="600" height="380"/>
+                <rect x="40" y="388" width="520" height="10" rx="3" fill="#9aa0a8"/>
+                <rect x="90" y="380" width="40" height="10" rx="2" fill="var(--marker-red)"/><rect x="140" y="380" width="40" height="10" rx="2" fill="var(--marker-blue)"/>
+              </g>
+              <g id="edgeG"><polygon class="edge" id="edgePoly"/><g id="edgeCorners"></g></g>
+              <rect width="1060" height="708" fill="url(#vign)" pointer-events="none"/>
+            </svg>
+            <div class="cam-chip"><span class="dot"></span>Board found · hold steady<i class="ms">crop_free</i></div>
+            <div class="tpl-strip">
+              <div class="tcard" data-t="cornell"><svg viewBox="0 0 120 70"><line x1="34" y1="0" x2="34" y2="54" stroke="#f2b8b5"/><line x1="0" y1="54" x2="120" y2="54" stroke="#f2b8b5"/><g stroke="#1d2433" stroke-width="2" stroke-linecap="round"><path d="M6 14h20M6 30h18"/><path d="M42 12h60M42 22h50M42 32h66M42 42h40"/><path d="M6 62h80" stroke="#2e7d32"/></g></svg><b>Cornell</b><small>Cues, notes, summary</small></div>
+              <div class="tcard on" data-t="lecture"><svg viewBox="0 0 120 70"><g stroke="#1d2433" stroke-width="2" stroke-linecap="round"><path d="M8 12h46" stroke="#1d3c8a" stroke-width="3"/><path d="M8 24h70M8 32h56"/><path d="M70 60 L 100 60 L 100 40 Z" fill="none"/><rect x="8" y="44" width="40" height="16" fill="none" stroke="#c62828"/></g></svg><b>Lecture</b><small>Teaching order, full</small></div>
+              <div class="tcard" data-t="cheat"><svg viewBox="0 0 120 70"><g stroke="#1d2433" stroke-width="1.6" stroke-linecap="round"><rect x="6" y="6" width="50" height="26" fill="none" stroke="#c62828"/><rect x="64" y="6" width="50" height="26" fill="none"/><rect x="6" y="38" width="50" height="26" fill="none"/><rect x="64" y="38" width="50" height="26" fill="none" stroke="#1d3c8a"/><path d="M12 16h30M12 22h22M70 16h34M12 48h36M70 50h30"/></g></svg><b>Cheat sheet</b><small>Dense, boxed, 1 page</small></div>
+              <div class="tcard" data-t="minimal"><svg viewBox="0 0 120 70"><g stroke="#1d2433" stroke-width="2" stroke-linecap="round"><path d="M10 16h50M10 30h80M10 44h64"/></g></svg><b>Minimal</b><small>Just the essentials</small></div>
+              <div class="privacy2"><i class="ms">lock</i><span><b>Your photo, your key.</b> It goes straight from this tablet to the AI provider you picked, with your own API key. BestNote has no servers. Nothing is kept.</span></div>
+            </div>
+          </div>
+          <div class="cam-side">
+            <span class="cb"><i class="ms">flash_off</i></span>
+            <span class="cb"><i class="ms">document_scanner</i></span>
+            <button class="shutter2" id="shutter" title="Capture"><i class="ms">auto_awesome</i></button>
+            <span class="gal"></span>
+            <span class="cb"><i class="ms">close</i></span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="flowarrow"><i class="ms">south</i></div>
+
+    <!-- ============ 2. PROCESSING ============ -->
+    <div>
+      <div class="variant-label">2 · Processing · under 2 seconds</div>
+      <div class="device tablet half">
+        <div class="status"><span>9:41</span><span><i class="ms">battery_full</i></span></div>
+        <div class="proc go" id="proc">
+          <div class="proc-img">
+            <div class="flat"><svg viewBox="0 0 600 380"><use href="#boardEN"/></svg>
+              <i class="found" style="left:4%;top:48%;width:40%;height:38%;animation-delay:.45s"></i>
+              <i class="found" style="left:68%;top:8%;width:28%;height:20%;animation-delay:.6s"></i>
+              <i class="found" style="left:32%;top:4%;width:30%;height:12%;animation-delay:.35s"></i>
+              <div class="sweep"></div>
+            </div>
+          </div>
+          <div class="proc-steps">
+            <h3>Writing your page…</h3>
+            <p class="muted">Lecture template · Gemini (your key)</p>
+            <div class="step" style="--t:.15s"><i class="st"><i class="ms">check</i></i>Straightened the photo<small>0.15 s</small></div>
+            <div class="step" style="--t:.55s"><i class="st"><i class="ms">check</i></i>Read 9 lines and 1 diagram<small>0.55 s</small></div>
+            <div class="step" style="--t:.9s"><i class="st"><i class="ms">check</i></i>Put it in teaching order<small>0.9 s</small></div>
+            <div class="step" style="--t:1.2s"><i class="st"><i class="ms">check</i></i>Ruler and compass for the drawing<small>1.2 s</small></div>
+            <div class="step" style="--t:1.55s"><i class="st"><i class="ms">check</i></i>Ink colors with meaning<small>1.55 s</small></div>
+            <div class="bar2"><i></i></div>
+            <div class="elapsed"><span id="elapsed">0.0 s</span><button class="btn ghost" id="procReplay" style="padding:3px 10px;font-size:11px">Replay</button></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="flowarrow"><i class="ms">south</i></div>
+
+    <!-- ============ 3. RESULT ============ -->
+    <div>
+      <div class="variant-label">3 · The result · a ruled page that writes itself by hand</div>
+      <div class="device tablet">
+        <div class="status"><span>9:41</span><span><i class="ms">signal_cellular_alt</i><i class="ms">wifi</i><i class="ms">battery_full</i></span></div>
+        <div class="rv">
+          <div class="rv-top">
+            <span class="ib"><i class="ms flip-rtl">arrow_back</i></span>
+            <div class="ttl"><b>Smart Board</b><small>Written in 3.5 s · 100% editable ink</small></div>
+            <div class="tplseg" id="rvTpl"><span class="chip">Cornell</span><span class="chip on">Lecture</span><span class="chip">Cheat sheet</span><span class="chip">Minimal</span></div>
+            <span class="grow"></span>
+            <button class="btn tonal" id="replay"><i class="ms">replay</i>Replay writing</button>
+            <button class="btn ghost"><i class="ms">photo_camera</i>Retake</button>
+            <button class="btn primary"><i class="ms">add_notes</i>Insert into Physics 201</button>
+          </div>
+          <div class="rv-body">
+            <div class="rv-left">
+              <h4 style="margin:0">The board</h4>
+              <div class="orig"><svg viewBox="0 0 600 380"><use href="#boardEN"/></svg><div><span>Room 204 · 10:52</span><span>messy, as usual</span></div></div>
+              <h4 style="margin:6px 0 0">Your handwriting style</h4>
+              <div class="seg2" id="styleSeg"><span class="on">Neat</span><span>Mine</span></div>
+              <p class="muted" style="font-size:11.5px">“Mine” learns your letter shapes from 3 pages you wrote. Until then BestNote uses a neat default hand.</p>
+            </div>
+            <div class="rv-center"><div class="paper nbp" id="resultPage"></div></div>
+            <div class="rv-right">
+              <h4 style="margin:0">What the expert student did</h4>
+              <div class="did"><i class="ms" style="color:var(--accent)">format_list_numbered</i><span><b>Teaching order</b>Title → definition → diagram → derivation → result, not where things sat on the board.</span></div>
+              <div class="did"><i class="ms" style="color:var(--pen-black)">straighten</i><span><b>Ruler-straight drawing</b>Edges welded, right angle squared, arrows anchored on the block.</span></div>
+              <div class="did"><i class="ms" style="color:var(--pen-red)">crop_square</i><span><b>Red box = key formula</b>Drawn with a pen, slightly imperfect, like you'd do it.</span></div>
+              <div class="did"><i class="ms" style="color:var(--pen-green)">subdirectory_arrow_left</i><span><b>Green margin notes</b>Asides go in the margin, with an arrow to what they're about.</span></div>
+              <div class="did"><i class="ms" style="color:var(--pen-navy)">functions</i><span><b>Proper math</b>Fixed the slip “F∥ = mg sinθ” layout, added the 30° check.</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <p class="caption">The page is written left to right, line by line, about 3 seconds for a full page. No typeset blocks, no cards: titles are hand-underlined, the key formula gets a pen-drawn red box, the diagram is drawn with a ruler. Press <b>Replay writing</b>.</p>
+    </div>
+
+    <div class="flowarrow"><i class="ms">south</i></div>
+
+    <!-- ============ 4. INSERTED ============ -->
+    <div>
+      <div class="variant-label">4 · Inserted into the notebook · it's ordinary, editable ink</div>
+      <div class="device tablet">
+        <div class="status"><span>9:41</span><span><i class="ms">signal_cellular_alt</i><i class="ms">wifi</i><i class="ms">battery_full</i></span></div>
+        <div class="ed">
+          <div class="ed-bar"><span class="ib"><i class="ms flip-rtl">arrow_back</i></span><div class="ed-title"><b>Physics 201</b><small>p.15 of 23 · from Smart Board</small></div><span class="grow"></span><span class="ib"><i class="ms">search</i></span><span class="ib on"><i class="ms">view_sidebar</i></span><span class="ib"><i class="ms">more_vert</i></span></div>
+          <div style="flex:1;display:flex;min-height:0">
+            <div class="ins-thumbs">
+              <div class="tt"><div class="pv p-ruled" style="--lh:6px;--top:14px"></div>13</div>
+              <div class="tt"><div class="pv p-ruled" style="--lh:6px;--top:14px"></div>14</div>
+              <div class="tt new"><div class="pv" id="insThumb"></div>15</div>
+              <div class="tt"><div class="pv p-grid" style="--g:7px"></div>16</div>
+            </div>
+            <div class="ins-main" id="insMain">
+              <div class="tb">
+                <span class="t"><i class="ms">ink_pen</i></span><span class="t"><i class="ms">ink_highlighter</i></span><span class="t"><i class="ms">ink_eraser</i></span><span class="t on"><i class="ms">lasso_select</i></span><span class="sep"></span><span class="t"><i class="ms">undo</i></span>
+              </div>
+              <div class="paper nbp" id="insPage"></div>
+              <div class="panel hmenu ins-ctx" id="insCtx"><span><i class="ms">palette</i>Recolor</span><span><i class="ms">line_weight</i>Thickness</span><span><i class="ms">open_with</i>Move</span><span><i class="ms">content_copy</i>Copy</span><span><i class="ms">text_fields</i>To text</span><span style="color:var(--danger)"><i class="ms">delete</i>Delete</span></div>
+              <div class="ink-badge" id="inkBadge"><i class="ms">gesture</i>14 strokes · same as your own ink</div>
+            </div>
+          </div>
+          <div class="toast-edge" style="inset-inline-start:136px"><i class="ms">check_circle</i>Inserted 1 page from Smart Board<u>Undo</u></div>
+        </div>
+      </div>
+      <p class="caption">One undo step inserts the page after the current one. Every line is a real stroke: erase a word, lasso the boxed formula and recolor it, or write between the lines with your own pen (try it).</p>
+    </div>
+
+    <!-- ============ 5. BEAUTIFY ============ -->
+    <div>
+      <div class="variant-label">5 · Beautify my handwriting · lasso a messy note, it becomes neat in place</div>
+      <div class="device tablet">
+        <div class="status"><span>9:41</span><span><i class="ms">signal_cellular_alt</i><i class="ms">wifi</i><i class="ms">battery_full</i></span></div>
+        <div class="bf">
+          <div class="bf-stage">
+            <div class="panel hmenu bf-menu"><span><i class="ms">content_copy</i>Copy</span><span><i class="ms">palette</i>Recolor</span><span><i class="ms">text_fields</i>To text</span><span class="ai" id="bfBtn"><i class="ms">auto_awesome</i>Beautify</span><span><i class="ms">more_horiz</i>More</span></div>
+            <div class="paper bf-paper p-ruled p-margin" style="--lh:40px;--top:60px;--ml:56px">
+              <svg viewBox="0 0 640 520" id="bfSvg">
+                <text class="hw" x="74" y="46" font-size="22" style="fill:#9aa1ad">Thermo · Oct 15 · written during class, fast</text>
+                <g id="bfInk"></g>
+                <path id="bfLasso" class="lasso-path marching" d="M54 70 C 40 160, 46 380, 120 410 C 300 440, 560 430, 610 360 C 640 240, 620 90, 520 70 C 380 56, 150 50, 54 70 Z" style="fill:color-mix(in srgb, var(--accent) 5%, transparent)"/>
+              </svg>
+              <div class="shimmer" id="bfShim"></div>
+            </div>
+            <div class="toast-edge bf-chip" id="bfChip"><i class="ms">auto_awesome</i>Beautified in place · still your ink, still your letters<u id="bfUndo">Undo</u></div>
+          </div>
+          <div class="bf-side">
+            <h3>Beautify</h3>
+            <p class="muted" style="font-size:12.5px">Keeps your own letter shapes. It only fixes what makes notes hard to read.</p>
+            <div class="cmp">
+              <div><i class="ms">check</i>Baselines straightened to the ruled lines</div>
+              <div><i class="ms">check</i>Letter size and spacing evened out</div>
+              <div><i class="ms">check</i>Wobbly arrows and boxes made clean</div>
+              <div><i class="ms">check</i>Words, colors and position stay yours</div>
+            </div>
+            <div class="seg2" id="bfSeg" style="margin-top:8px"><span class="on" data-v="before">Before</span><span data-v="after">After</span></div>
+            <button class="btn primary" id="bfGo" style="margin-top:auto"><i class="ms">auto_awesome</i>Beautify selection</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ 6. ARABIC ============ -->
+    <div>
+      <div class="variant-label">6 · Arabic board → Arabic page (right to left, Arabic numerals)</div>
+      <div class="device tablet">
+        <div class="status"><span>9:41</span><span><i class="ms">signal_cellular_alt</i><i class="ms">wifi</i><i class="ms">battery_full</i></span></div>
+        <div class="rv">
+          <div class="rv-top">
+            <span class="ib"><i class="ms flip-rtl">arrow_back</i></span>
+            <div class="ttl"><b>Smart Board</b><small>Arabic detected · written in 2.6 s</small></div>
+            <div class="tplseg"><span class="chip on">Lecture</span><span class="chip">Cheat sheet</span></div>
+            <span class="grow"></span>
+            <button class="btn tonal" id="replayAr"><i class="ms">replay</i>Replay writing</button>
+            <button class="btn primary"><i class="ms">add_notes</i>Insert into فيزياء ١</button>
+          </div>
+          <div class="rv-body">
+            <div class="rv-left">
+              <h4 style="margin:0">The board</h4>
+              <div class="orig"><svg viewBox="0 0 600 380"><use href="#boardAR"/></svg><div><span>Room 12 · 09:10</span><span>عربي</span></div></div>
+              <div class="did"><i class="ms" style="color:var(--accent)">translate</i><span><b>Stays in Arabic</b>The page keeps the lecture's language: Arabic letters for symbols (ق، ك، ت) and Arabic-Indic digits.</span></div>
+            </div>
+            <div class="rv-center"><div class="paper nbp" id="arPage"></div></div>
+            <div class="rv-right">
+              <h4 style="margin:0">Right to left, by hand</h4>
+              <div class="did"><i class="ms" style="color:var(--pen-black)">format_textdirection_r_to_l</i><span><b>Written right to left</b>Each line starts at the right margin, the way an Arabic student writes.</span></div>
+              <div class="did"><i class="ms" style="color:var(--pen-red)">crop_square</i><span><b>Same visual language</b>Red pen box for the law, green note in the outer margin with an arrow.</span></div>
+              <div class="did"><i class="ms" style="color:var(--ink-2)">info</i><span><b>Font is a placeholder</b>IBM Plex Sans Arabic stands in for a real Arabic handwriting model.</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <p class="caption">The app chrome follows the UI language; the paper does not. This page reads right to left because the <i>content</i> is Arabic, even when the app is in English.</p>
+    </div>
+  </div>
+</div>
+
+<!-- ===== The handwritten result page (560×700, ruled 30 px from y=80, margin at x=56) ===== -->
+<template id="sbPageTpl">
+  <svg viewBox="0 0 560 700" class="sb">
+    <text class="hw grey wr" x="452" y="40" font-size="18">Tue, Oct 14</text>
+    <text class="hw ttl wr" x="70" y="62" font-size="42" transform="rotate(-.6 70 62)">Inclined Plane</text>
+    <path class="stroke c-navy wr" stroke-width="2.6" d="M68 72 C 120 69, 200 74, 268 70 C 280 69, 290 71, 296 70"/>
+    <text class="hw wr" x="70" y="105" font-size="22"><tspan text-decoration="underline">Def.</tspan>  Normal force N = push of a surface, ⊥ to it</text>
+    <text class="hw wr" x="70" y="135" font-size="22">• weight mg always acts straight down</text>
+    <text class="hw wr" x="70" y="165" font-size="22">• tilt the axes: x along the slope, y ⊥ slope</text>
+    <!-- ruler-straight diagram -->
+    <path class="stroke wr" stroke-width="2.2" d="M80 320 H 330 V 190 Z"/>
+    <path class="stroke wr" stroke-width="1.6" d="M318 320 V 308 H 330"/>
+    <rect class="stroke wr" x="-22" y="-14" width="44" height="28" stroke-width="2.2" transform="translate(211 236) rotate(-27.5)"/>
+    <path class="stroke c-red wr" stroke-width="2.2" d="M211 236 V 300 M 205 290 L 211 301 L 217 290"/>
+    <text class="hw c-red wr" x="217" y="302" font-size="20">mg</text>
+    <path class="stroke c-blue wr" stroke-width="2.2" d="M211 236 L 182 181 M 181 193 L 182 180 L 192 188"/>
+    <text class="hw c-blue wr" x="166" y="182" font-size="20">N</text>
+    <path class="stroke c-red wr" stroke-width="1.8" stroke-dasharray="5 4" d="M211 236 L 165 260 M 171 252 L 164 260 L 175 261"/>
+    <text class="hw c-red wr" x="96" y="268" font-size="17">mg sin θ</text>
+    <path class="stroke wr" stroke-width="1.6" d="M114 320 A 34 34 0 0 0 110.2 304.3"/>
+    <text class="hw wr" x="120" y="314" font-size="18">θ</text>
+    <!-- margin note follows its anchor -->
+    <text class="hw c-green wr" x="380" y="214" font-size="21" transform="rotate(-2 380 214)">no friction</text>
+    <text class="hw c-green wr" x="380" y="236" font-size="21" transform="rotate(-2 380 236)">yet! (Lecture 8)</text>
+    <path class="stroke c-green wr" stroke-width="1.8" d="M376 228 C 340 232, 290 236, 242 236 M 252 230 L 241 236 L 252 242"/>
+    <!-- derivation -->
+    <text class="hw wr" x="70" y="375" font-size="23">along the slope:   ΣF = m a</text>
+    <text class="hw wr" x="70" y="405" font-size="23">mg sin θ = m a</text>
+    <text class="hw grey wr" x="230" y="405" font-size="19">(m cancels!)</text>
+    <path class="stroke wr" stroke-width="1.8" d="M96 412 V 428 M 90 421 L 96 429 L 102 421"/>
+    <text class="hw c-red wr" x="84" y="460" font-size="34">a = g sin θ</text>
+    <path class="stroke c-red wr" stroke-width="2.2" d="M72 432 C 120 430, 190 431, 238 433 C 240 446, 239 460, 240 470 C 190 472, 120 471, 71 471 C 70 458, 71 444, 72 432"/>
+    <text class="hw c-green wr" x="300" y="452" font-size="20" transform="rotate(-1 300 452)">same for a truck or a coin</text>
+    <path class="stroke c-green wr" stroke-width="1.6" d="M296 446 C 280 448, 262 450, 246 452 M 254 446 L 245 452 L 254 457"/>
+    <text class="hw wr" x="70" y="525" font-size="22">Ex. θ = 30°  →  a = 9.8 · ½ = 4.9 m/s²</text>
+    <text class="hw wr" x="70" y="555" font-size="22">check θ = 90°  →  a = g  (free fall)</text>
+    <path class="stroke c-green wr" stroke-width="2.2" d="M340 548 l 6 8 l 14 -18"/>
+    <text class="hw c-navy wr" x="70" y="615" font-size="22">next: add friction f = μ N  →  a = g (sin θ − μ cos θ)</text>
+  </svg>
+</template>
+
+<template id="arPageTpl">
+  <svg viewBox="0 0 560 700" class="sb">
+    <text class="hw-ar wr rtl" x="490" y="58" font-size="34" style="fill:var(--pen-navy)">قانون نيوتن الثاني</text>
+    <path class="stroke c-navy wr" stroke-width="2.6" d="M492 72 C 440 69, 380 74, 300 70 C 290 70, 284 71, 278 71"/>
+    <text class="hw-ar wr rtl" x="490" y="105" font-size="19"><tspan text-decoration="underline">تعريف:</tspan> القوة المحصّلة = الكتلة × التسارع</text>
+    <text class="hw-ar wr rtl" x="490" y="135" font-size="19">• كلما زادت الكتلة قلّ التسارع</text>
+    <text class="hw-ar wr rtl" x="490" y="165" font-size="19">• التسارع في اتجاه القوة المحصّلة</text>
+    <!-- diagram -->
+    <path class="stroke wr" stroke-width="2" d="M150 290 H 470"/>
+    <rect class="stroke wr" x="270" y="226" width="80" height="64" stroke-width="2.2"/>
+    <text class="hw-ar wr rtl" x="335" y="266" font-size="16">ك = ٤ كغ</text>
+    <path class="stroke c-red wr" stroke-width="2.2" d="M350 258 H 430 M 420 251 L 431 258 L 420 265"/>
+    <text class="hw-ar c-red wr rtl" x="500" y="264" font-size="17">ق = ٢٠ ن</text>
+    <path class="stroke c-blue wr" stroke-width="2.2" d="M270 258 H 214 M 224 251 L 213 258 L 224 265"/>
+    <text class="hw-ar c-blue wr rtl" x="206" y="264" font-size="17">ح = ٤ ن</text>
+    <!-- derivation -->
+    <text class="hw-ar wr rtl" x="490" y="345" font-size="20">ق − ح = ك × ت</text>
+    <text class="hw-ar wr rtl" x="490" y="375" font-size="20">٢٠ − ٤ = ٤ × ت</text>
+    <path class="stroke wr" stroke-width="1.8" d="M470 383 V 399 M 464 392 L 470 400 L 476 392"/>
+    <text class="hw-ar c-red wr rtl" x="478" y="432" font-size="28">ت = ٤ م/ث²</text>
+    <path class="stroke c-red wr" stroke-width="2.2" d="M490 402 C 440 400, 390 401, 334 403 C 332 416, 333 430, 332 442 C 390 444, 440 443, 491 443 C 492 430, 491 416, 490 402"/>
+    <!-- green note in the outer (left) margin -->
+    <text class="hw-ar c-green wr rtl" x="160" y="420" font-size="18">مهم للامتحان!</text>
+    <path class="stroke c-green wr" stroke-width="1.8" d="M160 414 C 210 410, 290 414, 326 420 M 316 413 L 327 420 L 316 426"/>
+    <text class="hw-ar wr rtl" x="490" y="495" font-size="19">تحقّق: لو ح = ٠ ← ت = ٥ م/ث²</text>
+    <text class="hw-ar c-navy wr rtl" x="490" y="555" font-size="19">التالي: قانون نيوتن الثالث (الفعل وردّ الفعل)</text>
+  </svg>
+</template>
+
+<script>
+const { $, $$, el } = BN;
+// ---------- 1. edge detection ----------
+const M = [1.18, .07, -.04, 1.2, 160, 36]; // board transform in the viewfinder
+const tp = (x, y) => [M[0] * x + M[2] * y + M[4], M[1] * x + M[3] * y + M[5]];
+const target = [tp(-14, -14), tp(614, -14), tp(614, 394), tp(-14, 394)];
+const cornersG = $('#edgeCorners');
+const cdots = target.map(() => el('circle', { class: 'edge-c', r: 7 }, cornersG));
+function setQuad(q) { $('#edgePoly').setAttribute('points', q.map(p => p.join(',')).join(' ')); q.forEach((p, i) => { cdots[i].setAttribute('cx', p[0]); cdots[i].setAttribute('cy', p[1]); }); }
+function lock() {
+  const start = target.map(([x, y], i) => [x + [-40, 50, 36, -30][i], y + [30, -24, 40, -36][i]]);
+  BN.tween(900, t => setQuad(start.map((p, i) => [p[0] + (target[i][0] - p[0]) * t, p[1] + (target[i][1] - p[1]) * t])));
+}
+setQuad(target); lock(); setInterval(lock, 4200);
+BN.seg($('.tpl-strip'), null, '.tcard');
+$('#shutter').onclick = () => { $('#proc').scrollIntoView({ behavior: 'smooth', block: 'center' }); setTimeout(runProc, 500); };
+
+// ---------- 2. processing ----------
+let tick;
+function runProc() {
+  const p = $('#proc'); p.classList.remove('go'); void p.offsetWidth; p.classList.add('go');
+  const t0 = performance.now(); clearInterval(tick);
+  tick = setInterval(() => { const s = Math.min(1.7, (performance.now() - t0) / 1000); $('#elapsed').textContent = s.toFixed(1) + ' s' + (s >= 1.7 ? ' · done' : ''); if (s >= 1.7) clearInterval(tick); }, 50);
+}
+$('#procReplay').onclick = runProc; runProc();
+
+// ---------- 3. result: writes itself ----------
+function mount(id, tplId, animate, opts) {
+  const host = $(id); host.innerHTML = '';
+  host.classList.add('p-ruled'); host.style.cssText += ';--lh:' + (30 * host.offsetHeight / 700) + 'px;--top:' + (80 * host.offsetHeight / 700) + 'px';
+  host.append($(tplId).content.cloneNode(true));
+  const svg = host.querySelector('svg');
+  if (animate) BN.writeOn(svg, opts); else $$('.wr', svg).forEach(e => e.classList.remove('wr'));
+  return svg;
+}
+function margin(id, x) { const m = document.createElement('i'); m.style.cssText = `position:absolute;top:0;bottom:0;left:${x / 560 * 100}%;width:1.5px;background:var(--paper-margin)`; $(id).prepend(m); }
+function writeResult() { mount('#resultPage', '#sbPageTpl', true, { cps: 200, pxps: 3000, gap: .008, min: .05 }); margin('#resultPage', 56); }
+function writeAr() { mount('#arPage', '#arPageTpl', true, { cps: 160, pxps: 3000, gap: .008, min: .05 }); margin('#arPage', 504); }
+$('#replay').onclick = writeResult; $('#replayAr').onclick = writeAr;
+BN.seg($('#rvTpl')); BN.seg($('#styleSeg'), v => { $('#resultPage svg').style.letterSpacing = v === 'Mine' ? '-.4px' : ''; $$('#resultPage text.hw').forEach(t => t.style.fontWeight = v === 'Mine' ? 700 : ''); });
+
+// ---------- 4. inserted ----------
+function insert() {
+  const svg = mount('#insPage', '#sbPageTpl', false); margin('#insPage', 56);
+  const th = $('#insThumb'); th.innerHTML = svg.outerHTML; th.classList.add('p-ruled'); th.style.cssText = '--lh:2.6px;--top:7px';
+  // lasso around the boxed formula
+  const g = el('g', {}, svg);
+  el('path', { class: 'lasso-path marching', d: 'M58 420 C 54 380, 130 410, 250 418 C 330 420, 260 470, 250 484 C 200 494, 90 492, 62 480 C 52 460, 60 440, 58 420 Z', style: 'fill:color-mix(in srgb, var(--accent) 6%, transparent)' }, g);
+  // the student's own extra note, in their pen
+  const t = el('text', { class: 'hw', x: 300, y: 585, 'font-size': 21, style: 'fill:var(--pen-violet)' }, svg); t.textContent = '← ask prof: why cos θ?';
+  BN.ink(svg, () => ({ color: 'var(--pen-violet)', width: 2.2 }));
+  requestAnimationFrame(placeIns);
+}
+function placeIns() {
+  const main = $('#insMain'), page = $('#insPage'), s = BN.local(main, { clientX: 0, clientY: 0 }).s, mr = main.getBoundingClientRect(), pr = page.getBoundingClientRect();
+  const px = (pr.left - mr.left) / s, py = (pr.top - mr.top) / s, k = page.offsetWidth / 560;
+  Object.assign($('#insCtx').style, { left: px + 40 * k + 'px', top: py + 498 * k + 'px' });
+  Object.assign($('#inkBadge').style, { left: px + 270 * k + 'px', top: py + 400 * k + 'px' });
+}
+addEventListener('resize', () => setTimeout(placeIns, 80));
+
+// ---------- 5. beautify ----------
+const BF = [
+  { t: 'Entropy of an isolated system', y: 140, size: 30, c: 'var(--pen-black)' },
+  { t: 'never decreases: ΔS ≥ 0', y: 180, size: 30, c: 'var(--pen-black)' },
+  { t: 'reversible:  ΔS = Q / T', y: 260, size: 30, c: 'var(--pen-navy)' },
+  { t: '→ no engine is 100% efficient', y: 340, size: 30, c: 'var(--pen-red)' },
+];
+let bfGlyphs = [], bfMessy = [], bfPaths = [];
+function rng(seed) { return () => (seed = (seed * 16807) % 2147483647) / 2147483647; }
+function buildBF() {
+  const g = $('#bfInk'); g.innerHTML = ''; bfGlyphs = []; bfMessy = [];
+  const r = rng(7);
+  BF.forEach((L, li) => {
+    const meas = el('text', { class: 'hw', x: 80, y: L.y, 'font-size': L.size }, g); meas.textContent = L.t;
+    const slope = (r() - .5) * .14, lineDx = (r() - .4) * 18, sizeK = .9 + r() * .25;
+    let wordShift = 0;
+    [...L.t].forEach((ch, i) => {
+      if (ch === ' ') { wordShift += (r() - .3) * 9; return; }
+      const x = 80 + meas.getSubStringLength(0, i);
+      const t = el('text', { class: 'hw gl', x, y: L.y, 'font-size': L.size }, g); t.textContent = ch; t.style.fill = L.c;
+      t.style.transitionDelay = (li * 60 + i * 7) + 'ms';
+      const dx = lineDx + wordShift + (x - 80) * (sizeK - 1) * .9 + (r() - .5) * 3, dy = (x - 80) * slope + (r() - .5) * 7;
+      bfMessy.push(`translate(${dx.toFixed(1)}px, ${dy.toFixed(1)}px) rotate(${((r() - .5) * 16 + slope * 40).toFixed(1)}deg) scale(${(sizeK + (r() - .5) * .22).toFixed(2)})`);
+      bfGlyphs.push(t);
+    });
+    meas.remove();
+  });
+  // messy box around "ΔS ≥ 0" + messy arrow
+  const box = el('path', { class: 'stroke', 'stroke-width': 2.4, style: 'stroke:var(--pen-red)' }, g);
+  const arrow = el('path', { class: 'stroke', 'stroke-width': 2.4, style: 'stroke:var(--pen-navy)' }, g);
+  const lineG = (li) => { const st = BF.slice(0, li).reduce((n, L) => n + L.t.replace(/ /g, '').length, 0); return bfGlyphs.slice(st, st + BF[li].t.replace(/ /g, '').length); };
+  const l2 = lineG(1), boxG = l2.slice(l2.length - 4).map(t => t.getBBox());
+  const bx0 = Math.min(...boxG.map(b => b.x)) - 8, bx1 = Math.max(...boxG.map(b => b.x + b.width)) + 8, by0 = Math.min(...boxG.map(b => b.y)) - 2, by1 = Math.max(...boxG.map(b => b.y + b.height)) + 2;
+  const neatBox = [[bx0, by0], [bx1, by0], [bx1, by1], [bx0, by1], [bx0, by0]].map(([x, y]) => ({ x, y }));
+  const messyBox = [[bx0 + 6, by0 + 10], [bx1 - 4, by0 - 12], [bx1 + 14, by1 - 4], [bx0 + 10, by1 + 10], [bx0 - 4, by0 + 14]].map(([x, y]) => ({ x, y }));
+  const l3 = lineG(2), e3 = Math.max(...l3.map(t => { const b = t.getBBox(); return b.x + b.width; })), y3 = BF[2].y - 10;
+  const neatAr = Array.from({ length: 12 }, (_, i) => ({ x: e3 + 24 + i * 11, y: y3 }));
+  const messyAr = neatAr.map((p, i) => ({ x: p.x + Math.sin(i) * 3, y: p.y + 4 + Math.sin(i * 1.3) * 6 + i * 2.2 }));
+  bfPaths = [[box, messyBox, neatBox, 'poly'], [arrow, messyAr, neatAr, 'arrow']];
+  setBF(false, true);
+}
+function pathFor(pts, kind) { if (kind === 'poly') return 'M' + pts.map(p => `${p.x} ${p.y}`).join(' L'); const l = pts[pts.length - 1], a = pts[pts.length - 3]; const ang = Math.atan2(l.y - a.y, l.x - a.x); return BN.smooth(pts) + ` M${l.x - 12 * Math.cos(ang - .5)} ${l.y - 12 * Math.sin(ang - .5)} L${l.x} ${l.y} L${l.x - 12 * Math.cos(ang + .5)} ${l.y - 12 * Math.sin(ang + .5)}`; }
+let bfNeat = false;
+function setBF(neat, instant) {
+  bfNeat = neat;
+  bfGlyphs.forEach((t, i) => { if (instant) t.style.transition = 'none'; t.style.transform = neat ? 'none' : bfMessy[i]; if (instant) requestAnimationFrame(() => t.style.transition = ''); });
+  bfPaths.forEach(([p, m, n, k]) => {
+    if (instant) { p.setAttribute('d', pathFor(neat ? n : m, k)); return; }
+    const a = neat ? m : n, b = neat ? n : m;
+    BN.tween(650, t => p.setAttribute('d', pathFor(a.map((q, i) => ({ x: q.x + (b[i].x - q.x) * t, y: q.y + (b[i].y - q.y) * t })), k)));
+  });
+  $$('#bfSeg span').forEach(s => s.classList.toggle('on', (s.dataset.v === 'after') === neat));
+  $('#bfChip').classList.toggle('on', neat && !instant);
+  $('#bfLasso').style.opacity = neat ? .35 : 1;
+}
+function beautify() { if (bfNeat) return; const s = $('#bfShim'); s.classList.remove('on'); void s.offsetWidth; s.classList.add('on'); setTimeout(() => setBF(true), 250); }
+$('#bfBtn').onclick = beautify; $('#bfGo').onclick = beautify;
+$('#bfUndo').onclick = () => setBF(false);
+BN.seg($('#bfSeg'), v => v === 'after' ? beautify() : setBF(false));
+
+document.fonts.ready.then(() => { writeResult(); writeAr(); insert(); buildBF(); });
+</script>
+</body>
+</html>
