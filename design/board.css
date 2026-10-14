@@ -297,3 +297,25 @@ svg.ink { position: absolute; inset: 0; width: 100%; height: 100%; }
 .back .ms { font-size: 22px; }
 #s-smart .flow { flex-wrap: nowrap; gap: 14px; }
 .device.tablet.half { width: 540px; height: 420px; }
+
+/* Smart Board v2: the result is handwritten ink on notebook paper */
+.nb-page { flex: 1; margin: 8px auto 4px; width: 96%; box-shadow: var(--shadow-2); border-radius: 3px; overflow: hidden; background: #FBF9F4; }
+.hp { width: 100%; height: 100%; display: block; }
+.hp text { font-family: var(--font-hand); fill: #1d2a4a; font-weight: 600; }
+.h-title { font-size: 30px; fill: #1d3c8a !important; }
+.h-txt { font-size: 19px; }
+.h-sm { font-size: 16px; }
+.h-big { font-size: 27px; }
+.h-note { font-size: 15px; fill: #5a6478 !important; }
+.hp .u { text-decoration: underline; }
+.hp .red { fill: #c62828 !important; }
+.hp .green { fill: #2e7d32 !important; }
+.hp .ln { fill: none; stroke: #1d2a4a; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.hp .ln.red { stroke: #c62828; } .hp .ln.green { stroke: #2e7d32; } .hp .ln.blue { stroke: #1d3c8a; stroke-width: 2.2; }
+/* fast "being written" animation: text reveals left→right, lines draw */
+.hp text.w { clip-path: inset(-30% 100% -30% -5%); animation: write .32s steps(14, end) forwards; animation-delay: var(--d); }
+.hp path.w { stroke-dasharray: 1; stroke-dashoffset: 1; animation: draw .28s ease-out forwards; animation-delay: var(--d); }
+@keyframes write { to { clip-path: inset(-30% -15% -30% -5%); } }
+@keyframes draw { to { stroke-dashoffset: 0; } }
+.legend .btn { padding: 4px 10px; font-size: 11px; }
+.hp path.ln { fill: none !important; }

@@ -305,19 +305,49 @@
     <div class="device tablet half">
       <div class="status"><span>9:41</span><span><i class="ms">signal_cellular_alt</i><i class="ms">wifi</i><i class="ms">battery_full</i></span></div>
       <div class="result">
-        <div class="res-head"><b>Review</b><span class="muted">6 blocks · 1 margin note · 0 dropped</span><span class="grow"></span><button class="btn ghost">Retake</button><button class="btn primary">Insert 1 page</button></div>
-        <div class="page result-page">
-          <div class="r-title">Inclined Plane</div>
-          <div class="r-summary">Gravity splits into parts along and across the slope. Without friction, the block accelerates at <i>g sin θ</i>.</div>
-          <div class="r-main">
-            <div class="callout def"><b>Definition · Normal force N</b>Perpendicular to the surface.</div>
-            <svg class="r-diagram" viewBox="0 0 220 120"><path d="M10 110 H 200 V 20 Z"/><path class="red" d="M120 65 V 108"/><path class="red" d="M115 100 L120 109 L125 100"/><text x="124" y="104">mg</text><path d="M40 110 A 30 30 0 0 0 38 99"/><text x="44" y="106">θ</text></svg>
-            <div class="proof"><b>Derivation</b><div>F<sub>∥</sub> = mg sin θ <em>component of gravity</em></div><div>a = g sin θ <em>Newton's 2nd law</em></div></div>
-            <div class="formula boxed">a = g sin θ</div>
-          </div>
-          <div class="r-margin"><div class="mnote">No friction assumed</div></div>
+        <div class="res-head"><b>Review</b><span class="muted">written in 3 s · editable ink</span><span class="grow"></span><button class="btn ghost">Retake</button><button class="btn primary">Insert 1 page</button></div>
+        <div class="nb-page" id="handPage">
+          <svg viewBox="0 0 520 330" class="hp">
+            <defs><pattern id="rl" width="520" height="22" patternUnits="userSpaceOnUse"><line x1="0" y1="21.5" x2="520" y2="21.5" stroke="#d6dfec" stroke-width="1"/></pattern></defs>
+            <rect width="520" height="330" fill="#FBF9F4"/><rect y="40" width="520" height="290" fill="url(#rl)"/>
+            <line x1="404" y1="0" x2="404" y2="330" stroke="#f2b8b5" stroke-width="1.2"/>
+            <!-- title + hand underline -->
+            <text x="22" y="34" class="w h-title" style="--d:0s">Inclined Plane</text>
+            <path class="w ln blue" pathLength="1" style="--d:.35s" d="M22 41 C 90 39, 150 42, 196 40"/>
+            <!-- definition with bracket -->
+            <text x="22" y="72" class="w h-txt" style="--d:.5s"><tspan class="u">Def.</tspan> Normal force N = force ⊥ to the surface</text>
+            <!-- bullets -->
+            <text x="22" y="94" class="w h-txt" style="--d:.8s">• weight mg acts straight down</text>
+            <text x="22" y="116" class="w h-txt" style="--d:1s">• split it: along the slope + across the slope</text>
+            <!-- diagram, ruler-neat -->
+            <g transform="translate(250 128)">
+              <path class="w ln" pathLength="1" style="--d:1.2s" d="M0 100 H 150 V 20 Z"/>
+              <path class="w ln" pathLength="1" style="--d:1.45s" d="M70 52 l 26 -14 l 10 18 l -26 14 z"/>
+              <path class="w ln red" pathLength="1" style="--d:1.6s" d="M88 61 V 96 M 83 89 L 88 97 L 93 89"/>
+              <text x="94" y="94" class="w h-sm red" style="--d:1.75s">mg</text>
+              <path class="w ln" pathLength="1" style="--d:1.8s" d="M30 100 A 30 30 0 0 0 28 88"/>
+              <text x="36" y="97" class="w h-sm" style="--d:1.85s">θ</text>
+            </g>
+            <!-- derivation -->
+            <text x="22" y="160" class="w h-txt" style="--d:1.95s">F<tspan dy="4" font-size="13">∥</tspan><tspan dy="-4"> = mg sin θ</tspan></text>
+            <text x="140" y="160" class="w h-note" style="--d:2.05s">(component of gravity)</text>
+            <text x="22" y="190" class="w h-txt" style="--d:2.15s">ma = mg sin θ</text>
+            <path class="w ln" pathLength="1" style="--d:2.25s" d="M30 198 l 6 8 l 6 -8"/>
+            <!-- boxed key formula -->
+            <text x="34" y="238" class="w h-big red" style="--d:2.35s">a = g sin θ</text>
+            <path class="w ln red" pathLength="1" style="--d:2.55s" d="M26 212 H 168 V 248 H 26 Z"/>
+            <!-- fraction example -->
+            <text x="22" y="290" class="w h-txt" style="--d:2.7s">so  a  =</text>
+            <text x="98" y="280" class="w h-txt" style="--d:2.8s">F</text>
+            <path class="w ln" pathLength="1" style="--d:2.85s" d="M92 286 H 116"/>
+            <text x="97" y="304" class="w h-txt" style="--d:2.9s">m</text>
+            <!-- margin note in green -->
+            <text x="412" y="72" class="w h-note green" style="--d:3s">no friction</text>
+            <text x="412" y="90" class="w h-note green" style="--d:3.05s">for now!</text>
+            <path class="w ln green" pathLength="1" style="--d:3.15s" d="M412 98 C 390 120, 360 150, 300 150"/>
+          </svg>
         </div>
-        <div class="legend"><span class="lg ord">① logical order</span><span class="lg geo">ruler geometry</span><span class="lg col">red → boxed essential</span><span class="lg mar">green → margin note</span></div>
+        <div class="legend"><button class="btn tonal" id="replay">▶ Replay writing</button><span class="lg">in your own handwriting style</span><span class="lg">ruler-straight drawings</span><span class="lg">red = boxed key formula</span><span class="lg">green = margin note</span></div>
       </div>
     </div>
   </div>

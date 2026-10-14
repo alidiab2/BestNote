@@ -52,3 +52,8 @@ $('#newNb')?.addEventListener('click', () => {
   setTimeout(() => a.classList.remove('go'), 1400);
 });
 $$('#covers .nb').forEach(n => n.addEventListener('click', () => $('#newNb').click()));
+
+// Replay the handwriting animation
+document.getElementById('replay')?.addEventListener('click', () => {
+  const p = document.getElementById('handPage'); const h = p.innerHTML; p.innerHTML = ''; void p.offsetWidth; p.innerHTML = h;
+});
