@@ -46,6 +46,8 @@ payload  u32 strokeCount, then per stroke:
            i32 colorArgb | f32 size | u8 familyKeyLength | familyKeyLength x UTF-8 (v2 only; 0 = none) | u32 sampleCount
            sampleCount x (f32 x | f32 y | f32 pressure | f32 tiltRad | f32 orientationRad | i64 timeMillis)
 ```
+Versions: writers always write v2. Readers accept v1 (DOC-01 builds: no family key, read as `family = null`, drawn with the tool's current family) and v2. The key maps to `InkBrush.family` in `:core:model`.
+
 An androidx.ink storage encoding can be added later as a new chunk version behind `StrokeChunkCodec`.
 
 ## Open questions
