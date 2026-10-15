@@ -10,6 +10,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
@@ -50,6 +52,7 @@ internal data class ChromeActions(
     val onClearPage: () -> Unit,
     /** The Pages pill: paper template, color and size of the page being read. */
     val pagesMenu: @Composable () -> Unit,
+    val onOpenSettings: () -> Unit = {},
 )
 
 /** Back circle + notebook title + "Page X of Y". Mirrors in RTL with the rest of the chrome. */
@@ -162,6 +165,11 @@ private fun MoreMenu(dock: ToolbarDock, leftHanded: Boolean, actions: ChromeActi
                 onClick = { actions.onLeftHanded(!leftHanded) },
             )
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.editor_settings)) },
+                leadingIcon = { Icon(Icons.Default.Settings, null, modifier = Modifier.size(20.dp)) },
+                onClick = { actions.onOpenSettings(); open = false },
+            )
             DropdownMenuItem(
                 text = { Text(stringResource(R.string.editor_clear_page), color = MaterialTheme.colorScheme.error) },
                 leadingIcon = { Icon(AtelierIcons.Trash, null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(20.dp)) },

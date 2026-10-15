@@ -14,6 +14,7 @@ import app.bestnote.core.datastore.ThemeMode
 import app.bestnote.core.datastore.UserPreferences
 import app.bestnote.core.datastore.UserPreferencesRepository
 import app.bestnote.core.designsystem.theme.BestNoteTheme
+import app.bestnote.core.designsystem.theme.systemReducedMotion
 import app.bestnote.feature.editor.editorScreen
 import app.bestnote.feature.editor.navigateToEditor
 import app.bestnote.feature.library.LibraryRoute
@@ -37,7 +38,12 @@ class MainActivity : ComponentActivity() {
                 ThemeMode.Light -> false
                 ThemeMode.Dark -> true
             }
-            BestNoteTheme(darkTheme = dark, dynamicColor = prefs.dynamicColor) { BestNoteNavHost() }
+            BestNoteTheme(
+                darkTheme = dark,
+                dynamicColor = prefs.dynamicColor,
+                reducedMotion = prefs.appearance.reduceMotion || systemReducedMotion(),
+                chromeWarmth = prefs.appearance.chromeWarmth.amount,
+            ) { BestNoteNavHost() }
         }
     }
 }
@@ -50,7 +56,7 @@ private fun BestNoteNavHost() {
             onOpenNotebook = { nav.navigateToEditor(it) },
             onOpenSettings = { nav.navigate(SettingsRoute) },
         )
-        editorScreen(onBack = nav::popBackStack)
+        editorScreen(onBack = nav::popBackStack, onOpenSettings = { nav.navigate(SettingsRoute) })
         settingsScreen(onBack = nav::popBackStack)
     }
 }
