@@ -33,6 +33,14 @@ interface LibraryRepository {
 
     /** Permanently removes Trash entries older than the retention period. @return how many. */
     suspend fun purgeExpired(): Int
+
+    /** Paths of the cached page thumbnails (DOC-10) that exist for [ids]. */
+    suspend fun thumbnails(ids: List<NotebookId>): Map<NotebookId, String> = emptyMap()
+}
+
+/** Where a notebook's cached thumbnail lives, if it has one. Implementations do their own I/O dispatching. */
+fun interface NotebookThumbnails {
+    suspend fun existing(ids: List<NotebookId>): Map<NotebookId, String>
 }
 
 /**
@@ -59,7 +67,11 @@ class StoreLibraryRepository(
     private val trashStore: NotebookStore,
     private val index: NotebookIndexMirror = NotebookIndexMirror.None,
     private val clock: () -> Long = System::currentTimeMillis,
+    private val thumbnailSource: NotebookThumbnails? = null,
 ) : LibraryRepository {
+
+    override suspend fun thumbnails(ids: List<NotebookId>): Map<NotebookId, String> =
+        thumbnailSource?.existing(ids).orEmpty()
 
     override suspend fun list(): List<Notebook> = store.list().sortedByDescending { it.updatedAtMillis }
 

@@ -186,12 +186,21 @@ internal fun GridRow(row: List<NotebookItem>, columns: Int, now: Long, actions: 
                         Modifier.fillMaxWidth().aspectRatio(GRID_ART_RATIO).background(MaterialTheme.colorScheme.surfaceContainerLow),
                         contentAlignment = Alignment.Center,
                     ) {
-                        NotebookCover(
-                            item.title,
-                            item.coverIndex,
-                            Modifier.fillMaxWidth(GRID_COVER_FRACTION).aspectRatio(COVER_RATIO),
-                            scale = GRID_COVER_SCALE,
-                        )
+                        if (item.thumbnailPath != null) {
+                            // A real page beats a generic cover once DOC-10 has rendered one.
+                            NotebookThumbnail(
+                                item.thumbnailPath,
+                                item.updatedAtMillis,
+                                Modifier.fillMaxWidth(GRID_COVER_FRACTION).aspectRatio(COVER_RATIO),
+                            )
+                        } else {
+                            NotebookCover(
+                                item.title,
+                                item.coverIndex,
+                                Modifier.fillMaxWidth(GRID_COVER_FRACTION).aspectRatio(COVER_RATIO),
+                                scale = GRID_COVER_SCALE,
+                            )
+                        }
                     }
                     Row(Modifier.padding(Spacing.M), verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) {

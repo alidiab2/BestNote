@@ -161,6 +161,18 @@ class LibraryViewModelTest {
     }
 
     @Test
+    fun `cached thumbnails reach the items that have one`() = runTest {
+        val withThumb = repo.create("Drawn")
+        val without = repo.create("Blank")
+        repo = StoreLibraryRepository(store, trashStore, clock = { now }, thumbnailSource = { ids ->
+            ids.filter { it == withThumb.id }.associateWith { "/thumbs/${it.value}.webp" }
+        })
+        val items = viewModel().state.value.items.associateBy { it.id }
+        assertEquals("/thumbs/${withThumb.id.value}.webp", items.getValue(withThumb.id).thumbnailPath)
+        assertNull(items.getValue(without.id).thumbnailPath)
+    }
+
+    @Test
     fun `greeting follows the hour`() {
         val utc = TimeZone.getTimeZone("UTC")
         val day = TimeUnit.DAYS.toMillis(1) * 20_000

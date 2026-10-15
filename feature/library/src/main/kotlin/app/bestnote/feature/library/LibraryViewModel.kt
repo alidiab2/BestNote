@@ -42,11 +42,12 @@ class LibraryViewModel @Inject constructor(
 ) : ViewModel() {
     private val notebooks = MutableStateFlow<List<Notebook>?>(null)
     private val trash = MutableStateFlow<List<TrashedNotebook>>(emptyList())
+    private val thumbnails = MutableStateFlow<Map<NotebookId, String>>(emptyMap())
     private val controls = MutableStateFlow(LibraryControls())
     private val events = Channel<LibraryEvent>(Channel.BUFFERED)
 
-    val state: StateFlow<LibraryUiState> = combine(notebooks, trash, controls) { list, bin, c ->
-        buildLibraryState(list, bin, c, metadata, CoverPalette.All.size, clock.now())
+    val state: StateFlow<LibraryUiState> = combine(notebooks, trash, controls, thumbnails) { list, bin, c, thumbs ->
+        buildLibraryState(list, bin, c, metadata, CoverPalette.All.size, clock.now(), thumbnails = thumbs)
     }.stateIn(viewModelScope, SharingStarted.Eagerly, LibraryUiState())
 
     /** One-shot UI events: navigation and the undo snackbar. */
@@ -109,7 +110,9 @@ class LibraryViewModel @Inject constructor(
     }
 
     private suspend fun reload() {
-        notebooks.value = repository.list()
+        val list = repository.list()
+        thumbnails.value = repository.thumbnails(list.map { it.id })
+        notebooks.value = list
         trash.value = repository.trash()
     }
 }

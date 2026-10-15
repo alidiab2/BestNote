@@ -1,6 +1,8 @@
 package app.bestnote.feature.library
 
+import android.graphics.BitmapFactory
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
@@ -12,15 +14,20 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.produceState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -32,6 +39,8 @@ import app.bestnote.core.designsystem.theme.CoverPalette
 import app.bestnote.core.designsystem.theme.Elevation
 import app.bestnote.core.designsystem.theme.InkPalette
 import app.bestnote.core.designsystem.theme.softShadow
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 /** Cover size on the shelf (approved design: 124 × 168 dp). */
 internal val CoverWidth: Dp = 124.dp
@@ -145,3 +154,29 @@ internal fun PageThumbnail(modifier: Modifier = Modifier, seed: Int = 0) {
 private const val RULED_LINES = 12
 private const val MARGIN_AT = 0.16f
 private const val INK_WIDTH_DIVISOR = 70f
+
+/**
+ * The cached page thumbnail at [path] (DOC-10), decoded off the main thread, or [PageThumbnail] while
+ * it loads, when there is none, or when it cannot be decoded. [version] re-decodes after an edit.
+ */
+@Composable
+internal fun NotebookThumbnail(path: String?, version: Long, modifier: Modifier = Modifier, seed: Int = 0) {
+    val bitmap by produceState<ImageBitmap?>(null, path, version) {
+        value = path?.let { p ->
+            withContext(Dispatchers.IO) { runCatching { BitmapFactory.decodeFile(p)?.asImageBitmap() }.getOrNull() }
+        }
+    }
+    val image = bitmap
+    if (image == null) {
+        PageThumbnail(modifier, seed)
+    } else {
+        val shape = RoundedCornerShape(4.dp)
+        Image(
+            image,
+            contentDescription = null,
+            contentScale = ContentScale.Crop,
+            alignment = Alignment.TopCenter,
+            modifier = modifier.softShadow(Elevation.Low, shape).clip(shape).background(BestNoteTheme.colors.paper.page),
+        )
+    }
+}

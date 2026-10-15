@@ -36,6 +36,8 @@ data class NotebookItem(
     val quicknote: Boolean,
     /** Zero-based page the user was last on. */
     val lastPageIndex: Int,
+    /** Cached page thumbnail (DOC-10), or null to draw the placeholder page. */
+    val thumbnailPath: String? = null,
 ) {
     /** Share of the notebook read/written so far, in 0..1. */
     val progress: Float get() = (lastPageIndex + 1f) / pageCount
@@ -87,6 +89,7 @@ internal fun buildLibraryState(
     paletteSize: Int,
     now: Long,
     timeZone: TimeZone = TimeZone.getDefault(),
+    thumbnails: Map<NotebookId, String> = emptyMap(),
 ): LibraryUiState {
     val folders = metadata.folders()
     val folderById = folders.associateBy { it.id }
@@ -102,6 +105,7 @@ internal fun buildLibraryState(
             favorite = meta.favorite,
             quicknote = meta.quicknote,
             lastPageIndex = (meta.lastPageIndex ?: (nb.pageCount - 1)).coerceIn(0, nb.pageCount - 1),
+            thumbnailPath = thumbnails[nb.id],
         )
     }
     val recentCutoff = now - RECENT_WINDOW_MILLIS

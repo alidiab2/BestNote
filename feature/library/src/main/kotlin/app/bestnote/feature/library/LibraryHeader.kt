@@ -239,7 +239,7 @@ private fun LastNotebookCard(item: NotebookItem, now: Long, onClick: () -> Unit,
             .padding(Spacing.L),
         horizontalArrangement = Arrangement.spacedBy(Spacing.L),
     ) {
-        PageThumbnail(Modifier.fillMaxHeight().width(108.dp), seed = item.pageCount)
+        NotebookThumbnail(item.thumbnailPath, item.updatedAtMillis, Modifier.fillMaxHeight().width(108.dp), seed = item.pageCount)
         Column(Modifier.weight(1f).fillMaxHeight()) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.S)) {
                 Box(Modifier.size(10.dp).clip(BestNoteShapes.Control).background(coverColor(item.coverIndex)))
