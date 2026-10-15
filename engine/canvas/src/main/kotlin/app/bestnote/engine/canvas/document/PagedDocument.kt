@@ -8,7 +8,7 @@ import app.bestnote.engine.canvas.CommandStack
 import app.bestnote.engine.canvas.StrokeTarget
 
 /** One page of a [PagedDocument]: its paper ([page]) and its finished strokes in page-local points. */
-class DocumentPage internal constructor(page: Page) {
+class DocumentPage internal constructor(page: Page, val id: String = newPageId()) {
     var page: Page = page
         internal set
 
@@ -17,6 +17,11 @@ class DocumentPage internal constructor(page: Page) {
     /** Finished strokes in drawing order, in page points (origin at the page's top-left). */
     val strokes: List<Stroke> get() = mutableStrokes
 }
+
+private const val ID_LENGTH = 12
+
+/** A fresh storage id for a page (matches the `.bnote` page id pattern). */
+internal fun newPageId(): String = "page-" + java.util.UUID.randomUUID().toString().take(ID_LENGTH)
 
 /**
  * The content of a paged notebook (CANVAS-07): ordered pages, each owning its ink, plus one undo
@@ -36,10 +41,20 @@ class PagedDocument {
     }
 
     /** An undoable stroke edit on one page. */
-    data class PageEdit(val page: Int, val edit: CanvasEdit) : Command<PagedDocument> {
+    class PageEdit internal constructor(private val page: DocumentPage, private val edit: CanvasEdit) : Command<PagedDocument> {
         override val retainedBytes: Long get() = edit.retainedBytes
         override fun apply(target: PagedDocument) = target.applyEdit(page, edit, forward = true)
         override fun revert(target: PagedDocument) = target.applyEdit(page, edit, forward = false)
+    }
+
+    /** A page and its paper at one moment, so page order, count and paper changes can be undone as one step. */
+    internal class Slot(val page: DocumentPage, val paper: Page)
+
+    /** An undoable change of the page list: insert, delete, move, duplicate, rotate or new paper. */
+    private class Restructure(val before: List<Slot>, val after: List<Slot>) : Command<PagedDocument> {
+        override val retainedBytes: Long get() = SLOT_BYTES * (before.size + after.size).toLong()
+        override fun apply(target: PagedDocument) = target.install(after)
+        override fun revert(target: PagedDocument) = target.install(before)
     }
 
     private val _pages = ArrayList<DocumentPage>()
@@ -68,9 +83,12 @@ class PagedDocument {
     }
 
     /** Replaces every page (e.g. after loading from storage) and clears the history. */
-    fun reset(pages: List<Page>, strokes: (Int) -> Collection<Stroke> = { emptyList() }) {
+    fun reset(pages: List<Page>, ids: List<String>? = null, strokes: (Int) -> Collection<Stroke> = { emptyList() }) {
         _pages.clear()
-        pages.forEachIndexed { i, p -> _pages += DocumentPage(p.copy(index = i)).apply { mutableStrokes += strokes(i) } }
+        pages.forEachIndexed { i, p ->
+            val page = DocumentPage(p.copy(index = i), ids?.getOrNull(i) ?: newPageId())
+            _pages += page.apply { mutableStrokes += strokes(i) }
+        }
         isLoaded = true
         history.clear()
         listeners.forEach { it.onPagesChanged() }
@@ -79,23 +97,91 @@ class PagedDocument {
 
     /**
      * Appends a page with the same paper (template, color, size) as the last page, or [template]
-     * when given. @return the new page's index, or -1 when there is no paper to copy.
+     * when given. Undoable. @return the new page's index, or -1 when there is no paper to copy.
      */
     fun addPage(template: Page? = null): Int {
         val base = template ?: _pages.lastOrNull()?.page ?: blankPage ?: return -1
-        val index = _pages.size
-        _pages += DocumentPage(base.copy(index = index))
-        isLoaded = true
-        listeners.forEach { it.onPagesChanged() }
+        return insertPage(_pages.size, base)
+    }
+
+    /** Inserts a blank page with [paper] at [at] (0..size). Undoable. @return its index. */
+    fun insertPage(at: Int, paper: Page): Int {
+        val index = at.coerceIn(0, _pages.size)
+        restructure { _pages.add(index, DocumentPage(paper.copy(index = index))) }
         return index
     }
 
-    /** Changes page [index]'s paper or size; ink stays where it is in page points. */
+    /** Changes page [index]'s paper or size; ink stays where it is in page points. Undoable. */
     fun updatePage(index: Int, transform: (Page) -> Page) {
         val p = _pages[index]
         val next = transform(p.page).copy(index = index)
         if (next == p.page) return
-        p.page = next
+        restructure { p.page = next }
+    }
+
+    /**
+     * Deletes the pages at [indices] (ink included) as one undoable step. A notebook keeps at least
+     * one page, so deleting every page keeps the first of them. @return the pages removed.
+     */
+    fun deletePages(indices: Collection<Int>): Int {
+        val gone = indices.filter { it in _pages.indices }.toSortedSet().toMutableSet()
+        if (gone.size == _pages.size) gone.remove(gone.first())
+        if (gone.isEmpty()) return 0
+        restructure { _pages.removeAll(gone.map { _pages[it] }.toSet()) }
+        return gone.size
+    }
+
+    /** Moves page [from] so it ends up at index [to]. Undoable. */
+    fun movePage(from: Int, to: Int) {
+        if (from !in _pages.indices || to !in _pages.indices || from == to) return
+        restructure { _pages.add(to, _pages.removeAt(from)) }
+    }
+
+    /** Puts a copy (paper and ink) of each page in [indices] right after its original. Undoable. @return the copies' indices. */
+    fun duplicatePages(indices: Collection<Int>): List<Int> {
+        val sources = indices.filter { it in _pages.indices }.toSortedSet().toList()
+        if (sources.isEmpty()) return emptyList()
+        val copies = ArrayList<DocumentPage>()
+        restructure {
+            for (i in sources.asReversed()) {
+                val original = _pages[i]
+                val copy = DocumentPage(original.page).apply { mutableStrokes += original.strokes }
+                copies += copy
+                _pages.add(i + 1, copy)
+            }
+        }
+        return copies.map { _pages.indexOf(it) }.sorted()
+    }
+
+    /** Turns the paper of each page in [indices] a quarter turn (width and height swap). Undoable. */
+    fun rotatePages(indices: Collection<Int>) {
+        val targets = indices.filter { it in _pages.indices }.toSet()
+        if (targets.isEmpty()) return
+        restructure {
+            for (i in targets) _pages[i].let { p -> p.page = p.page.copy(widthPt = p.page.heightPt, heightPt = p.page.widthPt) }
+        }
+    }
+
+    private fun snapshot() = _pages.map { Slot(it, it.page) }
+
+    /** Runs [change], renumbers, and records the before/after as one undo step. */
+    private fun restructure(change: () -> Unit) {
+        val before = snapshot()
+        change()
+        _pages.forEachIndexed { i, p -> if (p.page.index != i) p.page = p.page.copy(index = i) }
+        isLoaded = true
+        val after = snapshot()
+        history.record(Restructure(before, after))
+        listeners.forEach { it.onPagesChanged() }
+        notifyHistory()
+    }
+
+    private fun install(slots: List<Slot>) {
+        _pages.clear()
+        slots.forEachIndexed { i, s ->
+            s.page.page = s.paper.copy(index = i)
+            _pages += s.page
+        }
         listeners.forEach { it.onPagesChanged() }
     }
 
@@ -108,20 +194,21 @@ class PagedDocument {
     fun addStrokes(index: Int, strokes: Collection<Stroke>) {
         if (strokes.isEmpty()) return
         _pages[index].mutableStrokes += strokes
-        history.record(PageEdit(index, CanvasEdit.Added(strokes.toList())))
+        history.record(PageEdit(_pages[index], CanvasEdit.Added(strokes.toList())))
         contentChanged(index)
         notifyHistory()
     }
 
     /** Strokes for several pages added as one undo step (a Smart Board insert). */
     fun addStrokes(byPage: Map<Int, Collection<Stroke>>) {
-        val edits = byPage.filterValues { it.isNotEmpty() }.map { (index, strokes) ->
+        val changed = byPage.filterValues { it.isNotEmpty() }
+        val edits = changed.map { (index, strokes) ->
             _pages[index].mutableStrokes += strokes
-            PageEdit(index, CanvasEdit.Added(strokes.toList()))
+            PageEdit(_pages[index], CanvasEdit.Added(strokes.toList()))
         }
         if (edits.isEmpty()) return
         history.record(edits.singleOrNull() ?: Batch(edits))
-        edits.forEach { contentChanged(it.page) }
+        changed.keys.forEach(::contentChanged)
         notifyHistory()
     }
 
@@ -142,7 +229,7 @@ class PagedDocument {
 
     internal fun commitErase(index: Int, erased: List<Stroke>) {
         if (erased.isEmpty()) return
-        history.record(PageEdit(index, CanvasEdit.Erased(erased)))
+        history.record(PageEdit(_pages[index], CanvasEdit.Erased(erased)))
         notifyHistory()
     }
 
@@ -164,8 +251,9 @@ class PagedDocument {
         notifyHistory()
     }
 
-    private fun applyEdit(index: Int, edit: CanvasEdit, forward: Boolean) {
-        if (index !in _pages.indices) return
+    private fun applyEdit(page: DocumentPage, edit: CanvasEdit, forward: Boolean) {
+        val index = _pages.indexOf(page)
+        if (index < 0) return
         val target = object : StrokeTarget {
             override fun add(strokes: Collection<Stroke>) {
                 this@PagedDocument._pages[index].mutableStrokes += strokes
@@ -178,6 +266,10 @@ class PagedDocument {
         }
         if (forward) edit.apply(target) else edit.revert(target)
         contentChanged(index)
+    }
+
+    private companion object {
+        const val SLOT_BYTES = 64L
     }
 
     private fun contentChanged(index: Int) = listeners.forEach { it.onPageContentChanged(index) }

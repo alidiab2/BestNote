@@ -224,6 +224,7 @@ fun EditorScreen(
     var quickAt by remember { mutableStateOf<Offset?>(null) }
     var pageOrigin by remember { mutableStateOf(Offset.Zero) }
     var pageNumber by remember { mutableStateOf(1 to 1) }
+    var managerPage by remember { mutableStateOf<Int?>(null) }
     val snackbar = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     val reduce = reducedMotion()
@@ -292,7 +293,7 @@ fun EditorScreen(
             val index = canvas?.currentPage?.takeIf { it >= 0 } ?: 0
             document.pages.getOrNull(index)?.page?.let { onSmartBoard(viewModel.notebookId, it) }
         },
-        pagesMenu = { PaperMenuButton(canvas) },
+        pagesMenu = { PaperMenuButton(canvas, onManage = { picker = null; managerPage = canvas?.currentPage?.coerceAtLeast(0) ?: 0 }) },
         onOpenSettings = onOpenSettings,
     )
     val pickerContent: @Composable (PickerAnchor) -> Unit = { anchor ->
@@ -369,6 +370,7 @@ fun EditorScreen(
                     viewModel.session.attach(view)
                 },
                 onIndicator = { page, count -> pageNumber = page + 1 to count },
+                onIndicatorClick = { managerPage = canvas?.currentPage?.coerceAtLeast(0) ?: 0 },
                 modifier = Modifier
                     .windowInsetsPadding(WindowInsets.safeDrawing)
                     .padding(top = pageTop, start = reach, end = reach)
@@ -466,6 +468,18 @@ fun EditorScreen(
                     actionColor = BestNoteTheme.colors.aiAccent,
                 )
             }
+        }
+
+        // ---- page manager (PAGES-03/04/05): zooms out of the page being read ----
+        managerPage?.let { open ->
+            PageManager(
+                document = document,
+                currentPage = open,
+                onClose = { page ->
+                    managerPage = null
+                    if (page != null) canvas?.scrollToPage(page)
+                },
+            )
         }
 
         // ---- S Pen quick palette, over everything ----

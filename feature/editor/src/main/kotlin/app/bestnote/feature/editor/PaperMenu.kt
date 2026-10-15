@@ -68,7 +68,7 @@ private val PaperSizePreset.label: String
  * apply to that page; "+ New page" then continues with the last page's paper.
  */
 @Composable
-internal fun PaperMenuButton(view: PagedDocumentView?) {
+internal fun PaperMenuButton(view: PagedDocumentView?, onManage: () -> Unit = {}) {
     var open by remember { mutableStateOf(false) }
     var custom by remember { mutableStateOf<Page?>(null) }
     Box {
@@ -81,6 +81,11 @@ internal fun PaperMenuButton(view: PagedDocumentView?) {
             val preset = PaperSizes.presetOf(page.size)
             val orientation = PaperSizes.orientationOf(page.size)
             DropdownMenu(expanded = true, onDismissRequest = { open = false }) {
+                Choice("All pages…", false) {
+                    open = false
+                    onManage()
+                }
+                HorizontalDivider()
                 Section("Page ${index + 1} · template")
                 templateOrder.forEach { t ->
                     Choice(t.label, page.template == t) { update { it.copy(template = t) } }

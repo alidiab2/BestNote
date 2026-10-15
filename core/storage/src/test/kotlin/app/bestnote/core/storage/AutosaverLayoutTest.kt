@@ -69,4 +69,32 @@ class AutosaverLayoutTest {
         assertThrows(IllegalArgumentException::class.java) { s.updateLayout(listOf("../x" to Page(nid, 0))) }
         assertThrows(IllegalArgumentException::class.java) { s.updatePage("nope", emptyList()) }
     }
+
+    @Test fun reorderDeleteAndRestoreKeepTheirInk() = runTest {
+        val store = RecordingStore()
+        val s = Autosaver(initial, store, backgroundScope, cpu = StandardTestDispatcher(testScheduler), timeSource = testScheduler.timeSource)
+        val ink0 = randomStrokes(2, seed = 1)
+        val ink1 = randomStrokes(2, seed = 2)
+        s.updatePage("p0", ink0)
+        s.updatePage("p1", ink1)
+        s.flush()
+        // Reorder: p1 first.
+        s.updateLayout(listOf("p1" to Page(nid, 0), "p0" to Page(nid, 1)))
+        s.flush()
+        var pkg = store.read(nid)!!
+        assertEquals(listOf("p1", "p0"), pkg.pages.map { it.id })
+        assertEquals(ink1, InkChunkCodec.decode(pkg.pages[0].strokes))
+        assertEquals(ink0, InkChunkCodec.decode(pkg.pages[1].strokes))
+        // Delete p1, then undo (the page comes back with its ink, as the editor session does it).
+        s.updateLayout(listOf("p0" to Page(nid, 0)))
+        s.flush()
+        assertEquals(listOf("p0"), store.read(nid)!!.pages.map { it.id })
+        s.updateLayout(listOf("p1" to Page(nid, 0), "p0" to Page(nid, 1)))
+        s.updatePage("p1", ink1)
+        s.flush()
+        pkg = store.read(nid)!!
+        assertEquals(listOf("p1", "p0"), pkg.pages.map { it.id })
+        assertEquals(ink1, InkChunkCodec.decode(pkg.pages[0].strokes))
+        assertEquals(2, pkg.notebook.pageCount)
+    }
 }
