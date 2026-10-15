@@ -273,6 +273,10 @@ class PagedDocumentView(context: Context) : FrameLayout(context), InProgressStro
             return if (w > 0 && h > 0) h.toFloat() / w else PaperSizes.A4.heightPt / PaperSizes.A4.widthPt
         }
 
+    /** Current scroll position in px (for tests and diagnostics). */
+    val scrollOffsetX: Int get() = pages.scrollX
+    val scrollOffsetY: Int get() = pages.scrollY
+
     /** Page slot views currently alive (for tests and diagnostics): stays flat however long the notebook is. */
     val pageSlotCount: Int get() = pages.slotCount
 
@@ -485,6 +489,12 @@ class PagedDocumentView(context: Context) : FrameLayout(context), InProgressStro
                     finishErase(id)
                     sideButton.onEnd(id)
                     cardTaps.remove(id)?.let { (x, y) -> if (isTapOnCard(x, y, se.latest.x, se.latest.y)) addPage() }
+                    // The UP may carry movement no MOVE reported (coalesced input): apply it.
+                    scrolling[id]?.let { (px, py) ->
+                        if (scrolling.size == 1 && pages.preview.isIdentity && inking.isEmpty() && erasing.isEmpty() && highlighting == null) {
+                            pages.scrollToXY(pages.scrollX - (se.latest.x - px).roundToInt(), pages.scrollY - (se.latest.y - py).roundToInt())
+                        }
+                    }
                     if (scrolling.remove(id) != null) {
                         if (scrolling.size < 2) commitPreview()
                         if (scrolling.isEmpty()) {
