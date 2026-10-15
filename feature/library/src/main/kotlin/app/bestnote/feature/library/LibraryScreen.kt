@@ -1,63 +1,63 @@
 /**
- * :feature:library — the home screen: a grid of the user's notebooks (Room-backed) with a
- * "New notebook" action that creates one and opens it in the editor.
+ * :feature:library — the home screen in the approved "Atelier" design: a sidebar (library, recent,
+ * favorites, quicknotes, Smart Board, folders, trash) and a main area with a greeting, search, a
+ * "Continue writing" row and the notebooks as a bookshelf, a grid or a list.
+ *
+ * Data comes from [LibraryRepository], which only depends on the `NotebookStore` interface.
  */
 package app.bestnote.feature.library
 
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material3.Card
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ExtendedFloatingActionButton
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListScope
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Surface
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.platform.LocalResources
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
-import androidx.lifecycle.ViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.lifecycle.viewModelScope
 import androidx.navigation.NavGraphBuilder
 import androidx.navigation.compose.composable
-import app.bestnote.core.database.NotebookDao
-import app.bestnote.core.database.toEntity
-import app.bestnote.core.database.toModel
+import app.bestnote.core.designsystem.theme.BestNoteTheme
 import app.bestnote.core.designsystem.theme.Motion
 import app.bestnote.core.designsystem.theme.Spacing
-import app.bestnote.core.model.Notebook
 import app.bestnote.core.model.NotebookId
-import app.bestnote.core.ui.EmptyState
-import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.flow.SharingStarted
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.serialization.Serializable
-import java.text.DateFormat
-import java.util.Date
-import java.util.UUID
-import javax.inject.Inject
 
 @Serializable
 data object LibraryRoute
@@ -66,90 +66,235 @@ fun NavGraphBuilder.libraryScreen(onOpenNotebook: (NotebookId) -> Unit, onOpenSe
     composable<LibraryRoute> { LibraryScreen(onOpenNotebook, onOpenSettings) }
 }
 
-@HiltViewModel
-class LibraryViewModel @Inject constructor(private val dao: NotebookDao) : ViewModel() {
-    /** null while loading. */
-    val notebooks: StateFlow<List<Notebook>?> = dao.observeAll()
-        .map { list -> list.map { it.toModel() } }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
-
-    fun createNotebook(onCreated: (NotebookId) -> Unit) {
-        viewModelScope.launch {
-            val now = System.currentTimeMillis()
-            val count = notebooks.value?.size ?: 0
-            val notebook = Notebook(NotebookId(UUID.randomUUID().toString()), "Notebook ${count + 1}", now, now)
-            dao.upsert(notebook.toEntity())
-            onCreated(notebook.id)
-        }
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LibraryScreen(
     onOpenNotebook: (NotebookId) -> Unit,
     onOpenSettings: () -> Unit,
     viewModel: LibraryViewModel = hiltViewModel(),
 ) {
-    val notebooks by viewModel.notebooks.collectAsStateWithLifecycle()
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("BestNote") },
-                actions = { IconButton(onClick = onOpenSettings) { Icon(Icons.Default.Settings, "Settings") } },
-            )
-        },
-        floatingActionButton = {
-            ExtendedFloatingActionButton(
-                text = { Text("New notebook") },
-                icon = { Icon(Icons.Default.Add, null) },
-                onClick = { viewModel.createNotebook(onOpenNotebook) },
-            )
-        },
-    ) { padding ->
-        val list = notebooks
-        when {
-            list == null -> Box(Modifier.fillMaxSize().padding(padding))
-            list.isEmpty() -> EmptyState(
-                title = "No notebooks yet",
-                message = "Tap New notebook to start writing.",
-                modifier = Modifier.padding(padding),
-            )
-            else -> LazyVerticalGrid(
-                columns = GridCells.Adaptive(minSize = 160.dp),
-                modifier = Modifier.fillMaxSize().padding(padding),
-                contentPadding = PaddingValues(Spacing.L),
-                horizontalArrangement = Arrangement.spacedBy(Spacing.L),
-                verticalArrangement = Arrangement.spacedBy(Spacing.L),
-            ) {
-                items(list, key = { it.id.value }) { notebook ->
-                    NotebookCard(
-                        notebook,
-                        onClick = { onOpenNotebook(notebook.id) },
-                        modifier = Modifier.animateItem(placementSpec = Motion.Spring.gentle()),
+    val state by viewModel.state.collectAsStateWithLifecycle()
+    val snackbar = remember { SnackbarHostState() }
+    val resources = LocalResources.current
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { viewModel.refresh() }
+    LaunchedEffect(viewModel) {
+        viewModel.eventFlow.collect { event ->
+            when (event) {
+                is LibraryEvent.Open -> onOpenNotebook(event.id)
+                is LibraryEvent.Trashed -> launch {
+                    val result = snackbar.showSnackbar(
+                        message = resources.getString(R.string.library_trashed, event.title),
+                        actionLabel = resources.getString(R.string.library_undo),
+                        duration = SnackbarDuration.Long,
                     )
+                    if (result == SnackbarResult.ActionPerformed) viewModel.restore(event.id)
                 }
             }
+        }
+    }
+    val newTitle = stringResource(R.string.library_new_title)
+    val quickTitle = stringResource(R.string.library_quicknote_title)
+    LibraryContent(
+        state = state,
+        now = System.currentTimeMillis(),
+        snackbar = snackbar,
+        callbacks = LibraryCallbacks(
+            select = viewModel::select,
+            query = viewModel::setQuery,
+            layout = viewModel::setLayout,
+            filter = viewModel::setFilter,
+            newNotebook = { viewModel.create(newTitle) },
+            quicknote = { viewModel.create(quickTitle) },
+            open = viewModel::open,
+            rename = viewModel::rename,
+            trash = viewModel::moveToTrash,
+            restore = viewModel::restore,
+            settings = onOpenSettings,
+        ),
+    )
+}
+
+/** Everything the stateless [LibraryContent] can ask for. */
+internal class LibraryCallbacks(
+    val select: (LibraryDestination) -> Unit = {},
+    val query: (String) -> Unit = {},
+    val layout: (LibraryLayout) -> Unit = {},
+    val filter: (NotebookFilter) -> Unit = {},
+    val newNotebook: () -> Unit = {},
+    val quicknote: () -> Unit = {},
+    val open: (NotebookId) -> Unit = {},
+    val rename: (NotebookId, String) -> Unit = { _, _ -> },
+    val trash: (NotebookId) -> Unit = {},
+    val restore: (NotebookId) -> Unit = {},
+    val settings: () -> Unit = {},
+)
+
+/** Below this width the sidebar is hidden and the header controls tighten. */
+private val SidebarBreakpoint = 720.dp
+private val CompactBreakpoint = 1000.dp
+private val MainPaddingH = 40.dp
+
+@Composable
+internal fun LibraryContent(
+    state: LibraryUiState,
+    now: Long,
+    callbacks: LibraryCallbacks,
+    snackbar: SnackbarHostState = remember { SnackbarHostState() },
+) {
+    var renaming by rememberSaveable { mutableStateOf<String?>(null) }
+    val actions = remember(callbacks) {
+        NotebookActions(
+            open = { callbacks.open(it.id) },
+            rename = { renaming = it.id.value },
+            trash = { callbacks.trash(it.id) },
+        )
+    }
+    BoxWithConstraints(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+        val showSidebar = maxWidth >= SidebarBreakpoint
+        val compact = maxWidth < CompactBreakpoint
+        Row(Modifier.fillMaxSize()) {
+            if (showSidebar) {
+                LibrarySidebar(
+                    state,
+                    onSelect = callbacks.select,
+                    onOpenSettings = callbacks.settings,
+                    modifier = Modifier
+                        .fillMaxHeight()
+                        .background(BestNoteTheme.colors.sidebar) // runs under the system bars
+                        .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Start + WindowInsetsSides.Vertical)),
+                )
+            }
+            BoxWithConstraints(
+                Modifier.weight(1f).fillMaxHeight().windowInsetsPadding(
+                    WindowInsets.safeDrawing.only(
+                        if (showSidebar) WindowInsetsSides.Vertical + WindowInsetsSides.End else WindowInsetsSides.Vertical + WindowInsetsSides.Horizontal,
+                    ),
+                ),
+            ) {
+                val inner = maxWidth - MainPaddingH * 2
+                val shelfColumns = ((inner - Spacing.L * 2 + ShelfGap) / (CoverWidth + ShelfGap)).toInt().coerceAtLeast(1)
+                val gridColumns = ((inner + Spacing.L) / (GridMinCell + Spacing.L)).toInt().coerceAtLeast(1)
+                LazyColumn(
+                    Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(start = MainPaddingH, end = MainPaddingH, top = Spacing.XXL, bottom = Spacing.XXL * 2),
+                ) {
+                    item(key = "header", contentType = "header") {
+                        LibraryHeader(state, compact, callbacks.query, callbacks.layout, callbacks.newNotebook)
+                    }
+                    val last = state.continueWith
+                    if (state.showContinueWriting && last != null) {
+                        item(key = "continue-title", contentType = "section") { SectionTitle(stringResource(R.string.library_continue_writing)) }
+                        item(key = "continue", contentType = "continue") {
+                            ContinueWritingRow(
+                                last,
+                                now,
+                                onOpen = { callbacks.open(it.id) },
+                                onQuicknote = callbacks.quicknote,
+                                onSmartBoard = { callbacks.select(LibraryDestination.SmartBoard) },
+                            )
+                        }
+                    }
+                    notebooksSection(state, now, shelfColumns, gridColumns, actions, callbacks)
+                }
+                SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).padding(Spacing.L))
+            }
+        }
+    }
+    val target = renaming?.let { id -> state.items.firstOrNull { it.id.value == id } }
+    if (target != null) {
+        RenameDialog(
+            initial = target.title,
+            onDismiss = { renaming = null },
+            onConfirm = { title ->
+                callbacks.rename(target.id, title)
+                renaming = null
+            },
+        )
+    }
+}
+
+@Composable
+private fun SectionTitle(text: String) {
+    Text(
+        text,
+        style = MaterialTheme.typography.titleLarge,
+        color = MaterialTheme.colorScheme.onBackground,
+        modifier = Modifier.padding(top = Spacing.XXL, bottom = Spacing.L),
+    )
+}
+
+private fun LazyListScope.notebooksSection(
+    state: LibraryUiState,
+    now: Long,
+    shelfColumns: Int,
+    gridColumns: Int,
+    actions: NotebookActions,
+    callbacks: LibraryCallbacks,
+) {
+    when (state.controls.destination) {
+        LibraryDestination.Trash -> {
+            item(key = "trash-gap") { Spacer(Modifier.height(Spacing.XXL)) }
+            if (state.trash.isEmpty()) {
+                item(key = "trash-empty") {
+                    LibraryEmpty(stringResource(R.string.library_trash_empty), stringResource(R.string.library_trash_body))
+                }
+            } else {
+                items(state.trash, key = { "t-" + it.id.value }, contentType = { "trash" }) { item ->
+                    TrashRow(item, now, onRestore = { callbacks.restore(item.id) }, modifier = Modifier.animateItem(placementSpec = Motion.Spring.offsetGentle()))
+                }
+            }
+            return
+        }
+        LibraryDestination.SmartBoard -> {
+            item(key = "board-soon") {
+                LibraryEmpty(stringResource(R.string.library_nav_smart_board), stringResource(R.string.library_smart_board_soon))
+            }
+            return
+        }
+        else -> Unit
+    }
+    item(key = "notebooks-header", contentType = "section") {
+        NotebooksHeader(state.controls.filter, callbacks.filter, Modifier.padding(top = Spacing.XXL, bottom = Spacing.XL))
+    }
+    if (state.loading) return
+    if (state.items.isEmpty()) {
+        item(key = "empty") {
+            val query = state.controls.query.trim()
+            LibraryEmpty(
+                stringResource(R.string.library_empty_title),
+                if (query.isEmpty()) stringResource(R.string.library_empty_body) else stringResource(R.string.library_empty_search, query),
+            )
+        }
+        return
+    }
+    when (state.controls.layout) {
+        LibraryLayout.Shelf -> {
+            val rows = state.items.chunked(shelfColumns)
+            itemsIndexed(rows, key = { _, row -> "s-" + row.first().id.value }, contentType = { _, _ -> "shelf" }) { _, row ->
+                ShelfRow(row, now, actions, Modifier.padding(bottom = Spacing.XXL).animateItem(placementSpec = Motion.Spring.offsetGentle()))
+            }
+        }
+        LibraryLayout.Grid -> {
+            val rows = state.items.chunked(gridColumns)
+            itemsIndexed(rows, key = { _, row -> "g-" + row.first().id.value }, contentType = { _, _ -> "grid" }) { _, row ->
+                GridRow(row, gridColumns, now, actions, Modifier.padding(bottom = Spacing.L).animateItem(placementSpec = Motion.Spring.offsetGentle()))
+            }
+        }
+        LibraryLayout.List -> items(state.items, key = { "l-" + it.id.value }, contentType = { "list" }) { item ->
+            ListRow(item, now, actions, Modifier.animateItem(placementSpec = Motion.Spring.offsetGentle()))
         }
     }
 }
 
 @Composable
-private fun NotebookCard(notebook: Notebook, onClick: () -> Unit, modifier: Modifier = Modifier) {
-    Card(onClick = onClick, modifier = modifier.fillMaxWidth()) {
-        // Cover placeholder until page thumbnails exist.
-        Surface(
-            color = MaterialTheme.colorScheme.primaryContainer,
-            shape = MaterialTheme.shapes.medium,
-            modifier = Modifier.fillMaxWidth().aspectRatio(0.75f).padding(Spacing.S),
-        ) {}
-        Column(Modifier.padding(horizontal = Spacing.M, vertical = Spacing.S)) {
-            Text(notebook.title, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(
-                DateFormat.getDateInstance(DateFormat.MEDIUM).format(Date(notebook.updatedAtMillis)),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-    }
+private fun RenameDialog(initial: String, onDismiss: () -> Unit, onConfirm: (String) -> Unit) {
+    var text by rememberSaveable { mutableStateOf(initial) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.library_rename_title)) },
+        text = { OutlinedTextField(value = text, onValueChange = { text = it }, singleLine = true) },
+        confirmButton = {
+            TextButton(onClick = { onConfirm(text) }, enabled = text.isNotBlank()) { Text(stringResource(R.string.library_rename_confirm)) }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.library_cancel)) } },
+    )
 }

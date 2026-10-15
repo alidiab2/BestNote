@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="library_greeting_morning">صباح الخير</string>
+    <string name="library_greeting_afternoon">طاب يومك</string>
+    <string name="library_greeting_evening">مساء الخير</string>
+    <plurals name="library_notebook_count">
+        <item quantity="zero">لا دفاتر</item>
+        <item quantity="one">دفتر واحد</item>
+        <item quantity="two">دفتران</item>
+        <item quantity="few">%d دفاتر</item>
+        <item quantity="many">%d دفترًا</item>
+        <item quantity="other">%d دفتر</item>
+    </plurals>
+    <plurals name="library_page_count">
+        <item quantity="zero">لا صفحات</item>
+        <item quantity="one">صفحة واحدة</item>
+        <item quantity="two">صفحتان</item>
+        <item quantity="few">%d صفحات</item>
+        <item quantity="many">%d صفحة</item>
+        <item quantity="other">%d صفحة</item>
+    </plurals>
+    <string name="library_search_hint">ابحث في الخط اليدوي وملفات PDF والنصوص…</string>
+    <string name="library_new">جديد</string>
+    <string name="library_new_title">دفتر بلا عنوان</string>
+    <string name="library_quicknote_title">ملاحظة سريعة</string>
+    <string name="library_layout_shelf">رف</string>
+    <string name="library_layout_grid">شبكة</string>
+    <string name="library_layout_list">قائمة</string>
+
+    <string name="library_nav_library">المكتبة</string>
+    <string name="library_nav_recent">الأحدث</string>
+    <string name="library_nav_favorites">المفضلة</string>
+    <string name="library_nav_quicknotes">ملاحظات سريعة</string>
+    <string name="library_nav_smart_board">السبورة الذكية</string>
+    <string name="library_nav_ai_badge">AI</string>
+    <string name="library_nav_folders">المجلدات</string>
+    <string name="library_nav_trash">المحذوفات</string>
+    <string name="library_nav_settings">الإعدادات</string>
+    <string name="library_storage_title">على هذا الجهاز</string>
+    <string name="library_storage_detail">بلا حساب · نسخة احتياطية %1$s</string>
+    <string name="library_storage_detail_none">بلا حساب · لم يُحفظ شيء بعد</string>
+
+    <string name="library_continue_writing">تابع الكتابة</string>
+    <string name="library_continue_page">صفحة %1$d من %2$d</string>
+    <string name="library_quicknote_body">دوّنها الآن ورتّبها لاحقًا.</string>
+    <string name="library_quicknote_action">صفحة فارغة</string>
+    <string name="library_smart_board_body">صوّر السبورة واحصل على ملاحظات نظيفة قابلة للتعديل.</string>
+    <string name="library_smart_board_action">امسح السبورة</string>
+
+    <string name="library_notebooks">الدفاتر</string>
+    <string name="library_filter_all">الكل</string>
+    <string name="library_filter_week">هذا الأسبوع</string>
+    <string name="library_filter_favorites">المفضلة</string>
+    <string name="library_meta">%1$s · %2$s</string>
+
+    <string name="library_empty_title">لا دفاتر هنا</string>
+    <string name="library_empty_body">اضغط «جديد» لتبدأ الكتابة.</string>
+    <string name="library_empty_search">لا نتائج لـ «%1$s».</string>
+    <string name="library_smart_board_soon">السبورة الذكية قادمة قريبًا.</string>
+    <string name="library_trash_empty">المحذوفات فارغة</string>
+    <string name="library_trash_body">تبقى الدفاتر هنا 30 يومًا قبل حذفها نهائيًا.</string>
+    <string name="library_trash_purge">حُذف %1$s · يُحذف نهائيًا %2$s</string>
+    <string name="library_restore">استعادة</string>
+
+    <string name="library_menu_open">فتح</string>
+    <string name="library_menu_rename">إعادة تسمية</string>
+    <string name="library_menu_trash">نقل إلى المحذوفات</string>
+    <string name="library_rename_title">إعادة تسمية الدفتر</string>
+    <string name="library_rename_confirm">إعادة تسمية</string>
+    <string name="library_cancel">إلغاء</string>
+    <string name="library_trashed">نُقل «%1$s» إلى المحذوفات</string>
+    <string name="library_undo">تراجع</string>
+    <string name="library_favorite">مفضّل</string>
+</resources>
