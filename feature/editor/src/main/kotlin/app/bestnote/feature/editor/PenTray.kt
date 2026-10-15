@@ -123,7 +123,8 @@ internal fun PenTray(
     ) {
         TrayLine(vertical) {
             PenKind.entries.forEach { kind ->
-                val shown = temporary ?: toolbox.active
+                // With the lasso in hand no pen is raised (the side-button eraser still shows).
+                val shown = temporary ?: toolbox.active.takeUnless { toolbox.lasso }
                 PenSlot(
                     kind = kind,
                     ink = Color(toolbox.settingsOf(kind).colorArgb),

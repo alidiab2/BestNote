@@ -59,6 +59,7 @@ internal object AtelierIcons {
     val Ruler = icon("ruler", false, 1.8f, "M3.8 15.6L15.6 3.8l4.6 4.6L8.4 20.2z", "M7.5 12l1.8 1.8M10 9.5l1.2 1.2M12.5 7l1.8 1.8")
     val Collapse = icon("collapse", false, 2f, "M7 14l5-5 5 5")
     val Plus = icon("plus", false, 2f, "M12 6v12M6 12h12")
+    val Minus = icon("minus", false, 2f, "M6 12h12")
     val Check = icon("check", false, 2.2f, "M5.5 12.5l4 4 9-9")
     val Trash = icon("trash", false, 1.8f, "M4.5 7h15M9.5 7V5h5v2M6.5 7l1 12.5h9l1-12.5")
 }

@@ -184,6 +184,7 @@ class EditorViewModel @Inject constructor(
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), EditorUiState())
 
     fun selectPen(kind: PenKind) = toolboxState.update { it.select(kind) }
+    fun setLasso(on: Boolean) = toolboxState.update { it.withLasso(on) }
     fun updateToolbox(toolbox: Toolbox) = toolboxState.update { toolbox }
     fun setDock(dock: ToolbarDock) = viewModelScope.launch { preferences.setToolbarDock(dock) }
     fun setLeftHanded(enabled: Boolean) = viewModelScope.launch { preferences.setLeftHanded(enabled) }
@@ -229,6 +230,7 @@ fun EditorScreen(
     var pageOrigin by remember { mutableStateOf(Offset.Zero) }
     var pageNumber by remember { mutableStateOf(1 to 1) }
     var managerPage by remember { mutableStateOf<Int?>(null) }
+    var selectionMenu by remember { mutableStateOf<PagedDocumentView.SelectionMenu?>(null) }
     val snackbar = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     val reduce = reducedMotion()
@@ -262,7 +264,6 @@ fun EditorScreen(
     val comingSoonFormat = stringResource(R.string.editor_coming_soon)
     val clearedText = stringResource(R.string.editor_page_cleared)
     val undoText = stringResource(R.string.editor_undo)
-    val lassoText = stringResource(R.string.tool_lasso)
     fun comingSoon(what: String) {
         scope.launch {
             snackbar.currentSnackbarData?.dismiss()
@@ -277,8 +278,12 @@ fun EditorScreen(
             if (snackbar.showSnackbar(clearedText, actionLabel = undoText) == SnackbarResult.ActionPerformed) document.undo()
         }
     }
+    fun toggleLasso() {
+        picker = null
+        viewModel.setLasso(!toolbox.lasso)
+    }
     fun onPen(kind: PenKind) {
-        if (kind == toolbox.active) {
+        if (kind == toolbox.active && !toolbox.lasso) {
             picker = if (picker == PickerAnchor.Pen) null else PickerAnchor.Pen
         } else {
             picker = null
@@ -359,7 +364,7 @@ fun EditorScreen(
         CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
             PagedDocumentHost(
                 document = document,
-                tool = toolbox.active.tool,
+                tool = toolbox.tool,
                 penStyle = toolbox.active.style,
                 colorArgb = toolbox.current.brushColorArgb,
                 brushSize = toolbox.current.size,
@@ -370,6 +375,8 @@ fun EditorScreen(
                 onView = { view ->
                     view.layoutDirection = View.LAYOUT_DIRECTION_LTR
                     view.writingListener = PagedDocumentView.WritingListener { writing = it }
+                    view.selectionListener = PagedDocumentView.SelectionListener { selectionMenu = it }
+                    view.selectionAppearMs = Motion.Duration.Short
                     view.temporaryToolListener = { tool -> temporary = if (tool == Tool.Eraser) PenKind.Eraser else null }
                     view.quickPaletteListener = PagedDocumentView.QuickPaletteListener { x, y ->
                         picker = null
@@ -434,12 +441,12 @@ fun EditorScreen(
                     TraySide.Top -> if (wide) {
                         Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
                             tray()
-                            ToolsCapsule(vertical = false, onComingSoon = ::comingSoon)
+                            ToolsCapsule(vertical = false, onComingSoon = ::comingSoon, lassoActive = toolbox.lasso, onLasso = ::toggleLasso)
                         }
                     } else {
                         Column(verticalArrangement = Arrangement.spacedBy(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                             tray()
-                            ToolsCapsule(vertical = false, onComingSoon = ::comingSoon)
+                            ToolsCapsule(vertical = false, onComingSoon = ::comingSoon, lassoActive = toolbox.lasso, onLasso = ::toggleLasso)
                         }
                     }
                     // Side docks are physical: the tray hugs the screen edge, tools sit inward.
@@ -447,9 +454,9 @@ fun EditorScreen(
                         Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
                             if (side == TraySide.Left) {
                                 tray()
-                                ToolsCapsule(vertical = true, onComingSoon = ::comingSoon)
+                                ToolsCapsule(vertical = true, onComingSoon = ::comingSoon, lassoActive = toolbox.lasso, onLasso = ::toggleLasso)
                             } else {
-                                ToolsCapsule(vertical = true, onComingSoon = ::comingSoon)
+                                ToolsCapsule(vertical = true, onComingSoon = ::comingSoon, lassoActive = toolbox.lasso, onLasso = ::toggleLasso)
                                 tray()
                             }
                         }
@@ -479,6 +486,27 @@ fun EditorScreen(
             }
         }
 
+        // ---- lasso menu (CANVAS-10/11): over the selection, never under the pen ----
+        val menu = selectionMenu
+        if (menu != null && toolbox.lasso && managerPage == null) {
+            val view = canvas
+            SelectionMenu(
+                menu = menu,
+                origin = pageOrigin,
+                colors = toolbox.quickColors(PenKind.Fountain),
+                actions = SelectionActions(
+                    onColor = { view?.recolorSelection(it) },
+                    onThinner = { view?.thickenSelection(1f / THICKEN_STEP) },
+                    onThicker = { view?.thickenSelection(THICKEN_STEP) },
+                    onCut = { view?.cutSelection() },
+                    onCopy = { view?.copySelection() },
+                    onDuplicate = { view?.duplicateSelection() },
+                    onDelete = { view?.deleteSelection() },
+                    onPaste = { view?.paste() },
+                ),
+            )
+        }
+
         // ---- page manager (PAGES-03/04/05): zooms out of the page being read ----
         managerPage?.let { open ->
             PageManager(
@@ -499,7 +527,7 @@ fun EditorScreen(
                 toolbox = toolbox,
                 onToolbox = viewModel::updateToolbox,
                 onPen = { viewModel.selectPen(it) },
-                onLasso = { comingSoon(lassoText) },
+                onLasso = { viewModel.setLasso(true) },
                 onMore = {
                     collapsed = false
                     autoHidden = false

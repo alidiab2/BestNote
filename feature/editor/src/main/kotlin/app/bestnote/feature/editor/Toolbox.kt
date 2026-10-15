@@ -40,7 +40,12 @@ data class Toolbox(
     val recentColors: Map<PenKind, List<Int>> = PenDefaults.quickColors,
     /** What the eraser removes (CANVAS-01/02); also used by the side-button and pen-end eraser. */
     val eraserMode: EraserMode = EraserMode.Stroke,
+    /** The lasso (CANVAS-08) is the tool in hand instead of [active]; picking a pen puts it down. */
+    val lasso: Boolean = false,
 ) {
+    /** The canvas tool in hand. */
+    val tool: Tool get() = if (lasso) Tool.Lasso else active.tool
+
     val current: PenSettings get() = settingsOf(active)
 
     fun settingsOf(kind: PenKind): PenSettings = settings[kind] ?: PenDefaults.settings.getValue(kind)
@@ -48,7 +53,9 @@ data class Toolbox(
     /** The 5 color dots for [kind]. The current color is always one of them. */
     fun quickColors(kind: PenKind = active): List<Int> = recentColors[kind] ?: PenDefaults.quickColors.getValue(kind)
 
-    fun select(kind: PenKind) = copy(active = kind)
+    fun select(kind: PenKind) = copy(active = kind, lasso = false)
+
+    fun withLasso(on: Boolean) = copy(lasso = on)
 
     /** Sets the active pen's color; a color not in the dots replaces the least recently added one. */
     fun withColor(colorArgb: Int, kind: PenKind = active): Toolbox {

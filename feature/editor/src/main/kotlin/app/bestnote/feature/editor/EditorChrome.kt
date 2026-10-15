@@ -31,6 +31,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -193,18 +194,32 @@ private val Tools = listOf(
 
 /** The lighter second capsule: lasso, shapes, text, image, audio, ruler (placeholders until built). */
 @Composable
-internal fun ToolsCapsule(vertical: Boolean, onComingSoon: (String) -> Unit, modifier: Modifier = Modifier) {
+internal fun ToolsCapsule(
+    vertical: Boolean,
+    onComingSoon: (String) -> Unit,
+    modifier: Modifier = Modifier,
+    lassoActive: Boolean = false,
+    onLasso: () -> Unit = {},
+) {
     val content: @Composable () -> Unit = {
         Tools.forEach { tool ->
             val label = stringResource(tool.label)
+            val isLasso = tool.label == R.string.tool_lasso
+            val selected = isLasso && lassoActive
+            val shape = androidx.compose.foundation.shape.RoundedCornerShape(13.dp)
             ChromeIconButton(
                 tool.icon,
                 label,
-                { onComingSoon(label) },
+                { if (isLasso) onLasso() else onComingSoon(label) },
                 size = 44.dp,
-                shape = androidx.compose.foundation.shape.RoundedCornerShape(13.dp),
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.semantics { contentDescription = label },
+                shape = shape,
+                tint = if (selected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier
+                    .then(if (selected) Modifier.background(MaterialTheme.colorScheme.primaryContainer, shape) else Modifier)
+                    .semantics {
+                        contentDescription = label
+                        if (isLasso) this.selected = selected
+                    },
             )
         }
     }
