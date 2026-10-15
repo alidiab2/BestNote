@@ -68,6 +68,8 @@ data class RestoreResult(
     val restored: Int,
     val skippedNewerLocal: Int,
     val failed: List<String>,
+    /** Ids of the notebooks written by this restore. */
+    val restoredIds: Set<String>,
     /** Library-side files from the backup, for the caller to apply. */
     val extras: Map<String, ByteArray>,
     val manifest: BackupManifest,
@@ -150,7 +152,7 @@ class LibraryBackup(
         val localLive = notebooks.list().associate { it.id to it.updatedAtMillis }
         val localTrash = trash.list().associate { it.id to it.updatedAtMillis }
         val failed = ArrayList<String>()
-        var restored = 0
+        val restoredIds = HashSet<String>()
         var skipped = 0
         progress.update(0, manifest.notebooks.size)
         for ((i, entry) in manifest.notebooks.withIndex()) {
@@ -171,7 +173,7 @@ class LibraryBackup(
                     failed += entry.title
                 } else {
                     store.write(pkg)
-                    restored++
+                    restoredIds += entry.id
                 }
             }
             progress.update(i + 1, manifest.notebooks.size)
@@ -181,7 +183,7 @@ class LibraryBackup(
             requireValidExtraName(name)
             target.read("$EXTRAS_DIR$name") { it.readBytes() }?.let { extras[name] = it }
         }
-        return RestoreResult(restored, skipped, failed, extras, manifest)
+        return RestoreResult(restoredIds.size, skipped, failed, restoredIds, extras, manifest)
     }
 
     /** The manifest of the backup in [target], or null if there is none (or it is unreadable). */

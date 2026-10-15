@@ -4,6 +4,7 @@ import android.content.Context
 import android.text.format.Formatter
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -24,6 +25,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -31,6 +35,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.unit.dp
@@ -39,6 +44,8 @@ import app.bestnote.core.designsystem.theme.BestNoteShapes
 import app.bestnote.core.designsystem.theme.BestNoteTheme
 import app.bestnote.core.designsystem.theme.Motion
 import app.bestnote.core.designsystem.theme.Spacing
+import app.bestnote.engine.export.BackupDialog
+import app.bestnote.engine.export.rememberBackupController
 import app.bestnote.feature.settings.R
 import app.bestnote.feature.settings.StorageUiState
 
@@ -53,6 +60,8 @@ internal fun StorageSection(
 ) {
     val context = LocalContext.current
     val usage = storage.usage
+    var showBackup by remember { mutableStateOf(false) }
+    if (showBackup) BackupDialog(rememberBackupController(), onDismiss = { showBackup = false })
     DetailHeader(stringResource(R.string.settings_cat_storage), stringResource(R.string.settings_storage_desc))
 
     SettingsGroup(stringResource(R.string.settings_storage_used)) {
@@ -111,11 +120,11 @@ internal fun StorageSection(
     SettingsGroup(stringResource(R.string.settings_backup_group)) {
         row {
             SettingsRow(
-                title = stringResource(R.string.settings_export_all),
-                subtitle = stringResource(R.string.settings_export_all_sub),
+                title = stringResource(R.string.settings_backup_restore),
+                subtitle = stringResource(R.string.settings_backup_restore_sub),
                 icon = Icons.Outlined.IosShare,
-                enabled = false,
-            ) { ComingSoonChip() }
+                modifier = Modifier.clickable(role = Role.Button) { showBackup = true },
+            ) { RowAction(stringResource(R.string.settings_open), { showBackup = true }) }
         }
     }
 

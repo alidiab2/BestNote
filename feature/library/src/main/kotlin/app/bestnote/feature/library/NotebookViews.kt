@@ -61,7 +61,7 @@ private val ShelfStripHeight = 12.dp
 internal val GridMinCell: Dp = 168.dp
 
 /** Everything a notebook's "⋯" menu can do. */
-internal enum class NotebookMenuAction { Open, Rename, ChangeCover, Duplicate, Move, Favorite, Export, Select, Trash }
+internal enum class NotebookMenuAction { Open, Rename, ChangeCover, Duplicate, Move, Favorite, Export, Share, Select, Trash }
 
 /** Callbacks and selection state shared by every notebook view. */
 internal class NotebookActions(

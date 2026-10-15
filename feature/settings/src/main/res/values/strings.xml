@@ -175,8 +175,9 @@
     <string name="settings_storage_location">Where notebooks live</string>
     <string name="settings_storage_location_sub">On this device, private to BestNote</string>
     <string name="settings_backup_group">Backup</string>
-    <string name="settings_export_all">Export all notebooks</string>
-    <string name="settings_export_all_sub">As .bnote files and PDFs, to a folder you pick</string>
+    <string name="settings_backup_restore">Backup &amp; restore</string>
+    <string name="settings_backup_restore_sub">Save your whole library to a folder, and bring it back any time</string>
+    <string name="settings_open">Open</string>
     <string name="settings_cleanup_group">Clean up</string>
     <string name="settings_trash_retention">Keep deleted notebooks</string>
     <string name="settings_trash_never">Forever</string>

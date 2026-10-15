@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="export_title">Export</string>
+    <string name="export_pdf">PDF document</string>
+    <string name="export_pdf_sub">Every page; ink stays sharp at any zoom</string>
+    <string name="export_png">Images (PNG)</string>
+    <string name="export_png_sub">One picture per page</string>
+    <string name="export_bnote">BestNote file</string>
+    <string name="export_bnote_sub">Keeps everything; opens in BestNote</string>
+    <string name="export_this_page">This page</string>
+    <string name="export_all_pages">All %1$d pages</string>
+    <string name="export_share">Share</string>
+    <string name="export_cancel">Cancel</string>
+    <string name="export_working">Preparing page %1$d of %2$d</string>
+    <string name="export_failed">Couldn’t export: %1$s</string>
+
+    <string name="backup_title">Backup &amp; restore</string>
+    <string name="backup_folder">BACKUP FOLDER</string>
+    <string name="backup_no_folder">No folder chosen</string>
+    <string name="backup_choose">Choose</string>
+    <string name="backup_change">Change</string>
+    <string name="backup_never">Never backed up</string>
+    <string name="backup_last">Last backup %1$s</string>
+    <string name="backup_now">Back up now</string>
+    <string name="backup_restore">Restore</string>
+    <string name="backup_close">Done</string>
+    <string name="backup_running">Backing up %1$d of %2$d</string>
+    <string name="backup_restoring">Restoring %1$d of %2$d</string>
+    <string name="backup_hint">Backups are saved in a “BestNote Backup” folder inside the folder you choose, and only edited notebooks are rewritten each time.</string>
+    <string name="backup_restore_title">Restore from a backup?</string>
+    <string name="backup_restore_body">Pick the folder that holds your backup. Notebooks missing on this device are added; a notebook already here is replaced only if the backup has a newer copy.</string>
+    <string name="backup_restore_confirm">Choose folder</string>
+    <string name="backup_not_found">No BestNote backup found in that folder.</string>
+    <string name="backup_failed">Stopped: %1$s</string>
+    <string name="backup_unreadable">Couldn’t read: %1$s.</string>
+    <plurals name="backup_done">
+        <item quantity="one">Backed up %d notebook.</item>
+        <item quantity="other">Backed up %d notebooks.</item>
+    </plurals>
+    <plurals name="backup_restored">
+        <item quantity="one">Restored %d notebook.</item>
+        <item quantity="other">Restored %d notebooks.</item>
+    </plurals>
+    <plurals name="backup_kept_newer">
+        <item quantity="one">%d kept because this device has a newer copy.</item>
+        <item quantity="other">%d kept because this device has newer copies.</item>
+    </plurals>
+</resources>

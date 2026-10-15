@@ -34,6 +34,7 @@ import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material.icons.outlined.IosShare
 import androidx.compose.material.icons.outlined.Palette
+import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material.icons.outlined.Star
 import androidx.compose.material.icons.outlined.StarOutline
 import androidx.compose.material3.AlertDialog
@@ -163,7 +164,8 @@ internal fun NotebookMenu(item: NotebookItem, expanded: Boolean, onDismiss: () -
             stringResource(if (item.favorite) R.string.library_menu_unfavorite else R.string.library_menu_favorite),
             { onAction(NotebookMenuAction.Favorite) },
         )
-        AtelierMenuItem(Icons.Outlined.IosShare, stringResource(R.string.library_menu_export), { onAction(NotebookMenuAction.Export) }, trailing = stringResource(R.string.library_soon))
+        AtelierMenuItem(Icons.Outlined.IosShare, stringResource(R.string.library_menu_export), { onAction(NotebookMenuAction.Export) })
+        AtelierMenuItem(Icons.Outlined.Share, stringResource(R.string.library_menu_share), { onAction(NotebookMenuAction.Share) })
         AtelierMenuItem(Icons.Outlined.CheckCircleOutline, stringResource(R.string.library_menu_select), { onAction(NotebookMenuAction.Select) })
         MenuDivider()
         AtelierMenuItem(Icons.Outlined.DeleteOutline, stringResource(R.string.library_menu_trash), { onAction(NotebookMenuAction.Trash) }, destructive = true)

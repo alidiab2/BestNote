@@ -41,6 +41,7 @@ dependencies {
     implementation(projects.core.datastore)
     implementation(projects.ai.visionGemini)
 
+    implementation(projects.engine.export)
     implementation(projects.feature.library)
     implementation(projects.feature.editor)
     implementation(projects.feature.settings)

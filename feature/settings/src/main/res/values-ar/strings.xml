@@ -165,8 +165,9 @@
     <string name="settings_storage_location">مكان حفظ الدفاتر</string>
     <string name="settings_storage_location_sub">على هذا الجهاز، خاص بالتطبيق</string>
     <string name="settings_backup_group">النسخ الاحتياطي</string>
-    <string name="settings_export_all">تصدير كل الدفاتر</string>
-    <string name="settings_export_all_sub">ملفات ‎.bnote وPDF إلى مجلد تختاره</string>
+    <string name="settings_backup_restore">النسخ الاحتياطي والاستعادة</string>
+    <string name="settings_backup_restore_sub">احفظ مكتبتك كاملة في مجلد واستعدها وقتما شئت</string>
+    <string name="settings_open">فتح</string>
     <string name="settings_cleanup_group">التنظيف</string>
     <string name="settings_trash_retention">الاحتفاظ بالدفاتر المحذوفة</string>
     <string name="settings_trash_never">دائمًا</string>

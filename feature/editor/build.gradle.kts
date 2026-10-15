@@ -8,5 +8,6 @@ dependencies {
     implementation(projects.core.datastore)
     implementation(projects.engine.canvas)
     implementation(projects.engine.pdf)
+    implementation(projects.engine.export)
     implementation(libs.androidx.compose.material.icons.extended)
 }
