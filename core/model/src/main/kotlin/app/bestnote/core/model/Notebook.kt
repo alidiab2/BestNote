@@ -16,8 +16,11 @@ value class NotebookId(val value: String) {
     override fun toString(): String = value
 }
 
-/** Background pattern printed on a page. */
-enum class PaperTemplate { Blank, Ruled, Grid, Dotted }
+/**
+ * Background pattern printed on a page. Persisted by name, so entries are only ever appended.
+ * [Ruled] is college rule; [PaperColor] and the page size are separate properties of [Page].
+ */
+enum class PaperTemplate { Blank, Ruled, Grid, Dotted, RuledNarrow, RuledWide, Cornell, MusicStaff }
 
 /** A notebook as shown in the library. Timestamps are epoch milliseconds. */
 data class Notebook(
@@ -35,6 +38,7 @@ data class Notebook(
 
 /**
  * One page of a notebook. Sizes are in points (1/72 inch); the default is A4 portrait.
+ * Ink on a page is stored in page-local points, origin at the page's top-left corner.
  */
 data class Page(
     val notebookId: NotebookId,
@@ -42,6 +46,7 @@ data class Page(
     val template: PaperTemplate = PaperTemplate.Ruled,
     val widthPt: Float = A4_WIDTH_PT,
     val heightPt: Float = A4_HEIGHT_PT,
+    val paperColor: PaperColor = PaperColor.White,
 ) {
     init {
         require(index >= 0) { "Page index must be >= 0" }
@@ -49,6 +54,8 @@ data class Page(
     }
 
     val aspectRatio: Float get() = widthPt / heightPt
+
+    val size: PageSize get() = PageSize(widthPt, heightPt)
 
     companion object {
         const val A4_WIDTH_PT = 595f

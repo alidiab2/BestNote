@@ -37,7 +37,10 @@ class InkRenderer(private val renderer: CanvasStrokeRenderer = CanvasStrokeRende
         return opaqueCopies.getOrPut(stroke) { stroke.copy(stroke.brush.copyWithColorIntArgb(color)) }
     }
 
-    /** Device-space bounds of [items] into [bounds]; false if none has geometry. */
+    /**
+     * Bounds of [items] into [bounds], in stroke (= canvas-local) coordinates, because saveLayer takes
+     * local coordinates; [transform] only tells the stroke renderer the device scale. False if none has geometry.
+     */
     private fun unionBounds(items: List<Stroke>, transform: Matrix): Boolean {
         bounds.setEmpty()
         for (stroke in items) {
@@ -46,12 +49,14 @@ class InkRenderer(private val renderer: CanvasStrokeRenderer = CanvasStrokeRende
             bounds.union(strokeBounds)
         }
         if (bounds.isEmpty) return false
-        transform.mapRect(bounds)
-        bounds.inset(-1f, -1f)
+        // One device pixel of slack for anti-aliasing, expressed in local units.
+        val pad = 1f / transform.mapRadius(1f).coerceAtLeast(MIN_SCALE)
+        bounds.inset(-pad, -pad)
         return true
     }
 
     private companion object {
         val IDENTITY = Matrix()
+        const val MIN_SCALE = 0.01f
     }
 }

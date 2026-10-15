@@ -16,6 +16,8 @@
  * slow   time scale (default 1 = real time)
  * scale  extra page scale (default: 1 mm = 1 mm on screen, shrunk to fit the canvas)
  * side   temporary tool for the side button: eraser (default) | none
+ * left/top  where the writing starts, in dp from the canvas' corner (default 16; 112 on the paged
+ *        notebook, so the words land on the first page's writing lines)
  *
  * Progress goes to files/replay/status ("running …" / "done …" / "error …") and logcat tag
  * BestNoteReplay. scripts/agent/replay.sh wraps all of this.
@@ -40,6 +42,7 @@ import androidx.core.graphics.toColorInt
 import app.bestnote.core.model.PenStyle
 import app.bestnote.core.model.Tool
 import app.bestnote.engine.canvas.PageCanvasView
+import app.bestnote.engine.canvas.document.PagedDocumentView
 import app.bestnote.engine.ink.BrushCatalog
 import app.bestnote.engine.ink.InkPalette
 import java.io.File
@@ -87,7 +90,7 @@ class ReplayInstaller : ContentProvider() {
                 val name = intent.getStringExtra("file") ?: error("missing --es file")
                 val file = if (name.startsWith("/")) File(name) else File(dir, name)
                 val strokes = StrokeFile.parse(file.readText())
-                val canvas = findCanvas(activity.window.decorView) ?: error("no PageCanvasView on screen: open a notebook first")
+                val canvas = findCanvas(activity.window.decorView) ?: error("no notebook canvas on screen: open a notebook first")
                 running?.cancel()
 
                 val pen = (intent.getStringExtra("pen") ?: "fountain").lowercase()
@@ -95,26 +98,45 @@ class ReplayInstaller : ContentProvider() {
                 val color = intent.getStringExtra("color")?.toColorInt() ?: defaultColor(tool)
                 val size = intent.getFloatExtra("size", BrushCatalog.DEFAULT_SIZE)
                 val side = intent.getStringExtra("side")
-                fun applyPen() {
-                    canvas.tool = tool
-                    canvas.penStyle = style
-                    canvas.colorArgb = color
-                    canvas.brushSize = size
-                    canvas.sideButtonTool = if (side == "none") null else Tool.Eraser
+                val sideTool = if (side == "none") null else Tool.Eraser
+                fun applyPen() = when (canvas) {
+                    is PagedDocumentView -> {
+                        canvas.tool = tool
+                        canvas.penStyle = style
+                        canvas.colorArgb = color
+                        canvas.brushSize = size
+                        canvas.sideButtonTool = sideTool
+                    }
+                    is PageCanvasView -> {
+                        canvas.tool = tool
+                        canvas.penStyle = style
+                        canvas.colorArgb = color
+                        canvas.brushSize = size
+                        canvas.sideButtonTool = sideTool
+                    }
+                    else -> Unit
                 }
                 applyPen()
-                if (intent.getBooleanExtra("clear", false)) canvas.clear()
+                if (intent.getBooleanExtra("clear", false)) {
+                    when (canvas) {
+                        is PagedDocumentView -> canvas.document?.clearPage(canvas.currentPage)
+                        is PageCanvasView -> canvas.clear()
+                    }
+                }
 
                 val dm = activity.resources.displayMetrics
                 val pxPerMmRaw = (if (dm.xdpi > 100f) dm.xdpi else dm.densityDpi.toFloat()) / 25.4f
-                val margin = 16f * dm.density
+                val inset = if (canvas is PagedDocumentView) PAGED_INSET_DP else DEFAULT_INSET_DP
+                val left = intent.getFloatExtra("left", inset) * dm.density
+                val top = intent.getFloatExtra("top", inset) * dm.density
+                val margin = maxOf(left, top)
                 val fit = ReplayPlan.fitScale(strokes, pxPerMmRaw, canvas.width.toFloat(), canvas.height.toFloat(), margin)
                 val pxPerMm = pxPerMmRaw * fit * intent.getFloatExtra("scale", 1f)
                 val events = ReplayPlan.build(
                     strokes,
                     pxPerMm,
-                    margin,
-                    margin,
+                    left,
+                    top,
                     frameMs = intent.getFloatExtra("batch", 1000f / 120f).toDouble(),
                     timeScale = intent.getFloatExtra("slow", 1f).toDouble(),
                 )
@@ -131,8 +153,9 @@ class ReplayInstaller : ContentProvider() {
             }
         }
 
-        private fun findCanvas(v: View): PageCanvasView? {
-            if (v is PageCanvasView) return v
+        /** The paged notebook view, or the single-page canvas. */
+        private fun findCanvas(v: View): View? {
+            if (v is PagedDocumentView || v is PageCanvasView) return v
             if (v is ViewGroup) for (i in 0 until v.childCount) findCanvas(v.getChildAt(i))?.let { return it }
             return null
         }
@@ -147,6 +170,8 @@ class ReplayInstaller : ContentProvider() {
     private companion object {
         const val TAG = "BestNoteReplay"
         const val ACTION = "app.bestnote.debug.REPLAY"
+        const val DEFAULT_INSET_DP = 16f
+        const val PAGED_INSET_DP = 112f
         val PENS = mapOf(
             "fountain" to (Tool.Pen to PenStyle.Fountain),
             "ballpoint" to (Tool.Pen to PenStyle.Ball),

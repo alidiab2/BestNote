@@ -1,6 +1,7 @@
 package app.bestnote.core.storage
 
 import app.bestnote.core.model.InkStroke
+import app.bestnote.core.model.Page
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
@@ -39,7 +40,8 @@ sealed interface SaveState {
  *
  * A save starts once edits have been quiet for [debounceMillis], and at the latest [maxDelayMillis]
  * after the first unsaved edit, so continuous writing still reaches the disk every few seconds.
- * Only pages edited since the last save are re-encoded and rewritten. Callers should [flush] when
+ * Only pages edited since the last save are re-encoded and rewritten. [updateLayout] adds pages and
+ * changes their paper or size (PAGES-01/02); only new or changed pages are rewritten. Callers should [flush] when
  * the app goes to the background, so a later process kill finds everything on disk.
  *
  * @param scope long-lived scope (outliving the screen) that runs the background worker.
@@ -69,6 +71,9 @@ class Autosaver(
 
     /** pageId -> newest strokes not yet committed. Guarded by [lock]. */
     private val pending = LinkedHashMap<String, List<InkStroke>>()
+
+    /** New page order and metadata not yet committed, or null. Guarded by [lock]. */
+    private var pendingLayout: List<Pair<String, Page>>? = null
     private var closed = false
 
     private val signal = Channel<Unit>(Channel.CONFLATED)
@@ -83,7 +88,7 @@ class Autosaver(
     /** Page ids in order, as last committed. */
     val pageIds: List<String> get() = synchronized(lock) { saved.pages.map { it.id } }
 
-    val hasUnsavedChanges: Boolean get() = synchronized(lock) { pending.isNotEmpty() }
+    val hasUnsavedChanges: Boolean get() = synchronized(lock) { pending.isNotEmpty() || pendingLayout != null }
 
     private val worker = scope.launch { runWorker() }
 
@@ -94,8 +99,26 @@ class Autosaver(
     fun updatePage(pageId: String, strokes: List<InkStroke>) {
         synchronized(lock) {
             check(!closed) { "Autosaver is closed" }
-            require(saved.pages.any { it.id == pageId }) { "Unknown page '$pageId'" }
+            val known = pendingLayout?.any { it.first == pageId } ?: saved.pages.any { it.id == pageId }
+            require(known) { "Unknown page '$pageId'" }
             pending[pageId] = strokes
+        }
+        _state.value = SaveState.Dirty
+        signal.trySend(Unit)
+    }
+
+    /**
+     * Records the notebook's pages, in order, with their metadata (template, paper, size). Pages with
+     * an id the package doesn't have yet are added with no ink; [Page.index] is renumbered from the order.
+     * Cheap and non-blocking, like [updatePage].
+     */
+    fun updateLayout(pages: List<Pair<String, Page>>) {
+        require(pages.isNotEmpty()) { "A notebook always has at least one page" }
+        require(pages.map { it.first }.toSet().size == pages.size) { "Page ids must be unique" }
+        pages.forEach { (id, _) -> require(PageContent.PAGE_ID_PATTERN.matches(id)) { "Invalid page id '$id'" } }
+        synchronized(lock) {
+            check(!closed) { "Autosaver is closed" }
+            pendingLayout = pages.toList()
         }
         _state.value = SaveState.Dirty
         signal.trySend(Unit)
@@ -142,24 +165,34 @@ class Autosaver(
 
     private suspend fun saveLocked() {
         val batch: Map<String, List<InkStroke>>
+        val layout: List<Pair<String, Page>>?
         val base: NotebookPackage
         synchronized(lock) {
-            if (pending.isEmpty()) return
+            if (pending.isEmpty() && pendingLayout == null) return
             batch = LinkedHashMap(pending)
             pending.clear()
+            layout = pendingLayout
+            pendingLayout = null
             base = saved
         }
         val pkg = try {
             val encoded = withContext(cpu) { batch.mapValues { (_, strokes) -> codec.encode(strokes) } }
-            val pages = base.pages.map { p -> encoded[p.id]?.let { PageContent(p.page, it, p.id) } ?: p }
+            val (pages, changed) = if (layout == null) {
+                base.pages.map { p -> encoded[p.id]?.let { PageContent(p.page, it, p.id) } ?: p } to batch.keys
+            } else {
+                relayout(base, layout, encoded)
+            }
             val notebook = base.notebook.copy(
                 updatedAtMillis = maxOf(clock(), base.notebook.updatedAtMillis),
                 pageCount = pages.size,
             )
-            NotebookPackage(notebook, pages, base.assets).also { store.writePages(it, batch.keys) }
+            NotebookPackage(notebook, pages, base.assets).also { store.writePages(it, changed) }
         } catch (e: Throwable) {
             // Put the batch back unless the page was edited again meanwhile (newer content wins).
-            synchronized(lock) { batch.forEach { (id, strokes) -> pending.putIfAbsent(id, strokes) } }
+            synchronized(lock) {
+                batch.forEach { (id, strokes) -> pending.putIfAbsent(id, strokes) }
+                if (pendingLayout == null) pendingLayout = layout
+            }
             if (e !is CancellationException) _state.value = SaveState.Failed(e)
             throw e
         }
@@ -175,6 +208,26 @@ class Autosaver(
         } catch (@Suppress("TooGenericExceptionCaught") _: Exception) {
             // The content is safely on disk; a stale index entry is rebuilt from the package later.
         }
+    }
+
+    /** Pages in [layout] order with fresh metadata; returns them and the ids whose files must be written. */
+    private suspend fun relayout(
+        base: NotebookPackage,
+        layout: List<Pair<String, Page>>,
+        encoded: Map<String, ByteArray>,
+    ): Pair<List<PageContent>, Set<String>> {
+        val old = base.pages.associateBy { it.id }
+        val empty by lazy { codec.encode(emptyList()) }
+        val changed = HashSet<String>(encoded.keys)
+        val pages = layout.mapIndexed { i, (id, meta) ->
+            val page = meta.copy(notebookId = base.notebook.id, index = i)
+            val previous = old[id]
+            if (previous?.page != page) changed += id
+            val ink = encoded[id] ?: previous?.strokes ?: withContext(cpu) { empty }
+            PageContent(page, ink, id)
+        }
+        changed.retainAll(layout.mapTo(HashSet()) { it.first })
+        return pages to changed
     }
 
     companion object {

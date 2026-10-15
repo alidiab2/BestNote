@@ -37,6 +37,12 @@ On disk inside the app, a notebook lives **unpacked** as a directory with the sa
 - Autosave (`Autosaver`, DOC-03) rewrites only the pages edited since the last save, then the manifest. A crash leaves every page either fully old or fully new.
 - Inside the app, library thumbnails are cached outside the package (`files/thumbnails/<id>.webp`, DOC-10); `thumbs/` stays optional for exports.
 
+## Page metadata (`pages/<pageId>.json`)
+`format`, `id`, `index`, `template` (a `PaperTemplate` name: `Blank`, `Ruled` (college), `RuledNarrow`,
+`RuledWide`, `Grid`, `Dotted`, `Cornell`, `MusicStaff`), `widthPt`, `heightPt` (the page size in points,
+already oriented, so A5 landscape is 595 x 420), `ink` (the chunk file name) and `paper` (`White`,
+`Cream` or `Dark`; optional, missing or unknown reads as `White`). Ink coordinates are page-local points.
+
 ## `.ink` chunk v2 (implemented in `InkChunkCodec`; v1 is still read)
 Big-endian; floats are raw IEEE-754 bits, so round-trips are bit-exact. The family key (e.g. `fountain.v1`) is the brush family captured at pen-down, so strokes keep rendering identically after brush tuning.
 ```

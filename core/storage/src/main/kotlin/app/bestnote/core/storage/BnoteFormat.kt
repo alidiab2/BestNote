@@ -3,6 +3,7 @@ package app.bestnote.core.storage
 import app.bestnote.core.model.Notebook
 import app.bestnote.core.model.NotebookId
 import app.bestnote.core.model.Page
+import app.bestnote.core.model.PaperColor
 import app.bestnote.core.model.PaperTemplate
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.Serializable
@@ -39,6 +40,8 @@ internal data class PageJson(
     val widthPt: Float,
     val heightPt: Float,
     val ink: String,
+    /** [PaperColor] name. Added after v1 shipped as a draft: optional, unknown names read as White. */
+    val paper: String = "White",
 )
 
 /**
@@ -71,7 +74,7 @@ object BnoteFormat {
         pkg.assets.keys.forEach(::requireValidAssetPath)
         val out = LinkedHashMap<String, ByteArray>()
         for (p in pkg.pages) {
-            val meta = PageJson(VERSION, p.id, p.page.index, p.page.template.name, p.page.widthPt, p.page.heightPt, "${p.id}.ink")
+            val meta = PageJson(VERSION, p.id, p.page.index, p.page.template.name, p.page.widthPt, p.page.heightPt, "${p.id}.ink", p.page.paperColor.name)
             out[pageMetaPath(p.id)] = json.encodeToString(PageJson.serializer(), meta).encodeToByteArray()
             out[pageInkPath(p.id)] = p.strokes
         }
@@ -91,7 +94,7 @@ object BnoteFormat {
             if (meta.format > VERSION) throw UnsupportedFormatVersionException(meta.format, VERSION, "Page")
             if (!INK_NAME.matches(meta.ink)) throw CorruptChunkException("Invalid ink name '${meta.ink}'")
             val ink = entry(PAGES_DIR + meta.ink) ?: throw CorruptChunkException("Missing ink for page $pageId")
-            val page = construct("page $pageId") { Page(nid, meta.index, template(meta.template), meta.widthPt, meta.heightPt) }
+            val page = construct("page $pageId") { Page(nid, meta.index, template(meta.template), meta.widthPt, meta.heightPt, paperColor(meta.paper)) }
             construct("page $pageId") { PageContent(page, ink, pageId) }
         }
         val assets = manifest.assets.associateWith { path ->
@@ -130,6 +133,9 @@ object BnoteFormat {
 
     private fun template(name: String) =
         PaperTemplate.entries.firstOrNull { it.name == name } ?: throw CorruptChunkException("Unknown template '$name'")
+
+    /** Paper color is cosmetic: an unknown name (from a newer app) falls back to white instead of failing. */
+    private fun paperColor(name: String) = PaperColor.entries.firstOrNull { it.name == name } ?: PaperColor.White
 
     private fun <T> decode(what: String, bytes: ByteArray, block: (String) -> T) = decode(what, bytes.decodeToString(), block)
 

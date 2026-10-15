@@ -416,7 +416,7 @@ class PageCanvasView(context: Context) : FrameLayout(context), InProgressStrokes
             val h = height.toFloat()
             when (template) {
                 PaperTemplate.Blank -> Unit
-                PaperTemplate.Ruled -> {
+                PaperTemplate.Ruled, PaperTemplate.RuledNarrow, PaperTemplate.RuledWide, PaperTemplate.Cornell, PaperTemplate.MusicStaff -> {
                     var y = gap * 2
                     while (y < h) { canvas.drawLine(0f, y, w, y, linePaint); y += gap }
                     val margin = MARGIN_DP * density

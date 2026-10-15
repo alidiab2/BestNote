@@ -2,7 +2,7 @@
  * :feature:editor — the notebook page editor, "Atelier" direction (DS-03, DS-04, CANVAS-03):
  * the page on a warm desk, floating pills on top, the signature pen tray (realistic pens, colors,
  * live stroke width) with a lighter tools capsule, a pen picker popover, the S Pen quick palette,
- * and undo/redo over the page's bounded command stack. Ink is drawn by [PageCanvasView].
+ * and undo/redo over the bounded command stack. Ink is drawn by a [PagedDocumentView] of real pages.
  */
 package app.bestnote.feature.editor
 
@@ -59,7 +59,6 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.max
 import androidx.compose.ui.unit.min
-import androidx.compose.ui.viewinterop.AndroidView
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.SavedStateHandle
@@ -84,9 +83,11 @@ import app.bestnote.core.designsystem.theme.Motion
 import app.bestnote.core.designsystem.theme.reducedMotion
 import app.bestnote.core.designsystem.theme.softShadow
 import app.bestnote.core.model.NotebookId
+import app.bestnote.core.model.Page
 import app.bestnote.core.model.PaperTemplate
 import app.bestnote.core.model.Tool
-import app.bestnote.engine.canvas.PageCanvasView
+import app.bestnote.engine.canvas.document.PagedDocument
+import app.bestnote.engine.canvas.document.PagedDocumentView
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -94,6 +95,8 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -129,8 +132,13 @@ class EditorViewModel @Inject constructor(
 ) : ViewModel() {
     val notebookId = NotebookId(savedStateHandle.toRoute<EditorRoute>().notebookId)
 
-    /** Autosave + thumbnails for the open page (DOC-03, DOC-10). */
-    internal val session = PageSession(notebookId, repository, viewModelScope)
+    /** The notebook's pages and ink; outlives the view across configuration changes. */
+    val document = PagedDocument().apply { blankPage = Page(notebookId, 0) }
+
+    /** Loads the pages, autosaves them and keeps the thumbnail fresh (DOC-03, DOC-10, CANVAS-07). */
+    internal val session = DocumentSession(notebookId, repository, document, viewModelScope) {
+        dao.observe(notebookId.value).filterNotNull().first().toModel()
+    }
 
     override fun onCleared() = session.close()
 
@@ -169,11 +177,9 @@ internal fun traySide(dock: ToolbarDock, leftHanded: Boolean): TraySide = when (
     ToolbarDock.Right -> if (leftHanded) TraySide.Left else TraySide.Right
 }
 
-private val PageShape = RoundedCornerShape(topStart = 6.dp, topEnd = 6.dp)
 private val ChromeEdge = 20.dp
 private val TopRowHeight = 72.dp
 private val TrayTop = 76.dp
-private val PageMaxWidth = 860.dp
 private val SideTrayReach = 168.dp
 private const val DeskMidStop = 0.6f
 private const val DeskMidMix = 0.45f
@@ -184,9 +190,10 @@ private const val DeskRadius = 0.62f
 fun EditorScreen(onBack: () -> Unit, viewModel: EditorViewModel = hiltViewModel()) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val toolbox by viewModel.toolbox.collectAsStateWithLifecycle()
-    var canvas by remember { mutableStateOf<PageCanvasView?>(null) }
-    var canUndo by remember { mutableStateOf(false) }
-    var canRedo by remember { mutableStateOf(false) }
+    var canvas by remember { mutableStateOf<PagedDocumentView?>(null) }
+    val document = viewModel.document
+    var canUndo by remember { mutableStateOf(document.canUndo) }
+    var canRedo by remember { mutableStateOf(document.canRedo) }
     var writing by remember { mutableStateOf(false) }
     var autoHidden by remember { mutableStateOf(false) }
     var collapsed by rememberSaveable { mutableStateOf(false) }
@@ -194,13 +201,23 @@ fun EditorScreen(onBack: () -> Unit, viewModel: EditorViewModel = hiltViewModel(
     var temporary by remember { mutableStateOf<PenKind?>(null) }
     var quickAt by remember { mutableStateOf<Offset?>(null) }
     var pageOrigin by remember { mutableStateOf(Offset.Zero) }
+    var pageNumber by remember { mutableStateOf(1 to 1) }
     val snackbar = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     val reduce = reducedMotion()
     val side = traySide(state.dock, state.leftHanded)
-    val loaded by viewModel.session.ready.collectAsStateWithLifecycle()
-    LaunchedEffect(loaded, canvas) { canvas?.let(viewModel.session::attach) }
     LifecycleEventEffect(Lifecycle.Event.ON_STOP) { viewModel.session.onStop() }
+    DisposableEffect(document) {
+        val setHistory = { undo: Boolean, redo: Boolean ->
+            canUndo = undo
+            canRedo = redo
+        }
+        val listener = object : PagedDocument.Listener {
+            override fun onHistoryChanged(canUndo: Boolean, canRedo: Boolean) = setHistory(canUndo, canRedo)
+        }
+        document.addListener(listener)
+        onDispose { document.removeListener(listener) }
+    }
 
     // DS-03: the tray steps aside while the pen is down and returns shortly after it lifts.
     LaunchedEffect(writing) {
@@ -227,10 +244,10 @@ fun EditorScreen(onBack: () -> Unit, viewModel: EditorViewModel = hiltViewModel(
     }
     fun clearPage() {
         picker = null
-        canvas?.clear()
+        canvas?.let { document.clearPage(it.currentPage) }
         scope.launch {
             snackbar.currentSnackbarData?.dismiss()
-            if (snackbar.showSnackbar(clearedText, actionLabel = undoText) == SnackbarResult.ActionPerformed) canvas?.undo()
+            if (snackbar.showSnackbar(clearedText, actionLabel = undoText) == SnackbarResult.ActionPerformed) document.undo()
         }
     }
     fun onPen(kind: PenKind) {
@@ -243,12 +260,13 @@ fun EditorScreen(onBack: () -> Unit, viewModel: EditorViewModel = hiltViewModel(
     }
     val actions = ChromeActions(
         onBack = onBack,
-        onUndo = { canvas?.undo() },
-        onRedo = { canvas?.redo() },
+        onUndo = { document.undo() },
+        onRedo = { document.redo() },
         onComingSoon = ::comingSoon,
         onDock = { picker = null; viewModel.setDock(it) },
         onLeftHanded = { viewModel.setLeftHanded(it) },
         onClearPage = ::clearPage,
+        pagesMenu = { PaperMenuButton(canvas) },
     )
     val pickerContent: @Composable (PickerAnchor) -> Unit = { anchor ->
         AnchoredPopover(side, onDismissed = { if (picker == anchor) picker = null }) {
@@ -278,53 +296,36 @@ fun EditorScreen(onBack: () -> Unit, viewModel: EditorViewModel = hiltViewModel(
         val wide = maxWidth >= 1000.dp
         val pageTop: Dp = if (side == TraySide.Top) (if (wide) 160.dp else 222.dp) else TopRowHeight + 8.dp
         val reach = if (side == TraySide.Top) 0.dp else SideTrayReach
-        val pageWidth = max(min(PageMaxWidth, maxWidth - reach * 2 - 48.dp), 240.dp)
 
-        // ---- the page: paper on the desk. It never mirrors (forced LTR) ----
+        // ---- the pages: real sheets on the desk, scrolling vertically. They never mirror (forced LTR) ----
         CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
-            Box(
-                Modifier
+            PagedDocumentHost(
+                document = document,
+                tool = toolbox.active.tool,
+                penStyle = toolbox.active.style,
+                colorArgb = toolbox.current.brushColorArgb,
+                brushSize = toolbox.current.size,
+                stylusOnly = state.stylusOnly,
+                quickPalette = state.quickPalette,
+                doubleClickUndo = state.doubleClickUndo,
+                onView = { view ->
+                    view.layoutDirection = View.LAYOUT_DIRECTION_LTR
+                    view.writingListener = PagedDocumentView.WritingListener { writing = it }
+                    view.temporaryToolListener = { tool -> temporary = if (tool == Tool.Eraser) PenKind.Eraser else null }
+                    view.quickPaletteListener = PagedDocumentView.QuickPaletteListener { x, y ->
+                        picker = null
+                        quickAt = Offset(x, y)
+                    }
+                    canvas = view
+                    viewModel.session.attach(view)
+                },
+                onIndicator = { page, count -> pageNumber = page + 1 to count },
+                modifier = Modifier
                     .windowInsetsPadding(WindowInsets.safeDrawing)
-                    .padding(top = pageTop)
-                    .align(Alignment.TopCenter)
-                    .width(pageWidth)
-                    .fillMaxHeight()
-                    .softShadow(Elevation.High, PageShape)
-                    .clip(PageShape)
+                    .padding(top = pageTop, start = reach, end = reach)
+                    .fillMaxSize()
                     .onGloballyPositioned { pageOrigin = it.positionInRoot() },
-            ) {
-                AndroidView(
-                    factory = { context ->
-                        PageCanvasView(context).also { view ->
-                            view.layoutDirection = View.LAYOUT_DIRECTION_LTR
-                            view.historyListener = PageCanvasView.HistoryListener { undo, redo ->
-                                canUndo = undo
-                                canRedo = redo
-                                viewModel.session.onChanged(view)
-                            }
-                            view.writingListener = PageCanvasView.WritingListener { writing = it }
-                            view.temporaryToolListener = { tool -> temporary = if (tool == Tool.Eraser) PenKind.Eraser else null }
-                            view.quickPaletteListener = PageCanvasView.QuickPaletteListener { x, y ->
-                                picker = null
-                                quickAt = Offset(x, y)
-                            }
-                            canvas = view
-                        }
-                    },
-                    update = { view ->
-                        val pen = toolbox.active
-                        view.tool = pen.tool
-                        view.penStyle = pen.style
-                        view.colorArgb = toolbox.current.brushColorArgb
-                        view.brushSize = toolbox.current.size
-                        view.stylusOnly = state.stylusOnly
-                        view.template = state.template
-                        view.quickPaletteEnabled = state.quickPalette
-                        view.hoverDoubleClickUndo = state.doubleClickUndo
-                    },
-                    modifier = Modifier.fillMaxSize(),
-                )
-            }
+            )
         }
 
         // ---- floating chrome ----
@@ -336,7 +337,7 @@ fun EditorScreen(onBack: () -> Unit, viewModel: EditorViewModel = hiltViewModel(
                     .graphicsLayer { alpha = chromeAlpha },
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                TitleCluster(state.title, page = 1, pageCount = state.pageCount, onBack = onBack, modifier = Modifier.weight(1f))
+                TitleCluster(state.title, page = pageNumber.first, pageCount = maxOf(pageNumber.second, 1), onBack = onBack, modifier = Modifier.weight(1f))
                 ActionPills(canUndo, canRedo, state.dock, state.leftHanded, actions)
             }
 
@@ -442,7 +443,7 @@ fun EditorScreen(onBack: () -> Unit, viewModel: EditorViewModel = hiltViewModel(
 
 /** Debug builds: lets scripts inject hover side-button clicks and handwriting (see src/debug). */
 @Composable
-private fun DebugStylusHooksEffect(canvas: PageCanvasView?) {
+private fun DebugStylusHooksEffect(canvas: View?) {
     val context = LocalContext.current
     DisposableEffect(canvas) {
         val view = canvas ?: return@DisposableEffect onDispose {}

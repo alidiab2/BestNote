@@ -12,7 +12,7 @@
 | [ ] CANVAS-04 | Gestures: two-finger tap undo, three-finger tap redo | M1 | S | SPEN-02 | Gestures don't trigger while writing |
 | [ ] CANVAS-05 | Zoom & pan: pinch, fling, double-tap fit-to-width, zoom limits 25%–800% | M1 | L | — | 120 fps pan on a full page; ink sharp at every zoom |
 | [ ] CANVAS-06 | Dry-ink tile cache: rasterize finished strokes into tiles per zoom bucket | M1 | L | CANVAS-05 | Page with 5k strokes redraws in < 8 ms |
-| [ ] CANVAS-07 | Paginated vertical document view with page recycling | M1 | L | DOC-01 | Scrolling a 300-page notebook stays at 120 fps, memory flat |
+| [x] CANVAS-07 | Paginated vertical document view with page recycling | M1 | L | DOC-01 | Scrolling a 300-page notebook stays at 120 fps, memory flat |
 | [ ] CANVAS-08 | Lasso select (freehand) with spatial index hit-testing | M2 | M | — | Selects partially enclosed strokes by a > 50% rule |
 | [ ] CANVAS-09 | Transform selection: move, resize, rotate with handles and snapping | M2 | L | CANVAS-08 | Handles animate in; rotation snaps at 0/45/90° with a haptic tick |
 | [ ] CANVAS-10 | Restyle selection: color, thickness, pen type | M2 | S | CANVAS-08 | One-tap recolor of a lasso selection |
