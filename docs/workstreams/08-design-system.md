@@ -6,8 +6,8 @@
 
 | ID | Task | M | Size | Depends on | Done when |
 |---|---|---|---|---|---|
-| [ ] DS-01 | Theme v1: color roles, typography scale, shapes; light/dark; dynamic color opt-in | M1 | M | — | Figma (or Penpot) file + Compose tokens match 1:1 |
-| [ ] DS-02 | Motion tokens: springs, durations, easing, enter/exit patterns | M1 | S | — | No hard-coded durations anywhere outside `Motion` (lint check) |
+| [x] DS-01 | Theme v1: color roles, typography scale, shapes; light/dark; dynamic color opt-in | M1 | M | — | Figma (or Penpot) file + Compose tokens match 1:1 |
+| [x] DS-02 | Motion tokens: springs, durations, easing, enter/exit patterns | M1 | S | — | No hard-coded durations anywhere outside `Motion` (lint check) |
 | [ ] DS-03 | Editor toolbar: floating, collapsible, dockable top/left/right, left-handed mode | M1 | L | DS-02 | Collapses to a pill while writing; one tap to restore |
 | [ ] DS-04 | Pen picker and color palette: presets, custom colors, size preview with live stroke | M1 | M | INK-06 | Second tap on the active tool opens the picker as a popover anchored to it |
 | [ ] DS-05 | Adaptive layouts: phone, tablet, foldable, DeX window, using WindowSizeClass | M2 | M | — | Every screen reviewed at compact/medium/expanded |
