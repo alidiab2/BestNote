@@ -26,6 +26,7 @@ import app.bestnote.core.designsystem.theme.Spacing
 import app.bestnote.core.designsystem.theme.softShadow
 import app.bestnote.core.model.PenStyle
 import app.bestnote.core.model.Tool
+import app.bestnote.engine.canvas.EraserMode
 import app.bestnote.engine.canvas.document.PagedDocument
 import app.bestnote.engine.canvas.document.PagedDocumentView
 import app.bestnote.core.designsystem.R as DesignR
@@ -41,6 +42,7 @@ internal fun PagedDocumentHost(
     penStyle: PenStyle,
     colorArgb: Int,
     brushSize: Float,
+    eraserMode: EraserMode,
     stylusOnly: Boolean,
     quickPalette: Boolean,
     doubleClickUndo: Boolean,
@@ -58,6 +60,7 @@ internal fun PagedDocumentHost(
                 PagedDocumentView(context).also { view ->
                     view.addCardTypeface = runCatching { ResourcesCompat.getFont(context, DesignR.font.instrument_sans) }.getOrNull()
                     view.revealDurationMs = Motion.Duration.Long
+                    view.zoomDurationMs = Motion.Duration.Standard
                     view.pageIndicatorListener = PagedDocumentView.PageIndicatorListener { page, total ->
                         current = page
                         count = total
@@ -72,6 +75,7 @@ internal fun PagedDocumentHost(
                 view.penStyle = penStyle
                 view.colorArgb = colorArgb
                 view.brushSize = brushSize
+                view.eraserMode = eraserMode
                 view.quickPaletteEnabled = quickPalette
                 view.hoverDoubleClickUndo = doubleClickUndo
                 view.stylusOnly = stylusOnly

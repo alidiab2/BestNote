@@ -1,5 +1,6 @@
 package app.bestnote.feature.editor
 
+import app.bestnote.engine.canvas.EraserMode
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.foundation.Canvas
@@ -416,20 +417,20 @@ private fun CustomColor(initial: Color, onColor: (Color) -> Unit) {
 
 private const val HUE_MAX = 360f
 
-/** Eraser settings: the stroke eraser (today), what is coming, and clear page. */
+/** Eraser settings: stroke, pixel or highlighter-only erasing, and clear page. */
 @Composable
-internal fun EraserPickerContent(onClearPage: () -> Unit, onComingSoon: (String) -> Unit) {
+internal fun EraserPickerContent(mode: EraserMode, onMode: (EraserMode) -> Unit, onClearPage: () -> Unit) {
     Column(Modifier.width(300.dp).padding(vertical = Spacing.M)) {
         Text(
             penName(PenKind.Eraser),
             style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
             modifier = Modifier.padding(horizontal = 20.dp, vertical = Spacing.S),
         )
-        EraserOption(stringResource(R.string.eraser_stroke), stringResource(R.string.eraser_stroke_hint), selected = true) {}
-        val pixel = stringResource(R.string.eraser_pixel)
-        EraserOption(pixel, null, selected = false) { onComingSoon(pixel) }
-        val hlOnly = stringResource(R.string.eraser_highlighter_only)
-        EraserOption(hlOnly, null, selected = false) { onComingSoon(hlOnly) }
+        EraserOption(stringResource(R.string.eraser_stroke), stringResource(R.string.eraser_stroke_hint), mode == EraserMode.Stroke) { onMode(EraserMode.Stroke) }
+        EraserOption(stringResource(R.string.eraser_pixel), stringResource(R.string.eraser_pixel_hint), mode == EraserMode.Pixel) { onMode(EraserMode.Pixel) }
+        EraserOption(stringResource(R.string.eraser_highlighter_only), stringResource(R.string.eraser_highlighter_only_hint), mode == EraserMode.HighlighterOnly) {
+            onMode(EraserMode.HighlighterOnly)
+        }
         Text(
             stringResource(R.string.eraser_side_button),
             style = BestNoteTheme.type.caption,

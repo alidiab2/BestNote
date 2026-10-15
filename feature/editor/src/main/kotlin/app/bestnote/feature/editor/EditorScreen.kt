@@ -299,7 +299,11 @@ fun EditorScreen(
     val pickerContent: @Composable (PickerAnchor) -> Unit = { anchor ->
         AnchoredPopover(side, onDismissed = { if (picker == anchor) picker = null }) {
             if (toolbox.active == PenKind.Eraser) {
-                EraserPickerContent(onClearPage = ::clearPage, onComingSoon = ::comingSoon)
+                EraserPickerContent(
+                    mode = toolbox.eraserMode,
+                    onMode = { viewModel.updateToolbox(toolbox.copy(eraserMode = it)) },
+                    onClearPage = ::clearPage,
+                )
             } else {
                 PenPickerContent(toolbox.active, toolbox, viewModel::updateToolbox, startWithCustom = anchor == PickerAnchor.Colors)
             }
@@ -355,6 +359,7 @@ fun EditorScreen(
                 penStyle = toolbox.active.style,
                 colorArgb = toolbox.current.brushColorArgb,
                 brushSize = toolbox.current.size,
+                eraserMode = toolbox.eraserMode,
                 stylusOnly = state.stylusOnly,
                 quickPalette = state.quickPalette,
                 doubleClickUndo = state.doubleClickUndo,

@@ -54,6 +54,8 @@
     <string name="eraser_stroke">ممحاة الخطوط</string>
     <string name="eraser_stroke_hint">تمسح كل خط تلمسه</string>
     <string name="eraser_pixel">ممحاة دقيقة</string>
+    <string name="eraser_pixel_hint">تمسح الحبر الذي تمر عليه فقط</string>
+    <string name="eraser_highlighter_only_hint">تمسح التظليل وتُبقي الكتابة</string>
     <string name="eraser_highlighter_only">مسح التظليل فقط</string>
     <string name="eraser_side_button">اضغط زر S Pen مطولًا للمسح بأي قلم</string>
     <string name="editor_clear_page">مسح الصفحة</string>

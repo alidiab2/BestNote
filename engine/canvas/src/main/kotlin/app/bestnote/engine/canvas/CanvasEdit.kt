@@ -6,6 +6,13 @@ import androidx.ink.strokes.Stroke
 interface StrokeTarget {
     fun add(strokes: Collection<Stroke>)
     fun remove(strokes: Collection<Stroke>)
+
+    /** Applies (or, with [forward] false, reverts) [splice]; targets that keep an ordered list do it exactly. */
+    fun splice(splice: StrokeSplice<Stroke>, forward: Boolean) {
+        val (out, into) = if (forward) splice.removed to splice.added else splice.added to splice.removed
+        remove(out.map { it.value })
+        add(into.map { it.value })
+    }
 }
 
 /** A reversible change to the page's finished strokes, kept in the page's [CommandStack]. */
@@ -34,6 +41,14 @@ sealed interface CanvasEdit : Command<StrokeTarget> {
             target.remove(added)
             target.add(removed)
         }
+    }
+
+    /** An order-preserving erase or split (stroke and pixel eraser): undo puts every stroke back at its z-position. */
+    class Spliced(val splice: StrokeSplice<Stroke>) : CanvasEdit {
+        override val retainedBytes: Long =
+            estimateBytes(splice.removed.map { it.value }) + estimateBytes(splice.added.map { it.value })
+        override fun apply(target: StrokeTarget) = target.splice(splice, forward = true)
+        override fun revert(target: StrokeTarget) = target.splice(splice, forward = false)
     }
 
     companion object {

@@ -54,6 +54,8 @@
     <string name="eraser_stroke">Stroke eraser</string>
     <string name="eraser_stroke_hint">Removes every stroke it touches</string>
     <string name="eraser_pixel">Pixel eraser</string>
+    <string name="eraser_pixel_hint">Erases only the ink under it</string>
+    <string name="eraser_highlighter_only_hint">Removes highlighter strokes, keeps the writing</string>
     <string name="eraser_highlighter_only">Erase highlighter only</string>
     <string name="eraser_side_button">Hold the S Pen button to erase with any pen</string>
     <string name="editor_clear_page">Clear page</string>

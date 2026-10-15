@@ -33,6 +33,11 @@ class StrokeBrushes<I : Any, S : Any> {
 
     fun brushOf(stroke: S): InkBrush? = finished[stroke]
 
+    /** [piece] was cut from [original] (pixel eraser): it is stored with the same brush. */
+    fun inherit(piece: S, original: S) {
+        finished[original]?.let { finished[piece] = it }
+    }
+
     companion object {
         /** The full brush for a stroke starting now with these canvas settings, or null if [tool] doesn't ink. */
         fun capture(tool: Tool, penStyle: PenStyle, colorArgb: Int, size: Float): InkBrush? {

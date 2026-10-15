@@ -66,9 +66,10 @@ class ReplayInstaller : ContentProvider() {
 
         override fun onActivityResumed(activity: Activity) {
             val r = object : BroadcastReceiver() {
-                override fun onReceive(context: Context, intent: Intent) = replay(activity, intent)
+                override fun onReceive(context: Context, intent: Intent) =
+                    if (intent.action == PINCH) pinch(activity, intent) else replay(activity, intent)
             }
-            ContextCompat.registerReceiver(activity, r, IntentFilter(ACTION), ContextCompat.RECEIVER_EXPORTED)
+            ContextCompat.registerReceiver(activity, r, IntentFilter(ACTION).apply { addAction(PINCH) }, ContextCompat.RECEIVER_EXPORTED)
             receiver = r
         }
 
@@ -82,6 +83,27 @@ class ReplayInstaller : ContentProvider() {
         override fun onActivityStopped(activity: Activity) = Unit
         override fun onActivitySaveInstanceState(activity: Activity, outState: Bundle) = Unit
         override fun onActivityDestroyed(activity: Activity) = Unit
+
+        /** Two-finger pinch/pan on the notebook (see [FingerGesture]); status file like a replay. */
+        private fun pinch(activity: Activity, intent: Intent) {
+            val status = File(File(activity.filesDir, "replay").apply { mkdirs() }, "status")
+            val canvas = findCanvas(activity.window.decorView) ?: return status.writeText("error no notebook canvas on screen\n")
+            status.writeText("running pinch\n")
+            FingerGesture(
+                canvas,
+                intent.getFloatExtra("cx", canvas.width / 2f),
+                intent.getFloatExtra("cy", canvas.height / 2f),
+                intent.getFloatExtra("span0", 200f),
+                intent.getFloatExtra("span1", 400f),
+                intent.getFloatExtra("dx", 0f),
+                intent.getFloatExtra("dy", 0f),
+                intent.getIntExtra("steps", 40),
+            ) {
+                val zoom = (canvas as? PagedDocumentView)?.zoom
+                Log.i(TAG, "PINCH zoom=$zoom")
+                status.writeText("done pinch zoom=$zoom\n")
+            }.start()
+        }
 
         private fun replay(activity: Activity, intent: Intent) {
             val dir = File(activity.filesDir, "replay").apply { mkdirs() }
@@ -170,6 +192,7 @@ class ReplayInstaller : ContentProvider() {
     private companion object {
         const val TAG = "BestNoteReplay"
         const val ACTION = "app.bestnote.debug.REPLAY"
+        const val PINCH = "app.bestnote.debug.PINCH"
         const val DEFAULT_INSET_DP = 16f
         const val PAGED_INSET_DP = 112f
         val PENS = mapOf(
