@@ -18,6 +18,8 @@ dependencies {
     // Paper (templates, colors, dark-paper ink mapping), the brush width model and template geometry.
     implementation(projects.engine.canvas)
     implementation(projects.engine.ink)
+    // Imported-PDF pages: rendered as the background of exported pages.
+    implementation(projects.engine.pdf)
     implementation(projects.engine.layout)
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.activity.compose)

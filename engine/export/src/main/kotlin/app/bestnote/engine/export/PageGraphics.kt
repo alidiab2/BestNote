@@ -3,6 +3,8 @@ package app.bestnote.engine.export
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Paint
+import android.graphics.Rect
+import android.graphics.RectF
 import androidx.core.graphics.createBitmap
 import app.bestnote.core.model.InkStroke
 import app.bestnote.core.model.Page
@@ -16,18 +18,19 @@ import kotlin.math.roundToInt
 /** Draws one page (paper, template, ink) for export. */
 internal object PageGraphics {
     private val ink = InkPainter()
+    private val photo = Paint(Paint.FILTER_BITMAP_FLAG or Paint.ANTI_ALIAS_FLAG)
 
     /**
      * A PNG-ready bitmap of [page], [scale] pixels per point (2 = about 144 dpi), capped so the long
      * side stays within [MAX_SIDE_PX]. The caller owns (and recycles) it.
      */
-    fun bitmap(page: Page, strokes: List<InkStroke>, scale: Float = DEFAULT_PNG_SCALE): Bitmap {
+    fun bitmap(page: Page, strokes: List<InkStroke>, scale: Float = DEFAULT_PNG_SCALE, background: Bitmap? = null): Bitmap {
         val s = scale.coerceAtMost(MAX_SIDE_PX / max(page.widthPt, page.heightPt))
         val w = (page.widthPt * s).roundToInt().coerceAtLeast(1)
         val h = (page.heightPt * s).roundToInt().coerceAtLeast(1)
         val bitmap = createBitmap(w, h)
         val canvas = Canvas(bitmap)
-        PaperPainter.draw(canvas, page, s, w, h)
+        if (background != null) canvas.drawBitmap(background, null, Rect(0, 0, w, h), photo) else PaperPainter.draw(canvas, page, s, w, h)
         canvas.scale(s, s)
         ink.draw(canvas, strokes, PaperColors.of(page.paperColor))
         return bitmap
@@ -37,8 +40,14 @@ internal object PageGraphics {
      * Draws [page] into a PDF page canvas (units are points). Paper lines are hairline vector
      * strokes rather than the screen renderer's pixel-snapped ones.
      */
-    fun drawVector(canvas: Canvas, page: Page, strokes: List<InkStroke>) {
+    fun drawVector(canvas: Canvas, page: Page, strokes: List<InkStroke>, background: Bitmap? = null) {
         val colors = PaperColors.of(page.paperColor)
+        if (background != null) {
+            // An imported PDF page: its rendering is the paper; the ink on top stays vector.
+            canvas.drawBitmap(background, null, RectF(0f, 0f, page.widthPt, page.heightPt), photo)
+            ink.draw(canvas, strokes, PaperColors.White)
+            return
+        }
         canvas.drawColor(colors.page)
         val geometry = PaperGeometry.of(page.template, page.size)
         val line = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; strokeWidth = PDF_LINE_PT }

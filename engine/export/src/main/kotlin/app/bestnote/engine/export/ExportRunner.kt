@@ -7,11 +7,14 @@ import android.graphics.Bitmap
 import android.graphics.pdf.PdfDocument
 import androidx.core.content.FileProvider
 import app.bestnote.core.model.InkStroke
+import app.bestnote.core.model.Page
 import app.bestnote.core.model.NotebookId
 import app.bestnote.core.storage.BnoteArchive
 import app.bestnote.core.storage.InkChunkCodec
 import app.bestnote.core.storage.NotebookPackage
 import app.bestnote.core.storage.NotebookStore
+import app.bestnote.engine.pdf.PdfNotebookFiles
+import app.bestnote.engine.pdf.PdfPageBackgrounds
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -84,22 +87,45 @@ class ExportRunner @Inject constructor(
         ExportedFiles(files, format.mime, pkg.notebook.title)
     }
 
+    /**
+     * Width to render an imported-PDF page at: about 200 dpi, but shrunk for long PDFs so all the
+     * rendered pages together stay within [PDF_BACKGROUND_BUDGET_BYTES] (PdfDocument keeps every
+     * image until the file is written).
+     */
+    internal fun backgroundWidthPx(page: Page, pdfPages: Int): Int {
+        val ideal = (page.widthPt * PDF_BACKGROUND_SCALE).coerceAtMost(MAX_BACKGROUND_PX.toFloat())
+        val perPagePx = PDF_BACKGROUND_BUDGET_BYTES / 4f / pdfPages.coerceAtLeast(1)
+        val byBudget = kotlin.math.sqrt(perPagePx * page.widthPt / page.heightPt)
+        return minOf(ideal, byBudget).roundToInt().coerceAtLeast(MIN_BACKGROUND_PX)
+    }
+
+    /** The imported PDF page behind [page], rendered, or null for ordinary paper. Caller recycles it. */
+    private fun backgroundOf(backgrounds: PdfPageBackgrounds?, page: Page, widthPx: Int): Bitmap? =
+        if (page.pdf == null) null else runCatching { backgrounds?.renderNow(page, widthPx) }.getOrNull()
+
     private suspend fun writePdf(pkg: NotebookPackage, target: File, progress: ExportProgress): File {
         val document = PdfDocument()
+        val backgrounds = PdfNotebookFiles.open(pkg, File(context.cacheDir, PDF_SOURCES_DIR))
+        val pdfPages = pkg.pages.count { it.page.pdf != null }
+        val rendered = ArrayList<Bitmap>() // must outlive writeTo: the document draws from them then
         try {
             pkg.pages.forEachIndexed { i, content ->
                 coroutineContext.ensureActive()
                 val page = content.page
                 val info = PdfDocument.PageInfo.Builder(page.widthPt.roundToInt(), page.heightPt.roundToInt(), i + 1).create()
                 val pdfPage = document.startPage(info)
-                // TODO(PDF-01..03 / #18): draw the imported PDF page as this page's background before the paper ink.
-                PageGraphics.drawVector(pdfPage.canvas, page, strokesOf(content.strokes))
+                // The imported PDF page is rasterized (PdfDocument cannot embed another PDF's page), so its
+                // text is not selectable in the export; the ink on top is vector.
+                val background = backgroundOf(backgrounds, page, backgroundWidthPx(page, pdfPages))?.also { rendered += it }
+                PageGraphics.drawVector(pdfPage.canvas, page, strokesOf(content.strokes), background)
                 document.finishPage(pdfPage)
                 progress.update(i + 1, pkg.pages.size)
             }
             target.outputStream().buffered().use { document.writeTo(it) }
         } finally {
             document.close()
+            backgrounds?.close()
+            rendered.forEach { it.recycle() }
         }
         return target
     }
@@ -110,10 +136,33 @@ class ExportRunner @Inject constructor(
             is PageRange.Single -> listOf(range.index.coerceIn(0, pkg.pages.lastIndex))
         }
         val digits = pkg.pages.size.toString().length
-        return selected.mapIndexed { n, index ->
+        val backgrounds = PdfNotebookFiles.open(pkg, File(context.cacheDir, PDF_SOURCES_DIR))
+        try {
+            return writePngPages(pkg, selected, dir, base, digits, backgrounds, progress)
+        } finally {
+            backgrounds?.close()
+        }
+    }
+
+    private suspend fun writePngPages(
+        pkg: NotebookPackage,
+        selected: List<Int>,
+        dir: File,
+        base: String,
+        digits: Int,
+        backgrounds: PdfPageBackgrounds?,
+        progress: ExportProgress,
+    ): List<File> =
+        selected.mapIndexed { n, index ->
             coroutineContext.ensureActive()
             val content = pkg.pages[index]
-            val bitmap = PageGraphics.bitmap(content.page, strokesOf(content.strokes))
+            val scale = PageGraphics.DEFAULT_PNG_SCALE
+            val background = backgroundOf(backgrounds, content.page, (content.page.widthPt * scale).roundToInt().coerceAtMost(MAX_BACKGROUND_PX))
+            val bitmap = try {
+                PageGraphics.bitmap(content.page, strokesOf(content.strokes), scale, background)
+            } finally {
+                background?.recycle()
+            }
             val name = if (pkg.pages.size == 1) "$base.png" else "$base-${(index + 1).toString().padStart(digits, '0')}.png"
             val file = File(dir, name)
             try {
@@ -124,7 +173,6 @@ class ExportRunner @Inject constructor(
             progress.update(n + 1, selected.size)
             file
         }
-    }
 
     private fun writeBnote(pkg: NotebookPackage, target: File): File {
         target.outputStream().buffered().use { BnoteArchive.export(pkg, it) }
@@ -159,6 +207,11 @@ class ExportRunner @Inject constructor(
 
     private companion object {
         const val EXPORT_DIR = "exports"
+        const val PDF_SOURCES_DIR = "export-pdf-sources"
+        const val PDF_BACKGROUND_SCALE = 2.8f
+        const val MAX_BACKGROUND_PX = 2400
+        const val MIN_BACKGROUND_PX = 400
+        const val PDF_BACKGROUND_BUDGET_BYTES = 160L * 1024 * 1024
     }
 }
 

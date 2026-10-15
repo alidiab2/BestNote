@@ -89,4 +89,35 @@ class ExportRunnerInstrumentedTest {
         assertEquals(2, Regex("/Type /Page\\b").findAll(text).count())
         File("/sdcard/Download").takeIf { it.canWrite() }?.let { file.copyTo(File(it, "doc06-test.pdf"), overwrite = true) }
     }
+
+    /** A notebook page that shows a page of an imported PDF (a red block at the top-left) with ink on top. */
+    @Test fun importedPdfBackgroundIsPreserved(): Unit = runBlocking<Unit> {
+        val id = NotebookId("pdf-test")
+        val pdfBytes = java.io.ByteArrayOutputStream().also { out ->
+            val doc = android.graphics.pdf.PdfDocument()
+            val page = doc.startPage(android.graphics.pdf.PdfDocument.PageInfo.Builder(595, 842, 1).create())
+            page.canvas.drawRect(0f, 0f, 200f, 100f, android.graphics.Paint().apply { color = Color.RED })
+            doc.finishPage(page)
+            doc.writeTo(out)
+            doc.close()
+        }.toByteArray()
+        val ink = listOf(stroke(Tool.Pen, PenStyle.Ball, 0xFF1E2433.toInt(), 400f))
+        val pkg = NotebookPackage(
+            Notebook(id, "Imported", 1, 2, PaperTemplate.Blank, pageCount = 1),
+            listOf(PageContent(Page(id, 0, PaperTemplate.Blank, pdf = app.bestnote.core.model.PdfPageRef("assets/bg.pdf", 0)), InkChunkCodec.encode(ink), "page-0")),
+            mapOf("assets/bg.pdf" to pdfBytes),
+        )
+        val root = File(context.cacheDir, "export-test-store-pdf").also { it.deleteRecursively() }
+        val store = FileNotebookStore(root)
+        store.write(pkg)
+        val runner = ExportRunner(context, store)
+
+        val png = runner.export(id, ExportFormat.Png).files.single()
+        val bmp = BitmapFactory.decodeFile(png.path)
+        val px = bmp.getPixel(bmp.width / 6, bmp.height / 16) // inside the red block
+        assertTrue("background pixel should be red, was ${Integer.toHexString(px)}", Color.red(px) > 200 && Color.green(px) < 60)
+
+        val pdf = runner.export(id, ExportFormat.Pdf).files.single()
+        assertTrue("pdf has the page", pdf.length() > 1000)
+    }
 }
