@@ -1,5 +1,6 @@
 package app.bestnote.feature.editor
 
+import app.bestnote.engine.canvas.EraserMode
 import app.bestnote.core.model.PenStyle
 import app.bestnote.core.model.Tool
 import app.bestnote.engine.ink.BrushCatalog
@@ -37,6 +38,8 @@ data class Toolbox(
     val settings: Map<PenKind, PenSettings> = PenDefaults.settings,
     /** Per pen, the 5 color dots in the tray, most recently used first. */
     val recentColors: Map<PenKind, List<Int>> = PenDefaults.quickColors,
+    /** What the eraser removes (CANVAS-01/02); also used by the side-button and pen-end eraser. */
+    val eraserMode: EraserMode = EraserMode.Stroke,
 ) {
     val current: PenSettings get() = settingsOf(active)
 

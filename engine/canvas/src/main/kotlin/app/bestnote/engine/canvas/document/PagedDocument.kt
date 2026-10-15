@@ -5,6 +5,7 @@ import app.bestnote.core.model.Page
 import app.bestnote.engine.canvas.CanvasEdit
 import app.bestnote.engine.canvas.Command
 import app.bestnote.engine.canvas.CommandStack
+import app.bestnote.engine.canvas.StrokeSplice
 import app.bestnote.engine.canvas.StrokeTarget
 
 /** One page of a [PagedDocument]: its paper ([page]) and its finished strokes in page-local points. */
@@ -219,7 +220,7 @@ class PagedDocument {
         override fun revert(target: PagedDocument) = edits.asReversed().forEach { it.revert(target) }
     }
 
-    /** Removes [strokes] from page [index] now; [commitErase] records the gesture as one undo step. */
+    /** Removes [strokes] from page [index] now, without history; [commitStrokeEdit] records the gesture. */
     internal fun removeStrokes(index: Int, strokes: Collection<Stroke>) {
         if (strokes.isEmpty()) return
         val gone = strokes.toHashSet()
@@ -227,9 +228,24 @@ class PagedDocument {
         contentChanged(index)
     }
 
-    internal fun commitErase(index: Int, erased: List<Stroke>) {
-        if (erased.isEmpty()) return
-        history.record(PageEdit(_pages[index], CanvasEdit.Erased(erased)))
+    /** Puts [pieces] where [original] was on page [index] (same z-position), without history. */
+    internal fun replaceStroke(index: Int, original: Stroke, pieces: List<Stroke>) {
+        val list = _pages[index].mutableStrokes
+        val at = list.indexOfFirst { it === original }
+        if (at < 0) return
+        list.removeAt(at)
+        list.addAll(at, pieces)
+        contentChanged(index)
+    }
+
+    /** A copy of page [index]'s strokes now: what [commitStrokeEdit] diffs against at the end of a gesture. */
+    internal fun strokesSnapshot(index: Int): List<Stroke> = _pages[index].strokes.toList()
+
+    /** Records everything that changed on page [index] since [before] as one exact, undoable step. */
+    internal fun commitStrokeEdit(index: Int, before: List<Stroke>) {
+        val page = _pages.getOrNull(index) ?: return
+        val splice = StrokeSplice.diff(before, page.strokes) ?: return
+        history.record(PageEdit(page, CanvasEdit.Spliced(splice)))
         notifyHistory()
     }
 
@@ -238,7 +254,7 @@ class PagedDocument {
         val all = _pages.getOrNull(index)?.strokes?.toList().orEmpty()
         if (all.isEmpty()) return
         removeStrokes(index, all)
-        commitErase(index, all)
+        commitStrokeEdit(index, all)
     }
 
     fun undo() {
@@ -262,6 +278,11 @@ class PagedDocument {
             override fun remove(strokes: Collection<Stroke>) {
                 val gone = strokes.toHashSet()
                 this@PagedDocument._pages[index].mutableStrokes.removeAll { it in gone }
+            }
+
+            override fun splice(splice: StrokeSplice<Stroke>, forward: Boolean) {
+                val list = this@PagedDocument._pages[index].mutableStrokes
+                if (forward) splice.apply(list) else splice.revert(list)
             }
         }
         if (forward) edit.apply(target) else edit.revert(target)

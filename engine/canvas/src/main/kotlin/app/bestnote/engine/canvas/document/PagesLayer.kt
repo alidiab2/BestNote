@@ -70,7 +70,9 @@ internal class PagesLayer(context: Context, private val sheet: SheetStyle, var m
 
     init {
         setWillNotDraw(false)
-        clipChildren = true
+        // Pages outside this view's bounds stay visible while a pinch preview scales it down;
+        // the document view still clips to its own bounds.
+        clipChildren = false
     }
 
     private fun bindSlot(slot: PageSlotView, index: Int) {
@@ -93,6 +95,13 @@ internal class PagesLayer(context: Context, private val sheet: SheetStyle, var m
         window.slotFor(index)?.setWet(stroke, colorArgb)
     }
 
+    /** The layout the pages would have at [zoom], or null before the view has a width. */
+    fun layoutAt(zoom: Float): DocumentLayout? {
+        val doc = document ?: return null
+        if (width <= 0) return null
+        return DocumentLayout(doc.pages.map { it.page.size }, width, metrics, ZoomMath.clamp(zoom))
+    }
+
     /** Recomputes page positions (pages added, paper changed, view resized) and rebinds visible pages. */
     fun relayout() {
         val doc = document
@@ -102,7 +111,7 @@ internal class PagesLayer(context: Context, private val sheet: SheetStyle, var m
             invalidate()
             return
         }
-        layout = DocumentLayout(doc.pages.map { it.page.size }, width, metrics)
+        layout = DocumentLayout(doc.pages.map { it.page.size }, width, metrics, zoom)
         window.clear()
         clampScroll()
         refreshWindow()
@@ -117,21 +126,62 @@ internal class PagesLayer(context: Context, private val sheet: SheetStyle, var m
     /** Number of page slots that exist (bound or pooled); flat however long the document is. */
     val slotCount: Int get() = childCount
 
-    fun scrollToY(y: Int) {
-        val max = layout?.maxScroll(height) ?: 0
-        scrollTo(0, y.coerceIn(0, max))
+    fun scrollToY(y: Int) = scrollToXY(scrollX, y)
+
+    fun scrollToXY(x: Int, y: Int) {
+        scrollTo(x.coerceIn(0, maxScrollX), y.coerceIn(0, maxScrollY))
     }
 
     val maxScrollY: Int get() = layout?.maxScroll(height) ?: 0
 
+    /** Horizontal room when zoomed in past the viewport width; 0 at fit-to-width and below. */
+    val maxScrollX: Int get() = ((layout?.contentWidth ?: 0) - width).coerceAtLeast(0)
+
+    /** Zoom relative to fit-to-width (CANVAS-05); change it with [applyZoom]. */
+    var zoom: Float = 1f
+        private set
+
+    /**
+     * Lays the pages out at [newZoom] and scrolls so the content at screen point ([sx], [sy]), which
+     * showed unscaled view point ([vx], [vy]) before, stays there. Pages re-record at the new scale,
+     * so ink and paper are vector-sharp at every zoom.
+     */
+    fun applyZoom(newZoom: Float, vx: Float, vy: Float, sx: Float, sy: Float) {
+        val prev = layout
+        zoom = ZoomMath.clamp(newZoom)
+        if (prev == null) return relayout()
+        val (oldX, oldY) = scrollX to scrollY
+        relayout()
+        val next = layout ?: return
+        val (x, y) = ZoomMath.anchoredScroll(prev, oldX, oldY, vx, vy, next, sx, sy)
+        scrollToXY(Math.round(x), Math.round(y))
+    }
+
+    /** The pinch preview: the recorded pages scaled by the GPU until the gesture settles. */
+    var preview: PreviewTransform = PreviewTransform()
+        set(value) {
+            field = value
+            pivotX = 0f
+            pivotY = 0f
+            scaleX = value.scale
+            scaleY = value.scale
+            translationX = value.tx
+            translationY = value.ty
+            if (value.scale < 1f) refreshWindow()
+        }
+
     private fun clampScroll() {
-        if (scrollY > maxScrollY) scrollTo(0, maxScrollY)
+        if (scrollY > maxScrollY || scrollX > maxScrollX) scrollTo(scrollX.coerceAtMost(maxScrollX), scrollY.coerceAtMost(maxScrollY))
     }
 
     private fun refreshWindow() {
         val l = layout ?: return
         val count = document?.size ?: 0
-        window.update(l.visiblePages(scrollY, height), count)
+        // While a pinch zooms out, the scaled-down pages reveal more of the document: bind those too.
+        val s = preview.scale
+        val top = if (s < 1f) (scrollY - preview.ty / s).toInt() else scrollY
+        val h = if (s < 1f) (height / s).toInt() else height
+        window.update(l.visiblePages(top.coerceAtLeast(0), h), count)
     }
 
     override fun onScrollChanged(l: Int, t: Int, oldl: Int, oldt: Int) {

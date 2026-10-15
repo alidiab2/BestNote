@@ -1,8 +1,12 @@
 package app.bestnote.engine.canvas.document
 
+import android.animation.Animator
+import android.animation.AnimatorListenerAdapter
+import android.animation.ValueAnimator
 import android.annotation.SuppressLint
 import android.content.Context
 import android.graphics.Matrix
+import android.graphics.Rect
 import android.graphics.Typeface
 import android.os.SystemClock
 import android.view.InputDevice
@@ -11,6 +15,7 @@ import android.view.PointerIcon
 import android.view.VelocityTracker
 import android.view.View
 import android.view.ViewConfiguration
+import android.view.animation.DecelerateInterpolator
 import android.widget.FrameLayout
 import android.widget.OverScroller
 import androidx.ink.authoring.InProgressStrokeId
@@ -22,7 +27,10 @@ import app.bestnote.core.model.InkBrush
 import app.bestnote.core.model.PaperSizes
 import app.bestnote.core.model.PenStyle
 import app.bestnote.core.model.Tool
+import app.bestnote.engine.canvas.EraserMode
 import app.bestnote.engine.canvas.StrokeBrushes
+import app.bestnote.engine.canvas.erase.EraserCapsule
+import app.bestnote.engine.canvas.erase.InkEraser
 import app.bestnote.engine.canvas.WetHighlighter
 import app.bestnote.engine.ink.BrushCatalog
 import app.bestnote.engine.ink.InkPalette
@@ -63,6 +71,9 @@ class PagedDocumentView(context: Context) : FrameLayout(context), InProgressStro
     }
 
     var tool: Tool = Tool.Pen
+
+    /** What the eraser (tool, side button or the pen's eraser end) removes. */
+    var eraserMode: EraserMode = EraserMode.Stroke
     var penStyle: PenStyle = PenStyle.Fountain
     var colorArgb: Int = InkPalette.BLACK
 
@@ -121,6 +132,12 @@ class PagedDocumentView(context: Context) : FrameLayout(context), InProgressStro
 
     /** Duration of the scroll that reveals a newly added page; the host passes a Motion token. */
     var revealDurationMs: Int = 0
+
+    /** Duration of the double-tap fit-to-width zoom; the host passes a Motion token (0 = jump). */
+    var zoomDurationMs: Int = 0
+
+    /** Zoom relative to fit-to-width, [ZoomMath.MIN_ZOOM]..[ZoomMath.MAX_ZOOM] (CANVAS-05). */
+    val zoom: Float get() = pages.zoom * pages.preview.scale
 
     var addCardLabel: String
         get() = pages.addCardLabel
@@ -208,11 +225,29 @@ class PagedDocumentView(context: Context) : FrameLayout(context), InProgressStro
     /** The brush each stroke was started with (sizes in page points, canonical ink colors). */
     private val strokeBrushes = StrokeBrushes<InProgressStrokeId, Stroke>()
 
-    /** pointerId -> (page, strokes erased so far): one undo step per gesture. */
-    private val erasing = HashMap<Int, Pair<Int, MutableList<Stroke>>>()
+    /** An eraser gesture on one page: one undo step, diffed against the strokes it started with. */
+    private class EraseGesture(val page: Int, val before: List<Stroke>, val mode: EraserMode) {
+        var lastX = Float.NaN
+        var lastY = Float.NaN
+    }
 
-    /** Scrolling pointers -> last y. */
-    private val scrolling = HashMap<Int, Float>()
+    /** pointerId -> eraser gesture in progress. */
+    private val erasing = HashMap<Int, EraseGesture>()
+    private val eraser = InkEraser()
+
+    /** Panning/zooming fingers -> last (x, y). */
+    private val scrolling = HashMap<Int, Pair<Float, Float>>()
+
+    /** A lone finger that may become a tap: (down x, down y, down time). */
+    private var tapCandidate: Triple<Float, Float, Long>? = null
+
+    /** The last tap (x, y, up time), to detect a double-tap. */
+    private var lastTap: Triple<Float, Float, Long>? = null
+    private val doubleTapSlop = ViewConfiguration.get(context).scaledDoubleTapSlop
+    private var zoomAnimator: ValueAnimator? = null
+
+    /** The state the running zoom animation ends in: zoom, (unscaled view point, screen point) anchor. */
+    private var zoomTarget: FloatArray? = null
 
     /** Pointers that touched down on the add-page card -> down position. */
     private val cardTaps = HashMap<Int, Pair<Float, Float>>()
@@ -237,6 +272,8 @@ class PagedDocumentView(context: Context) : FrameLayout(context), InProgressStro
         // Set up the front-buffered renderer now, not on the first pen-down.
         wet.eagerInit()
         pages.onViewportChanged = ::reportIndicator
+        // The pinch preview may draw pages beyond the pages layer's own bounds; clip to ours instead.
+        clipChildren = false
         isFocusable = true
         isFocusableInTouchMode = true
     }
@@ -299,7 +336,7 @@ class PagedDocumentView(context: Context) : FrameLayout(context), InProgressStro
     }
 
     private fun handle(event: MotionEvent, predicted: MotionEvent?) {
-        var scrollDy = 0f
+        val fingersBefore = if (scrolling.isEmpty()) emptyMap() else HashMap(scrolling)
         var scrollMoves = 0
         for (se in StylusEventMapper.map(event)) {
             val id = se.pointerId
@@ -309,7 +346,7 @@ class PagedDocumentView(context: Context) : FrameLayout(context), InProgressStro
                 val wasInking = inking.containsKey(cancelled)
                 cancelInk(cancelled, event)
                 sideButton.onEnd(cancelled)
-                if (wasInking) pointerY(event, cancelled)?.let { scrolling[cancelled] = it }
+                if (wasInking) pointerXY(event, cancelled)?.let { scrolling[cancelled] = it }
             }
             if (hover.onEvent(se)) refreshHover()
             hoverGestures.onEvent(se) // touching abandons a pending side-button click
@@ -317,20 +354,19 @@ class PagedDocumentView(context: Context) : FrameLayout(context), InProgressStro
                 StylusAction.Down -> onDown(event, se, decision)
                 StylusAction.Move -> {
                     sideButton.onMove(se)?.let { switch ->
-                        val page = inking[id]?.first ?: erasing[id]?.first ?: highlighting?.takeIf { it.second.pointerId == id }?.first
+                        val page = inking[id]?.first ?: erasing[id]?.page ?: highlighting?.takeIf { it.second.pointerId == id }?.first
                         cancelInk(id, event)
                         finishErase(id)
                         if (page != null) begin(event, se, switch.tool, page)
                     }
                     when {
-                        id in erasing -> se.samples.forEach { eraseAt(id, it.x, it.y) }
+                        id in erasing -> eraseAlong(id, se)
                         id in inking -> wet.addToStroke(event, id, inking.getValue(id).second, predicted)
                         highlighting?.second?.pointerId == id -> highlighting?.let { (page, h) -> h.add(event, predicted); pages.invalidatePage(page) }
                         id in scrolling -> {
-                            val y = se.latest.y
-                            scrollDy += y - scrolling.getValue(id)
+                            scrolling[id] = se.latest.x to se.latest.y
                             scrollMoves++
-                            scrolling[id] = y
+                            tapCandidate?.let { (x0, y0) -> if (abs(se.latest.x - x0) > touchSlop || abs(se.latest.y - y0) > touchSlop) tapCandidate = null }
                         }
                     }
                 }
@@ -340,20 +376,26 @@ class PagedDocumentView(context: Context) : FrameLayout(context), InProgressStro
                     finishErase(id)
                     sideButton.onEnd(id)
                     cardTaps.remove(id)?.let { (x, y) -> if (isTapOnCard(x, y, se.latest.x, se.latest.y)) addPage() }
-                    if (scrolling.remove(id) != null && scrolling.isEmpty()) fling(id)
+                    if (scrolling.remove(id) != null) {
+                        if (scrolling.size < 2) commitPreview()
+                        if (scrolling.isEmpty()) {
+                            if (!onFingerTap(se)) fling(id)
+                        }
+                    }
                 }
                 StylusAction.Cancel -> {
                     cancelInk(id, event)
                     finishErase(id)
                     sideButton.onEnd(id)
                     cardTaps.remove(id)
-                    scrolling.remove(id)
+                    if (scrolling.remove(id) != null && scrolling.size < 2) commitPreview()
+                    tapCandidate = null
                 }
                 else -> Unit
             }
         }
         if (scrollMoves > 0 && inking.isEmpty() && erasing.isEmpty() && highlighting == null) {
-            pages.scrollToY(pages.scrollY - (scrollDy / scrollMoves).roundToInt())
+            PinchStep.of(fingersBefore, scrolling)?.let(::panZoom)
         }
         notifyTemporaryTool()
         notifyWriting()
@@ -370,6 +412,9 @@ class PagedDocumentView(context: Context) : FrameLayout(context), InProgressStro
     private fun onDown(event: MotionEvent, se: StylusEvent, decision: InputDecision) {
         val id = se.pointerId
         scroller.forceFinished(true)
+        val finger = se.tool == PointerTool.Finger || se.tool == PointerTool.Unknown
+        // Nothing moves under the pen: a pen lands on the final, settled layout.
+        if (!finger || decision == InputDecision.Draw || decision == InputDecision.Erase) settleZoom()
         val x = se.latest.x
         val y = se.latest.y
         val l = pages.layout
@@ -377,7 +422,6 @@ class PagedDocumentView(context: Context) : FrameLayout(context), InProgressStro
             cardTaps[id] = x to y
             return
         }
-        val finger = se.tool == PointerTool.Finger || se.tool == PointerTool.Unknown
         if (decision == InputDecision.Draw || decision == InputDecision.Erase) {
             val page = l?.pageAt(x + pages.scrollX, y + pages.scrollY) ?: -1
             if (page >= 0) {
@@ -387,7 +431,115 @@ class PagedDocumentView(context: Context) : FrameLayout(context), InProgressStro
             }
             if (!finger) return // A pen on the desk does nothing.
         }
-        if (finger) scrolling[id] = y
+        if (finger) {
+            if (scrolling.isEmpty()) {
+                tapCandidate = Triple(x, y, event.eventTime)
+            } else {
+                tapCandidate = null
+                lastTap = null
+            }
+            if (zoomAnimator != null) settleZoom()
+            scrolling[id] = x to y
+        }
+    }
+
+    /** Applies one frame of finger panning (one finger) or pinching (two or more). */
+    private fun panZoom(step: PinchStep) {
+        if (scrolling.size >= 2 || !pages.preview.isIdentity) {
+            val k = ZoomMath.clampFactor(pages.zoom, pages.preview.scale, step.scale)
+            pages.preview = pages.preview.scaledBy(k, step.focusX, step.focusY, step.dx, step.dy)
+            // Re-lay out (sharp ink, the right pages bound) whenever the preview drifted far from it.
+            val s = pages.preview.scale
+            if (s < PREVIEW_MIN || s > PREVIEW_MAX) commitPreview(step.focusX, step.focusY)
+        } else {
+            pages.scrollToXY(pages.scrollX - step.dx.roundToInt(), pages.scrollY - step.dy.roundToInt())
+        }
+    }
+
+    /** Turns the pinch preview into a real layout at the new zoom, keeping screen point ([fx], [fy]) still. */
+    private fun commitPreview(fx: Float = width / 2f, fy: Float = height / 2f) {
+        val p = pages.preview
+        if (p.isIdentity) return
+        pages.preview = PreviewTransform()
+        if (p.scale == 1f) {
+            pages.scrollToXY(pages.scrollX - p.tx.roundToInt(), pages.scrollY - p.ty.roundToInt())
+        } else {
+            pages.applyZoom(pages.zoom * p.scale, p.unmapX(fx), p.unmapY(fy), fx, fy)
+        }
+        refreshHover()
+    }
+
+    /** Finishes any zoom animation or pinch preview right now, so input maps onto the final layout. */
+    private fun settleZoom() {
+        zoomAnimator?.let { a ->
+            zoomAnimator = null
+            a.removeAllListeners()
+            a.cancel()
+            finishZoomAnimation()
+        }
+        commitPreview()
+    }
+
+    /** A lone finger lifted: a double-tap zooms to fit the page width. @return true when it was a tap. */
+    private fun onFingerTap(se: StylusEvent): Boolean {
+        val (x0, y0, t0) = tapCandidate ?: return false
+        tapCandidate = null
+        val now = se.latest.timeMillis
+        if (now - t0 > ViewConfiguration.getTapTimeout() * 2L) return false
+        val prev = lastTap
+        if (prev != null && now - prev.third <= ViewConfiguration.getDoubleTapTimeout() &&
+            abs(x0 - prev.first) < doubleTapSlop && abs(y0 - prev.second) < doubleTapSlop
+        ) {
+            lastTap = null
+            zoomTo(1f, x0, y0)
+        } else {
+            lastTap = Triple(x0, y0, now)
+        }
+        return true
+    }
+
+    /**
+     * Zooms to [target] (relative to fit-to-width) keeping the content under ([fx], [fy]) still,
+     * animated with [zoomDurationMs]. A pen touching down finishes the animation at once.
+     */
+    fun zoomTo(target: Float, fx: Float = width / 2f, fy: Float = height / 2f) {
+        settleZoom()
+        val z = ZoomMath.clamp(target)
+        if (abs(z - pages.zoom) < 1e-3f && pages.scrollX == 0) return
+        zoomTarget = floatArrayOf(z, fx, fy)
+        if (zoomDurationMs <= 0 || writing) return finishZoomAnimation()
+        // Animate a GPU preview to exactly where the focus point will be on the final layout.
+        val prev = pages.layout ?: return finishZoomAnimation()
+        val next = pages.layoutAt(z) ?: return finishZoomAnimation()
+        val (rawX, rawY) = ZoomMath.anchoredScroll(prev, pages.scrollX, pages.scrollY, fx, fy, next, fx, fy)
+        val endX = fx + rawX - rawX.coerceIn(0f, (next.contentWidth - width).coerceAtLeast(0).toFloat())
+        val endY = fy + rawY - rawY.coerceIn(0f, next.maxScroll(height).toFloat())
+        val k = z / pages.zoom
+        zoomAnimator = ValueAnimator.ofFloat(0f, 1f).apply {
+            duration = zoomDurationMs.toLong()
+            interpolator = DecelerateInterpolator()
+            addUpdateListener {
+                val f = it.animatedValue as Float
+                val scale = 1f + (k - 1f) * f
+                pages.preview = PreviewTransform(scale, (endX - k * fx) * f, (endY - k * fy) * f)
+            }
+            addListener(object : AnimatorListenerAdapter() {
+                override fun onAnimationEnd(animation: Animator) {
+                    if (zoomAnimator !== animation) return
+                    zoomAnimator = null
+                    finishZoomAnimation()
+                }
+            })
+            start()
+        }
+    }
+
+    private fun finishZoomAnimation() {
+        val (z, fx, fy) = zoomTarget ?: return
+        zoomTarget = null
+        pages.preview = PreviewTransform()
+        pages.applyZoom(z, fx, fy, fx, fy)
+        refreshHover()
     }
 
     private fun isTapOnCard(x0: Float, y0: Float, x1: Float, y1: Float): Boolean {
@@ -396,23 +548,24 @@ class PagedDocumentView(context: Context) : FrameLayout(context), InProgressStro
             l.addCard.contains(x1 + pages.scrollX, y1 + pages.scrollY)
     }
 
-    private fun pointerY(event: MotionEvent, pointerId: Int): Float? {
+    private fun pointerXY(event: MotionEvent, pointerId: Int): Pair<Float, Float>? {
         val index = event.findPointerIndex(pointerId)
-        return if (index >= 0) event.getY(index) else null
+        return if (index >= 0) event.getX(index) to event.getY(index) else null
     }
 
     private fun fling(pointerId: Int) {
         val tracker = velocity ?: return
         tracker.computeCurrentVelocity(1000, maxFling.toFloat())
+        val vx = tracker.getXVelocity(pointerId).let { if (pages.maxScrollX > 0) it else 0f }
         val vy = tracker.getYVelocity(pointerId)
-        if (abs(vy) < minFling) return
-        scroller.fling(0, pages.scrollY, 0, -vy.roundToInt(), 0, 0, 0, pages.maxScrollY)
+        if (abs(vy) < minFling && abs(vx) < minFling) return
+        scroller.fling(pages.scrollX, pages.scrollY, -vx.roundToInt(), -vy.roundToInt(), 0, pages.maxScrollX, 0, pages.maxScrollY)
         postInvalidateOnAnimation()
     }
 
     override fun computeScroll() {
         if (scroller.computeScrollOffset()) {
-            pages.scrollToY(scroller.currY)
+            pages.scrollToXY(scroller.currX, scroller.currY)
             postInvalidateOnAnimation()
         }
     }
@@ -422,6 +575,11 @@ class PagedDocumentView(context: Context) : FrameLayout(context), InProgressStro
             inking.isEmpty() && highlighting == null
         ) {
             val v = event.getAxisValue(MotionEvent.AXIS_VSCROLL)
+            if (v != 0f && (event.metaState and android.view.KeyEvent.META_CTRL_ON) != 0) {
+                settleZoom()
+                pages.applyZoom(pages.zoom * if (v > 0) WHEEL_ZOOM else 1f / WHEEL_ZOOM, event.x, event.y, event.x, event.y)
+                return true
+            }
             if (v != 0f) {
                 scroller.forceFinished(true)
                 pages.scrollToY(pages.scrollY - (v * WHEEL_STEP_DP * density).roundToInt())
@@ -436,8 +594,9 @@ class PagedDocumentView(context: Context) : FrameLayout(context), InProgressStro
         val id = se.pointerId
         when {
             strokeTool == Tool.Eraser -> {
-                erasing[id] = page to ArrayList()
-                se.samples.forEach { eraseAt(id, it.x, it.y) }
+                val doc = document ?: return
+                erasing[id] = EraseGesture(page, doc.strokesSnapshot(page), eraserMode)
+                eraseAlong(id, se)
             }
             strokeTool.inks -> startInk(event, id, strokeTool, page)
             else -> Unit // Lasso: CANVAS-08.
@@ -513,32 +672,45 @@ class PagedDocumentView(context: Context) : FrameLayout(context), InProgressStro
         strokePages.clear()
         erasing.keys.toList().forEach(::finishErase)
         scrolling.clear()
+        tapCandidate = null
+        settleZoom()
         cardTaps.clear()
         palm.reset()
         notifyWriting()
     }
 
-    /** Whole-stroke eraser on the gesture's page: strokes whose bounds (plus a radius) contain the point. */
-    private fun eraseAt(pointerId: Int, x: Float, y: Float) {
-        val (page, removed) = erasing[pointerId] ?: return
+    /**
+     * Erases along the pointer's path since its last sample, on the gesture's page: each step is a
+     * capsule (no gaps however fast the pen moves). The radius is [ERASE_RADIUS_DP] on screen, so
+     * it covers fewer page points when zoomed in, exactly as the hover cursor shows.
+     */
+    private fun eraseAlong(pointerId: Int, se: StylusEvent) {
+        val g = erasing[pointerId] ?: return
         val doc = document ?: return
         val l = pages.layout ?: return
-        val r = l.pageRect(page)
-        val px = (x + pages.scrollX - r.left) / l.scale
-        val py = (y + pages.scrollY - r.top) / l.scale
+        if (g.page !in 0 until doc.size) return
         val radius = eraseRadiusPx / l.scale
-        val hits = doc.pages[page].strokes.filter { stroke ->
-            val box = stroke.shape.computeBoundingBox() ?: return@filter false
-            px >= box.xMin - radius && px <= box.xMax + radius && py >= box.yMin - radius && py <= box.yMax + radius
+        val capsules = ArrayList<EraserCapsule>(se.samples.size)
+        for (sample in se.samples) {
+            val (px, py) = ZoomMath.viewToPage(l, pages.scrollX, pages.scrollY, g.page, sample.x, sample.y)
+            val fromX = if (g.lastX.isNaN()) px else g.lastX
+            val fromY = if (g.lastY.isNaN()) py else g.lastY
+            capsules += EraserCapsule(fromX, fromY, px, py, radius)
+            g.lastX = px
+            g.lastY = py
         }
-        if (hits.isEmpty()) return
-        doc.removeStrokes(page, hits)
-        removed += hits
+        val result = eraser.erase(doc.pages[g.page].strokes, capsules, g.mode)
+        if (result.isEmpty) return
+        doc.removeStrokes(g.page, result.removed)
+        result.replacements.forEach { (original, pieces) ->
+            pieces.forEach { strokeBrushes.inherit(it, original) }
+            doc.replaceStroke(g.page, original, pieces)
+        }
     }
 
     private fun finishErase(pointerId: Int) {
-        val (page, removed) = erasing.remove(pointerId) ?: return
-        document?.commitErase(page, removed)
+        val g = erasing.remove(pointerId) ?: return
+        document?.commitStrokeEdit(g.page, g.before)
     }
 
     override fun onStrokesFinished(strokes: Map<InProgressStrokeId, Stroke>) {
@@ -587,7 +759,13 @@ class PagedDocumentView(context: Context) : FrameLayout(context), InProgressStro
         }
     }
 
+    override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
+        super.onSizeChanged(w, h, oldw, oldh)
+        clipBounds = Rect(0, 0, w, h)
+    }
+
     override fun onDetachedFromWindow() {
+        settleZoom()
         removeCallbacks(expireHover)
         removeCallbacks(resolveHoverClick)
         scroller.forceFinished(true)
@@ -632,6 +810,11 @@ class PagedDocumentView(context: Context) : FrameLayout(context), InProgressStro
         const val ERASE_RADIUS_DP = 10f
 
         private const val WHEEL_STEP_DP = 64f
+        private const val WHEEL_ZOOM = 1.1f
+
+        /** The pinch preview re-lays out the pages once it has scaled them beyond this range. */
+        private const val PREVIEW_MIN = 0.67f
+        private const val PREVIEW_MAX = 1.5f
         private val IDENTITY = Matrix()
     }
 }
