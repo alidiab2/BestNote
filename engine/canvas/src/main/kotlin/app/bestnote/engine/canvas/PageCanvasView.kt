@@ -149,6 +149,17 @@ class PageCanvasView(context: Context) : FrameLayout(context), InProgressStrokes
         notifyHistory()
     }
 
+    /** The page's finished strokes in drawing order (read on the main thread). */
+    val strokes: List<Stroke> get() = dry.strokes
+
+    /** Replaces the page's strokes (e.g. loaded from disk) and starts a fresh undo history. */
+    fun setStrokes(strokes: Collection<Stroke>) {
+        dry.remove(dry.strokes.toList())
+        dry.add(strokes)
+        history.clear()
+        notifyHistory()
+    }
+
     override fun onInterceptTouchEvent(ev: MotionEvent) = true
 
     @SuppressLint("ClickableViewAccessibility")

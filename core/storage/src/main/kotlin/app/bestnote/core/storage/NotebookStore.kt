@@ -51,6 +51,13 @@ interface NotebookStore {
     suspend fun read(id: NotebookId): NotebookPackage?
     suspend fun write(pkg: NotebookPackage)
 
+    /**
+     * Commits [pkg] but only rewrites the pages in [changedPageIds] (plus the manifest); the other
+     * pages are assumed unchanged since the last write. Used by [Autosaver] so saving one edited
+     * page of a long notebook costs one page, not the whole notebook. The default rewrites everything.
+     */
+    suspend fun writePages(pkg: NotebookPackage, changedPageIds: Set<String>) = write(pkg)
+
     /** @return true if a notebook was removed. */
     suspend fun delete(id: NotebookId): Boolean
 }

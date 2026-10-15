@@ -34,6 +34,8 @@ On disk inside the app, a notebook lives **unpacked** as a directory with the sa
 - Write to `<file>.tmp`, `fsync`, then atomic rename.
 - `manifest.json` is written last, so a crash leaves the previous manifest pointing at valid pages.
 - Each `.ink` chunk has a header with magic bytes `BNIK`, the chunk version and a CRC32.
+- Autosave (`Autosaver`, DOC-03) rewrites only the pages edited since the last save, then the manifest. A crash leaves every page either fully old or fully new.
+- Inside the app, library thumbnails are cached outside the package (`files/thumbnails/<id>.webp`, DOC-10); `thumbs/` stays optional for exports.
 
 ## `.ink` chunk v1 (implemented in `InkChunkCodec`)
 Big-endian; floats are raw IEEE-754 bits, so round-trips are bit-exact.

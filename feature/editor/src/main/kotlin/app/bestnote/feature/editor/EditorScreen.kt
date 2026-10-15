@@ -28,6 +28,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -38,8 +39,10 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import androidx.navigation.NavController
@@ -47,6 +50,7 @@ import androidx.navigation.NavGraphBuilder
 import androidx.navigation.compose.composable
 import androidx.navigation.toRoute
 import app.bestnote.core.database.NotebookDao
+import app.bestnote.core.database.NotebookRepository
 import app.bestnote.core.database.toModel
 import app.bestnote.core.datastore.UserPreferencesRepository
 import app.bestnote.core.designsystem.theme.Motion
@@ -89,8 +93,14 @@ class EditorViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     dao: NotebookDao,
     preferences: UserPreferencesRepository,
+    repository: NotebookRepository,
 ) : ViewModel() {
     val notebookId = NotebookId(savedStateHandle.toRoute<EditorRoute>().notebookId)
+
+    /** Autosave + thumbnails for the open page (DOC-03, DOC-10). */
+    internal val session = PageSession(notebookId, repository, viewModelScope)
+
+    override fun onCleared() = session.close()
 
     private val toolState = MutableStateFlow(Tool.Pen to PenStyle.Fountain)
 
@@ -127,6 +137,9 @@ fun EditorScreen(onBack: () -> Unit, viewModel: EditorViewModel = hiltViewModel(
     var canUndo by remember { mutableStateOf(false) }
     var canRedo by remember { mutableStateOf(false) }
     var penMenu by remember { mutableStateOf(false) }
+    val loaded by viewModel.session.ready.collectAsStateWithLifecycle()
+    LaunchedEffect(loaded, canvas) { canvas?.let(viewModel.session::attach) }
+    LifecycleEventEffect(Lifecycle.Event.ON_STOP) { viewModel.session.onStop() }
 
     Scaffold(
         topBar = {
@@ -163,6 +176,7 @@ fun EditorScreen(onBack: () -> Unit, viewModel: EditorViewModel = hiltViewModel(
                     view.historyListener = PageCanvasView.HistoryListener { undo, redo ->
                         canUndo = undo
                         canRedo = redo
+                        viewModel.session.onChanged(view)
                     }
                     canvas = view
                 }
