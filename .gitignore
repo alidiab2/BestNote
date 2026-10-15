@@ -25,3 +25,7 @@ keystore.properties
 
 # --- Kotlin ---
 .kotlin/
+
+# --- Handwriting tool venv ---
+tools/handwriting/.venv/
+__pycache__/

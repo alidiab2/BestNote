@@ -16,7 +16,8 @@ android {
 
     buildTypes {
         debug {
-            applicationIdSuffix = ".debug"
+            // -PdebugIdSuffix=.qaink installs side by side with other agents' builds on the shared emulator.
+            applicationIdSuffix = ".debug" + (findProperty("debugIdSuffix") as String? ?: "")
         }
         release {
             isMinifyEnabled = true
@@ -42,4 +43,8 @@ dependencies {
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.navigation.compose)
     implementation(libs.kotlinx.serialization.json)
+
+    // Debug-only handwriting replay harness (app/src/debug, QA-INK): drives PageCanvasView directly.
+    debugImplementation(projects.engine.canvas)
+    testImplementation(libs.junit4)
 }
