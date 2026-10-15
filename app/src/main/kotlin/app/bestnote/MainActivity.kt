@@ -2,6 +2,8 @@ package app.bestnote
 
 import android.content.Context
 import android.content.Intent
+import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -26,6 +28,7 @@ import app.bestnote.feature.editor.InkInsert
 import app.bestnote.feature.editor.editorScreen
 import app.bestnote.feature.editor.navigateToEditor
 import app.bestnote.feature.library.LibraryRoute
+import app.bestnote.feature.library.PdfOpenRequests
 import app.bestnote.feature.library.QuicknoteRequests
 import app.bestnote.feature.library.libraryScreen
 import app.bestnote.feature.settings.SettingsRoute
@@ -40,6 +43,8 @@ class MainActivity : ComponentActivity() {
     @Inject lateinit var preferences: UserPreferencesRepository
 
     @Inject lateinit var quicknotes: QuicknoteRequests
+
+    @Inject lateinit var pdfRequests: PdfOpenRequests
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -59,7 +64,7 @@ class MainActivity : ComponentActivity() {
                 dynamicColor = prefs.dynamicColor,
                 reducedMotion = prefs.appearance.reduceMotion || systemReducedMotion(),
                 chromeWarmth = prefs.appearance.chromeWarmth.amount,
-            ) { BestNoteNavHost(quicknotes) }
+            ) { BestNoteNavHost(quicknotes, pdfRequests) }
         }
     }
 
@@ -70,7 +75,20 @@ class MainActivity : ComponentActivity() {
 
     private fun handleIntent(intent: Intent?) {
         if (intent?.action == QuicknoteRequests.ACTION) quicknotes.request()
+        pdfUri(intent)?.let { pdfRequests.request(it.toString()) }
     }
+}
+
+/** The PDF an "Open with" (VIEW) or share (SEND) intent carries, if any. */
+@Suppress("DEPRECATION")
+private fun pdfUri(intent: Intent?): Uri? = when (intent?.action) {
+    Intent.ACTION_VIEW -> intent.data
+    Intent.ACTION_SEND -> if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        intent.getParcelableExtra(Intent.EXTRA_STREAM, Uri::class.java)
+    } else {
+        intent.getParcelableExtra(Intent.EXTRA_STREAM)
+    }
+    else -> null
 }
 
 /** Launcher long-press shortcut "Quicknote" (LIB-05). Re-published on launch so its label follows the locale. */
@@ -89,12 +107,17 @@ private fun publishShortcuts(context: Context) {
 }
 
 @Composable
-private fun BestNoteNavHost(quicknotes: QuicknoteRequests) {
+private fun BestNoteNavHost(quicknotes: QuicknoteRequests, pdfRequests: PdfOpenRequests) {
     val nav = rememberNavController()
     val quicknoteRequested by quicknotes.requested.collectAsStateWithLifecycle()
     // A Quicknote request while the editor is open: go back to the library, which opens the note.
     LaunchedEffect(quicknoteRequested) {
         if (quicknoteRequested) nav.popBackStack(LibraryRoute, inclusive = false)
+    }
+    // A PDF opened with BestNote while the editor is up: back to the library, which imports it.
+    val pdfRequested by pdfRequests.requested.collectAsStateWithLifecycle()
+    LaunchedEffect(pdfRequested) {
+        if (pdfRequested != null) nav.popBackStack(LibraryRoute, inclusive = false)
     }
     // Smart Board → editor hand-off: the handwritten pages wait here until the editor takes them.
     val inbox = remember { InkInbox() }

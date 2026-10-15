@@ -56,6 +56,8 @@ import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -109,6 +111,11 @@ fun LibraryScreen(
     val resources = LocalResources.current
     val quicknoteTitle = quicknoteTitle()
     val quicknoteRequested by viewModel.quicknoteRequested.collectAsStateWithLifecycle()
+    val pickPdf = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) viewModel.importPdf(uri.toString())
+    }
+    val pdfRequested by viewModel.pdfRequested.collectAsStateWithLifecycle()
+    LaunchedEffect(pdfRequested) { if (pdfRequested != null) viewModel.takePdfRequest() }
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { viewModel.refresh() }
     LaunchedEffect(quicknoteRequested) { if (quicknoteRequested) viewModel.takeQuicknoteRequest(quicknoteTitle) }
     LaunchedEffect(viewModel) {
@@ -145,7 +152,7 @@ fun LibraryScreen(
             clearFilters = viewModel::clearFilters,
             sort = viewModel::setSort,
             quicknote = { viewModel.quicknote(quicknoteTitle) },
-            importPdf = viewModel::importPdfSoon,
+            importPdf = { pickPdf.launch(arrayOf(PDF_MIME)) },
             create = viewModel::create,
             open = viewModel::open,
             rename = viewModel::rename,
@@ -169,6 +176,8 @@ fun LibraryScreen(
     )
 }
 
+private const val PDF_MIME = "application/pdf"
+
 /** "Quicknote · 15 Oct", in the user's locale. */
 @Composable
 private fun quicknoteTitle(): String {
@@ -179,7 +188,8 @@ private fun quicknoteTitle(): String {
 
 private fun noticeText(resources: android.content.res.Resources, event: LibraryEvent.Message): String = when (event.notice) {
     Notice.ExportSoon -> resources.getString(R.string.library_export_soon)
-    Notice.ImportPdfSoon -> resources.getString(R.string.library_import_pdf_soon)
+    Notice.ImportingPdf -> resources.getString(R.string.library_importing_pdf)
+    Notice.ImportPdfFailed -> resources.getString(R.string.library_import_pdf_failed)
     Notice.Duplicated -> resources.getString(R.string.library_duplicated, event.name)
     Notice.Moved -> if (event.name.isEmpty()) {
         resources.getQuantityString(R.plurals.library_moved_library, event.count, event.count)

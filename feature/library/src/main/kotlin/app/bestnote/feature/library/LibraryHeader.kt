@@ -328,7 +328,7 @@ private fun NewButton(callbacks: LibraryCallbacks) {
             AtelierMenuItem(Icons.Outlined.Book, stringResource(R.string.library_new_notebook), { menu = false; callbacks.newNotebook() })
             AtelierMenuItem(Icons.Outlined.EditNote, stringResource(R.string.library_quicknote_title), { menu = false; callbacks.quicknote() })
             AtelierMenuItem(Icons.Outlined.CreateNewFolder, stringResource(R.string.library_folder_new), { menu = false; callbacks.newFolder() })
-            AtelierMenuItem(Icons.Outlined.PictureAsPdf, stringResource(R.string.library_import_pdf), { menu = false; callbacks.importPdf() }, trailing = stringResource(R.string.library_soon))
+            AtelierMenuItem(Icons.Outlined.PictureAsPdf, stringResource(R.string.library_import_pdf), { menu = false; callbacks.importPdf() })
         }
     }
 }

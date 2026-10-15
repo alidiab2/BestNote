@@ -178,7 +178,8 @@
     <string name="library_template_grid">مربعات</string>
     <string name="library_template_dotted">منقّط</string>
     <string name="library_import_pdf">استيراد PDF</string>
-    <string name="library_import_pdf_soon">استيراد ملفات PDF قادم قريبًا.</string>
+    <string name="library_importing_pdf">جارٍ استيراد PDF…</string>
+    <string name="library_import_pdf_failed">تعذّر استيراد ملف PDF هذا. قد يكون تالفًا أو محميًا بكلمة مرور.</string>
     <string name="library_quicknote_dated">ملاحظة سريعة · %1$s</string>
 
     <string name="library_folder_new">مجلد جديد</string>

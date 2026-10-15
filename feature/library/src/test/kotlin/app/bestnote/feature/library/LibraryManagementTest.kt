@@ -52,7 +52,7 @@ class LibraryManagementTest {
         TimeZone.setDefault(defaultTz)
     }
 
-    private fun viewModel() = LibraryViewModel(repo, metadata, { }, clock, quicknotes)
+    private fun viewModel() = LibraryViewModel(repo, metadata, { }, clock, quicknotes, PdfImporting { error("no import") }, PdfOpenRequests())
 
     private fun LibraryViewModel.titles() = state.value.items.map { it.title }
 

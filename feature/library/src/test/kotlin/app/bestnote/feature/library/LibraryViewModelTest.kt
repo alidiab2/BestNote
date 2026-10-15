@@ -39,7 +39,7 @@ class LibraryViewModelTest {
     @After
     fun tearDown() = Dispatchers.resetMain()
 
-    private fun viewModel(seeder: LibrarySeeder = LibrarySeeder { }) = LibraryViewModel(repo, metadata, seeder, clock, QuicknoteRequests())
+    private fun viewModel(seeder: LibrarySeeder = LibrarySeeder { }) = LibraryViewModel(repo, metadata, seeder, clock, QuicknoteRequests(), PdfImporting { error("no import") }, PdfOpenRequests())
 
     @Test
     fun `loads notebooks newest first and picks the last one to continue`() = runTest {

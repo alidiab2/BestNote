@@ -83,6 +83,7 @@ import app.bestnote.core.model.Page
 import app.bestnote.core.model.PaperColor
 import app.bestnote.core.model.PaperTemplate
 import app.bestnote.engine.canvas.document.DocumentPage
+import app.bestnote.engine.canvas.document.PageBackgrounds
 import app.bestnote.engine.canvas.document.PagedDocument
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.isActive
@@ -223,6 +224,7 @@ internal fun PageManager(
                     val index = pages.indexOf(page)
                     ThumbnailCell(
                         page = page,
+                        backgrounds = document.backgrounds,
                         number = index + 1,
                         current = index == currentPage,
                         selected = page.id in selection,
@@ -393,6 +395,7 @@ private fun EdgeScroller(grid: LazyGridState, reorder: ReorderState) {
 @Composable
 private fun ThumbnailCell(
     page: DocumentPage,
+    backgrounds: PageBackgrounds?,
     number: Int,
     current: Boolean,
     selected: Boolean,
@@ -428,7 +431,7 @@ private fun ThumbnailCell(
     ) {
         Box(Modifier.fillMaxWidth().aspectRatio(CELL_ASPECT), contentAlignment = Alignment.Center) {
             val shape = RoundedCornerShape(6.dp)
-            val thumb by rememberThumbnail(page)
+            val thumb by rememberThumbnail(page, backgrounds)
             val aspect = page.page.widthPt / page.page.heightPt
             Box(
                 Modifier
@@ -468,10 +471,12 @@ private fun ThumbnailCell(
 }
 
 @Composable
-private fun rememberThumbnail(page: DocumentPage) = produceState<ImageBitmap?>(null, page.id, page.page, page.strokes.size, page.strokes.lastOrNull()) {
+private fun rememberThumbnail(page: DocumentPage, backgrounds: PageBackgrounds?) = produceState<ImageBitmap?>(null, page.id, page.page, page.strokes.size, page.strokes.lastOrNull()) {
     val paper = page.page
     val strokes = page.strokes.toList()
-    value = withContext(Dispatchers.Default) { renderPageBitmap(paper, strokes, THUMB_PX).asImageBitmap() }
+    value = withContext(Dispatchers.Default) {
+        renderPageBitmap(paper, strokes, THUMB_PX, backgrounds?.thumbnail(paper, THUMB_PX)).asImageBitmap()
+    }
 }
 
 @Composable

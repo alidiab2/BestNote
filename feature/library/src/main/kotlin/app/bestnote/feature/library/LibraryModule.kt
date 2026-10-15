@@ -53,6 +53,9 @@ object LibraryModule {
     )
 
     @Provides
+    fun pdfImporting(service: PdfImportService): PdfImporting = service
+
+    @Provides
     @Singleton
     fun metadata(@ApplicationContext context: Context): LibraryMetadata =
         FileLibraryMetadata(File(context.filesDir, METADATA_FILE))

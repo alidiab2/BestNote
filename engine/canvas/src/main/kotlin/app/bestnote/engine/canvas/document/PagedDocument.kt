@@ -67,6 +67,9 @@ class PagedDocument {
     val canUndo: Boolean get() = history.canUndo
     val canRedo: Boolean get() = history.canRedo
 
+    /** Draws the raster background of pages that have one ([Page.pdf]); set before [reset]. */
+    var backgrounds: PageBackgrounds? = null
+
     /** Paper for the first page when "+ New page" is used on an empty document. */
     var blankPage: Page? = null
 
@@ -107,7 +110,8 @@ class PagedDocument {
     /** Inserts a blank page with [paper] at [at] (0..size). Undoable. @return its index. */
     fun insertPage(at: Int, paper: Page): Int {
         val index = at.coerceIn(0, _pages.size)
-        restructure { _pages.add(index, DocumentPage(paper.copy(index = index))) }
+        // A new blank page next to a PDF page is plain paper: it must not repeat the PDF page's background.
+        restructure { _pages.add(index, DocumentPage(paper.copy(index = index, pdf = null))) }
         return index
     }
 
@@ -158,7 +162,8 @@ class PagedDocument {
         val targets = indices.filter { it in _pages.indices }.toSet()
         if (targets.isEmpty()) return
         restructure {
-            for (i in targets) _pages[i].let { p -> p.page = p.page.copy(widthPt = p.page.heightPt, heightPt = p.page.widthPt) }
+            // A PDF page keeps its orientation: its raster and ink are laid out in the PDF's own page points.
+            for (i in targets) _pages[i].let { p -> if (p.page.pdf == null) p.page = p.page.copy(widthPt = p.page.heightPt, heightPt = p.page.widthPt) }
         }
     }
 
