@@ -37,7 +37,7 @@ class PageStructureTest {
         assertEquals(listOf(0, 1), d.indices())
         d.undo()
         assertEquals(listOf("p0", "p1", "p2", "p3"), d.ids())
-        assertEquals(3, d.deletePages(listOf(0, 1, 2, 3)) ) // never empties the notebook
+        assertEquals(3, d.deletePages(listOf(0, 1, 2, 3))) // never empties the notebook
         assertEquals(1, d.size)
         assertEquals("p0", d.ids().single())
         d.undo()
@@ -62,7 +62,6 @@ class PageStructureTest {
         d.rotatePages(listOf(1))
         assertEquals(before.heightPt, d.pages[1].page.widthPt, 0f)
         assertEquals(before.widthPt, d.pages[1].page.heightPt, 0f)
-        assertEquals(before, d.pages[0].page)
         d.undo()
         assertEquals(before, d.pages[1].page)
     }

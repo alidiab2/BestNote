@@ -215,33 +215,8 @@ private const val MIN_THUMB_STROKE_PX = 1.5f
  * Strokes are immutable, so this runs off the main thread.
  */
 internal fun renderThumbnail(page: Page, strokes: List<Stroke>): ByteArray {
-    val scale = THUMB_WIDTH / page.widthPt
-    val height = (page.heightPt * scale).roundToInt().coerceAtLeast(1)
-    val bitmap = createBitmap(THUMB_WIDTH, height)
+    val bitmap = renderPageBitmap(page, strokes, THUMB_WIDTH)
     try {
-        val canvas = Canvas(bitmap)
-        PaperPainter.draw(canvas, page, scale, THUMB_WIDTH, height)
-        // Plain polylines: a cover image does not need brush tips, and this works on any (software) canvas.
-        val ink = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            style = Paint.Style.STROKE
-            strokeCap = Paint.Cap.ROUND
-            strokeJoin = Paint.Join.ROUND
-        }
-        val path = Path()
-        val input = StrokeInput()
-        for (stroke in strokes) {
-            val inputs = stroke.inputs
-            if (inputs.isEmpty()) continue
-            path.rewind()
-            for (i in 0 until inputs.size) {
-                inputs.populate(i, input)
-                if (i == 0) path.moveTo(input.x * scale, input.y * scale) else path.lineTo(input.x * scale, input.y * scale)
-            }
-            if (inputs.size == 1) path.lineTo(input.x * scale + MIN_THUMB_STROKE_PX / 2, input.y * scale)
-            ink.color = stroke.brush.colorIntArgb
-            ink.strokeWidth = (stroke.brush.size * scale).coerceAtLeast(MIN_THUMB_STROKE_PX)
-            canvas.drawPath(path, ink)
-        }
         val format = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             Bitmap.CompressFormat.WEBP_LOSSY
         } else {
@@ -252,4 +227,35 @@ internal fun renderThumbnail(page: Page, strokes: List<Stroke>): ByteArray {
     } finally {
         bitmap.recycle()
     }
+}
+
+/** Draws [page] (paper, template and [strokes] in page points) into a new bitmap [widthPx] wide. Caller owns it. */
+internal fun renderPageBitmap(page: Page, strokes: List<Stroke>, widthPx: Int): Bitmap {
+    val scale = widthPx / page.widthPt
+    val height = (page.heightPt * scale).roundToInt().coerceAtLeast(1)
+    val bitmap = createBitmap(widthPx, height)
+    val canvas = Canvas(bitmap)
+    PaperPainter.draw(canvas, page, scale, widthPx, height)
+    // Plain polylines: a cover image does not need brush tips, and this works on any (software) canvas.
+    val ink = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE
+        strokeCap = Paint.Cap.ROUND
+        strokeJoin = Paint.Join.ROUND
+    }
+    val path = Path()
+    val input = StrokeInput()
+    for (stroke in strokes) {
+        val inputs = stroke.inputs
+        if (inputs.isEmpty()) continue
+        path.rewind()
+        for (i in 0 until inputs.size) {
+            inputs.populate(i, input)
+            if (i == 0) path.moveTo(input.x * scale, input.y * scale) else path.lineTo(input.x * scale, input.y * scale)
+        }
+        if (inputs.size == 1) path.lineTo(input.x * scale + MIN_THUMB_STROKE_PX / 2, input.y * scale)
+        ink.color = stroke.brush.colorIntArgb
+        ink.strokeWidth = (stroke.brush.size * scale).coerceAtLeast(MIN_THUMB_STROKE_PX)
+        canvas.drawPath(path, ink)
+    }
+    return bitmap
 }

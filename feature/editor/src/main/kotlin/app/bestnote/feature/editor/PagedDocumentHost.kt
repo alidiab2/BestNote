@@ -46,6 +46,7 @@ internal fun PagedDocumentHost(
     doubleClickUndo: Boolean,
     onView: (PagedDocumentView) -> Unit,
     onIndicator: (page: Int, count: Int) -> Unit = { _, _ -> },
+    onIndicatorClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     var current by remember { mutableIntStateOf(-1) }
@@ -81,18 +82,20 @@ internal fun PagedDocumentHost(
             modifier = Modifier.fillMaxSize(),
         )
         if (count > 0 && current >= 0) {
-            PageIndicator(current + 1, count, Modifier.align(Alignment.BottomCenter).padding(bottom = Spacing.XL))
+            PageIndicator(current + 1, count, Modifier.align(Alignment.BottomCenter).padding(bottom = Spacing.XL), onIndicatorClick)
         }
     }
 }
 
 /** Small "3 / 12" pill. Static: it never animates, so it can't distract under the pen. */
 @Composable
-internal fun PageIndicator(page: Int, count: Int, modifier: Modifier = Modifier) {
+internal fun PageIndicator(page: Int, count: Int, modifier: Modifier = Modifier, onClick: (() -> Unit)? = null) {
     Surface(
         modifier = modifier
             .softShadow(Elevation.Low, BestNoteShapes.Pill)
             .semantics { contentDescription = "Page $page of $count" },
+        onClick = onClick ?: {},
+        enabled = onClick != null,
         shape = BestNoteShapes.Pill,
         color = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f),
         contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
