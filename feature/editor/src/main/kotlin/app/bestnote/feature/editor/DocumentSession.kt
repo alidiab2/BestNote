@@ -18,6 +18,7 @@ import app.bestnote.core.model.NotebookId
 import app.bestnote.core.model.Page
 import app.bestnote.core.storage.Autosaver
 import app.bestnote.core.storage.InkChunkCodec
+import app.bestnote.engine.canvas.document.DocumentPage
 import app.bestnote.engine.canvas.document.PagedDocument
 import app.bestnote.engine.canvas.document.PagedDocumentView
 import app.bestnote.engine.canvas.document.PaperPainter
@@ -28,7 +29,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.ByteArrayOutputStream
 import java.util.IdentityHashMap
-import java.util.UUID
 import kotlin.math.roundToInt
 
 /**
@@ -51,9 +51,8 @@ internal class DocumentSession(
 ) : PagedDocument.Listener {
     private var saver: Autosaver? = null
 
-    /** Storage id of each page, in document order. */
-    private val pageIds = ArrayList<String>()
-    private val savedLayout = ArrayList<Page>()
+    /** The (storage id, paper) of each page as last handed to the [Autosaver], in order. */
+    private var savedLayout: List<Pair<String, Page>> = emptyList()
 
     /** Stored strokes this build cannot draw (unknown brush), per page id; kept so saving never drops them. */
     private val preserved = HashMap<String, List<InkStroke>>()
@@ -90,16 +89,13 @@ internal class DocumentSession(
             repository.backgroundScope.launch { open.autosaver.close() }
             return
         }
-        pageIds.clear()
-        savedLayout.clear()
         pages.forEachIndexed { i, content ->
-            pageIds += content.id
-            savedLayout += content.page.copy(index = i)
             preserved[content.id] = loaded[i].filter { it.second == null }.map { it.first }
         }
+        savedLayout = pages.mapIndexed { i, content -> content.id to content.page.copy(index = i) }
         val strokes = loaded.map { page -> page.mapNotNull { (model, stroke) -> stroke?.also { models[it] = model } } }
         saver = open.autosaver
-        document.reset(savedLayout.toList()) { strokes[it] }
+        document.reset(savedLayout.map { it.second }, savedLayout.map { it.first }) { strokes[it] }
         document.addListener(this)
     }
 
@@ -115,22 +111,30 @@ internal class DocumentSession(
 
     override fun onPageContentChanged(index: Int) {
         val saver = saver ?: return
-        val id = pageIds.getOrNull(index) ?: return
-        val strokes = document.pages[index].strokes
-        val page = ArrayList<InkStroke>(strokes.size + (preserved[id]?.size ?: 0))
-        preserved[id]?.let { page += it }
-        for (stroke in strokes) page += models.getOrPut(stroke) { InkConversion.toModel(stroke, brushOf(stroke)) }
-        saver.updatePage(id, page)
+        val page = document.pages.getOrNull(index) ?: return
+        saver.updatePage(page.id, modelsOf(page))
     }
 
+    private fun modelsOf(page: DocumentPage): List<InkStroke> {
+        val strokes = page.strokes
+        val out = ArrayList<InkStroke>(strokes.size + (preserved[page.id]?.size ?: 0))
+        preserved[page.id]?.let { out += it }
+        for (stroke in strokes) out += models.getOrPut(stroke) { InkConversion.toModel(stroke, brushOf(stroke)) }
+        return out
+    }
+
+    /**
+     * Pages were added, deleted, reordered, duplicated or re-papered (also by undo): hand storage the
+     * new order. A page storage doesn't have yet (new, duplicated, or brought back by undo) also gets its ink.
+     */
     override fun onPagesChanged() {
         val saver = saver ?: return
-        while (pageIds.size < document.size) pageIds += "page-" + UUID.randomUUID().toString().take(ID_LENGTH)
-        val layout = document.pages.map { it.page }
+        val layout = document.pages.map { it.id to it.page }
         if (layout == savedLayout) return
-        savedLayout.clear()
-        savedLayout += layout
-        saver.updateLayout(pageIds.take(layout.size).zip(layout))
+        val known = savedLayout.mapTo(HashSet()) { it.first }
+        savedLayout = layout
+        saver.updateLayout(layout)
+        for (page in document.pages) if (page.id !in known && page.strokes.isNotEmpty()) saver.updatePage(page.id, modelsOf(page))
     }
 
     /** App left the foreground: get everything on disk now. */
@@ -199,7 +203,6 @@ internal class DocumentSession(
 
     private companion object {
         const val TAG = "BestNoteAutosave"
-        const val ID_LENGTH = 12
     }
 }
 
