@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Debug-only additions. The handwriting replay harness (QA-INK) never ships in release. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application>
+        <provider
+            android:name="app.bestnote.debug.replay.ReplayInstaller"
+            android:authorities="${applicationId}.replay"
+            android:exported="false" />
+    </application>
+</manifest>
