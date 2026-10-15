@@ -701,11 +701,8 @@ class PagedDocumentView(context: Context) : FrameLayout(context), InProgressStro
         }
         val result = eraser.erase(doc.pages[g.page].strokes, capsules, g.mode)
         if (result.isEmpty) return
-        doc.removeStrokes(g.page, result.removed)
-        result.replacements.forEach { (original, pieces) ->
-            pieces.forEach { strokeBrushes.inherit(it, original) }
-            doc.replaceStroke(g.page, original, pieces)
-        }
+        result.replacements.forEach { (original, pieces) -> pieces.forEach { strokeBrushes.inherit(it, original) } }
+        doc.eraseStep(g.page, result.removed, result.replacements)
     }
 
     private fun finishErase(pointerId: Int) {

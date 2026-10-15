@@ -228,13 +228,23 @@ class PagedDocument {
         contentChanged(index)
     }
 
-    /** Puts [pieces] where [original] was on page [index] (same z-position), without history. */
-    internal fun replaceStroke(index: Int, original: Stroke, pieces: List<Stroke>) {
+    /**
+     * One eraser step on page [index], without history: [removed] strokes go, and each key of
+     * [replacements] is swapped for its pieces at the same z-position. Listeners hear about it once.
+     */
+    internal fun eraseStep(index: Int, removed: Collection<Stroke>, replacements: Map<Stroke, List<Stroke>>) {
+        if (removed.isEmpty() && replacements.isEmpty()) return
         val list = _pages[index].mutableStrokes
-        val at = list.indexOfFirst { it === original }
-        if (at < 0) return
-        list.removeAt(at)
-        list.addAll(at, pieces)
+        if (removed.isNotEmpty()) {
+            val gone = removed.toHashSet()
+            list.removeAll { it in gone }
+        }
+        if (replacements.isNotEmpty()) {
+            val next = ArrayList<Stroke>(list.size + replacements.size)
+            for (s in list) next += replacements[s] ?: listOf(s)
+            list.clear()
+            list.addAll(next)
+        }
         contentChanged(index)
     }
 
