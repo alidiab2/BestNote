@@ -8,7 +8,8 @@ import kotlin.math.max
  *
  * Pen-like tools: a thin ring ([RING_STROKE_DP], [RING_RADIUS_DP], grown to fit very wide
  * brushes) with a faint fill and a center dot at least [DOT_DP] wide that is otherwise exactly the
- * brush's width, all in the pen color. Eraser: a neutral outline of the real erase radius.
+ * brush's width, all in the pen color. Eraser: a neutral **dashed** ring of the real erase radius
+ * with no center dot, so it can't be mistaken for a pen at a glance.
  */
 data class HoverCursorStyle(
     val ringRadius: Float,
@@ -18,6 +19,9 @@ data class HoverCursorStyle(
     val colorArgb: Int,
     val fillArgb: Int,
     val erasing: Boolean,
+    /** Dash and gap length of the ring in px; 0 = solid ring. */
+    val dashPx: Float = 0f,
+    val gapPx: Float = 0f,
 ) {
     companion object {
         const val RING_RADIUS_DP = 12f
@@ -25,6 +29,10 @@ data class HoverCursorStyle(
         const val DOT_DP = 2.4f
         const val FILL_ALPHA = 0x1F // ~12%, as in the design board
         const val ERASER_ARGB = 0xFF5F6368.toInt()
+        const val ERASER_RING_STROKE_DP = 1.6f
+        const val ERASER_DASH_DP = 4f
+        const val ERASER_GAP_DP = 3f
+        const val ERASER_FILL_ALPHA = 0x14
 
         /**
          * @param brushWidthPx stroke width the brush lays down at full pressure.
@@ -33,7 +41,10 @@ data class HoverCursorStyle(
         fun of(tool: Tool, colorArgb: Int, brushWidthPx: Float, eraseRadiusPx: Float, density: Float): HoverCursorStyle {
             val stroke = RING_STROKE_DP * density
             if (tool == Tool.Eraser) {
-                return HoverCursorStyle(eraseRadiusPx, stroke, 0f, ERASER_ARGB, withAlpha(ERASER_ARGB, FILL_ALPHA), erasing = true)
+                return HoverCursorStyle(
+                    eraseRadiusPx, ERASER_RING_STROKE_DP * density, 0f, ERASER_ARGB, withAlpha(ERASER_ARGB, ERASER_FILL_ALPHA),
+                    erasing = true, dashPx = ERASER_DASH_DP * density, gapPx = ERASER_GAP_DP * density,
+                )
             }
             val opaque = withAlpha(colorArgb, 0xFF)
             val dot = max(DOT_DP * density, brushWidthPx) / 2f

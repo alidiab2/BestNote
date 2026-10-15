@@ -8,6 +8,7 @@ import android.graphics.Paint
 import android.graphics.RectF
 import android.graphics.Typeface
 import android.view.ViewGroup
+import androidx.ink.strokes.InProgressStroke
 import app.bestnote.engine.layout.document.DocumentLayout
 import app.bestnote.engine.layout.document.DocumentMetrics
 import app.bestnote.engine.layout.document.PageWindow
@@ -76,6 +77,20 @@ internal class PagesLayer(context: Context, private val sheet: SheetStyle, var m
         val l = layout ?: return
         val doc = document ?: return
         slot.bind(index, doc.pages[index], l.pageRect(index), l.scale)
+        if (index == wetPage) slot.setWet(wetStroke, wetColor)
+    }
+
+    private var wetPage = -1
+    private var wetStroke: InProgressStroke? = null
+    private var wetColor = 0
+
+    /** Shows [stroke], a highlighter stroke in progress, under the ink of page [index]; null clears it. */
+    fun setWetHighlight(index: Int, stroke: InProgressStroke?, colorArgb: Int) {
+        if (wetPage >= 0 && wetPage != index) window.slotFor(wetPage)?.setWet(null, 0)
+        wetPage = if (stroke != null) index else -1
+        wetStroke = stroke
+        wetColor = colorArgb
+        window.slotFor(index)?.setWet(stroke, colorArgb)
     }
 
     /** Recomputes page positions (pages added, paper changed, view resized) and rebinds visible pages. */
