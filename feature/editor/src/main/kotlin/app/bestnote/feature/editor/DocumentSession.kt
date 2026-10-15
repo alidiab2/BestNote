@@ -7,6 +7,7 @@ import android.graphics.Path
 import android.os.Build
 import android.os.SystemClock
 import android.util.Log
+import androidx.core.graphics.createBitmap
 import androidx.ink.strokes.Stroke
 import androidx.ink.strokes.StrokeInput
 import app.bestnote.core.database.NotebookRepository
@@ -208,7 +209,7 @@ private const val MIN_THUMB_STROKE_PX = 1.5f
 internal fun renderThumbnail(page: Page, strokes: List<Stroke>): ByteArray {
     val scale = THUMB_WIDTH / page.widthPt
     val height = (page.heightPt * scale).roundToInt().coerceAtLeast(1)
-    val bitmap = Bitmap.createBitmap(THUMB_WIDTH, height, Bitmap.Config.ARGB_8888)
+    val bitmap = createBitmap(THUMB_WIDTH, height)
     try {
         val canvas = Canvas(bitmap)
         PaperPainter.draw(canvas, page, scale, THUMB_WIDTH, height)
