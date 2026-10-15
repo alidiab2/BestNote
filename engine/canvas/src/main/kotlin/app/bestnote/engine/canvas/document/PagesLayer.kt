@@ -79,10 +79,12 @@ internal class PagesLayer(context: Context, private val sheet: SheetStyle, var m
         val l = layout ?: return
         val doc = document ?: return
         slot.backgrounds = doc.backgrounds
+        slot.images = doc.images
         slot.bind(index, doc.pages[index], l.pageRect(index), l.scale)
         if (index == wetPage) slot.setWet(wetStroke, wetColor)
         slot.setHidden(if (index == hiddenPage) hidden else emptySet())
         if (index == morphPage) slot.setMorph(morphTarget, morphFrame) else slot.setMorph(null, null)
+        slot.setHiddenElements(if (index == hiddenElementsPage) hiddenElements else emptySet())
     }
 
     private var morphPage = -1
@@ -96,6 +98,17 @@ internal class PagesLayer(context: Context, private val sheet: SheetStyle, var m
         morphTarget = target
         morphFrame = frame
         if (index >= 0) window.slotFor(index)?.setMorph(target, frame)
+    }
+
+    private var hiddenElementsPage = -1
+    private var hiddenElements: Set<String> = emptySet()
+
+    /** Leaves the elements [ids] out of page [index]'s drawing (the selection layer draws them while they move); empty restores. */
+    fun setHiddenElements(index: Int, ids: Set<String>) {
+        if (hiddenElementsPage >= 0 && hiddenElementsPage != index) window.slotFor(hiddenElementsPage)?.setHiddenElements(emptySet())
+        hiddenElementsPage = if (ids.isEmpty()) -1 else index
+        hiddenElements = ids
+        if (index >= 0) window.slotFor(index)?.setHiddenElements(ids)
     }
 
     private var hiddenPage = -1

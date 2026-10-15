@@ -5,6 +5,7 @@ import androidx.ink.strokes.MutableStrokeInputBatch
 import androidx.ink.strokes.Stroke
 import androidx.ink.strokes.StrokeInput
 import app.bestnote.core.model.InkBrush
+import app.bestnote.core.model.PageElement
 import java.util.WeakHashMap
 import kotlin.math.atan2
 
@@ -96,11 +97,16 @@ object InkClipboard {
     var box: Box? = null
         private set
 
-    val hasContent: Boolean get() = items.isNotEmpty()
+    /** Copied text boxes and pictures (TEXT-01, MEDIA-01), in page points. */
+    var elements: List<PageElement> = emptyList()
+        private set
 
-    fun set(items: List<Item>, box: Box?) {
+    val hasContent: Boolean get() = items.isNotEmpty() || elements.isNotEmpty()
+
+    fun set(items: List<Item>, box: Box?, elements: List<PageElement> = emptyList()) {
         this.items = items
         this.box = box
+        this.elements = elements
     }
 
     fun clear() = set(emptyList(), null)

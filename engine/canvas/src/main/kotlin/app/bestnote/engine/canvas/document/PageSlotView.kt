@@ -34,6 +34,11 @@ internal class PageSlotView(context: Context, private val style: SheetStyle) : V
     private val backgroundDst = Rect()
     private val backgroundPaint = Paint(Paint.FILTER_BITMAP_FLAG)
     private var scale = 1f
+
+    /** Source of the pictures of image elements (MEDIA-01). */
+    var images: ElementImages? = null
+    private val imageReady = Runnable { if (index >= 0) invalidate() }
+    private val elementPainter = ElementPainter()
     private val paper = PaperRenderer()
     private val ink = InkRenderer()
     private val density = resources.displayMetrics.density
@@ -85,6 +90,15 @@ internal class PageSlotView(context: Context, private val style: SheetStyle) : V
         invalidate()
     }
 
+    /** Elements the selection layer is dragging: drawn there, so left out here. */
+    private var hiddenElements: Set<String> = emptySet()
+
+    fun setHiddenElements(ids: Set<String>) {
+        if (ids == hiddenElements) return
+        hiddenElements = ids
+        invalidate()
+    }
+
     fun setHidden(strokes: Set<Stroke>) {
         if (strokes === hidden) return
         hidden = strokes
@@ -105,6 +119,7 @@ internal class PageSlotView(context: Context, private val style: SheetStyle) : V
         morphTarget = null
         morphFrame = null
         hidden = emptySet()
+        hiddenElements = emptySet()
         drawList.clear()
         visibility = INVISIBLE
     }
@@ -137,6 +152,8 @@ internal class PageSlotView(context: Context, private val style: SheetStyle) : V
                 paper.draw(this, p.page, s, w, h, dpi)
             }
             scale(s, s)
+            // Text and pictures lie on the paper, under the handwriting.
+            if (p.elements.isNotEmpty()) elementPainter.draw(this, p.elements, s, images, imageReady, hiddenElements) { PaperInk.colorOn(it, colors) }
             // The renderer needs the stroke-to-pixel scale for crisp anti-aliasing (translation doesn't matter).
             inkMatrix.setScale(s, s)
             ink.draw(this, readable(p.strokes, colors), inkMatrix, wet, PaperInk.colorOn(wetColor, colors))

@@ -17,13 +17,20 @@ package app.bestnote.core.storage
 import app.bestnote.core.model.Notebook
 import app.bestnote.core.model.NotebookId
 import app.bestnote.core.model.Page
+import app.bestnote.core.model.PageElement
 
 /**
  * One page and its binary stroke chunk, stored at `pages/<id>.ink`. [strokes] is normally produced by
  * [InkChunkCodec.encode]; stores treat it as opaque bytes. [id] is stable across reorders and must
  * match [PAGE_ID_PATTERN] because it becomes a file name.
  */
-class PageContent(val page: Page, val strokes: ByteArray, val id: String = "page-${page.index}") {
+class PageContent(
+    val page: Page,
+    val strokes: ByteArray,
+    val id: String = "page-${page.index}",
+    /** Text boxes and images on the page, bottom to top; stored in `pages/<id>.json` (TEXT-01, MEDIA-01). */
+    val elements: List<PageElement> = emptyList(),
+) {
     init {
         require(PAGE_ID_PATTERN.matches(id)) { "Invalid page id '$id'" }
     }

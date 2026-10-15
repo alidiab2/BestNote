@@ -1,11 +1,16 @@
 package app.bestnote.core.storage
 
+import app.bestnote.core.model.CropRect
+import app.bestnote.core.model.ImageElement
 import app.bestnote.core.model.Notebook
 import app.bestnote.core.model.NotebookId
 import app.bestnote.core.model.Page
+import app.bestnote.core.model.PageElement
 import app.bestnote.core.model.PaperColor
 import app.bestnote.core.model.PdfPageRef
 import app.bestnote.core.model.PaperTemplate
+import app.bestnote.core.model.TextAlignment
+import app.bestnote.core.model.TextElement
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
@@ -44,6 +49,33 @@ internal data class PageJson(
     /** PDF background (PDF-01): archive path of the PDF asset and the page in it. Absent for ordinary pages. */
     val pdfAsset: String? = null,
     val pdfPage: Int = 0,
+    /** Text boxes and images (TEXT-01, MEDIA-01), bottom to top. Absent in files written before them. */
+    val elements: List<ElementJson> = emptyList(),
+)
+
+/** One page element. [type] is `image` or `text`; fields of the other kind stay at their defaults. */
+@Serializable
+internal data class ElementJson(
+    val type: String,
+    val id: String,
+    val cx: Float,
+    val cy: Float,
+    val w: Float,
+    val h: Float,
+    val rot: Float = 0f,
+    val locked: Boolean = false,
+    // image
+    val asset: String? = null,
+    val srcW: Int = 0,
+    val srcH: Int = 0,
+    val crop: List<Float>? = null,
+    // text
+    val text: String? = null,
+    val size: Float = TextElement.DEFAULT_SIZE_PT,
+    val color: Int = TextElement.DEFAULT_COLOR,
+    val bold: Boolean = false,
+    val italic: Boolean = false,
+    val align: String = "Start",
 )
 
 /**
@@ -77,7 +109,7 @@ object BnoteFormat {
         pkg.assets.keys.forEach(::requireValidAssetPath)
         val out = LinkedHashMap<String, ByteArray>()
         for (p in pkg.pages) {
-            val meta = PageJson(VERSION, p.id, p.page.index, p.page.template.name, p.page.widthPt, p.page.heightPt, "${p.id}.ink", p.page.paperColor.name, p.page.pdf?.asset, p.page.pdf?.pageIndex ?: 0)
+            val meta = PageJson(VERSION, p.id, p.page.index, p.page.template.name, p.page.widthPt, p.page.heightPt, "${p.id}.ink", p.page.paperColor.name, p.page.pdf?.asset, p.page.pdf?.pageIndex ?: 0, p.elements.map(::elementJson))
             out[pageMetaPath(p.id)] = json.encodeToString(PageJson.serializer(), meta).encodeToByteArray()
             out[pageInkPath(p.id)] = p.strokes
         }
@@ -97,7 +129,7 @@ object BnoteFormat {
             if (!INK_NAME.matches(meta.ink)) throw CorruptChunkException("Invalid ink name '${meta.ink}'")
             val ink = entry(PAGES_DIR + meta.ink) ?: throw CorruptChunkException("Missing ink for page $pageId")
             val page = construct("page $pageId") { Page(nid, meta.index, template(meta.template), meta.widthPt, meta.heightPt, paperColor(meta.paper), pdfRef(meta)) }
-            construct("page $pageId") { PageContent(page, ink, pageId) }
+            construct("page $pageId") { PageContent(page, ink, pageId, meta.elements.mapNotNull(::elementOrNull)) }
         }
         val assets = manifest.assets.associateWith { path ->
             construct("asset") { requireValidAssetPath(path) }
@@ -150,6 +182,36 @@ object BnoteFormat {
         val asset = meta.pdfAsset ?: return null
         requireValidAssetPath(asset)
         return PdfPageRef(asset, meta.pdfPage)
+    }
+
+    private fun elementJson(e: PageElement): ElementJson = when (e) {
+        is ImageElement -> ElementJson(
+            "image", e.id, e.cx, e.cy, e.width, e.height, e.rotation, e.locked,
+            asset = e.asset, srcW = e.srcWidth, srcH = e.srcHeight, crop = listOf(e.crop.left, e.crop.top, e.crop.right, e.crop.bottom),
+        )
+        is TextElement -> ElementJson(
+            "text", e.id, e.cx, e.cy, e.width, e.height, e.rotation, e.locked,
+            text = e.text, size = e.sizePt, color = e.colorArgb, bold = e.bold, italic = e.italic, align = e.align.name,
+        )
+    }
+
+    /** An element, or null for one this version cannot show (unknown type from a newer app, or unusable numbers). */
+    private fun elementOrNull(j: ElementJson): PageElement? = try {
+        when (j.type) {
+            "image" -> {
+                val asset = j.asset ?: return null
+                requireValidAssetPath(asset)
+                val c = j.crop?.takeIf { it.size == 4 }?.let { CropRect.sanitized(it[0], it[1], it[2], it[3]) } ?: CropRect()
+                ImageElement(j.id, j.cx, j.cy, j.w, j.h, asset, j.srcW, j.srcH, c, j.rot, j.locked)
+            }
+            "text" -> TextElement(
+                j.id, j.cx, j.cy, j.w, j.h, j.text.orEmpty(), j.size, j.color, j.bold, j.italic,
+                TextAlignment.entries.firstOrNull { it.name == j.align } ?: TextAlignment.Start, j.rot, j.locked,
+            )
+            else -> null
+        }
+    } catch (_: IllegalArgumentException) {
+        null
     }
 
     /** Paper color is cosmetic: an unknown name (from a newer app) falls back to white instead of failing. */

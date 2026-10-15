@@ -2,6 +2,7 @@ package app.bestnote.core.storage
 
 import app.bestnote.core.model.InkStroke
 import app.bestnote.core.model.Page
+import app.bestnote.core.model.PageElement
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
@@ -72,6 +73,12 @@ class Autosaver(
     /** pageId -> newest strokes not yet committed. Guarded by [lock]. */
     private val pending = LinkedHashMap<String, List<InkStroke>>()
 
+    /** pageId -> newest text boxes and images not yet committed. Guarded by [lock]. */
+    private val pendingElements = LinkedHashMap<String, List<PageElement>>()
+
+    /** Asset path -> bytes (inserted images) not yet committed. Guarded by [lock]. */
+    private val pendingAssets = LinkedHashMap<String, ByteArray>()
+
     /** New page order and metadata not yet committed, or null. Guarded by [lock]. */
     private var pendingLayout: List<Pair<String, Page>>? = null
     private var closed = false
@@ -88,7 +95,7 @@ class Autosaver(
     /** Page ids in order, as last committed. */
     val pageIds: List<String> get() = synchronized(lock) { saved.pages.map { it.id } }
 
-    val hasUnsavedChanges: Boolean get() = synchronized(lock) { pending.isNotEmpty() || pendingLayout != null }
+    val hasUnsavedChanges: Boolean get() = synchronized(lock) { pending.isNotEmpty() || pendingElements.isNotEmpty() || pendingAssets.isNotEmpty() || pendingLayout != null }
 
     private val worker = scope.launch { runWorker() }
 
@@ -102,6 +109,37 @@ class Autosaver(
             val known = pendingLayout?.any { it.first == pageId } ?: saved.pages.any { it.id == pageId }
             require(known) { "Unknown page '$pageId'" }
             pending[pageId] = strokes
+        }
+        _state.value = SaveState.Dirty
+        signal.trySend(Unit)
+    }
+
+    /**
+     * Records [elements] (text boxes and images, bottom to top) as the new content of [pageId] and
+     * schedules a save. Non-blocking like [updatePage]; [elements] must not be mutated afterwards.
+     */
+    fun updateElements(pageId: String, elements: List<PageElement>) {
+        synchronized(lock) {
+            check(!closed) { "Autosaver is closed" }
+            val known = pendingLayout?.any { it.first == pageId } ?: saved.pages.any { it.id == pageId }
+            require(known) { "Unknown page '$pageId'" }
+            pendingElements[pageId] = elements
+        }
+        _state.value = SaveState.Dirty
+        signal.trySend(Unit)
+    }
+
+    /**
+     * Stores [bytes] as the notebook asset [path] (an `assets/...` path) with the next save. A path the
+     * notebook already has is left alone, so an image used many times is stored once. Call before (or
+     * with) the [updateElements] that refers to it.
+     */
+    fun addAsset(path: String, bytes: ByteArray) {
+        BnoteFormat.requireValidAssetPath(path)
+        synchronized(lock) {
+            check(!closed) { "Autosaver is closed" }
+            if (path in saved.assets || path in pendingAssets) return
+            pendingAssets[path] = bytes
         }
         _state.value = SaveState.Dirty
         signal.trySend(Unit)
@@ -165,12 +203,18 @@ class Autosaver(
 
     private suspend fun saveLocked() {
         val batch: Map<String, List<InkStroke>>
+        val elements: Map<String, List<PageElement>>
+        val newAssets: Map<String, ByteArray>
         val layout: List<Pair<String, Page>>?
         val base: NotebookPackage
         synchronized(lock) {
-            if (pending.isEmpty() && pendingLayout == null) return
+            if (pending.isEmpty() && pendingElements.isEmpty() && pendingAssets.isEmpty() && pendingLayout == null) return
             batch = LinkedHashMap(pending)
             pending.clear()
+            elements = LinkedHashMap(pendingElements)
+            pendingElements.clear()
+            newAssets = LinkedHashMap(pendingAssets)
+            pendingAssets.clear()
             layout = pendingLayout
             pendingLayout = null
             base = saved
@@ -178,19 +222,25 @@ class Autosaver(
         val pkg = try {
             val encoded = withContext(cpu) { batch.mapValues { (_, strokes) -> codec.encode(strokes) } }
             val (pages, changed) = if (layout == null) {
-                base.pages.map { p -> encoded[p.id]?.let { PageContent(p.page, it, p.id) } ?: p } to batch.keys
+                base.pages.map { p ->
+                    val ink = encoded[p.id]
+                    val shapes = elements[p.id]
+                    if (ink == null && shapes == null) p else PageContent(p.page, ink ?: p.strokes, p.id, shapes ?: p.elements)
+                } to (batch.keys + elements.keys)
             } else {
-                relayout(base, layout, encoded)
+                relayout(base, layout, encoded, elements)
             }
             val notebook = base.notebook.copy(
                 updatedAtMillis = maxOf(clock(), base.notebook.updatedAtMillis),
                 pageCount = pages.size,
             )
-            NotebookPackage(notebook, pages, base.assets).also { store.writePages(it, changed) }
+            NotebookPackage(notebook, pages, base.assets + newAssets).also { store.writePages(it, changed) }
         } catch (e: Throwable) {
             // Put the batch back unless the page was edited again meanwhile (newer content wins).
             synchronized(lock) {
                 batch.forEach { (id, strokes) -> pending.putIfAbsent(id, strokes) }
+                elements.forEach { (id, shapes) -> pendingElements.putIfAbsent(id, shapes) }
+                newAssets.forEach { (path, bytes) -> pendingAssets.putIfAbsent(path, bytes) }
                 if (pendingLayout == null) pendingLayout = layout
             }
             if (e !is CancellationException) _state.value = SaveState.Failed(e)
@@ -198,7 +248,7 @@ class Autosaver(
         }
         val dirty = synchronized(lock) {
             saved = pkg
-            pending.isNotEmpty()
+            pending.isNotEmpty() || pendingElements.isNotEmpty() || pendingAssets.isNotEmpty()
         }
         _state.value = if (dirty) SaveState.Dirty else SaveState.Saved
         try {
@@ -215,16 +265,19 @@ class Autosaver(
         base: NotebookPackage,
         layout: List<Pair<String, Page>>,
         encoded: Map<String, ByteArray>,
+        elements: Map<String, List<PageElement>>,
     ): Pair<List<PageContent>, Set<String>> {
         val old = base.pages.associateBy { it.id }
         val empty by lazy { codec.encode(emptyList()) }
-        val changed = HashSet<String>(encoded.keys)
+        val changed = HashSet<String>(encoded.keys).apply { addAll(elements.keys) }
         val pages = layout.mapIndexed { i, (id, meta) ->
             val page = meta.copy(notebookId = base.notebook.id, index = i)
             val previous = old[id]
             if (previous?.page != page) changed += id
             val ink = encoded[id] ?: previous?.strokes ?: withContext(cpu) { empty }
-            PageContent(page, ink, id)
+            val shapes = elements[id] ?: previous?.elements ?: emptyList()
+            if (previous != null && previous.elements != shapes) changed += id
+            PageContent(page, ink, id, shapes)
         }
         changed.retainAll(layout.mapTo(HashSet()) { it.first })
         return pages to changed
