@@ -5,6 +5,7 @@ import android.content.Context
 import android.graphics.Canvas
 import android.graphics.Matrix
 import android.graphics.Paint
+import android.graphics.Rect
 import android.view.View
 import androidx.core.graphics.withTranslation
 import androidx.ink.strokes.InProgressStroke
@@ -25,6 +26,13 @@ internal class PageSlotView(context: Context, private val style: SheetStyle) : V
         private set
 
     private var page: DocumentPage? = null
+
+    /** Source of PDF page rasters (PDF-01); null for plain notebooks. */
+    var backgrounds: PageBackgrounds? = null
+    private val backgroundReady = Runnable { if (index >= 0) invalidate() }
+    private val backgroundSrc = Rect()
+    private val backgroundDst = Rect()
+    private val backgroundPaint = Paint(Paint.FILTER_BITMAP_FLAG)
     private var scale = 1f
     private val paper = PaperRenderer()
     private val ink = InkRenderer()
@@ -93,7 +101,18 @@ internal class PageSlotView(context: Context, private val style: SheetStyle) : V
         val dpi = density // Canvas has its own `density`: read ours outside the receiver lambda.
         canvas.withTranslation(pad, pad) {
             clipRect(0, 0, w, h)
-            paper.draw(this, p.page, s, w, h, dpi)
+            val raster = if (p.page.pdf != null) backgrounds?.background(p.page, w, backgroundReady) else null
+            if (p.page.pdf != null) {
+                // A PDF page is its own paper: white until the first raster arrives, no template lines.
+                drawColor(colors.page)
+                if (raster != null) {
+                    backgroundSrc.set(0, 0, raster.width, raster.height)
+                    backgroundDst.set(0, 0, w, h)
+                    drawBitmap(raster, backgroundSrc, backgroundDst, backgroundPaint)
+                }
+            } else {
+                paper.draw(this, p.page, s, w, h, dpi)
+            }
             scale(s, s)
             // The renderer needs the stroke-to-pixel scale for crisp anti-aliasing (translation doesn't matter).
             inkMatrix.setScale(s, s)

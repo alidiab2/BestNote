@@ -47,6 +47,8 @@ data class Page(
     val widthPt: Float = A4_WIDTH_PT,
     val heightPt: Float = A4_HEIGHT_PT,
     val paperColor: PaperColor = PaperColor.White,
+    /** The PDF page printed under this page's ink, or null for ordinary paper (PDF-01). */
+    val pdf: PdfPageRef? = null,
 ) {
     init {
         require(index >= 0) { "Page index must be >= 0" }

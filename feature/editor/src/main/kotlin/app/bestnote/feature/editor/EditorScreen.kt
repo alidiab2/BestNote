@@ -51,7 +51,10 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
+import android.content.Context
 import androidx.compose.ui.platform.LocalContext
+import dagger.hilt.android.qualifiers.ApplicationContext
+import java.io.File
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Dp
@@ -144,6 +147,7 @@ class EditorViewModel @Inject constructor(
     dao: NotebookDao,
     private val preferences: UserPreferencesRepository,
     repository: NotebookRepository,
+    @ApplicationContext context: Context,
 ) : ViewModel() {
     val notebookId = NotebookId(savedStateHandle.toRoute<EditorRoute>().notebookId)
 
@@ -151,7 +155,7 @@ class EditorViewModel @Inject constructor(
     val document = PagedDocument().apply { blankPage = Page(notebookId, 0) }
 
     /** Loads the pages, autosaves them and keeps the thumbnail fresh (DOC-03, DOC-10, CANVAS-07). */
-    internal val session = DocumentSession(notebookId, repository, document, viewModelScope) {
+    internal val session = DocumentSession(notebookId, repository, document, viewModelScope, File(context.cacheDir, "pdf")) {
         dao.observe(notebookId.value).filterNotNull().first().toModel()
     }
 

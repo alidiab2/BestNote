@@ -78,6 +78,7 @@ internal class PagesLayer(context: Context, private val sheet: SheetStyle, var m
     private fun bindSlot(slot: PageSlotView, index: Int) {
         val l = layout ?: return
         val doc = document ?: return
+        slot.backgrounds = doc.backgrounds
         slot.bind(index, doc.pages[index], l.pageRect(index), l.scale)
         if (index == wetPage) slot.setWet(wetStroke, wetColor)
     }

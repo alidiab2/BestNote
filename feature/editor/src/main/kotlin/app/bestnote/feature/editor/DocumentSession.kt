@@ -22,12 +22,15 @@ import app.bestnote.engine.canvas.document.DocumentPage
 import app.bestnote.engine.canvas.document.PagedDocument
 import app.bestnote.engine.canvas.document.PagedDocumentView
 import app.bestnote.engine.canvas.document.PaperPainter
+import app.bestnote.engine.pdf.PdfNotebookFiles
+import app.bestnote.engine.pdf.PdfPageBackgrounds
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.ByteArrayOutputStream
+import java.io.File
 import java.util.IdentityHashMap
 import kotlin.math.roundToInt
 
@@ -47,6 +50,7 @@ internal class DocumentSession(
     private val repository: NotebookRepository,
     private val document: PagedDocument,
     scope: CoroutineScope,
+    private val pdfCacheDir: File,
     private val fallback: suspend () -> Notebook?,
 ) : PagedDocument.Listener {
     private var saver: Autosaver? = null
@@ -58,6 +62,9 @@ internal class DocumentSession(
     private val preserved = HashMap<String, List<InkStroke>>()
     private val models = IdentityHashMap<Stroke, InkStroke>()
     private var view: PagedDocumentView? = null
+
+    /** Rasters of the notebook's PDF pages (PDF-01), or null for a plain notebook. */
+    private var pdf: PdfPageBackgrounds? = null
 
     init {
         scope.launch { load() }
@@ -95,6 +102,8 @@ internal class DocumentSession(
         savedLayout = pages.mapIndexed { i, content -> content.id to content.page.copy(index = i) }
         val strokes = loaded.map { page -> page.mapNotNull { (model, stroke) -> stroke?.also { models[it] = model } } }
         saver = open.autosaver
+        pdf = withContext(Dispatchers.IO) { PdfNotebookFiles.open(open.pkg, pdfCacheDir) }
+        document.backgrounds = pdf
         document.reset(savedLayout.map { it.second }, savedLayout.map { it.first }) { strokes[it] }
         document.addListener(this)
     }
@@ -149,7 +158,7 @@ internal class DocumentSession(
             } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
                 Log.e(TAG, "Flush failed; autosave keeps retrying", e)
             }
-            refreshThumbnail(saver, first)
+            refreshThumbnail(saver, first, pdf)
         }
     }
 
@@ -160,6 +169,8 @@ internal class DocumentSession(
         val saver = saver ?: return
         this.saver = null
         val first = firstPage()
+        val pdf = pdf
+        this.pdf = null
         val closedAt = SystemClock.elapsedRealtime()
         repository.backgroundScope.launch {
             try {
@@ -169,7 +180,9 @@ internal class DocumentSession(
             } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
                 Log.e(TAG, "Final save of $notebookId failed", e)
             }
-            if (refreshThumbnail(saver, first)) {
+            val thumbnailed = refreshThumbnail(saver, first, pdf)
+            pdf?.close()
+            if (thumbnailed) {
                 Log.i(TAG, "Thumbnail of $notebookId updated ${SystemClock.elapsedRealtime() - closedAt} ms after closing")
             }
         }
@@ -184,12 +197,12 @@ internal class DocumentSession(
     private fun brushOf(stroke: Stroke): InkBrush = view?.brushOf(stroke) ?: InkConversion.brushFromInk(stroke.brush)
 
     /** Re-renders the thumbnail when the cached one predates the last save. @return true if rendered. */
-    private suspend fun refreshThumbnail(saver: Autosaver, first: Pair<Page, List<Stroke>>?): Boolean {
+    private suspend fun refreshThumbnail(saver: Autosaver, first: Pair<Page, List<Stroke>>?, pdf: PdfPageBackgrounds? = this.pdf): Boolean {
         val (page, strokes) = first ?: return false
         val notebook = saver.notebook
         if (!repository.thumbnailIsStale(notebookId, notebook.updatedAtMillis)) return false
         return try {
-            val bytes = withContext(Dispatchers.Default) { renderThumbnail(page, strokes) }
+            val bytes = withContext(Dispatchers.Default) { renderThumbnail(page, strokes, pdf?.renderNow(page, THUMB_WIDTH)) }
             repository.saveThumbnail(notebookId, notebook.updatedAtMillis, bytes)
             Log.i(TAG, "Thumbnail of $notebookId rendered from ${strokes.size} strokes")
             true
@@ -214,8 +227,8 @@ private const val MIN_THUMB_STROKE_PX = 1.5f
  * Renders [page] (paper, template and [strokes] in page points) [THUMB_WIDTH] px wide as WebP.
  * Strokes are immutable, so this runs off the main thread.
  */
-internal fun renderThumbnail(page: Page, strokes: List<Stroke>): ByteArray {
-    val bitmap = renderPageBitmap(page, strokes, THUMB_WIDTH)
+internal fun renderThumbnail(page: Page, strokes: List<Stroke>, pdfRaster: Bitmap? = null): ByteArray {
+    val bitmap = renderPageBitmap(page, strokes, THUMB_WIDTH, pdfRaster)
     try {
         val format = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             Bitmap.CompressFormat.WEBP_LOSSY
@@ -230,12 +243,18 @@ internal fun renderThumbnail(page: Page, strokes: List<Stroke>): ByteArray {
 }
 
 /** Draws [page] (paper, template and [strokes] in page points) into a new bitmap [widthPx] wide. Caller owns it. */
-internal fun renderPageBitmap(page: Page, strokes: List<Stroke>, widthPx: Int): Bitmap {
+internal fun renderPageBitmap(page: Page, strokes: List<Stroke>, widthPx: Int, pdfRaster: Bitmap? = null): Bitmap {
     val scale = widthPx / page.widthPt
     val height = (page.heightPt * scale).roundToInt().coerceAtLeast(1)
     val bitmap = createBitmap(widthPx, height)
     val canvas = Canvas(bitmap)
-    PaperPainter.draw(canvas, page, scale, widthPx, height)
+    if (page.pdf != null) {
+        // A PDF page is its own paper: its raster (white while it is not available) and no template lines.
+        canvas.drawColor(PaperPainter.pageColor(page))
+        if (pdfRaster != null) canvas.drawBitmap(pdfRaster, null, android.graphics.Rect(0, 0, widthPx, height), null)
+    } else {
+        PaperPainter.draw(canvas, page, scale, widthPx, height)
+    }
     // Plain polylines: a cover image does not need brush tips, and this works on any (software) canvas.
     val ink = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE

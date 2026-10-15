@@ -54,7 +54,7 @@ class QuicknoteRequests @Inject constructor() {
 }
 
 /** Short messages the screen shows in a snackbar. */
-enum class Notice { ExportSoon, ImportPdfSoon, Duplicated, Moved, FolderCreated, FolderDeleted, AddedToFavorites, RemovedFromFavorites }
+enum class Notice { ExportSoon, ImportingPdf, ImportPdfFailed, Duplicated, Moved, FolderCreated, FolderDeleted, AddedToFavorites, RemovedFromFavorites }
 
 sealed interface LibraryEvent {
     data class Open(val id: NotebookId) : LibraryEvent
@@ -71,6 +71,8 @@ class LibraryViewModel @Inject constructor(
     private val seeder: LibrarySeeder,
     private val clock: LibraryClock,
     private val quicknotes: QuicknoteRequests,
+    private val pdfImporter: PdfImporting,
+    private val pdfRequests: PdfOpenRequests,
 ) : ViewModel() {
     private val notebooks = MutableStateFlow<List<Notebook>?>(null)
     private val trash = MutableStateFlow<List<TrashedNotebook>>(emptyList())
@@ -90,6 +92,9 @@ class LibraryViewModel @Inject constructor(
 
     /** Pending launcher-shortcut Quicknote requests. */
     val quicknoteRequested: StateFlow<Boolean> = quicknotes.requested
+
+    /** The PDF an "Open with" / share intent asked to import, if any. */
+    val pdfRequested: StateFlow<String?> = pdfRequests.requested
 
     init {
         viewModelScope.launch {
@@ -265,8 +270,26 @@ class LibraryViewModel @Inject constructor(
         events.trySend(LibraryEvent.Message(Notice.ExportSoon))
     }
 
-    fun importPdfSoon() {
-        events.trySend(LibraryEvent.Message(Notice.ImportPdfSoon))
+    /** Runs a pending "Open with" PDF import, if any. */
+    fun takePdfRequest() {
+        pdfRequests.take()?.let(::importPdf)
+    }
+
+    /** Imports the PDF at [uri] as a new notebook (in the open folder, if any) and opens it. */
+    fun importPdf(uri: String) {
+        viewModelScope.launch {
+            events.send(LibraryEvent.Message(Notice.ImportingPdf))
+            val notebook = try {
+                pdfImporter.import(uri)
+            } catch (@Suppress("SwallowedException") e: PdfImportFailed) {
+                events.send(LibraryEvent.Message(Notice.ImportPdfFailed))
+                return@launch
+            }
+            val folderId = (controls.value.destination as? LibraryDestination.InFolder)?.folderId
+            metadata.update(notebook.id) { it.copy(folderId = folderId) }
+            reload()
+            events.send(LibraryEvent.Open(notebook.id))
+        }
     }
 
     // endregion
