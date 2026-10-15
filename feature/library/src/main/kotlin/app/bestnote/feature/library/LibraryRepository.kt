@@ -21,8 +21,11 @@ data class TrashedNotebook(val notebook: Notebook, val deletedAtMillis: Long)
 interface LibraryRepository {
     /** Notebooks, most recently edited first. */
     suspend fun list(): List<Notebook>
-    suspend fun create(title: String, template: PaperTemplate = PaperTemplate.Ruled): Notebook
+    suspend fun create(title: String, template: PaperTemplate = PaperTemplate.Ruled, format: PaperFormat = PaperFormat()): Notebook
     suspend fun rename(id: NotebookId, title: String): Notebook?
+
+    /** Copies [id] (pages, ink, assets) under a new id and [title]. @return null if [id] does not exist. */
+    suspend fun duplicate(id: NotebookId, title: String): Notebook?
 
     /** Moves [id] to the Trash. @return false if it did not exist. */
     suspend fun moveToTrash(id: NotebookId): Boolean
@@ -75,12 +78,22 @@ class StoreLibraryRepository(
 
     override suspend fun list(): List<Notebook> = store.list().sortedByDescending { it.updatedAtMillis }
 
-    override suspend fun create(title: String, template: PaperTemplate): Notebook {
+    override suspend fun create(title: String, template: PaperTemplate, format: PaperFormat): Notebook {
         val now = clock()
         val notebook = Notebook(NotebookId(UUID.randomUUID().toString()), title.trim().ifEmpty { title }, now, now, template)
-        store.write(emptyPackage(notebook))
+        store.write(emptyPackage(notebook, format))
         index.upsert(notebook)
         return notebook
+    }
+
+    override suspend fun duplicate(id: NotebookId, title: String): Notebook? {
+        val pkg = store.read(id) ?: return null
+        val now = clock()
+        val copy = pkg.notebook.copy(id = NotebookId(UUID.randomUUID().toString()), title = title.trim().ifEmpty { pkg.notebook.title }, createdAtMillis = now, updatedAtMillis = now)
+        val pages = pkg.pages.map { PageContent(it.page.copy(notebookId = copy.id), it.strokes.copyOf(), it.id) }
+        store.write(NotebookPackage(copy, pages, pkg.assets.mapValues { it.value.copyOf() }))
+        index.upsert(copy)
+        return copy
     }
 
     override suspend fun rename(id: NotebookId, title: String): Notebook? {
@@ -128,11 +141,15 @@ class StoreLibraryRepository(
         val TRASH_RETENTION_MILLIS: Long = TimeUnit.DAYS.toMillis(30)
         internal const val DELETED_AT_ASSET = "assets/library/deleted-at"
 
-        /** A fresh notebook: one empty page per [Notebook.pageCount]. */
-        fun emptyPackage(notebook: Notebook): NotebookPackage = NotebookPackage(
+        /** A fresh notebook: one empty page per [Notebook.pageCount], all in [format]. */
+        fun emptyPackage(notebook: Notebook, format: PaperFormat = PaperFormat()): NotebookPackage = NotebookPackage(
             notebook,
             List(notebook.pageCount) { i ->
-                PageContent(Page(notebook.id, i, notebook.template), InkChunkCodec.encode(emptyList()), "page-$i")
+                PageContent(
+                    Page(notebook.id, i, notebook.template, format.widthPt, format.heightPt),
+                    InkChunkCodec.encode(emptyList()),
+                    "page-$i",
+                )
             },
         )
     }

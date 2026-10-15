@@ -22,13 +22,18 @@ class DemoLibrarySeeder @Inject constructor(
     @ApplicationContext private val context: Context,
     private val store: NotebookStore,
     private val index: RoomIndexMirror,
-    private val metadata: InMemoryLibraryMetadata,
+    private val metadata: LibraryMetadata,
     private val clock: LibraryClock,
 ) : LibrarySeeder {
 
     override suspend fun seed() {
-        metadata.setFolders(FOLDERS)
-        DEMO.forEach { metadata.put(NotebookId(it.id), it.meta) }
+        // Demo folders and covers are persisted once; after that they are the user's to change.
+        val metaMarker = File(context.filesDir, META_SEEDED_MARKER)
+        if (!metaMarker.exists()) {
+            FOLDERS.forEach { metadata.putFolder(it) }
+            DEMO.forEach { demo -> metadata.update(NotebookId(demo.id)) { demo.meta } }
+            metaMarker.createNewFile()
+        }
         // A marker, so trashing a demo notebook sticks and existing notebooks are never touched.
         val marker = File(context.filesDir, SEEDED_MARKER)
         if (marker.exists()) return
@@ -57,22 +62,24 @@ class DemoLibrarySeeder @Inject constructor(
     private companion object {
         const val DEMO_AGE_DAYS = 40L
         const val SEEDED_MARKER = ".library-demo-seeded"
+        const val META_SEEDED_MARKER = ".library-demo-meta-seeded"
         val FOLDERS = listOf(
             Folder("uni", "University", colorIndex = 0),
             Folder("work", "Work", colorIndex = 1),
             Folder("personal", "Personal", colorIndex = 2),
             Folder("ideas", "Ideas", colorIndex = 3),
+            Folder("uni-lectures", "Lectures", colorIndex = 4, parentId = "uni"),
         )
         val DEMO = listOf(
-            Demo("demo-organic-chem", "Organic Chemistry", 48, 25, NotebookMeta(0, "uni", favorite = true, lastPageIndex = 31)),
-            Demo("demo-linear-algebra", "Linear Algebra", 36, 180, NotebookMeta(4, "uni", lastPageIndex = 12), PaperTemplate.Grid),
-            Demo("demo-arabic", "ملاحظات المحاضرة", 22, 300, NotebookMeta(2, "uni", lastPageIndex = 9)),
-            Demo("demo-meetings", "Team Meetings", 64, 1_440, NotebookMeta(1, "work", favorite = true, lastPageIndex = 60)),
-            Demo("demo-roadmap", "Q4 Roadmap", 12, 2_900, NotebookMeta(5, "work", lastPageIndex = 4)),
-            Demo("demo-sketchbook", "Sketchbook", 80, 4_300, NotebookMeta(3, "ideas", lastPageIndex = 18), PaperTemplate.Blank),
-            Demo("demo-journal", "Travel Journal", 30, 9_000, NotebookMeta(2, "personal", favorite = true, lastPageIndex = 27), PaperTemplate.Dotted),
-            Demo("demo-reading", "Reading Log", 20, 14_000, NotebookMeta(4, "personal", lastPageIndex = 6)),
-            Demo("demo-physics", "Physics II", 40, 20_000, NotebookMeta(0, "uni", lastPageIndex = 39), PaperTemplate.Grid),
+            Demo("demo-organic-chem", "Organic Chemistry", 48, 25, NotebookMeta(0, folderId = "uni", favorite = true, lastPageIndex = 31)),
+            Demo("demo-linear-algebra", "Linear Algebra", 36, 180, NotebookMeta(4, folderId = "uni", lastPageIndex = 12), PaperTemplate.Grid),
+            Demo("demo-arabic", "ملاحظات المحاضرة", 22, 300, NotebookMeta(2, folderId = "uni-lectures", lastPageIndex = 9)),
+            Demo("demo-meetings", "Team Meetings", 64, 1_440, NotebookMeta(1, folderId = "work", favorite = true, lastPageIndex = 60)),
+            Demo("demo-roadmap", "Q4 Roadmap", 12, 2_900, NotebookMeta(5, folderId = "work", lastPageIndex = 4)),
+            Demo("demo-sketchbook", "Sketchbook", 80, 4_300, NotebookMeta(3, CoverStyle.Dots, folderId = "ideas", lastPageIndex = 18), PaperTemplate.Blank),
+            Demo("demo-journal", "Travel Journal", 30, 9_000, NotebookMeta(2, CoverStyle.Stripes, folderId = "personal", favorite = true, lastPageIndex = 27), PaperTemplate.Dotted),
+            Demo("demo-reading", "Reading Log", 20, 14_000, NotebookMeta(4, folderId = "personal", lastPageIndex = 6)),
+            Demo("demo-physics", "Physics II", 40, 20_000, NotebookMeta(0, CoverStyle.Grid, folderId = "uni", lastPageIndex = 39), PaperTemplate.Grid),
             Demo("demo-quick", "Grocery list", 1, 50, NotebookMeta(3, quicknote = true)),
         )
     }

@@ -66,6 +66,7 @@ internal fun NotebookCover(
     showLabel: Boolean = true,
     shadow: Boolean = true,
     scale: Float = 1f,
+    style: CoverStyle = CoverStyle.Plain,
 ) {
     val cover = coverColor(coverIndex)
     val paper = BestNoteTheme.colors.paper.page
@@ -76,6 +77,7 @@ internal fun NotebookCover(
             .then(if (shadow) Modifier.softShadow(Elevation.High, shape) else Modifier)
             .clip(shape)
             .background(cover)
+            .coverPattern(style, cover, paper, scale)
             // A faint edge, so dark covers (black, navy) still read on the graphite theme.
             .border(Elevation.Hairline, lerp(cover, paper, EDGE_LIGHTEN), shape),
     ) {

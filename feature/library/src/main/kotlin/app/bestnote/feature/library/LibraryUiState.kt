@@ -2,7 +2,10 @@ package app.bestnote.feature.library
 
 import app.bestnote.core.model.Notebook
 import app.bestnote.core.model.NotebookId
+import java.text.Collator
+import java.text.Normalizer
 import java.util.Calendar
+import java.util.Locale
 import java.util.TimeZone
 import java.util.concurrent.TimeUnit
 
@@ -20,9 +23,14 @@ sealed interface LibraryDestination {
 enum class LibraryLayout { Shelf, Grid, List }
 
 /** Chips next to the "Notebooks" header. */
-enum class NotebookFilter { All, ThisWeek, Favorites }
+enum class NotebookFilter { All, ThisWeek, Favorites, Pdfs }
+
+enum class SortOrder { Modified, Created, Name }
 
 enum class Greeting { Morning, Afternoon, Evening }
+
+/** Which empty state to draw when [LibraryUiState.items] is empty. */
+enum class EmptyKind { NoNotebooks, EmptyFolder, NoFavorites, NoQuicknotes, NoRecent, NoPdfs, NoMatches, NoSearchResults }
 
 /** One notebook as the library draws it. */
 data class NotebookItem(
@@ -38,12 +46,18 @@ data class NotebookItem(
     val lastPageIndex: Int,
     /** Cached page thumbnail (DOC-10), or null to draw the placeholder page. */
     val thumbnailPath: String? = null,
+    val createdAtMillis: Long = updatedAtMillis,
+    val coverStyle: CoverStyle = CoverStyle.Plain,
+    val kind: NotebookKind = NotebookKind.Notebook,
+    /** Top-level folder down to [folder], for breadcrumbs in search results. */
+    val folderPath: List<Folder> = listOfNotNull(folder),
 ) {
     /** Share of the notebook read/written so far, in 0..1. */
     val progress: Float get() = (lastPageIndex + 1f) / pageCount
 }
 
-data class FolderItem(val folder: Folder, val count: Int)
+/** A folder with its notebook count and nesting depth (0 = top level), in sidebar order. */
+data class FolderItem(val folder: Folder, val count: Int, val depth: Int = 0)
 
 data class TrashItem(val id: NotebookId, val title: String, val coverIndex: Int, val deletedAtMillis: Long, val purgeAtMillis: Long)
 
@@ -52,7 +66,12 @@ data class LibraryControls(
     val destination: LibraryDestination = LibraryDestination.Library,
     val layout: LibraryLayout = LibraryLayout.Shelf,
     val filter: NotebookFilter = NotebookFilter.All,
+    /** Only notebooks in folders of this color (index into `CoverPalette.All`), or null for any. */
+    val folderColor: Int? = null,
+    val sort: SortOrder = SortOrder.Modified,
     val query: String = "",
+    val selecting: Boolean = false,
+    val selected: Set<NotebookId> = emptySet(),
 )
 
 data class LibraryUiState(
@@ -64,18 +83,30 @@ data class LibraryUiState(
     val favoritesCount: Int = 0,
     val quicknotesCount: Int = 0,
     val trashCount: Int = 0,
+    /** All folders as a tree, flattened depth-first. */
     val folders: List<FolderItem> = emptyList(),
-    /** The notebooks for the current destination, filter and query, in display order. */
+    /** The notebooks for the current destination, filters and query, in display order. */
     val items: List<NotebookItem> = emptyList(),
     /** The most recently edited notebook, shown first under "Continue writing". */
     val continueWith: NotebookItem? = null,
     val trash: List<TrashItem> = emptyList(),
     /** Time of the latest save on this device, for the sidebar storage card. */
     val lastSavedAtMillis: Long? = null,
+    /** Folder destination: top-level folder down to the open one. */
+    val breadcrumb: List<Folder> = emptyList(),
+    /** Folder destination: its direct subfolders. */
+    val subfolders: List<FolderItem> = emptyList(),
+    /** Folder colors in use, for the color filter. */
+    val folderColors: List<Int> = emptyList(),
+    val emptyKind: EmptyKind = EmptyKind.NoNotebooks,
 ) {
+    val searching: Boolean get() = controls.query.isNotBlank()
+
     /** "Continue writing" only shows on the plain library view. */
     val showContinueWriting: Boolean
-        get() = controls.destination == LibraryDestination.Library && controls.query.isBlank() && continueWith != null
+        get() = controls.destination == LibraryDestination.Library && !searching && !controls.selecting && continueWith != null
+
+    val filtersActive: Boolean get() = controls.filter != NotebookFilter.All || controls.folderColor != null
 }
 
 internal val RECENT_WINDOW_MILLIS: Long = TimeUnit.DAYS.toMillis(7)
@@ -90,40 +121,78 @@ internal fun buildLibraryState(
     now: Long,
     timeZone: TimeZone = TimeZone.getDefault(),
     thumbnails: Map<NotebookId, String> = emptyMap(),
+    locale: Locale = Locale.getDefault(),
 ): LibraryUiState {
     val folders = metadata.folders()
     val folderById = folders.associateBy { it.id }
     val all = notebooks.orEmpty().sortedByDescending { it.updatedAtMillis }.map { nb ->
         val meta = metadata.meta(nb.id)
+        val folder = meta.folderId?.let(folderById::get)
         NotebookItem(
             id = nb.id,
             title = nb.title,
             pageCount = nb.pageCount,
             updatedAtMillis = nb.updatedAtMillis,
             coverIndex = (meta.coverIndex ?: defaultCoverIndex(nb.id, paletteSize)).mod(paletteSize),
-            folder = meta.folderId?.let(folderById::get),
+            folder = folder,
             favorite = meta.favorite,
             quicknote = meta.quicknote,
             lastPageIndex = (meta.lastPageIndex ?: (nb.pageCount - 1)).coerceIn(0, nb.pageCount - 1),
             thumbnailPath = thumbnails[nb.id],
+            createdAtMillis = nb.createdAtMillis,
+            coverStyle = meta.coverStyle,
+            kind = meta.kind,
+            folderPath = if (folder == null) emptyList() else folderPath(folder.id, folderById),
         )
     }
     val recentCutoff = now - RECENT_WINDOW_MILLIS
-    val inDestination = when (val d = controls.destination) {
-        LibraryDestination.Library -> all
-        LibraryDestination.Recent -> all.filter { it.updatedAtMillis >= recentCutoff }
-        LibraryDestination.Favorites -> all.filter { it.favorite }
-        LibraryDestination.Quicknotes -> all.filter { it.quicknote }
-        LibraryDestination.SmartBoard, LibraryDestination.Trash -> emptyList()
-        is LibraryDestination.InFolder -> all.filter { it.folder?.id == d.folderId }
+    val destination = controls.destination
+    val query = normalizeForSearch(controls.query)
+    val items: List<NotebookItem>
+    val emptyKind: EmptyKind
+    if (query.isNotEmpty()) {
+        // Search spans the whole library: title matches, those starting with the query first.
+        val hits = all.mapNotNull { item ->
+            val title = normalizeForSearch(item.title)
+            when {
+                title.startsWith(query) || title.split(' ').any { it.startsWith(query) } -> 0 to item
+                title.contains(query) -> 1 to item
+                else -> null
+            }
+        }
+        items = hits.sortedWith(compareBy<Pair<Int, NotebookItem>> { it.first }.thenByDescending { it.second.updatedAtMillis }).map { it.second }
+        emptyKind = EmptyKind.NoSearchResults
+    } else {
+        val inDestination = when (destination) {
+            LibraryDestination.Library -> all
+            LibraryDestination.Recent -> all.filter { it.updatedAtMillis >= recentCutoff }
+            LibraryDestination.Favorites -> all.filter { it.favorite }
+            LibraryDestination.Quicknotes -> all.filter { it.quicknote }
+            LibraryDestination.SmartBoard, LibraryDestination.Trash -> emptyList()
+            is LibraryDestination.InFolder -> all.filter { it.folder?.id == destination.folderId }
+        }
+        val filtered = inDestination.filter { item ->
+            val byKind = when (controls.filter) {
+                NotebookFilter.All -> true
+                NotebookFilter.ThisWeek -> item.updatedAtMillis >= recentCutoff
+                NotebookFilter.Favorites -> item.favorite
+                NotebookFilter.Pdfs -> item.kind == NotebookKind.Pdf
+            }
+            byKind && (controls.folderColor == null || item.folder?.colorIndex == controls.folderColor)
+        }
+        items = sortItems(filtered, controls.sort, locale)
+        emptyKind = when {
+            inDestination.isNotEmpty() -> if (controls.filter == NotebookFilter.Pdfs && controls.folderColor == null) EmptyKind.NoPdfs else EmptyKind.NoMatches
+            destination is LibraryDestination.InFolder -> EmptyKind.EmptyFolder
+            destination == LibraryDestination.Favorites -> EmptyKind.NoFavorites
+            destination == LibraryDestination.Quicknotes -> EmptyKind.NoQuicknotes
+            destination == LibraryDestination.Recent -> EmptyKind.NoRecent
+            else -> EmptyKind.NoNotebooks
+        }
     }
-    val filtered = when (controls.filter) {
-        NotebookFilter.All -> inDestination
-        NotebookFilter.ThisWeek -> inDestination.filter { it.updatedAtMillis >= recentCutoff }
-        NotebookFilter.Favorites -> inDestination.filter { it.favorite }
-    }
-    val query = controls.query.trim()
-    val items = if (query.isEmpty()) filtered else filtered.filter { it.title.contains(query, ignoreCase = true) }
+    val counts = all.groupingBy { it.folder?.id }.eachCount()
+    val tree = folderTree(folders, counts)
+    val openFolder = (destination as? LibraryDestination.InFolder)?.folderId
     return LibraryUiState(
         loading = notebooks == null,
         controls = controls,
@@ -132,7 +201,7 @@ internal fun buildLibraryState(
         favoritesCount = all.count { it.favorite },
         quicknotesCount = all.count { it.quicknote },
         trashCount = trash.size,
-        folders = folders.map { f -> FolderItem(f, all.count { it.folder?.id == f.id }) },
+        folders = tree,
         items = items,
         continueWith = all.firstOrNull(),
         trash = trash.map {
@@ -145,7 +214,61 @@ internal fun buildLibraryState(
             )
         },
         lastSavedAtMillis = all.maxOfOrNull { it.updatedAtMillis },
+        breadcrumb = folderPath(openFolder, folderById),
+        subfolders = if (openFolder == null) emptyList() else tree.filter { it.folder.parentId == openFolder },
+        folderColors = folders.map { it.colorIndex.mod(paletteSize) }.distinct().sorted(),
+        emptyKind = emptyKind,
     )
+}
+
+internal fun sortItems(items: List<NotebookItem>, sort: SortOrder, locale: Locale = Locale.getDefault()): List<NotebookItem> = when (sort) {
+    SortOrder.Modified -> items.sortedByDescending { it.updatedAtMillis }
+    SortOrder.Created -> items.sortedByDescending { it.createdAtMillis }
+    SortOrder.Name -> {
+        val collator = Collator.getInstance(locale).apply { strength = Collator.PRIMARY }
+        items.sortedWith { a, b -> collator.compare(a.title.trim(), b.title.trim()) }
+    }
+}
+
+/** Folders depth-first (children right under their parent), each with its own notebook count. */
+internal fun folderTree(folders: List<Folder>, counts: Map<String?, Int>): List<FolderItem> {
+    val ids = folders.mapTo(HashSet()) { it.id }
+    val children = folders.groupBy { f -> f.parentId?.takeIf { it in ids && it != f.id } }
+    val out = ArrayList<FolderItem>(folders.size)
+    fun walk(parent: String?, depth: Int) {
+        children[parent].orEmpty().forEach { f ->
+            if (out.none { it.folder.id == f.id }) {
+                out += FolderItem(f, counts[f.id] ?: 0, depth)
+                walk(f.id, depth + 1)
+            }
+        }
+    }
+    walk(null, 0)
+    return out
+}
+
+private val ARABIC_MARKS = Regex("[\\u0610-\\u061A\\u064B-\\u065F\\u0670\\u06D6-\\u06ED\\u0640]")
+private val LATIN_MARKS = Regex("\\p{Mn}+")
+private val SPACES = Regex("\\s+")
+
+/**
+ * Folds a title or query for matching: case, Latin accents, Arabic diacritics and tatweel are ignored;
+ * أ/إ/آ/ٱ → ا, ة → ه and ى → ي, so "مكتبة" finds "مكتبه" and "أحمد" finds "احمد".
+ */
+fun normalizeForSearch(text: String): String {
+    val arabic = ARABIC_MARKS.replace(text, "")
+        .replace('أ', 'ا').replace('إ', 'ا').replace('آ', 'ا').replace('ٱ', 'ا')
+        .replace('ة', 'ه').replace('ى', 'ي')
+    val latin = LATIN_MARKS.replace(Normalizer.normalize(arabic, Normalizer.Form.NFD), "")
+    // NFD splits آ into ا + madda, which LATIN_MARKS removes; recompose the rest.
+    return SPACES.replace(Normalizer.normalize(latin, Normalizer.Form.NFC).lowercase(Locale.ROOT), " ").trim()
+}
+
+/** True if [a] and [b] fall on the same calendar day in [timeZone]. */
+internal fun sameDay(a: Long, b: Long, timeZone: TimeZone): Boolean {
+    val ca = Calendar.getInstance(timeZone).apply { timeInMillis = a }
+    val cb = Calendar.getInstance(timeZone).apply { timeInMillis = b }
+    return ca.get(Calendar.YEAR) == cb.get(Calendar.YEAR) && ca.get(Calendar.DAY_OF_YEAR) == cb.get(Calendar.DAY_OF_YEAR)
 }
 
 internal fun greetingAt(now: Long, timeZone: TimeZone): Greeting {

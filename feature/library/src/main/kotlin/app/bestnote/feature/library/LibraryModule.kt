@@ -54,13 +54,12 @@ object LibraryModule {
 
     @Provides
     @Singleton
-    fun inMemoryMetadata(): InMemoryLibraryMetadata = InMemoryLibraryMetadata()
-
-    @Provides
-    fun metadata(impl: InMemoryLibraryMetadata): LibraryMetadata = impl
+    fun metadata(@ApplicationContext context: Context): LibraryMetadata =
+        FileLibraryMetadata(File(context.filesDir, METADATA_FILE))
 
     @Provides
     fun clock(): LibraryClock = LibraryClock(System::currentTimeMillis)
 
     private const val TRASH_DIR = "trash"
+    private const val METADATA_FILE = "library/metadata.json"
 }
