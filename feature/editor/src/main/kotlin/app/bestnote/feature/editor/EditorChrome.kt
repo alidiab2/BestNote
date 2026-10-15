@@ -48,6 +48,8 @@ internal data class ChromeActions(
     val onDock: (ToolbarDock) -> Unit,
     val onLeftHanded: (Boolean) -> Unit,
     val onClearPage: () -> Unit,
+    /** The Pages pill: paper template, color and size of the page being read. */
+    val pagesMenu: @Composable () -> Unit,
 )
 
 /** Back circle + notebook title + "Page X of Y". Mirrors in RTL with the rest of the chrome. */
@@ -95,11 +97,10 @@ internal fun ActionPills(
             ChromeIconButton(AtelierIcons.Redo, stringResource(R.string.editor_redo), actions.onRedo, enabled = canRedo, size = 44.dp)
         }
         SmartBoardPill { actions.onComingSoon(it) }
-        val pages = stringResource(R.string.editor_pages)
         val layers = stringResource(R.string.editor_layers)
         val export = stringResource(R.string.editor_export)
         Row(Modifier.chromeSurface().padding(horizontal = 2.dp)) {
-            ChromeIconButton(AtelierIcons.Pages, pages, { actions.onComingSoon(pages) }, size = 44.dp)
+            actions.pagesMenu()
             ChromeIconButton(AtelierIcons.Layers, layers, { actions.onComingSoon(layers) }, size = 44.dp)
             ChromeIconButton(AtelierIcons.Export, export, { actions.onComingSoon(export) }, size = 44.dp)
             MoreMenu(dock, leftHanded, actions)

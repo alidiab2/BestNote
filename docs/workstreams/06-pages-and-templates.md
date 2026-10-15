@@ -6,8 +6,8 @@
 
 | ID | Task | M | Size | Depends on | Done when |
 |---|---|---|---|---|---|
-| [ ] PAGES-01 | Templates: blank, ruled (narrow/college/wide), grid, dotted; paper color incl. dark paper | M1 | M | — | Lines stay 1 physical px crisp at all zoom levels |
-| [ ] PAGES-02 | Paper sizes: A4, A5, Letter, "fit to screen", custom; portrait/landscape | M1 | S | — | — |
+| [x] PAGES-01 | Templates: blank, ruled (narrow/college/wide), grid, dotted; paper color incl. dark paper | M1 | M | — | Lines stay 1 physical px crisp at all zoom levels |
+| [x] PAGES-02 | Paper sizes: A4, A5, Letter, "fit to screen", custom; portrait/landscape | M1 | S | — | — |
 | [ ] PAGES-03 | Page thumbnails sidebar / grid overview | M2 | M | DOC-10 | Opens with a shared-element zoom-out animation |
 | [ ] PAGES-04 | Add, delete, reorder (drag), duplicate, rotate pages | M2 | M | PAGES-03 | Reorder by drag with spring physics; undoable |
 | [ ] PAGES-05 | Insert page: template picker, from PDF, from image | M2 | M | PDF-01 | — |

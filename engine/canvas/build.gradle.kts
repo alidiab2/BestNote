@@ -6,6 +6,7 @@ dependencies {
     api(projects.core.model)
     api(projects.engine.ink)
     api(projects.engine.stylus)
+    api(projects.engine.layout)
     implementation(libs.androidx.core.ktx)
 
     api(libs.androidx.ink.authoring)

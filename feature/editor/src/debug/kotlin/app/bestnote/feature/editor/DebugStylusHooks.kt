@@ -9,7 +9,7 @@ import android.os.Build
 import android.os.SystemClock
 import android.view.InputDevice
 import android.view.MotionEvent
-import app.bestnote.engine.canvas.PageCanvasView
+import android.view.View
 
 /**
  * DEBUG BUILDS ONLY. Synthesizes S Pen input on the open page, because adb cannot press the side
@@ -30,7 +30,7 @@ internal object DebugStylusHooks {
     private const val CLICK_GAP_MS = 160L
 
     @SuppressLint("UnspecifiedRegisterReceiverFlag")
-    fun attach(context: Context, view: PageCanvasView): () -> Unit {
+    fun attach(context: Context, view: View): () -> Unit {
         val receiver = object : BroadcastReceiver() {
             override fun onReceive(c: Context, intent: Intent) {
                 val x = intent.getFloatExtra("fx", 0.5f) * view.width
@@ -66,14 +66,14 @@ internal object DebugStylusHooks {
         return MotionEvent.obtain(down, at, action, 1, arrayOf(props), arrayOf(coords), 0, buttons, 1f, 1f, 0, 0, InputDevice.SOURCE_STYLUS, 0)
     }
 
-    private fun hover(view: PageCanvasView, action: Int, x: Float, y: Float, buttons: Int) {
+    private fun hover(view: View, action: Int, x: Float, y: Float, buttons: Int) {
         val now = SystemClock.uptimeMillis()
         val e = event(now, now, action, x, y, 0f, buttons)
         view.onHoverEvent(e)
         e.recycle()
     }
 
-    private fun hoverClick(view: PageCanvasView, x: Float, y: Float, count: Int) {
+    private fun hoverClick(view: View, x: Float, y: Float, count: Int) {
         hover(view, MotionEvent.ACTION_HOVER_ENTER, x, y, 0)
         var t = 0L
         repeat(count) {
@@ -85,7 +85,7 @@ internal object DebugStylusHooks {
 
     private var held: Long? = null
 
-    private fun touch(view: PageCanvasView, x: Float, y: Float, phase: String) {
+    private fun touch(view: View, x: Float, y: Float, phase: String) {
         val now = SystemClock.uptimeMillis()
         val down = held
         val e = if (phase == "down" && down == null) {

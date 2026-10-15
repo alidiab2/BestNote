@@ -12,54 +12,52 @@ import androidx.ink.strokes.StrokeInput
 import app.bestnote.core.database.NotebookRepository
 import app.bestnote.core.model.InkBrush
 import app.bestnote.core.model.InkStroke
+import app.bestnote.core.model.Notebook
 import app.bestnote.core.model.NotebookId
-import app.bestnote.core.model.PaperTemplate
+import app.bestnote.core.model.Page
 import app.bestnote.core.storage.Autosaver
 import app.bestnote.core.storage.InkChunkCodec
-import app.bestnote.engine.canvas.PageCanvasView
+import app.bestnote.engine.canvas.document.PagedDocument
+import app.bestnote.engine.canvas.document.PagedDocumentView
+import app.bestnote.engine.canvas.document.PaperPainter
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.ByteArrayOutputStream
 import java.util.IdentityHashMap
+import java.util.UUID
 import kotlin.math.roundToInt
 
 /**
- * Connects the editor's canvas to storage (DOC-03) and the thumbnail cache (DOC-10).
+ * Connects the paged [document] to storage (DOC-03, CANVAS-07) and the thumbnail cache (DOC-10).
  *
- * Loading decodes and meshes strokes off the main thread. After every canvas change, [onChanged]
- * converts only the strokes it has not seen before (each one once) and hands an immutable snapshot
- * to the [Autosaver], which encodes and writes in the background. [onStop] flushes when the app
- * leaves the foreground, so a later process kill loses nothing; [close] flushes and re-renders the
- * library thumbnail. All methods except the background work run on the main thread.
+ * Loading decodes and meshes every page off the main thread, then fills [document]. After that the
+ * session listens to the document: a page's ink change hands only that page to the [Autosaver]
+ * (strokes are converted once each), and added pages or paper/size changes hand over the page
+ * layout. [onStop] flushes when the app leaves the foreground; [close] flushes and re-renders the
+ * library thumbnail from the first page. All methods except the background work run on the main thread.
+ *
+ * If the notebook can't be opened, [fallback] fills the document so the user can still write.
  */
-internal class PageSession(
+internal class DocumentSession(
     private val notebookId: NotebookId,
     private val repository: NotebookRepository,
+    private val document: PagedDocument,
     scope: CoroutineScope,
-) {
-    private val _ready = MutableStateFlow(false)
-
-    /** True once the page is loaded and can be [attach]ed to a canvas. */
-    val ready: StateFlow<Boolean> = _ready.asStateFlow()
-
+    private val fallback: suspend () -> Notebook?,
+) : PagedDocument.Listener {
     private var saver: Autosaver? = null
-    private var pageId = ""
-    private var template = PaperTemplate.Ruled
 
-    /** Stored strokes this build cannot draw (unknown brush); kept so saving never drops them. */
-    private var preserved: List<InkStroke> = emptyList()
-    private var current: List<Stroke> = emptyList()
+    /** Storage id of each page, in document order. */
+    private val pageIds = ArrayList<String>()
+    private val savedLayout = ArrayList<Page>()
+
+    /** Stored strokes this build cannot draw (unknown brush), per page id; kept so saving never drops them. */
+    private val preserved = HashMap<String, List<InkStroke>>()
     private val models = IdentityHashMap<Stroke, InkStroke>()
-    private var width = 0
-    private var height = 0
-    private var density = 1f
-    private var applying = false
+    private var view: PagedDocumentView? = null
 
     init {
         scope.launch { load() }
@@ -72,58 +70,67 @@ internal class PageSession(
             throw e
         } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
             Log.e(TAG, "Cannot open $notebookId; editing without autosave", e)
+            fallback()?.let { nb -> if (!document.isLoaded) document.reset(List(nb.pageCount) { Page(notebookId, it, nb.template) }) }
             return
         }
-        val page = open.pkg.pages.first()
+        val pages = open.pkg.pages
         val loaded = try {
             withContext(Dispatchers.Default) {
-                InkChunkCodec.decode(page.strokes).map { model -> model to runCatching { InkConversion.toInk(model) }.getOrNull() }
+                pages.map { page ->
+                    InkChunkCodec.decode(page.strokes).map { model -> model to runCatching { InkConversion.toInk(model) }.getOrNull() }
+                }
             }
         } catch (e: CancellationException) {
             repository.backgroundScope.launch { open.autosaver.close() } // closed before loading finished
             throw e
         } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
             // Damaged page (DOC-04 adds the placeholder): never overwrite it with an empty page.
-            Log.e(TAG, "Page ${page.id} of $notebookId is damaged; autosave disabled", e)
+            Log.e(TAG, "A page of $notebookId is damaged; autosave disabled", e)
             repository.backgroundScope.launch { open.autosaver.close() }
             return
         }
-        preserved = loaded.filter { it.second == null }.map { it.first }
-        current = loaded.mapNotNull { (model, stroke) -> stroke?.also { models[it] = model } }
-        pageId = page.id
-        template = page.page.template
+        pageIds.clear()
+        savedLayout.clear()
+        pages.forEachIndexed { i, content ->
+            pageIds += content.id
+            savedLayout += content.page.copy(index = i)
+            preserved[content.id] = loaded[i].filter { it.second == null }.map { it.first }
+        }
+        val strokes = loaded.map { page -> page.mapNotNull { (model, stroke) -> stroke?.also { models[it] = model } } }
         saver = open.autosaver
-        _ready.value = true
+        document.reset(savedLayout.toList()) { strokes[it] }
+        document.addListener(this)
     }
 
-    /** Shows the loaded page on [view] (also after a configuration change recreated the view). */
-    fun attach(view: PageCanvasView) {
-        if (!_ready.value) return
-        val drawnWhileLoading = view.strokes.isNotEmpty()
-        applying = true
-        view.setStrokes(current + view.strokes)
-        applying = false
-        density = view.resources.displayMetrics.density
-        if (drawnWhileLoading) onChanged(view) else rememberSize(view)
+    /** The view that draws (for pen-down brushes). Call again after a configuration change. */
+    fun attach(view: PagedDocumentView) {
+        this.view = view
     }
 
-    /** Called after every change to the canvas (draw, erase, undo, redo, clear). Cheap and non-blocking. */
-    fun onChanged(view: PageCanvasView) {
+    override fun onPageContentChanged(index: Int) {
         val saver = saver ?: return
-        if (applying || !_ready.value) return
-        val strokes = view.strokes.toList()
-        val page = ArrayList<InkStroke>(preserved.size + strokes.size)
-        page += preserved
-        for (stroke in strokes) page += models.getOrPut(stroke) { InkConversion.toModel(stroke, brushOf(view, stroke)) }
-        current = strokes
-        rememberSize(view)
-        saver.updatePage(pageId, page)
+        val id = pageIds.getOrNull(index) ?: return
+        val strokes = document.pages[index].strokes
+        val page = ArrayList<InkStroke>(strokes.size + (preserved[id]?.size ?: 0))
+        preserved[id]?.let { page += it }
+        for (stroke in strokes) page += models.getOrPut(stroke) { InkConversion.toModel(stroke, brushOf(stroke)) }
+        saver.updatePage(id, page)
+    }
+
+    override fun onPagesChanged() {
+        val saver = saver ?: return
+        while (pageIds.size < document.size) pageIds += "page-" + UUID.randomUUID().toString().take(ID_LENGTH)
+        val layout = document.pages.map { it.page }
+        if (layout == savedLayout) return
+        savedLayout.clear()
+        savedLayout += layout
+        saver.updateLayout(pageIds.take(layout.size).zip(layout))
     }
 
     /** App left the foreground: get everything on disk now. */
     fun onStop() {
         val saver = saver ?: return
-        val snapshot = current
+        val first = firstPage()
         repository.backgroundScope.launch {
             try {
                 saver.flush()
@@ -132,15 +139,17 @@ internal class PageSession(
             } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
                 Log.e(TAG, "Flush failed; autosave keeps retrying", e)
             }
-            refreshThumbnail(saver, snapshot)
+            refreshThumbnail(saver, first)
         }
     }
 
     /** The editor closed: final save, then the library thumbnail. */
     fun close() {
+        document.removeListener(this)
+        view = null
         val saver = saver ?: return
         this.saver = null
-        val snapshot = current
+        val first = firstPage()
         val closedAt = SystemClock.elapsedRealtime()
         repository.backgroundScope.launch {
             try {
@@ -150,34 +159,27 @@ internal class PageSession(
             } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
                 Log.e(TAG, "Final save of $notebookId failed", e)
             }
-            if (refreshThumbnail(saver, snapshot)) {
+            if (refreshThumbnail(saver, first)) {
                 Log.i(TAG, "Thumbnail of $notebookId updated ${SystemClock.elapsedRealtime() - closedAt} ms after closing")
             }
         }
     }
 
-    private fun rememberSize(view: PageCanvasView) {
-        if (view.width > 0 && view.height > 0) {
-            width = view.width
-            height = view.height
-        }
-    }
+    private fun firstPage(): Pair<Page, List<Stroke>>? = document.pages.firstOrNull()?.let { it.page to it.strokes.toList() }
 
     /**
      * The brush captured at pen-down for [stroke]. The fallback (a stroke the canvas has no record
      * of) identifies the family from the stroke's own androidx.ink brush, never from the toolbar.
      */
-    private fun brushOf(view: PageCanvasView, stroke: Stroke): InkBrush =
-        view.brushOf(stroke) ?: InkConversion.brushFromInk(stroke.brush)
+    private fun brushOf(stroke: Stroke): InkBrush = view?.brushOf(stroke) ?: InkConversion.brushFromInk(stroke.brush)
 
     /** Re-renders the thumbnail when the cached one predates the last save. @return true if rendered. */
-    private suspend fun refreshThumbnail(saver: Autosaver, strokes: List<Stroke>): Boolean {
+    private suspend fun refreshThumbnail(saver: Autosaver, first: Pair<Page, List<Stroke>>?): Boolean {
+        val (page, strokes) = first ?: return false
         val notebook = saver.notebook
-        val w = width
-        val h = height
-        if (w <= 0 || h <= 0 || !repository.thumbnailIsStale(notebookId, notebook.updatedAtMillis)) return false
+        if (!repository.thumbnailIsStale(notebookId, notebook.updatedAtMillis)) return false
         return try {
-            val bytes = withContext(Dispatchers.Default) { renderThumbnail(strokes, w, h, template, density) }
+            val bytes = withContext(Dispatchers.Default) { renderThumbnail(page, strokes) }
             repository.saveThumbnail(notebookId, notebook.updatedAtMillis, bytes)
             Log.i(TAG, "Thumbnail of $notebookId rendered from ${strokes.size} strokes")
             true
@@ -191,6 +193,7 @@ internal class PageSession(
 
     private companion object {
         const val TAG = "BestNoteAutosave"
+        const val ID_LENGTH = 12
     }
 }
 
@@ -198,23 +201,17 @@ private const val THUMB_WIDTH = 320
 private const val THUMB_QUALITY = 80
 private const val MIN_THUMB_STROKE_PX = 1.5f
 
-/** Renders the page at [THUMB_WIDTH] px wide as WebP. Strokes are immutable, so this runs off the main thread. */
-internal fun renderThumbnail(strokes: List<Stroke>, viewWidth: Int, viewHeight: Int, template: PaperTemplate, density: Float): ByteArray {
-    val scale = THUMB_WIDTH / viewWidth.toFloat()
-    val bitmap = Bitmap.createBitmap(THUMB_WIDTH, (viewHeight * scale).roundToInt().coerceAtLeast(1), Bitmap.Config.ARGB_8888)
+/**
+ * Renders [page] (paper, template and [strokes] in page points) [THUMB_WIDTH] px wide as WebP.
+ * Strokes are immutable, so this runs off the main thread.
+ */
+internal fun renderThumbnail(page: Page, strokes: List<Stroke>): ByteArray {
+    val scale = THUMB_WIDTH / page.widthPt
+    val height = (page.heightPt * scale).roundToInt().coerceAtLeast(1)
+    val bitmap = Bitmap.createBitmap(THUMB_WIDTH, height, Bitmap.Config.ARGB_8888)
     try {
         val canvas = Canvas(bitmap)
-        canvas.drawColor(if (template == PaperTemplate.Blank) 0xFFFFFFFF.toInt() else 0xFFFFFDF7.toInt())
-        val gap = 32 * density * scale
-        val line = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0x332D5BFF }
-        if (template == PaperTemplate.Ruled || template == PaperTemplate.Grid) {
-            var y = if (template == PaperTemplate.Ruled) gap * 2 else gap
-            while (y < bitmap.height) { canvas.drawLine(0f, y, bitmap.width.toFloat(), y, line); y += gap }
-        }
-        if (template == PaperTemplate.Grid) {
-            var x = gap
-            while (x < bitmap.width) { canvas.drawLine(x, 0f, x, bitmap.height.toFloat(), line); x += gap }
-        }
+        PaperPainter.draw(canvas, page, scale, THUMB_WIDTH, height)
         // Plain polylines: a cover image does not need brush tips, and this works on any (software) canvas.
         val ink = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             style = Paint.Style.STROKE
