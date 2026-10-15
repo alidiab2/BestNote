@@ -19,7 +19,7 @@
         <item quantity="many">%d صفحة</item>
         <item quantity="other">%d صفحة</item>
     </plurals>
-    <string name="library_search_hint">ابحث في الخط اليدوي وملفات PDF والنصوص…</string>
+    <string name="library_search_hint">ابحث في عناوين الدفاتر</string>
     <string name="library_new">جديد</string>
     <string name="library_new_title">دفتر بلا عنوان</string>
     <string name="library_quicknote_title">ملاحظة سريعة</string>
@@ -53,9 +53,8 @@
     <string name="library_filter_favorites">المفضلة</string>
     <string name="library_meta">%1$s · %2$s</string>
 
-    <string name="library_empty_title">لا دفاتر هنا</string>
-    <string name="library_empty_body">اضغط «جديد» لتبدأ الكتابة.</string>
-    <string name="library_empty_search">لا نتائج لـ «%1$s».</string>
+    <string name="library_empty_title">رفّك جاهز</string>
+    <string name="library_empty_body">أنشئ دفترك الأول، أو دوّن شيئًا في ملاحظة سريعة.</string>
     <string name="library_smart_board_soon">السبورة الذكية قادمة قريبًا.</string>
     <string name="library_trash_empty">المحذوفات فارغة</string>
     <string name="library_trash_body">تبقى الدفاتر هنا 30 يومًا قبل حذفها نهائيًا.</string>
@@ -71,4 +70,169 @@
     <string name="library_trashed">نُقل «%1$s» إلى المحذوفات</string>
     <string name="library_undo">تراجع</string>
     <string name="library_favorite">مفضّل</string>
+
+    <!-- LIB-02..07 -->
+    <string name="library_more_actions">إجراءات أخرى</string>
+    <string name="library_soon">قريبًا</string>
+    <string name="library_create">إنشاء</string>
+    <string name="library_save">حفظ</string>
+    <string name="library_done">تم</string>
+    <string name="library_delete">حذف</string>
+    <string name="library_move">نقل</string>
+    <string name="library_cover">الغلاف</string>
+    <string name="library_select">تحديد</string>
+    <string name="library_select_all">تحديد الكل</string>
+    <plurals name="library_selected">
+        <item quantity="zero">لا شيء محدد</item>
+        <item quantity="one">واحد محدد</item>
+        <item quantity="two">اثنان محددان</item>
+        <item quantity="few">%d محددة</item>
+        <item quantity="many">%d محددًا</item>
+        <item quantity="other">%d محدد</item>
+    </plurals>
+
+    <string name="library_menu_cover">تغيير الغلاف</string>
+    <string name="library_menu_duplicate">إنشاء نسخة</string>
+    <string name="library_menu_move">نقل إلى مجلد</string>
+    <string name="library_menu_favorite">إضافة إلى المفضلة</string>
+    <string name="library_menu_unfavorite">إزالة من المفضلة</string>
+    <string name="library_menu_export">تصدير</string>
+    <string name="library_menu_select">تحديد</string>
+    <string name="library_copy_title">%1$s (نسخة)</string>
+    <string name="library_duplicated">أُنشئت نسخة باسم «%1$s»</string>
+    <string name="library_export_soon">التصدير قادم قريبًا.</string>
+    <plurals name="library_trashed_many">
+        <item quantity="zero">لم يُنقل شيء إلى المحذوفات</item>
+        <item quantity="one">نُقل دفتر واحد إلى المحذوفات</item>
+        <item quantity="two">نُقل دفتران إلى المحذوفات</item>
+        <item quantity="few">نُقلت %d دفاتر إلى المحذوفات</item>
+        <item quantity="many">نُقل %d دفترًا إلى المحذوفات</item>
+        <item quantity="other">نُقل %d دفتر إلى المحذوفات</item>
+    </plurals>
+    <plurals name="library_favorited">
+        <item quantity="zero">لم يُضف شيء إلى المفضلة</item>
+        <item quantity="one">أُضيف إلى المفضلة</item>
+        <item quantity="two">أُضيف دفتران إلى المفضلة</item>
+        <item quantity="few">أُضيفت %d دفاتر إلى المفضلة</item>
+        <item quantity="many">أُضيف %d دفترًا إلى المفضلة</item>
+        <item quantity="other">أُضيف %d دفتر إلى المفضلة</item>
+    </plurals>
+    <plurals name="library_unfavorited">
+        <item quantity="zero">لم يُزل شيء من المفضلة</item>
+        <item quantity="one">أُزيل من المفضلة</item>
+        <item quantity="two">أُزيل دفتران من المفضلة</item>
+        <item quantity="few">أُزيلت %d دفاتر من المفضلة</item>
+        <item quantity="many">أُزيل %d دفترًا من المفضلة</item>
+        <item quantity="other">أُزيل %d دفتر من المفضلة</item>
+    </plurals>
+
+    <string name="library_cover_title">اختر غلافًا</string>
+    <string name="library_cover_option">لون الغلاف %1$d، %2$s</string>
+    <string name="library_cover_plain">سادة</string>
+    <string name="library_cover_stripes">مقلّم</string>
+    <string name="library_cover_dots">منقّط</string>
+    <string name="library_cover_grid">مربعات</string>
+    <string name="library_color_n">اللون %1$d</string>
+    <plurals name="library_move_title">
+        <item quantity="zero">نقل إلى</item>
+        <item quantity="one">نقل الدفتر إلى</item>
+        <item quantity="two">نقل الدفترين إلى</item>
+        <item quantity="few">نقل %d دفاتر إلى</item>
+        <item quantity="many">نقل %d دفترًا إلى</item>
+        <item quantity="other">نقل %d دفتر إلى</item>
+    </plurals>
+    <string name="library_move_none">المكتبة (بلا مجلد)</string>
+    <plurals name="library_moved">
+        <item quantity="zero">لم يُنقل شيء</item>
+        <item quantity="one">نُقل إلى %2$s</item>
+        <item quantity="two">نُقل دفتران إلى %2$s</item>
+        <item quantity="few">نُقلت %1$d دفاتر إلى %2$s</item>
+        <item quantity="many">نُقل %1$d دفترًا إلى %2$s</item>
+        <item quantity="other">نُقل %1$d دفتر إلى %2$s</item>
+    </plurals>
+    <plurals name="library_moved_library">
+        <item quantity="zero">لم يُنقل شيء</item>
+        <item quantity="one">أُخرج من مجلده</item>
+        <item quantity="two">أُخرج دفتران من مجلديهما</item>
+        <item quantity="few">أُخرجت %d دفاتر من مجلداتها</item>
+        <item quantity="many">أُخرج %d دفترًا من مجلداتها</item>
+        <item quantity="other">أُخرج %d دفتر من مجلداتها</item>
+    </plurals>
+
+    <string name="library_new_more">طرق أخرى للإنشاء</string>
+    <string name="library_new_notebook">دفتر جديد</string>
+    <string name="library_new_notebook_here">دفتر جديد هنا</string>
+    <string name="library_new_subtitle">اختر غلافًا وورقًا. يمكنك تغييرهما لاحقًا.</string>
+    <string name="library_new_in_folder">سيُحفظ في %1$s.</string>
+    <string name="library_new_title_label">العنوان</string>
+    <string name="library_new_cover">الغلاف</string>
+    <string name="library_new_paper">الورق</string>
+    <string name="library_new_size">المقاس</string>
+    <string name="library_portrait">عمودي</string>
+    <string name="library_landscape">أفقي</string>
+    <string name="library_size_a4">A4</string>
+    <string name="library_size_a5">A5</string>
+    <string name="library_size_letter">Letter</string>
+    <string name="library_template_blank">فارغ</string>
+    <string name="library_template_ruled">مسطّر</string>
+    <string name="library_template_grid">مربعات</string>
+    <string name="library_template_dotted">منقّط</string>
+    <string name="library_import_pdf">استيراد PDF</string>
+    <string name="library_import_pdf_soon">استيراد ملفات PDF قادم قريبًا.</string>
+    <string name="library_quicknote_dated">ملاحظة سريعة · %1$s</string>
+
+    <string name="library_folder_new">مجلد جديد</string>
+    <string name="library_folder_new_sub">مجلد فرعي جديد</string>
+    <string name="library_folder_edit">تعديل المجلد</string>
+    <string name="library_folder_rename">إعادة التسمية</string>
+    <string name="library_folder_recolor">تغيير اللون</string>
+    <string name="library_folder_delete">حذف المجلد</string>
+    <string name="library_folder_more">إجراءات أخرى لـ %1$s</string>
+    <string name="library_folder_name_hint">اسم المجلد</string>
+    <string name="library_folder_color">اللون</string>
+    <string name="library_folder_inside">داخل %1$s</string>
+    <string name="library_folder_created">أُنشئ المجلد «%1$s»</string>
+    <string name="library_folder_deleted">حُذف المجلد «%1$s». دفاترك بأمان.</string>
+    <string name="library_folder_delete_title">حذف «%1$s»؟</string>
+    <plurals name="library_folder_delete_body">
+        <item quantity="zero">المجلد فارغ. لن يُحذف أي دفتر.</item>
+        <item quantity="one">ينتقل دفتره مستوى إلى الأعلى. لن يُحذف أي دفتر.</item>
+        <item quantity="two">ينتقل دفتراه مستوى إلى الأعلى. لن يُحذف أي دفتر.</item>
+        <item quantity="few">تنتقل دفاتره الـ%d مستوى إلى الأعلى. لن يُحذف أي دفتر.</item>
+        <item quantity="many">ينتقل %d دفترًا مستوى إلى الأعلى. لن يُحذف أي دفتر.</item>
+        <item quantity="other">ينتقل %d دفتر مستوى إلى الأعلى. لن يُحذف أي دفتر.</item>
+    </plurals>
+
+    <string name="library_filter_pdfs">ملفات PDF</string>
+    <string name="library_filter_color">مجلدات باللون %1$d</string>
+    <string name="library_clear_filters">مسح عوامل التصفية</string>
+    <string name="library_sort_by">الترتيب: %1$s</string>
+    <string name="library_sort_modified">آخر تعديل</string>
+    <string name="library_sort_created">تاريخ الإنشاء</string>
+    <string name="library_sort_name">الاسم</string>
+    <string name="library_clear_search">مسح البحث</string>
+    <plurals name="library_results">
+        <item quantity="zero">لا نتائج لـ «%2$s»</item>
+        <item quantity="one">نتيجة واحدة لـ «%2$s»</item>
+        <item quantity="two">نتيجتان لـ «%2$s»</item>
+        <item quantity="few">%1$d نتائج لـ «%2$s»</item>
+        <item quantity="many">%1$d نتيجة لـ «%2$s»</item>
+        <item quantity="other">%1$d نتيجة لـ «%2$s»</item>
+    </plurals>
+
+    <string name="library_empty_folder_title">%1$s فارغ</string>
+    <string name="library_empty_folder_body">أنشئ دفترًا هنا، أو اسحب الدفاتر إلى هذا المجلد في الشريط الجانبي.</string>
+    <string name="library_empty_favorites_title">لا مفضلات بعد</string>
+    <string name="library_empty_favorites_body">اضغط ⋯ على أي دفتر واختر «إضافة إلى المفضلة»، أو اسحبه إلى المفضلة.</string>
+    <string name="library_empty_quicknotes_title">لا ملاحظات سريعة بعد</string>
+    <string name="library_empty_quicknotes_body">بضغطة واحدة تحصل على صفحة اليوم الفارغة. ويمكنك أيضًا الضغط مطولًا على أيقونة التطبيق.</string>
+    <string name="library_empty_recent_title">لا شيء هذا الأسبوع</string>
+    <string name="library_empty_recent_body">تظهر هنا الدفاتر التي عدّلتها خلال آخر 7 أيام.</string>
+    <string name="library_empty_pdfs_title">لا ملفات PDF بعد</string>
+    <string name="library_empty_pdfs_body">استيراد ملفات PDF قادم قريبًا، وستظهر هنا.</string>
+    <string name="library_empty_filter_title">لا شيء يطابق عوامل التصفية</string>
+    <string name="library_empty_filter_body">جرّب عامل تصفية آخر، أو امسحها لرؤية كل الدفاتر.</string>
+    <string name="library_empty_search_title">لا عناوين تطابق «%1$s»</string>
+    <string name="library_empty_search_body">تحقق من الإملاء أو جرّب أحرفًا أقل. يبحث البحث في عناوين الدفاتر.</string>
+    <string name="library_just_now">الآن</string>
 </resources>

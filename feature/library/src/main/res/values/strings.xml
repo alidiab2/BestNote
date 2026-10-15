@@ -11,7 +11,7 @@
         <item quantity="one">%d page</item>
         <item quantity="other">%d pages</item>
     </plurals>
-    <string name="library_search_hint">Search handwriting, PDFs, text…</string>
+    <string name="library_search_hint">Search notebook titles</string>
     <string name="library_new">New</string>
     <string name="library_new_title">Untitled notebook</string>
     <string name="library_quicknote_title">Quicknote</string>
@@ -45,9 +45,8 @@
     <string name="library_filter_favorites">Favorites</string>
     <string name="library_meta">%1$s · %2$s</string>
 
-    <string name="library_empty_title">No notebooks here</string>
-    <string name="library_empty_body">Tap New to start writing.</string>
-    <string name="library_empty_search">Nothing matches “%1$s”.</string>
+    <string name="library_empty_title">Your shelf is ready</string>
+    <string name="library_empty_body">Create your first notebook, or jot something down in a Quicknote.</string>
     <string name="library_smart_board_soon">Smart Board is coming soon.</string>
     <string name="library_trash_empty">Trash is empty</string>
     <string name="library_trash_body">Notebooks stay here for 30 days before they are deleted for good.</string>
@@ -63,4 +62,134 @@
     <string name="library_trashed">“%1$s” moved to Trash</string>
     <string name="library_undo">Undo</string>
     <string name="library_favorite">Favorite</string>
+
+    <!-- LIB-02..07 -->
+    <string name="library_more_actions">More actions</string>
+    <string name="library_soon">Soon</string>
+    <string name="library_create">Create</string>
+    <string name="library_save">Save</string>
+    <string name="library_done">Done</string>
+    <string name="library_delete">Delete</string>
+    <string name="library_move">Move</string>
+    <string name="library_cover">Cover</string>
+    <string name="library_select">Select</string>
+    <string name="library_select_all">Select all</string>
+    <plurals name="library_selected">
+        <item quantity="one">%d selected</item>
+        <item quantity="other">%d selected</item>
+    </plurals>
+
+    <string name="library_menu_cover">Change cover</string>
+    <string name="library_menu_duplicate">Duplicate</string>
+    <string name="library_menu_move">Move to folder</string>
+    <string name="library_menu_favorite">Add to Favorites</string>
+    <string name="library_menu_unfavorite">Remove from Favorites</string>
+    <string name="library_menu_export">Export</string>
+    <string name="library_menu_select">Select</string>
+    <string name="library_copy_title">%1$s (copy)</string>
+    <string name="library_duplicated">Duplicated as “%1$s”</string>
+    <string name="library_export_soon">Export is coming soon.</string>
+    <plurals name="library_trashed_many">
+        <item quantity="one">%d notebook moved to Trash</item>
+        <item quantity="other">%d notebooks moved to Trash</item>
+    </plurals>
+    <plurals name="library_favorited">
+        <item quantity="one">Added to Favorites</item>
+        <item quantity="other">%d notebooks added to Favorites</item>
+    </plurals>
+    <plurals name="library_unfavorited">
+        <item quantity="one">Removed from Favorites</item>
+        <item quantity="other">%d notebooks removed from Favorites</item>
+    </plurals>
+
+    <string name="library_cover_title">Choose a cover</string>
+    <string name="library_cover_option">Cover color %1$d, %2$s</string>
+    <string name="library_cover_plain">plain</string>
+    <string name="library_cover_stripes">pinstripe</string>
+    <string name="library_cover_dots">dotted</string>
+    <string name="library_cover_grid">graph</string>
+    <string name="library_color_n">Color %1$d</string>
+
+    <plurals name="library_move_title">
+        <item quantity="one">Move notebook to</item>
+        <item quantity="other">Move %d notebooks to</item>
+    </plurals>
+    <string name="library_move_none">Library (no folder)</string>
+    <plurals name="library_moved">
+        <item quantity="one">Moved to %2$s</item>
+        <item quantity="other">%1$d notebooks moved to %2$s</item>
+    </plurals>
+    <plurals name="library_moved_library">
+        <item quantity="one">Moved out of its folder</item>
+        <item quantity="other">%d notebooks moved out of their folders</item>
+    </plurals>
+
+    <string name="library_new_more">More ways to create</string>
+    <string name="library_new_notebook">New notebook</string>
+    <string name="library_new_notebook_here">New notebook here</string>
+    <string name="library_new_subtitle">Pick a cover and paper. You can change both later.</string>
+    <string name="library_new_in_folder">It will be saved in %1$s.</string>
+    <string name="library_new_title_label">Title</string>
+    <string name="library_new_cover">Cover</string>
+    <string name="library_new_paper">Paper</string>
+    <string name="library_new_size">Size</string>
+    <string name="library_portrait">Portrait</string>
+    <string name="library_landscape">Landscape</string>
+    <string name="library_size_a4">A4</string>
+    <string name="library_size_a5">A5</string>
+    <string name="library_size_letter">Letter</string>
+    <string name="library_template_blank">Blank</string>
+    <string name="library_template_ruled">Ruled</string>
+    <string name="library_template_grid">Grid</string>
+    <string name="library_template_dotted">Dotted</string>
+    <string name="library_import_pdf">Import PDF</string>
+    <string name="library_import_pdf_soon">PDF import is coming soon.</string>
+    <string name="library_quicknote_dated">Quicknote · %1$s</string>
+
+    <string name="library_folder_new">New folder</string>
+    <string name="library_folder_new_sub">New subfolder</string>
+    <string name="library_folder_edit">Edit folder</string>
+    <string name="library_folder_rename">Rename</string>
+    <string name="library_folder_recolor">Change color</string>
+    <string name="library_folder_delete">Delete folder</string>
+    <string name="library_folder_more">More actions for %1$s</string>
+    <string name="library_folder_name_hint">Folder name</string>
+    <string name="library_folder_color">Color</string>
+    <string name="library_folder_inside">Inside %1$s</string>
+    <string name="library_folder_created">Folder “%1$s” created</string>
+    <string name="library_folder_deleted">Folder “%1$s” deleted. Its notebooks are safe.</string>
+    <string name="library_folder_delete_title">Delete “%1$s”?</string>
+    <plurals name="library_folder_delete_body">
+        <item quantity="one">Its notebook moves up a level. No notebooks are deleted.</item>
+        <item quantity="other">Its %d notebooks move up a level. No notebooks are deleted.</item>
+    </plurals>
+
+    <string name="library_filter_pdfs">PDFs</string>
+    <string name="library_filter_color">Folders colored %1$d</string>
+    <string name="library_clear_filters">Clear filters</string>
+    <string name="library_sort_by">Sort: %1$s</string>
+    <string name="library_sort_modified">Last edited</string>
+    <string name="library_sort_created">Date created</string>
+    <string name="library_sort_name">Name</string>
+    <string name="library_clear_search">Clear search</string>
+    <plurals name="library_results">
+        <item quantity="one">%1$d result for “%2$s”</item>
+        <item quantity="other">%1$d results for “%2$s”</item>
+    </plurals>
+
+    <string name="library_empty_folder_title">%1$s is empty</string>
+    <string name="library_empty_folder_body">Create a notebook here, or drag notebooks onto this folder in the sidebar.</string>
+    <string name="library_empty_favorites_title">No favorites yet</string>
+    <string name="library_empty_favorites_body">Tap ⋯ on a notebook and choose Add to Favorites, or drag it onto Favorites.</string>
+    <string name="library_empty_quicknotes_title">No quick notes yet</string>
+    <string name="library_empty_quicknotes_body">One tap gives you today\'s blank page. You can also long-press the app icon.</string>
+    <string name="library_empty_recent_title">Nothing this week</string>
+    <string name="library_empty_recent_body">Notebooks you edit in the last 7 days show up here.</string>
+    <string name="library_empty_pdfs_title">No PDFs yet</string>
+    <string name="library_empty_pdfs_body">PDF import is coming soon. Your imported PDFs will be listed here.</string>
+    <string name="library_empty_filter_title">Nothing matches these filters</string>
+    <string name="library_empty_filter_body">Try another filter, or clear them to see every notebook.</string>
+    <string name="library_empty_search_title">No titles match “%1$s”</string>
+    <string name="library_empty_search_body">Check the spelling or try fewer letters. Search looks at notebook titles.</string>
+    <string name="library_just_now">Just now</string>
 </resources>

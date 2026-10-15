@@ -1,6 +1,25 @@
 package app.bestnote.feature.library
 
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.foundation.border
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
+import androidx.compose.material.icons.automirrored.outlined.Sort
+import androidx.compose.material.icons.outlined.Book
+import androidx.compose.material.icons.outlined.Check
+import androidx.compose.material.icons.outlined.CheckCircleOutline
+import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.outlined.CreateNewFolder
+import androidx.compose.material.icons.outlined.KeyboardArrowDown
+import androidx.compose.material.icons.outlined.PictureAsPdf
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -59,17 +78,16 @@ import app.bestnote.core.designsystem.theme.softShadow
 
 private val ControlHeight = 44.dp
 
-/** Greeting (or destination name), count, search, layout switch and "New". */
+/** Greeting (or destination name), breadcrumb, count, search, Select, layout switch and "New". */
 @Composable
 internal fun LibraryHeader(
     state: LibraryUiState,
     compact: Boolean,
-    onQuery: (String) -> Unit,
-    onLayout: (LibraryLayout) -> Unit,
-    onNew: () -> Unit,
+    callbacks: LibraryCallbacks,
     modifier: Modifier = Modifier,
 ) {
-    val title = when (val d = state.controls.destination) {
+    val destination = state.controls.destination
+    val title = when (destination) {
         LibraryDestination.Library -> stringResource(
             when (state.greeting) {
                 Greeting.Morning -> R.string.library_greeting_morning
@@ -82,47 +100,96 @@ internal fun LibraryHeader(
         LibraryDestination.Quicknotes -> stringResource(R.string.library_nav_quicknotes)
         LibraryDestination.SmartBoard -> stringResource(R.string.library_nav_smart_board)
         LibraryDestination.Trash -> stringResource(R.string.library_nav_trash)
-        is LibraryDestination.InFolder -> state.folders.firstOrNull { it.folder.id == d.folderId }?.folder?.name.orEmpty()
+        is LibraryDestination.InFolder -> state.breadcrumb.lastOrNull()?.name.orEmpty()
     }
-    val count = when (state.controls.destination) {
+    val count = when (destination) {
         LibraryDestination.Library -> state.totalCount
         LibraryDestination.Trash -> state.trash.size
         else -> state.items.size
     }
-    Row(modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        Column(Modifier.weight(1f)) {
-            Text(
-                title,
-                style = MaterialTheme.typography.displayMedium,
-                color = MaterialTheme.colorScheme.onBackground,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Text(
-                pluralStringResource(R.plurals.library_notebook_count, count, count),
-                style = MaterialTheme.typography.bodyMedium,
-                color = BestNoteTheme.colors.muted,
-                modifier = Modifier.padding(top = Spacing.XS),
-            )
+    val canSelect = destination != LibraryDestination.Trash && destination != LibraryDestination.SmartBoard && state.items.isNotEmpty()
+    Column(modifier.fillMaxWidth()) {
+        if (destination is LibraryDestination.InFolder) {
+            Breadcrumb(state.breadcrumb, callbacks.select, Modifier.padding(bottom = Spacing.S))
         }
-        Spacer(Modifier.width(Spacing.L))
-        SearchField(state.controls.query, onQuery, Modifier.width(if (compact) 220.dp else 300.dp))
-        Spacer(Modifier.width(Spacing.M))
-        LayoutSwitch(state.controls.layout, onLayout)
-        Spacer(Modifier.width(Spacing.M))
-        NewButton(onNew)
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text(
+                    title,
+                    style = MaterialTheme.typography.displayMedium,
+                    color = MaterialTheme.colorScheme.onBackground,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    pluralStringResource(R.plurals.library_notebook_count, count, count),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = BestNoteTheme.colors.muted,
+                    modifier = Modifier.padding(top = Spacing.XS),
+                )
+            }
+            Spacer(Modifier.width(Spacing.L))
+            if (!compact) {
+                SearchField(state.controls.query, callbacks.query, Modifier.width(300.dp))
+                Spacer(Modifier.width(Spacing.M))
+            }
+            if (canSelect) {
+                OutlinePill(stringResource(R.string.library_select), Icons.Outlined.CheckCircleOutline, onClick = { callbacks.startSelection(null) })
+                Spacer(Modifier.width(Spacing.M))
+            }
+            LayoutSwitch(state.controls.layout, callbacks.layout)
+            Spacer(Modifier.width(Spacing.M))
+            NewButton(callbacks)
+        }
+        if (compact) {
+            SearchField(state.controls.query, callbacks.query, Modifier.fillMaxWidth().padding(top = Spacing.L))
+        }
     }
+}
+
+/** "Library › University › Lectures": every crumb but the last is a link. */
+@Composable
+private fun Breadcrumb(path: List<Folder>, onSelect: (LibraryDestination) -> Unit, modifier: Modifier = Modifier) {
+    Row(modifier, verticalAlignment = Alignment.CenterVertically) {
+        Crumb(stringResource(R.string.library_nav_library), current = false) { onSelect(LibraryDestination.Library) }
+        path.forEachIndexed { i, folder ->
+            Icon(
+                Icons.AutoMirrored.Outlined.KeyboardArrowRight,
+                null,
+                tint = BestNoteTheme.colors.muted,
+                modifier = Modifier.size(18.dp),
+            )
+            val last = i == path.lastIndex
+            Crumb(folder.name, current = last) { if (!last) onSelect(LibraryDestination.InFolder(folder.id)) }
+        }
+    }
+}
+
+@Composable
+private fun Crumb(label: String, current: Boolean, onClick: () -> Unit) {
+    Text(
+        label,
+        style = MaterialTheme.typography.labelLarge,
+        color = if (current) MaterialTheme.colorScheme.onSurface else BestNoteTheme.colors.muted,
+        maxLines = 1,
+        modifier = Modifier
+            .clip(BestNoteShapes.Pill)
+            .then(if (current) Modifier else Modifier.clickable(role = Role.Button, onClick = onClick))
+            .padding(horizontal = Spacing.S, vertical = Spacing.XS),
+    )
 }
 
 @Composable
 private fun SearchField(query: String, onQuery: (String) -> Unit, modifier: Modifier = Modifier) {
     val hint = stringResource(R.string.library_search_hint)
+    val clear = stringResource(R.string.library_clear_search)
     BasicTextField(
         value = query,
         onValueChange = onQuery,
         singleLine = true,
         textStyle = MaterialTheme.typography.bodyMedium.copy(color = MaterialTheme.colorScheme.onSurface),
         cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
         modifier = modifier.semantics { contentDescription = hint },
         decorationBox = { inner ->
             Row(
@@ -131,7 +198,7 @@ private fun SearchField(query: String, onQuery: (String) -> Unit, modifier: Modi
                     .clip(BestNoteShapes.Pill)
                     .background(MaterialTheme.colorScheme.surface)
                     .hairline(BestNoteShapes.Pill)
-                    .padding(horizontal = Spacing.L),
+                    .padding(start = Spacing.L, end = Spacing.XS),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(Spacing.S),
             ) {
@@ -142,9 +209,39 @@ private fun SearchField(query: String, onQuery: (String) -> Unit, modifier: Modi
                     }
                     inner()
                 }
+                if (query.isNotEmpty()) {
+                    Box(
+                        Modifier.size(36.dp).clip(BestNoteShapes.Pill).clickable(role = Role.Button, onClickLabel = clear) { onQuery("") },
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(Icons.Outlined.Close, clear, tint = BestNoteTheme.colors.muted, modifier = Modifier.size(18.dp))
+                    }
+                } else {
+                    Spacer(Modifier.width(Spacing.S))
+                }
             }
         },
     )
+}
+
+/** White pill with a hairline: secondary header actions ("Select", "Sort"). */
+@Composable
+internal fun OutlinePill(label: String, icon: ImageVector?, modifier: Modifier = Modifier, trailingIcon: ImageVector? = null, onClick: () -> Unit) {
+    Row(
+        modifier
+            .height(ControlHeight)
+            .clip(BestNoteShapes.Pill)
+            .background(MaterialTheme.colorScheme.surface)
+            .hairline(BestNoteShapes.Pill)
+            .clickable(role = Role.Button, onClick = onClick)
+            .padding(horizontal = Spacing.L),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(Spacing.S),
+    ) {
+        if (icon != null) Icon(icon, null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(19.dp))
+        Text(label, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurface, maxLines = 1)
+        if (trailingIcon != null) Icon(trailingIcon, null, tint = BestNoteTheme.colors.muted, modifier = Modifier.size(18.dp))
+    }
 }
 
 @Composable
@@ -190,20 +287,49 @@ private fun Segment(icon: ImageVector, label: String, selected: Boolean, onClick
     }
 }
 
+/** "New" split pill: the main part opens the new-notebook sheet, the chevron offers more. */
 @Composable
-private fun NewButton(onClick: () -> Unit) {
-    Row(
-        Modifier
-            .height(ControlHeight)
-            .clip(BestNoteShapes.Pill)
-            .background(BestNoteTheme.colors.strongButton)
-            .clickable(role = Role.Button, onClick = onClick)
-            .padding(start = Spacing.L, end = Spacing.L + Spacing.XS),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(Spacing.S),
-    ) {
-        Icon(Icons.Outlined.Add, null, tint = BestNoteTheme.colors.onStrongButton, modifier = Modifier.size(20.dp))
-        Text(stringResource(R.string.library_new), style = MaterialTheme.typography.labelLarge, color = BestNoteTheme.colors.onStrongButton)
+private fun NewButton(callbacks: LibraryCallbacks) {
+    var menu by remember { mutableStateOf(false) }
+    val fg = BestNoteTheme.colors.onStrongButton
+    val moreLabel = stringResource(R.string.library_new_more)
+    Box {
+        Row(
+            Modifier
+                .height(ControlHeight)
+                .clip(BestNoteShapes.Pill)
+                .background(BestNoteTheme.colors.strongButton),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Row(
+                Modifier
+                    .fillMaxHeight()
+                    .clickable(role = Role.Button, onClick = callbacks.newNotebook)
+                    .padding(start = Spacing.L, end = Spacing.M),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(Spacing.S),
+            ) {
+                Icon(Icons.Outlined.Add, null, tint = fg, modifier = Modifier.size(20.dp))
+                Text(stringResource(R.string.library_new), style = MaterialTheme.typography.labelLarge, color = fg)
+            }
+            Box(Modifier.width(Elevation.Hairline).height(22.dp).background(fg.copy(alpha = 0.25f)))
+            Box(
+                Modifier
+                    .fillMaxHeight()
+                    .width(40.dp)
+                    .clickable(role = Role.Button, onClickLabel = moreLabel) { menu = true }
+                    .semantics { contentDescription = moreLabel },
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(Icons.Outlined.KeyboardArrowDown, null, tint = fg, modifier = Modifier.size(20.dp))
+            }
+        }
+        AtelierMenu(menu, onDismiss = { menu = false }) {
+            AtelierMenuItem(Icons.Outlined.Book, stringResource(R.string.library_new_notebook), { menu = false; callbacks.newNotebook() })
+            AtelierMenuItem(Icons.Outlined.EditNote, stringResource(R.string.library_quicknote_title), { menu = false; callbacks.quicknote() })
+            AtelierMenuItem(Icons.Outlined.CreateNewFolder, stringResource(R.string.library_folder_new), { menu = false; callbacks.newFolder() })
+            AtelierMenuItem(Icons.Outlined.PictureAsPdf, stringResource(R.string.library_import_pdf), { menu = false; callbacks.importPdf() }, trailing = stringResource(R.string.library_soon))
+        }
     }
 }
 
@@ -385,20 +511,97 @@ private fun ActionCard(
     }
 }
 
-/** "Notebooks" title with the filter chips. */
+/** "Notebooks" (or "Results") title, filter chips, folder-color dots and the sort menu. */
 @Composable
-internal fun NotebooksHeader(filter: NotebookFilter, onFilter: (NotebookFilter) -> Unit, modifier: Modifier = Modifier) {
-    Row(modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.S)) {
+internal fun NotebooksHeader(state: LibraryUiState, callbacks: LibraryCallbacks, modifier: Modifier = Modifier) {
+    val c = state.controls
+    Row(modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        if (state.searching) {
+            Text(
+                pluralStringResource(R.plurals.library_results, state.items.size, state.items.size, c.query.trim()),
+                style = MaterialTheme.typography.titleLarge,
+                color = MaterialTheme.colorScheme.onBackground,
+                modifier = Modifier.weight(1f),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            return@Row
+        }
         Text(
             stringResource(R.string.library_notebooks),
             style = MaterialTheme.typography.titleLarge,
             color = MaterialTheme.colorScheme.onBackground,
             modifier = Modifier.padding(end = Spacing.M),
         )
-        Chip(stringResource(R.string.library_filter_all), filter == NotebookFilter.All) { onFilter(NotebookFilter.All) }
-        Chip(stringResource(R.string.library_filter_week), filter == NotebookFilter.ThisWeek) { onFilter(NotebookFilter.ThisWeek) }
-        Chip(stringResource(R.string.library_filter_favorites), filter == NotebookFilter.Favorites) { onFilter(NotebookFilter.Favorites) }
+        Row(
+            Modifier.weight(1f).horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(Spacing.S),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Chip(stringResource(R.string.library_filter_all), c.filter == NotebookFilter.All && c.folderColor == null) { callbacks.clearFilters() }
+            Chip(stringResource(R.string.library_filter_week), c.filter == NotebookFilter.ThisWeek) { callbacks.filter(NotebookFilter.ThisWeek) }
+            Chip(stringResource(R.string.library_filter_favorites), c.filter == NotebookFilter.Favorites) { callbacks.filter(NotebookFilter.Favorites) }
+            Chip(stringResource(R.string.library_filter_pdfs), c.filter == NotebookFilter.Pdfs) { callbacks.filter(NotebookFilter.Pdfs) }
+            if (state.folderColors.isNotEmpty()) {
+                Box(Modifier.padding(horizontal = Spacing.XS).width(Elevation.Hairline).height(22.dp).background(MaterialTheme.colorScheme.outline))
+                state.folderColors.forEach { color -> ColorChip(color, c.folderColor == color) { callbacks.folderColor(color) } }
+            }
+        }
+        Spacer(Modifier.width(Spacing.M))
+        SortMenu(c.sort, callbacks.sort)
     }
+}
+
+@Composable
+private fun ColorChip(colorIndex: Int, selected: Boolean, onClick: () -> Unit) {
+    val label = stringResource(R.string.library_filter_color, colorIndex + 1)
+    Box(
+        Modifier
+            .size(36.dp)
+            .clip(BestNoteShapes.Pill)
+            .clickable(role = Role.Checkbox, onClickLabel = label, onClick = onClick)
+            .semantics {
+                contentDescription = label
+                this.selected = selected
+            },
+        contentAlignment = Alignment.Center,
+    ) {
+        Box(
+            Modifier
+                .size(if (selected) 26.dp else 20.dp)
+                .then(if (selected) Modifier.border(2.dp, MaterialTheme.colorScheme.onSurface, BestNoteShapes.Pill).padding(3.dp) else Modifier)
+                .clip(BestNoteShapes.Pill)
+                .background(coverColor(colorIndex)),
+        )
+    }
+}
+
+@Composable
+private fun SortMenu(sort: SortOrder, onSort: (SortOrder) -> Unit) {
+    var open by remember { mutableStateOf(false) }
+    val label = stringResource(sortLabel(sort))
+    Box {
+        OutlinePill(stringResource(R.string.library_sort_by, label), Icons.AutoMirrored.Outlined.Sort, trailingIcon = Icons.Outlined.KeyboardArrowDown) { open = true }
+        AtelierMenu(open, onDismiss = { open = false }) {
+            SortOrder.entries.forEach { o ->
+                DropdownMenuItem(
+                    text = { Text(stringResource(sortLabel(o)), style = MaterialTheme.typography.labelLarge) },
+                    onClick = {
+                        open = false
+                        onSort(o)
+                    },
+                    trailingIcon = { if (o == sort) Icon(Icons.Outlined.Check, null, tint = MaterialTheme.colorScheme.primary) },
+                    modifier = Modifier.height(48.dp),
+                )
+            }
+        }
+    }
+}
+
+private fun sortLabel(sort: SortOrder): Int = when (sort) {
+    SortOrder.Modified -> R.string.library_sort_modified
+    SortOrder.Created -> R.string.library_sort_created
+    SortOrder.Name -> R.string.library_sort_name
 }
 
 @Composable

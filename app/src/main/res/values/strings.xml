@@ -1,3 +1,5 @@
 <resources>
-    <string name="app_name">BestNote</string>
+    <string name="app_name" translatable="false">BestNote</string>
+    <string name="shortcut_quicknote_short">Quicknote</string>
+    <string name="shortcut_quicknote_long">New Quicknote</string>
 </resources>

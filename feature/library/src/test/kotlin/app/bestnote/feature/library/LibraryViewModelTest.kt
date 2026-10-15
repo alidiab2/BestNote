@@ -39,7 +39,7 @@ class LibraryViewModelTest {
     @After
     fun tearDown() = Dispatchers.resetMain()
 
-    private fun viewModel(seeder: LibrarySeeder = LibrarySeeder { }) = LibraryViewModel(repo, metadata, seeder, clock)
+    private fun viewModel(seeder: LibrarySeeder = LibrarySeeder { }) = LibraryViewModel(repo, metadata, seeder, clock, QuicknoteRequests())
 
     @Test
     fun `loads notebooks newest first and picks the last one to continue`() = runTest {
@@ -101,7 +101,7 @@ class LibraryViewModelTest {
     @Test
     fun `create emits an open event`() = runTest {
         val vm = viewModel()
-        vm.create("Untitled notebook")
+        vm.create(NewNotebookSpec("Untitled notebook"))
         val event = vm.eventFlow.first()
         assertTrue(event is LibraryEvent.Open)
         assertEquals("Untitled notebook", vm.state.value.items.single().title)
@@ -122,7 +122,7 @@ class LibraryViewModelTest {
         val nb = repo.create("Keep me")
         val vm = viewModel()
         vm.moveToTrash(nb.id)
-        assertEquals(LibraryEvent.Trashed(nb.id, "Keep me"), vm.eventFlow.first())
+        assertEquals(LibraryEvent.Trashed(listOf(nb.id), "Keep me"), vm.eventFlow.first())
         assertTrue(vm.state.value.items.isEmpty())
         assertEquals(1, vm.state.value.trashCount)
         val trashed = vm.state.value.trash.single()

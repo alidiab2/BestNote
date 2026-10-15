@@ -2,6 +2,23 @@ package app.bestnote.feature.library
 
 import android.text.format.DateFormat
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.border
+import androidx.compose.material.icons.outlined.Add
+import androidx.compose.material.icons.outlined.CreateNewFolder
+import androidx.compose.material.icons.outlined.MoreHoriz
+import androidx.compose.material3.IconButton
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.unit.Dp
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -55,6 +72,9 @@ import app.bestnote.core.designsystem.theme.Spacing
 import app.bestnote.core.designsystem.theme.softShadow
 import java.util.Date
 
+private const val HOVER_SCALE = 1.04f
+private val FadeHeight = 40.dp
+
 /** Approved sidebar width. */
 internal val SidebarWidth = 252.dp
 
@@ -64,26 +84,68 @@ internal fun LibrarySidebar(
     onSelect: (LibraryDestination) -> Unit,
     onOpenSettings: () -> Unit,
     modifier: Modifier = Modifier,
+    onNewFolder: () -> Unit = {},
+    onFolderMenu: (Folder, FolderMenuAction) -> Unit = { _, _ -> },
 ) {
     val selected = state.controls.destination
+    val hovered = LocalLibraryDrag.current.hovered
     Column(
         modifier
             .width(SidebarWidth)
             .background(BestNoteTheme.colors.sidebar)
             .padding(horizontal = Spacing.M, vertical = Spacing.L),
     ) {
-        Wordmark(Modifier.padding(start = Spacing.M, top = Spacing.XS, bottom = Spacing.XL))
-        Column(Modifier.weight(1f).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(Spacing.XXS)) {
-            NavItem(Icons.AutoMirrored.Outlined.LibraryBooks, stringResource(R.string.library_nav_library), selected == LibraryDestination.Library, state.totalCount) {
+        Row(Modifier.fillMaxWidth().padding(bottom = Spacing.L), verticalAlignment = Alignment.CenterVertically) {
+            Wordmark(Modifier.weight(1f).padding(start = Spacing.M))
+            val settings = stringResource(R.string.library_nav_settings)
+            IconButton(onClick = onOpenSettings, modifier = Modifier.size(44.dp).semantics { contentDescription = settings }) {
+                Icon(Icons.Outlined.Settings, null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(22.dp))
+            }
+        }
+        val scroll = rememberScrollState()
+        val fade = BestNoteTheme.colors.sidebar
+        Column(
+            Modifier
+                .weight(1f)
+                .drawWithContent {
+                    drawContent()
+                    // A soft fade tells the user there are more folders below.
+                    if (scroll.canScrollForward) {
+                        val h = FadeHeight.toPx()
+                        drawRect(
+                            Brush.verticalGradient(listOf(fade.copy(alpha = 0f), fade), startY = size.height - h, endY = size.height),
+                            topLeft = Offset(0f, size.height - h),
+                            size = Size(size.width, h),
+                        )
+                    }
+                }
+                .verticalScroll(scroll),
+            verticalArrangement = Arrangement.spacedBy(Spacing.XXS),
+        ) {
+            NavItem(
+                Icons.AutoMirrored.Outlined.LibraryBooks,
+                stringResource(R.string.library_nav_library),
+                selected == LibraryDestination.Library,
+                count = state.totalCount,
+                hovered = hovered == LibraryDestination.Library,
+                modifier = Modifier.dropTarget(LibraryDestination.Library),
+            ) {
                 onSelect(LibraryDestination.Library)
             }
             NavItem(Icons.Outlined.Schedule, stringResource(R.string.library_nav_recent), selected == LibraryDestination.Recent) {
                 onSelect(LibraryDestination.Recent)
             }
-            NavItem(Icons.Outlined.StarOutline, stringResource(R.string.library_nav_favorites), selected == LibraryDestination.Favorites, state.favoritesCount) {
+            NavItem(
+                Icons.Outlined.StarOutline,
+                stringResource(R.string.library_nav_favorites),
+                selected == LibraryDestination.Favorites,
+                count = state.favoritesCount,
+                hovered = hovered == LibraryDestination.Favorites,
+                modifier = Modifier.dropTarget(LibraryDestination.Favorites),
+            ) {
                 onSelect(LibraryDestination.Favorites)
             }
-            NavItem(Icons.Outlined.EditNote, stringResource(R.string.library_nav_quicknotes), selected == LibraryDestination.Quicknotes, state.quicknotesCount) {
+            NavItem(Icons.Outlined.EditNote, stringResource(R.string.library_nav_quicknotes), selected == LibraryDestination.Quicknotes, count = state.quicknotesCount) {
                 onSelect(LibraryDestination.Quicknotes)
             }
             NavItem(
@@ -93,30 +155,73 @@ internal fun LibrarySidebar(
                 trailing = { AiBadge() },
             ) { onSelect(LibraryDestination.SmartBoard) }
 
-            Text(
-                stringResource(R.string.library_nav_folders).uppercase(),
-                style = BestNoteTheme.type.overline,
-                color = BestNoteTheme.colors.muted,
-                modifier = Modifier.padding(start = Spacing.M, top = Spacing.XL, bottom = Spacing.S),
-            )
+            Row(
+                Modifier.fillMaxWidth().padding(start = Spacing.M, top = Spacing.L),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    stringResource(R.string.library_nav_folders).uppercase(),
+                    style = BestNoteTheme.type.overline,
+                    color = BestNoteTheme.colors.muted,
+                    modifier = Modifier.weight(1f),
+                )
+                val newFolder = stringResource(R.string.library_folder_new)
+                IconButton(onClick = onNewFolder, modifier = Modifier.size(40.dp).semantics { contentDescription = newFolder }) {
+                    Icon(Icons.Outlined.Add, null, tint = BestNoteTheme.colors.muted, modifier = Modifier.size(20.dp))
+                }
+            }
             state.folders.forEach { item ->
                 val dest = LibraryDestination.InFolder(item.folder.id)
+                var menu by remember { mutableStateOf(false) }
                 NavItem(
                     icon = null,
                     label = item.folder.name,
                     active = selected == dest,
                     count = item.count,
-                    leading = {
-                        Box(Modifier.size(10.dp).clip(RoundedCornerShape(3.dp)).background(coverColor(item.folder.colorIndex)))
+                    hovered = hovered == dest,
+                    indent = Spacing.L * item.depth,
+                    modifier = Modifier.dropTarget(dest),
+                    leading = { FolderGlyph(item.folder.colorIndex, Modifier.size(18.dp, 15.dp)) },
+                    trailing = {
+                        Box {
+                            val more = stringResource(R.string.library_folder_more, item.folder.name)
+                            Box(
+                                Modifier
+                                    .size(32.dp)
+                                    .clip(BestNoteShapes.Pill)
+                                    .clickable(role = Role.Button, onClick = { menu = true })
+                                    .semantics { contentDescription = more },
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Icon(Icons.Outlined.MoreHoriz, null, tint = BestNoteTheme.colors.muted, modifier = Modifier.size(18.dp))
+                            }
+                            FolderMenu(menu, onDismiss = { menu = false }) { action ->
+                                menu = false
+                                onFolderMenu(item.folder, action)
+                            }
+                        }
                     },
                 ) { onSelect(dest) }
             }
+            NavItem(
+                icon = Icons.Outlined.CreateNewFolder,
+                label = stringResource(R.string.library_folder_new),
+                active = false,
+                muted = true,
+                onClick = onNewFolder,
+            )
         }
         Spacer(Modifier.height(Spacing.S))
-        NavItem(Icons.Outlined.DeleteOutline, stringResource(R.string.library_nav_trash), selected == LibraryDestination.Trash, state.trashCount.takeIf { it > 0 }) {
+        NavItem(
+            Icons.Outlined.DeleteOutline,
+            stringResource(R.string.library_nav_trash),
+            selected == LibraryDestination.Trash,
+            count = state.trashCount.takeIf { it > 0 },
+            hovered = hovered == LibraryDestination.Trash,
+            modifier = Modifier.dropTarget(LibraryDestination.Trash),
+        ) {
             onSelect(LibraryDestination.Trash)
         }
-        NavItem(Icons.Outlined.Settings, stringResource(R.string.library_nav_settings), active = false, onClick = onOpenSettings)
         Spacer(Modifier.height(Spacing.M))
         StorageCard(state.lastSavedAtMillis)
     }
@@ -141,26 +246,41 @@ private fun NavItem(
     icon: ImageVector?,
     label: String,
     active: Boolean,
+    modifier: Modifier = Modifier,
     count: Int? = null,
     leading: (@Composable () -> Unit)? = null,
     trailing: (@Composable () -> Unit)? = null,
+    hovered: Boolean = false,
+    muted: Boolean = false,
+    indent: Dp = 0.dp,
     onClick: () -> Unit,
 ) {
     val bg by animateColorAsState(
-        if (active) MaterialTheme.colorScheme.surfaceBright else Color.Transparent,
+        when {
+            hovered -> MaterialTheme.colorScheme.primaryContainer
+            active -> MaterialTheme.colorScheme.surfaceBright
+            else -> Color.Transparent
+        },
         Motion.tween(Motion.Duration.Short),
         label = "navItem",
     )
     val shape = BestNoteShapes.Pill
+    val scale by animateFloatAsState(if (hovered) HOVER_SCALE else 1f, Motion.Spring.Snappy, label = "navHover")
     Row(
-        Modifier
+        modifier
             .fillMaxWidth()
-            .height(40.dp)
-            .then(if (active) Modifier.softShadow(Elevation.Low, shape) else Modifier)
+            .padding(start = indent)
+            .height(44.dp)
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+            }
+            .then(if (active || hovered) Modifier.softShadow(Elevation.Low, shape) else Modifier)
             .clip(shape)
             .background(bg)
+            .then(if (hovered) Modifier.border(2.dp, MaterialTheme.colorScheme.primary, shape) else Modifier)
             .clickable(role = Role.Tab, onClick = onClick)
-            .padding(horizontal = Spacing.M),
+            .padding(start = Spacing.M, end = if (trailing != null) Spacing.XS else Spacing.M),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(Spacing.M),
     ) {
@@ -170,7 +290,11 @@ private fun NavItem(
                 icon != null -> Icon(
                     icon,
                     contentDescription = null,
-                    tint = if (active) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
+                    tint = when {
+                        active -> MaterialTheme.colorScheme.onSurface
+                        muted -> BestNoteTheme.colors.muted
+                        else -> MaterialTheme.colorScheme.onSurfaceVariant
+                    },
                     modifier = Modifier.size(20.dp),
                 )
             }
@@ -178,15 +302,19 @@ private fun NavItem(
         Text(
             label,
             style = MaterialTheme.typography.labelLarge,
-            color = if (active) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
+            color = when {
+                active -> MaterialTheme.colorScheme.onSurface
+                muted -> BestNoteTheme.colors.muted
+                else -> MaterialTheme.colorScheme.onSurfaceVariant
+            },
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f),
         )
-        trailing?.invoke()
         if (count != null) {
             Text(count.toString(), style = MaterialTheme.typography.labelMedium, color = BestNoteTheme.colors.muted)
         }
+        trailing?.invoke()
     }
 }
 
