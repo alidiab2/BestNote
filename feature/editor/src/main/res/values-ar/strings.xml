@@ -75,4 +75,6 @@
     <string name="quick_palette">اللوحة السريعة</string>
     <string name="quick_palette_all">كل إعدادات القلم</string>
     <string name="quick_palette_size">الحجم %1$s مم. انقر للتغيير</string>
+    <string name="editor_pen_detected">تم اكتشاف القلم: الأصابع الآن للتمرير والتكبير.</string>
+    <string name="toolbar_move">نقل الأدوات: اسحب إلى الأعلى أو إلى أحد الجانبين</string>
 </resources>

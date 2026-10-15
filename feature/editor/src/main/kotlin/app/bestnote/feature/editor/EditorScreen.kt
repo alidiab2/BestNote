@@ -8,6 +8,13 @@ package app.bestnote.feature.editor
 
 import android.view.View
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.layout.absoluteOffset
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.round
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -76,7 +83,9 @@ import androidx.navigation.toRoute
 import app.bestnote.core.database.NotebookDao
 import app.bestnote.core.database.NotebookRepository
 import app.bestnote.core.database.toModel
+import app.bestnote.core.datastore.FingerDrawing
 import app.bestnote.core.datastore.HoverButtonAction
+import app.bestnote.core.datastore.UserPreferences
 import app.bestnote.core.datastore.ToolbarDock
 import app.bestnote.core.datastore.UserPreferencesRepository
 import app.bestnote.core.designsystem.theme.BestNoteShapes
@@ -134,7 +143,7 @@ data class EditorUiState(
     val title: String = "",
     val template: PaperTemplate = PaperTemplate.Ruled,
     val pageCount: Int = 1,
-    val stylusOnly: Boolean = false,
+    val input: FingerInput = FingerInput(),
     val dock: ToolbarDock = ToolbarDock.Top,
     val leftHanded: Boolean = false,
     val quickPalette: Boolean = true,
@@ -175,7 +184,7 @@ class EditorViewModel @Inject constructor(
             title = notebook?.title.orEmpty(),
             template = notebook?.template ?: PaperTemplate.Ruled,
             pageCount = notebook?.pageCount ?: 1,
-            stylusOnly = prefs.stylusOnly,
+            input = fingerInput(prefs),
             dock = prefs.toolbarDock,
             leftHanded = prefs.leftHanded,
             quickPalette = prefs.hoverButtonAction == HoverButtonAction.QuickPalette,
@@ -188,7 +197,17 @@ class EditorViewModel @Inject constructor(
     fun updateToolbox(toolbox: Toolbox) = toolboxState.update { toolbox }
     fun setDock(dock: ToolbarDock) = viewModelScope.launch { preferences.setToolbarDock(dock) }
     fun setLeftHanded(enabled: Boolean) = viewModelScope.launch { preferences.setLeftHanded(enabled) }
+    fun markPenSeen() = viewModelScope.launch { preferences.markPenSeen() }
 }
+
+/** SPEN-02: settings to finger routing. "Draw with finger" off (default) = auto stylus-only. */
+internal fun fingerInput(prefs: UserPreferences) = FingerInput(
+    stylusOnly = prefs.stylus.fingerDrawing == FingerDrawing.Never,
+    autoStylusOnly = prefs.stylus.fingerDrawing == FingerDrawing.WhenNoPen,
+    penSeen = prefs.stylus.penSeen,
+    twoFingerTapUndo = prefs.gestures.twoFingerTapUndo,
+    threeFingerTapRedo = prefs.gestures.threeFingerTapRedo,
+)
 
 /** Left-handed mode moves side docks to the other physical side, away from the writing hand. */
 internal fun traySide(dock: ToolbarDock, leftHanded: Boolean): TraySide = when (dock) {
@@ -197,11 +216,39 @@ internal fun traySide(dock: ToolbarDock, leftHanded: Boolean): TraySide = when (
     ToolbarDock.Right -> if (leftHanded) TraySide.Left else TraySide.Right
 }
 
+/** The dock that puts the tray on physical [side] (the inverse of [traySide]). */
+internal fun dockFor(side: TraySide, leftHanded: Boolean): ToolbarDock = when (side) {
+    TraySide.Top -> ToolbarDock.Top
+    TraySide.Left -> if (leftHanded) ToolbarDock.Right else ToolbarDock.Left
+    TraySide.Right -> if (leftHanded) ToolbarDock.Left else ToolbarDock.Right
+}
+
+/**
+ * Where a tray dragged to ([x], [y]) on a [width] x [height] screen lands: the nearest of the top
+ * edge and the two physical sides. The top wins ties: it is the default and the calmest place.
+ */
+internal fun dropSide(x: Float, y: Float, width: Float, height: Float): TraySide {
+    val top = y / TOP_PULL
+    val left = x
+    val right = width - x
+    return when {
+        top <= left && top <= right -> TraySide.Top
+        left <= right -> TraySide.Left
+        else -> TraySide.Right
+    }.takeIf { width > 0f && height > 0f } ?: TraySide.Top
+}
+
+/** The top edge pulls from further away than the sides (a tray below the title row still docks on top). */
+private const val TOP_PULL = 2.5f
+
 private const val INSERT_POLL_MS = 50L
 private val ChromeEdge = 20.dp
-private val TopRowHeight = 72.dp
-private val TrayTop = 76.dp
-private val SideTrayReach = 168.dp
+private val TopRowTop = 12.dp
+private val TopRowHeight = 64.dp
+private val TrayTop = 66.dp
+
+/** Below this width the top dock floats the tools capsule on its own, down the end edge. */
+private val WideTopTray = 960.dp
 private const val DeskMidStop = 0.6f
 private const val DeskMidMix = 0.45f
 private const val DeskCenterY = 0.45f
@@ -341,26 +388,63 @@ fun EditorScreen(
         if (snackbar.showSnackbar(insertedFormat.format(byPage.size), actionLabel = undoText) == SnackbarResult.ActionPerformed) document.undo()
     }
 
+    // SPEN-02: the first pen event switches fingers to scroll/zoom for good; say so once.
+    val penDetectedText = stringResource(R.string.editor_pen_detected)
+    val settingsText = stringResource(R.string.editor_settings)
+    fun onPenSeen() {
+        if (state.input.penSeen) return
+        viewModel.markPenSeen()
+        if (!state.input.autoStylusOnly) return
+        scope.launch {
+            snackbar.currentSnackbarData?.dismiss()
+            if (snackbar.showSnackbar(penDetectedText, actionLabel = settingsText) == SnackbarResult.ActionPerformed) onOpenSettings()
+        }
+    }
+
+    // The tray can be dragged to the top or a side; it docks where it is dropped.
+    var trayDrag by remember { mutableStateOf(Offset.Zero) }
+    var trayCenter by remember { mutableStateOf(Offset.Zero) }
+    var screen by remember { mutableStateOf(Offset.Zero) }
+    val trayGrip = Modifier.pointerInput(Unit) {
+        detectDragGestures(
+            onDragStart = { picker = null },
+            onDragEnd = {
+                val at = trayCenter + trayDrag
+                viewModel.setDock(dockFor(dropSide(at.x, at.y, screen.x, screen.y), state.leftHanded))
+                trayDrag = Offset.Zero
+            },
+            onDragCancel = { trayDrag = Offset.Zero },
+        ) { change, amount ->
+            change.consume()
+            trayDrag += amount
+        }
+    }
+
     val desk = BestNoteTheme.colors
     BoxWithConstraints(
-        Modifier.fillMaxSize().drawBehind {
-            // The desk: a soft warm radial light behind the page (#F4F1EB center to #E1DCD2 edge).
-            drawRect(
-                Brush.radialGradient(
-                    0f to desk.deskCenter,
-                    DeskMidStop to lerp(desk.deskCenter, desk.deskEdge, DeskMidMix),
-                    1f to desk.deskEdge,
-                    center = Offset(size.width / 2, size.height * DeskCenterY),
-                    radius = size.maxDimension * DeskRadius,
-                ),
-            )
-        },
+        Modifier
+            .fillMaxSize()
+            .onSizeChanged { screen = Offset(it.width.toFloat(), it.height.toFloat()) }
+            .drawBehind {
+                // The desk: a soft warm radial light behind the page (#F4F1EB center to #E1DCD2 edge).
+                drawRect(
+                    Brush.radialGradient(
+                        0f to desk.deskCenter,
+                        DeskMidStop to lerp(desk.deskCenter, desk.deskEdge, DeskMidMix),
+                        1f to desk.deskEdge,
+                        center = Offset(size.width / 2, size.height * DeskCenterY),
+                        radius = size.maxDimension * DeskRadius,
+                    ),
+                )
+            },
     ) {
-        val wide = maxWidth >= 1000.dp
-        val pageTop: Dp = if (side == TraySide.Top) (if (wide) 160.dp else 222.dp) else TopRowHeight + 8.dp
-        val reach = if (side == TraySide.Top) 0.dp else SideTrayReach
+        val wide = maxWidth >= WideTopTray
+        val density = LocalDensity.current
+        // The chrome floats over the page: no reserved bar. Only the first page starts below the
+        // title row (so the title never hides its top); everything scrolls under the chrome.
+        val topInsetPx = with(density) { WindowInsets.safeDrawing.getTop(this) + TopRowHeight.roundToPx() }
 
-        // ---- the pages: real sheets on the desk, scrolling vertically. They never mirror (forced LTR) ----
+        // ---- the pages: real sheets on the desk, full screen. They never mirror (forced LTR) ----
         CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
             PagedDocumentHost(
                 document = document,
@@ -369,7 +453,7 @@ fun EditorScreen(
                 colorArgb = toolbox.current.brushColorArgb,
                 brushSize = toolbox.current.size,
                 eraserMode = toolbox.eraserMode,
-                stylusOnly = state.stylusOnly,
+                input = state.input,
                 quickPalette = state.quickPalette,
                 doubleClickUndo = state.doubleClickUndo,
                 onView = { view ->
@@ -387,9 +471,9 @@ fun EditorScreen(
                 },
                 onIndicator = { page, count -> pageNumber = page + 1 to count },
                 onIndicatorClick = { managerPage = canvas?.currentPage?.coerceAtLeast(0) ?: 0 },
+                onPenSeen = ::onPenSeen,
+                topInsetPx = topInsetPx,
                 modifier = Modifier
-                    .windowInsetsPadding(WindowInsets.safeDrawing)
-                    .padding(top = pageTop, start = reach, end = reach)
                     .fillMaxSize()
                     .onGloballyPositioned { pageOrigin = it.positionInRoot() },
             )
@@ -400,11 +484,13 @@ fun EditorScreen(
             Row(
                 Modifier
                     .fillMaxWidth()
-                    .padding(start = ChromeEdge, end = ChromeEdge, top = 14.dp)
+                    .padding(start = ChromeEdge, end = ChromeEdge, top = TopRowTop)
                     .graphicsLayer { alpha = chromeAlpha },
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                TitleCluster(state.title, page = pageNumber.first, pageCount = maxOf(pageNumber.second, 1), onBack = onBack, modifier = Modifier.weight(1f))
+                Box(Modifier.weight(1f)) {
+                    TitleCluster(state.title, page = pageNumber.first, pageCount = maxOf(pageNumber.second, 1), onBack = onBack)
+                }
                 ActionPills(canUndo, canRedo, state.dock, state.leftHanded, actions)
             }
 
@@ -415,14 +501,21 @@ fun EditorScreen(
             }
             val trayPadding = when (side) {
                 TraySide.Top -> Modifier.padding(top = TrayTop)
-                TraySide.Left -> Modifier.absolutePadding(left = ChromeEdge + 8.dp, top = TopRowHeight)
-                TraySide.Right -> Modifier.absolutePadding(right = ChromeEdge + 8.dp, top = TopRowHeight)
+                TraySide.Left -> Modifier.absolutePadding(left = ChromeEdge, top = TopRowHeight)
+                TraySide.Right -> Modifier.absolutePadding(right = ChromeEdge, top = TopRowHeight)
+            }
+            val tools: @Composable (Boolean) -> Unit = { vertical ->
+                ToolsCapsule(vertical = vertical, onComingSoon = ::comingSoon, lassoActive = toolbox.lasso, onLasso = ::toggleLasso)
             }
             AnimatedVisibility(
                 visible = trayShown,
                 enter = Motion.Enter.toolbar(reduce),
                 exit = Motion.Exit.toolbar(reduce),
-                modifier = Modifier.align(trayAlignment).then(trayPadding),
+                modifier = Modifier
+                    .align(trayAlignment)
+                    .then(trayPadding)
+                    .onGloballyPositioned { trayCenter = it.boundsInRoot().center }
+                    .absoluteOffset { trayDrag.round() },
             ) {
                 val tray: @Composable () -> Unit = {
                     PenTray(
@@ -435,34 +528,39 @@ fun EditorScreen(
                         onOpenPicker = { picker = if (picker == it) null else it },
                         onCollapse = { picker = null; collapsed = true },
                         picker = pickerContent,
+                        grip = trayGrip,
                     )
                 }
                 when (side) {
                     TraySide.Top -> if (wide) {
                         Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
                             tray()
-                            ToolsCapsule(vertical = false, onComingSoon = ::comingSoon, lassoActive = toolbox.lasso, onLasso = ::toggleLasso)
+                            tools(false)
                         }
                     } else {
-                        Column(verticalArrangement = Arrangement.spacedBy(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                            tray()
-                            ToolsCapsule(vertical = false, onComingSoon = ::comingSoon, lassoActive = toolbox.lasso, onLasso = ::toggleLasso)
-                        }
+                        tray()
                     }
                     // Side docks are physical: the tray hugs the screen edge, tools sit inward.
                     TraySide.Left, TraySide.Right -> CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
                         Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
                             if (side == TraySide.Left) {
                                 tray()
-                                ToolsCapsule(vertical = true, onComingSoon = ::comingSoon, lassoActive = toolbox.lasso, onLasso = ::toggleLasso)
+                                tools(true)
                             } else {
-                                ToolsCapsule(vertical = true, onComingSoon = ::comingSoon, lassoActive = toolbox.lasso, onLasso = ::toggleLasso)
+                                tools(true)
                                 tray()
                             }
                         }
                     }
                 }
             }
+            // Narrow screens, top dock: the tools capsule floats on its own down the end edge.
+            AnimatedVisibility(
+                visible = trayShown && side == TraySide.Top && !wide,
+                enter = Motion.Enter.toolbar(reduce),
+                exit = Motion.Exit.toolbar(reduce),
+                modifier = Modifier.align(Alignment.TopEnd).padding(top = TrayTop + TopRowHeight, end = ChromeEdge),
+            ) { tools(true) }
             AnimatedVisibility(
                 visible = !trayShown,
                 enter = Motion.Enter.popover(reduce),

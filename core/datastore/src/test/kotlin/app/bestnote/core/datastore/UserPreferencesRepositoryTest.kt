@@ -22,7 +22,23 @@ class UserPreferencesRepositoryTest {
         assertEquals(FingerDrawing.WhenNoPen, prefs.stylus.fingerDrawing)
         assertEquals(30, prefs.storage.trashRetentionDays)
         assertFalse(prefs.stylusOnly)
+        assertFalse(prefs.drawWithFinger)
+        assertFalse(prefs.stylus.penSeen)
         assertFalse(prefs.dynamicColor)
+    }
+
+    @Test fun penSeenPersistsAndDrawWithFingerIsAnOptIn() = runTest {
+        repo.markPenSeen()
+        repo.markPenSeen()
+        assertTrue(store.value.stylus.penSeen)
+        assertEquals(FingerDrawing.WhenNoPen, store.value.stylus.fingerDrawing)
+        repo.setDrawWithFinger(true)
+        assertTrue(store.value.drawWithFinger)
+        assertEquals(FingerDrawing.Always, store.value.stylus.fingerDrawing)
+        repo.setDrawWithFinger(false)
+        assertFalse(store.value.drawWithFinger)
+        assertEquals(FingerDrawing.WhenNoPen, store.value.stylus.fingerDrawing)
+        assertTrue(store.value.stylus.penSeen)
     }
 
     @Test fun sectionUpdatesOnlyTouchTheirSection() = runTest {

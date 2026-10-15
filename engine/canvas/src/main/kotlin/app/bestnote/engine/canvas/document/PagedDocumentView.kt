@@ -39,6 +39,7 @@ import app.bestnote.engine.stylus.HoverButtonGestures
 import app.bestnote.engine.stylus.HoverCursorStyle
 import app.bestnote.engine.stylus.HoverTracker
 import app.bestnote.engine.stylus.InputDecision
+import app.bestnote.engine.stylus.MultiFingerTap
 import app.bestnote.engine.stylus.PalmRejection
 import app.bestnote.engine.stylus.PointerTool
 import app.bestnote.engine.stylus.SideButtonTool
@@ -58,9 +59,11 @@ import kotlin.math.roundToInt
  *    with a page-to-view transform, so its inputs are recorded in that page's local points;
  *  - the stylus hover cursor.
  *
- * Input: pens (and fingers when allowed by [PalmRejection]) write on the page they touch down
- * on; fingers that may not write, and any two-finger gesture, scroll with fling; the mouse wheel
- * scrolls. Nothing scrolls while a stroke is in progress. Ink belongs to the [PagedDocument].
+ * Input (SPEN-02): pens write on the page they touch down on. Once a pen has been seen (or in
+ * stylus-only mode) fingers never ink: one finger scrolls with fling (and pans sideways when zoomed
+ * in), two fingers pinch-zoom, a double-tap fits the width, a two-finger tap undoes and a
+ * three-finger tap redoes (CANVAS-04). Palms are dropped ([PalmRejection]). The mouse wheel scrolls.
+ * Nothing scrolls while a stroke is in progress. Ink belongs to the [PagedDocument].
  */
 @SuppressLint("ViewConstructor")
 class PagedDocumentView(context: Context) : FrameLayout(context), InProgressStrokesFinishedListener {
@@ -123,11 +126,48 @@ class PagedDocumentView(context: Context) : FrameLayout(context), InProgressStro
             hoverGestures.doubleClickUndo = value
         }
 
+    /** Fingers never ink: they scroll, pan, zoom and tap (SPEN-02). */
     var stylusOnly: Boolean
         get() = palm.stylusOnly
         set(value) {
             palm.stylusOnly = value
         }
+
+    /** Auto stylus-only (the default): fingers draw until a pen is seen, then only navigate. */
+    var autoStylusOnly: Boolean
+        get() = palm.autoStylusOnly
+        set(value) {
+            palm.autoStylusOnly = value
+        }
+
+    /** A pen was seen on this device (restored from settings). Only ever turns on. */
+    var penSeen: Boolean
+        get() = palm.penSeen
+        set(value) {
+            if (value) palm.penSeen = true
+        }
+
+    /** Called once when the first pen event turns [penSeen] on, so the host can persist it. */
+    var penSeenListener: (() -> Unit)?
+        get() = palm.onPenSeen
+        set(value) {
+            palm.onPenSeen = value
+        }
+
+    /** CANVAS-04 settings: two-finger tap undoes, three-finger tap redoes. */
+    var twoFingerTapUndo: Boolean = true
+    var threeFingerTapRedo: Boolean = true
+
+    /**
+     * Space the host's floating chrome covers at the top and bottom of the viewport, in px. The first
+     * page starts below [top] and the last one ends above [bottom]; pages still scroll under both.
+     */
+    fun setContentInsets(top: Int, bottom: Int) {
+        val m = metrics.copy(topPad = metrics.topPad + top.coerceAtLeast(0), bottomPad = metrics.bottomPad + bottom.coerceAtLeast(0))
+        if (m == pages.metrics) return
+        pages.metrics = m
+        pages.relayout()
+    }
 
     /**
      * The lasso's floating menu (CANVAS-10/11): where to show it, or null to hide it (no selection,
@@ -251,6 +291,7 @@ class PagedDocumentView(context: Context) : FrameLayout(context), InProgressStro
     private val wet = InProgressStrokesView(context)
     private val cursor = HoverCursorLayer(context)
     private val palm = PalmRejection()
+    private val fingerTaps = MultiFingerTap(ViewConfiguration.get(context).scaledTouchSlop.toFloat())
     private val sideButton = SideButtonTool()
     private val hover = HoverTracker()
     private val hoverGestures = HoverButtonGestures()
@@ -405,12 +446,12 @@ class PagedDocumentView(context: Context) : FrameLayout(context), InProgressStro
         for (se in StylusEventMapper.map(event)) {
             val id = se.pointerId
             val decision = palm.decide(se)
-            // A stylus or a second finger arrived: finger strokes are dropped and become scrolling.
-            palm.drainCancels().forEach { cancelled ->
-                val wasInking = inking.containsKey(cancelled)
-                cancelInk(cancelled, event)
-                sideButton.onEnd(cancelled)
-                if (wasInking) pointerXY(event, cancelled)?.let { scrolling[cancelled] = it }
+            applyPalmCancels(event)
+            if (inking.isNotEmpty() || erasing.isNotEmpty() || highlighting != null || selection.active) fingerTaps.invalidate()
+            when (fingerTaps.onEvent(se, decision)) {
+                MultiFingerTap.Gesture.Undo -> if (twoFingerTapUndo) document?.undo()
+                MultiFingerTap.Gesture.Redo -> if (threeFingerTapRedo) document?.redo()
+                null -> Unit
             }
             if (hover.onEvent(se)) refreshHover()
             hoverGestures.onEvent(se) // touching abandons a pending side-button click
@@ -470,6 +511,27 @@ class PagedDocumentView(context: Context) : FrameLayout(context), InProgressStro
         notifyWriting()
     }
 
+    /**
+     * Finger pointers [palm] took back: a stylus arrived (they are palms: drop their ink and their
+     * scroll) or a second finger did (their ink is dropped and they join the gesture).
+     */
+    private fun applyPalmCancels(event: MotionEvent) {
+        for (cancelled in palm.drainCancels()) {
+            val wasWriting = inking.containsKey(cancelled) || erasing.containsKey(cancelled) ||
+                highlighting?.second?.pointerId == cancelled
+            cancelInk(cancelled, event)
+            finishErase(cancelled)
+            sideButton.onEnd(cancelled)
+            if (palm.isPalm(cancelled)) {
+                cardTaps.remove(cancelled)
+                tapCandidate = null
+                if (scrolling.remove(cancelled) != null && scrolling.size < 2) commitPreview()
+            } else if (wasWriting) {
+                pointerXY(event, cancelled)?.let { scrolling[cancelled] = it }
+            }
+        }
+    }
+
     private fun notifyWriting() {
         val now = inking.isNotEmpty() || erasing.isNotEmpty() || highlighting != null || selection.active
         if (now != writing) {
@@ -480,8 +542,10 @@ class PagedDocumentView(context: Context) : FrameLayout(context), InProgressStro
 
     private fun onDown(event: MotionEvent, se: StylusEvent, decision: InputDecision) {
         val id = se.pointerId
-        scroller.forceFinished(true)
         val finger = se.tool == PointerTool.Finger || se.tool == PointerTool.Unknown
+        // A palm (a finger landing while the pen writes or hovers) does nothing at all.
+        if (finger && decision == InputDecision.Ignore) return
+        scroller.forceFinished(true)
         // Nothing moves under the pen: a pen lands on the final, settled layout.
         if (!finger || decision == InputDecision.Draw || decision == InputDecision.Erase) settleZoom()
         val x = se.latest.x
@@ -814,6 +878,7 @@ class PagedDocumentView(context: Context) : FrameLayout(context), InProgressStro
         var changed = false
         for (hoverEvent in events) {
             palm.decide(hoverEvent)
+            applyPalmCancels(event) // the pen arriving turns fingers already down into palms
             changed = hover.onEvent(hoverEvent) || changed
             hoverGestures.onEvent(hoverEvent)?.let(::onHoverGesture)
         }

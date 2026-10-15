@@ -38,11 +38,7 @@
     <string name="settings_palm_pen">صارم أثناء استخدام القلم</string>
     <string name="settings_palm_pen_sub">اللمسات قرب القلم أو أثناء تحويمه لا تترك أي أثر</string>
     <string name="settings_finger_draws">الرسم بالإصبع</string>
-    <string name="settings_finger_never">أبدًا</string>
-    <string name="settings_finger_nopen">بلا قلم</string>
-    <string name="settings_finger_always">دائمًا</string>
-    <string name="settings_finger_never_sub">القلم وحده يكتب، والأصابع للتمرير والتكبير.</string>
-    <string name="settings_finger_nopen_sub">يرسم الإصبع حتى يكتشف التطبيق قلمًا، ثم يكتب القلم وحده.</string>
+    <string name="settings_finger_nopen_sub">متوقف: بعد اكتشاف القلم يكتب القلم وحده، والأصابع للتمرير والتكبير واللمس.</string>
     <string name="settings_finger_always_sub">يرسم الإصبع ما دام القلم لا يلمس الشاشة ولا يحوم فوقها.</string>
     <string name="settings_feel_group">الإحساس</string>
     <string name="settings_hover_cursor">مؤشر التحويم</string>

@@ -57,21 +57,27 @@ internal data class ChromeActions(
     val onOpenSettings: () -> Unit = {},
 )
 
-/** Back circle + notebook title + "Page X of Y". Mirrors in RTL with the rest of the chrome. */
+/**
+ * The small floating back pill: back arrow, notebook title and "Page X of Y" (Atelier "float-back").
+ * Mirrors in RTL with the rest of the chrome.
+ */
 @Composable
 internal fun TitleCluster(title: String, page: Int, pageCount: Int, onBack: () -> Unit, modifier: Modifier = Modifier) {
-    Row(modifier, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.M)) {
+    Row(
+        modifier.chromeSurface().padding(start = 2.dp, end = Spacing.L),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(Spacing.XS),
+    ) {
         ChromeIconButton(
             icon = AtelierIcons.Back,
             label = stringResource(R.string.editor_back),
             onClick = onBack,
             size = 44.dp,
-            modifier = Modifier.chromeSurface(),
         )
-        Column(Modifier.widthIn(max = 280.dp)) {
+        Column(Modifier.widthIn(max = 240.dp)) {
             Text(
                 title.ifBlank { stringResource(R.string.editor_untitled) },
-                style = MaterialTheme.typography.titleMedium.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold),
+                style = MaterialTheme.typography.titleSmall.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold),
                 color = MaterialTheme.colorScheme.onSurface,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,

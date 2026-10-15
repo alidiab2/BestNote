@@ -75,4 +75,6 @@
     <string name="quick_palette">Quick palette</string>
     <string name="quick_palette_all">All pen settings</string>
     <string name="quick_palette_size">Size %1$s mm. Tap to change</string>
+    <string name="editor_pen_detected">Pen detected: fingers now scroll and zoom.</string>
+    <string name="toolbar_move">Move toolbar: drag to the top or a side</string>
 </resources>

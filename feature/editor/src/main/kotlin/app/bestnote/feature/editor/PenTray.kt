@@ -110,6 +110,7 @@ internal fun PenTray(
     onCollapse: () -> Unit,
     picker: @Composable (PickerAnchor) -> Unit,
     modifier: Modifier = Modifier,
+    grip: Modifier? = null,
 ) {
     val vertical = side != TraySide.Top
     val inks = toolbox.active.inks
@@ -121,6 +122,7 @@ internal fun PenTray(
             .padding(if (vertical) PaddingTrayVertical else PaddingTrayHorizontal),
         spacing = 10.dp,
     ) {
+        if (grip != null) TrayGrip(vertical, grip)
         TrayLine(vertical) {
             PenKind.entries.forEach { kind ->
                 // With the lasso in hand no pen is raised (the side-button eraser still shows).
@@ -167,8 +169,32 @@ internal fun PenTray(
     }
 }
 
-private val PaddingTrayHorizontal = androidx.compose.foundation.layout.PaddingValues(start = 10.dp, end = 8.dp)
-private val PaddingTrayVertical = androidx.compose.foundation.layout.PaddingValues(top = 10.dp, bottom = 8.dp)
+/** Drag handle: two columns of dots. Drag the tray by it to the top or a side ([grip] holds the gesture). */
+@Composable
+private fun TrayGrip(vertical: Boolean, grip: Modifier) {
+    val label = stringResource(R.string.toolbar_move)
+    val dot = BestNoteTheme.colors.muted
+    Canvas(
+        Modifier
+            .then(if (vertical) Modifier.size(GripLong, GripShort) else Modifier.size(GripShort, GripLong))
+            .semantics { contentDescription = label }
+            .then(grip),
+    ) {
+        val r = 1.6.dp.toPx()
+        val step = 6.dp.toPx()
+        for (i in -1..1) for (j in 0..1) {
+            val along = i * step
+            val across = (j - 0.5f) * step
+            drawCircle(dot, r, center + if (vertical) Offset(along, across) else Offset(across, along))
+        }
+    }
+}
+
+private val GripShort = 20.dp
+private val GripLong = 44.dp
+
+private val PaddingTrayHorizontal = androidx.compose.foundation.layout.PaddingValues(start = 6.dp, end = 8.dp)
+private val PaddingTrayVertical = androidx.compose.foundation.layout.PaddingValues(top = 6.dp, bottom = 8.dp)
 
 /** One pen peeking out of the tray. Raised (Motion.Spring.snappy + TrayLift scale) when active. */
 @Composable

@@ -8,7 +8,10 @@ enum class InputDecision {
     /** Erase regardless of the selected tool (the stylus' eraser end). The side button is [SideButtonTool]'s job. */
     Erase,
 
-    /** Not for drawing: leave it to scroll/zoom or ignore it. */
+    /** A finger that navigates: scroll, pan, pinch-zoom, taps and multi-finger tap gestures. Never ink. */
+    Navigate,
+
+    /** Do nothing with it (hover, or a palm resting while the pen writes or hovers). */
     Ignore,
 
     /** Abort and discard the in-progress stroke for this pointer. */
@@ -16,93 +19,152 @@ enum class InputDecision {
 }
 
 /**
- * Palm rejection policy. Pure and stateful per page; feed it every [StylusEvent] in order.
+ * Palm rejection and finger routing (SPEN-02). Pure and stateful; feed it every [StylusEvent] in order.
  *
  * Rules:
  *  1. ACTION_CANCEL / FLAG_CANCELED always cancel (the system identified an accidental touch).
  *  2. Hover never draws.
  *  3. Stylus draws (the eraser end erases). Mouse draws.
- *  4. Fingers draw only when [stylusOnly] is off **and** no stylus is touching **or hovering**
- *     (a palm lands while the pen hovers just above the page). A hover counts for
- *     [HOVER_GRACE_MS] after its last sample, so a missed HOVER_EXIT can't lock fingers out.
- *  5. A stylus touching down cancels in-flight finger strokes (the palm usually lands first).
+ *  4. Auto stylus-only: with [autoStylusOnly] on, the first stylus event (touch or hover) sets
+ *     [penSeen] and calls [onPenSeen] once, so the host can persist it. From then on fingers navigate.
+ *  5. Fingers navigate when [fingersNavigate]; otherwise one finger may draw while no stylus is
+ *     touching or hovering, and a second finger turns the gesture into navigation.
+ *  6. Palms: a finger that touches down while the pen touches or hovers (a hover counts for
+ *     [HOVER_GRACE_MS] after its last sample, so a missed HOVER_EXIT can't lock fingers out) is
+ *     ignored until it lifts. A pen touching down or starting to hover turns every finger already
+ *     down into a palm: its stroke or scroll is cancelled ([drainCancels], then [isPalm]).
  */
 class PalmRejection(var stylusOnly: Boolean = false) {
+    /** "Fingers draw until a pen is seen" (the default): see rule 4. */
+    var autoStylusOnly: Boolean = false
+
+    /** A pen has been used on this device. The host restores it from settings; it only ever turns on here. */
+    var penSeen: Boolean = false
+
+    /** Called once when [penSeen] turns on because of an event. */
+    var onPenSeen: (() -> Unit)? = null
+
+    /** True when fingers never ink and only scroll / zoom / tap. */
+    val fingersNavigate: Boolean get() = stylusOnly || (autoStylusOnly && penSeen)
+
     private val stylusDown = HashSet<Int>()
     private val fingerDrawing = HashSet<Int>()
+    private val fingerNavigating = HashSet<Int>()
+    private val palms = HashSet<Int>()
+    private val pendingCancels = ArrayList<Int>()
 
     /** Event time of the last stylus hover sample, or null when the pen left (HOVER_EXIT). */
     private var lastStylusHoverAt: Long? = null
 
-    /** Decide for [event]. After a Down, call [drainCancels] for finger strokes to abort. */
+    /** Decide for [event]. After each event, call [drainCancels] for finger pointers to abort. */
     fun decide(event: StylusEvent): InputDecision {
+        val pen = event.tool == PointerTool.Stylus || event.tool == PointerTool.Eraser
+        if (pen) markPenSeen()
         if (event.canceled || event.action == StylusAction.Cancel) {
             release(event.pointerId)
             return InputDecision.Cancel
         }
         if (event.isHover) {
-            if (event.tool == PointerTool.Stylus || event.tool == PointerTool.Eraser) {
-                lastStylusHoverAt = if (event.action == StylusAction.HoverExit) null else event.latest.timeMillis
+            if (pen) {
+                if (event.action == StylusAction.HoverExit) {
+                    lastStylusHoverAt = null
+                } else {
+                    if (lastStylusHoverAt == null) fingersBecomePalms()
+                    lastStylusHoverAt = event.latest.timeMillis
+                }
             }
             return InputDecision.Ignore
         }
+        val id = event.pointerId
         return when (event.action) {
             StylusAction.Down -> onDown(event)
             StylusAction.Up -> {
-                val wasFinger = event.pointerId in fingerDrawing
-                val wasStylus = event.pointerId in stylusDown
-                release(event.pointerId)
-                if (wasFinger || wasStylus || event.tool == PointerTool.Mouse) InputDecision.Draw else InputDecision.Ignore
+                val decision = current(id, event.tool)
+                release(id)
+                decision
             }
-            else -> when (event.pointerId) {
-                in stylusDown, in fingerDrawing -> InputDecision.Draw
-                else -> if (event.tool == PointerTool.Mouse) InputDecision.Draw else InputDecision.Ignore
-            }
+            else -> current(id, event.tool)
         }
     }
 
-    private val pendingCancels = ArrayList<Int>()
+    private fun current(id: Int, tool: PointerTool): InputDecision = when (id) {
+        in palms -> InputDecision.Ignore
+        in stylusDown, in fingerDrawing -> InputDecision.Draw
+        in fingerNavigating -> InputDecision.Navigate
+        else -> if (tool == PointerTool.Mouse) InputDecision.Draw else InputDecision.Ignore
+    }
 
-    /** Finger pointers whose in-flight strokes must be cancelled (stylus or second finger arrived). */
+    /** Finger pointers whose stroke or scroll must be aborted (a stylus or a second finger arrived). */
     fun drainCancels(): List<Int> = pendingCancels.toList().also { pendingCancels.clear() }
+
+    /** True while [pointerId] is a finger judged to be a palm: drop it, never scroll with it. */
+    fun isPalm(pointerId: Int): Boolean = pointerId in palms
 
     fun reset() {
         stylusDown.clear()
         fingerDrawing.clear()
+        fingerNavigating.clear()
+        palms.clear()
         pendingCancels.clear()
         lastStylusHoverAt = null
     }
 
+    private fun markPenSeen() {
+        if (penSeen) return
+        penSeen = true
+        onPenSeen?.invoke()
+    }
+
     private fun stylusHovering(now: Long): Boolean = lastStylusHoverAt?.let { now - it <= HOVER_GRACE_MS } ?: false
+
+    /** The pen arrived: every finger already on the glass is a palm. */
+    private fun fingersBecomePalms() {
+        val fingers = fingerDrawing + fingerNavigating
+        if (fingers.isEmpty()) return
+        palms += fingers
+        pendingCancels += fingers
+        fingerDrawing.clear()
+        fingerNavigating.clear()
+    }
 
     private fun onDown(event: StylusEvent): InputDecision = when (event.tool) {
         PointerTool.Stylus, PointerTool.Eraser -> {
             stylusDown += event.pointerId
-            if (fingerDrawing.isNotEmpty()) {
-                pendingCancels += fingerDrawing
-                fingerDrawing.clear()
-            }
+            fingersBecomePalms()
             lastStylusHoverAt = null
             if (event.tool == PointerTool.Eraser) InputDecision.Erase else InputDecision.Draw
         }
         PointerTool.Mouse -> InputDecision.Draw
-        PointerTool.Finger, PointerTool.Unknown ->
-            if (!stylusOnly && stylusDown.isEmpty() && fingerDrawing.isEmpty() && !stylusHovering(event.latest.timeMillis)) {
-                fingerDrawing += event.pointerId
-                InputDecision.Draw
-            } else {
-                // Second finger: whatever the first finger was doing becomes a gesture.
-                if (fingerDrawing.isNotEmpty()) {
-                    pendingCancels += fingerDrawing
-                    fingerDrawing.clear()
+        PointerTool.Finger, PointerTool.Unknown -> {
+            val id = event.pointerId
+            when {
+                stylusDown.isNotEmpty() || stylusHovering(event.latest.timeMillis) -> {
+                    palms += id
+                    InputDecision.Ignore
                 }
-                InputDecision.Ignore
+                !fingersNavigate && fingerDrawing.isEmpty() && fingerNavigating.isEmpty() -> {
+                    fingerDrawing += id
+                    InputDecision.Draw
+                }
+                else -> {
+                    // Second finger: whatever the first finger was doing becomes a gesture.
+                    if (fingerDrawing.isNotEmpty()) {
+                        pendingCancels += fingerDrawing
+                        fingerNavigating += fingerDrawing
+                        fingerDrawing.clear()
+                    }
+                    fingerNavigating += id
+                    InputDecision.Navigate
+                }
             }
+        }
     }
 
     private fun release(pointerId: Int) {
         stylusDown -= pointerId
         fingerDrawing -= pointerId
+        fingerNavigating -= pointerId
+        palms -= pointerId
     }
 
     companion object {
