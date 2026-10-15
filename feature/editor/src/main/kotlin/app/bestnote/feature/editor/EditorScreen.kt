@@ -55,6 +55,7 @@ import app.bestnote.core.model.PaperTemplate
 import app.bestnote.core.model.PenStyle
 import app.bestnote.core.model.Tool
 import app.bestnote.engine.canvas.PageCanvasView
+import app.bestnote.engine.ink.InkPalette
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -113,9 +114,9 @@ class EditorViewModel @Inject constructor(
 }
 
 private fun toolColor(tool: Tool): Int = when (tool) {
-    Tool.Highlighter -> 0xFFFFD54F.toInt()
-    Tool.Pencil -> 0xFF4A4A4A.toInt()
-    else -> 0xFF1F1F1F.toInt()
+    Tool.Highlighter -> InkPalette.HIGHLIGHTER_YELLOW
+    Tool.Pencil -> InkPalette.GRAPHITE
+    else -> InkPalette.BLACK
 }
 
 @OptIn(ExperimentalMaterial3Api::class)

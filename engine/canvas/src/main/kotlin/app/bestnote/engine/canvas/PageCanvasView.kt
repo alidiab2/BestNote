@@ -6,7 +6,7 @@
  *    through androidx.graphics' front-buffered renderer, fed with unbuffered MotionEvents
  *    and [MotionEventPredictor] samples for minimum perceived latency;
  *  - **dry ink**: a regular View drawing the paper template and finished strokes with
- *    [CanvasStrokeRenderer].
+ *    :engine:ink's [InkRenderer] (highlighters under ink).
  * Input is classified by :engine:stylus ([StylusEventMapper] + [PalmRejection]); brushes come
  * from :engine:ink. Edits (add / erase) go through an [UndoStack].
  */
@@ -23,13 +23,14 @@ import android.widget.FrameLayout
 import androidx.ink.authoring.InProgressStrokeId
 import androidx.ink.authoring.InProgressStrokesFinishedListener
 import androidx.ink.authoring.InProgressStrokesView
-import androidx.ink.rendering.android.canvas.CanvasStrokeRenderer
 import androidx.ink.strokes.Stroke
 import androidx.input.motionprediction.MotionEventPredictor
 import app.bestnote.core.model.PaperTemplate
 import app.bestnote.core.model.PenStyle
 import app.bestnote.core.model.Tool
 import app.bestnote.engine.ink.BrushCatalog
+import app.bestnote.engine.ink.InkPalette
+import app.bestnote.engine.ink.InkRenderer
 import app.bestnote.engine.stylus.InputDecision
 import app.bestnote.engine.stylus.PalmRejection
 import app.bestnote.engine.stylus.StylusAction
@@ -52,7 +53,7 @@ class PageCanvasView(context: Context) : FrameLayout(context), InProgressStrokes
     var historyListener: HistoryListener? = null
     var tool: Tool = Tool.Pen
     var penStyle: PenStyle = PenStyle.Fountain
-    var colorArgb: Int = 0xFF1F1F1F.toInt()
+    var colorArgb: Int = InkPalette.BLACK
     var brushSize: Float = BrushCatalog.DEFAULT_SIZE
 
     /** When true, fingers never draw. */
@@ -206,7 +207,7 @@ class PageCanvasView(context: Context) : FrameLayout(context), InProgressStrokes
 
     /** Paper template + finished strokes + stylus hover cursor. */
     private class DryLayer(context: Context) : View(context) {
-        private val renderer = CanvasStrokeRenderer.create()
+        private val renderer = InkRenderer()
         val strokes = ArrayList<Stroke>()
         private val density = resources.displayMetrics.density
         private val linePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0x332D5BFF; strokeWidth = density }
@@ -239,7 +240,7 @@ class PageCanvasView(context: Context) : FrameLayout(context), InProgressStrokes
         override fun onDraw(canvas: Canvas) {
             canvas.drawColor(if (template == PaperTemplate.Blank) 0xFFFFFFFF.toInt() else 0xFFFFFDF7.toInt())
             drawTemplate(canvas)
-            strokes.forEach { renderer.draw(canvas, it, IDENTITY) }
+            renderer.draw(canvas, strokes, IDENTITY)
             hover?.let { (x, y) -> canvas.drawCircle(x, y, 4 * density, hoverPaint) }
         }
 

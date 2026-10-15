@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Debug builds only: brush lab, launch with
+     adb shell am start -n app.bestnote.debug/app.bestnote.engine.ink.lab.BrushLabActivity -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application>
+        <activity
+            android:name="app.bestnote.engine.ink.lab.BrushLabActivity"
+            android:exported="true"
+            android:label="Brush lab" />
+    </application>
+</manifest>
