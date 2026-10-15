@@ -42,7 +42,12 @@ data class FingerInput(
     val penSeen: Boolean = false,
     val twoFingerTapUndo: Boolean = true,
     val threeFingerTapRedo: Boolean = true,
-)
+) {
+    companion object {
+        /** Before settings are known: stylus-first, a finger never inks. */
+        val BeforeSettings = FingerInput(stylusOnly = true)
+    }
+}
 
 /**
  * The notebook surface (CANVAS-07): real pages on the Atelier desk, scrolling vertically, with a
@@ -64,6 +69,7 @@ internal fun PagedDocumentHost(
     onIndicatorClick: (() -> Unit)? = null,
     onPenSeen: () -> Unit = {},
     topInsetPx: Int = 0,
+    bottomInsetPx: Int = 0,
     modifier: Modifier = Modifier,
 ) {
     val penSeenCallback by rememberUpdatedState(onPenSeen)
@@ -101,7 +107,7 @@ internal fun PagedDocumentHost(
                 view.penSeen = input.penSeen
                 view.twoFingerTapUndo = input.twoFingerTapUndo
                 view.threeFingerTapRedo = input.threeFingerTapRedo
-                view.setContentInsets(topInsetPx, 0)
+                view.setContentInsets(topInsetPx, bottomInsetPx)
                 view.addCardColor = muted
                 view.selectionColor = accent
                 view.document = document

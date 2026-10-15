@@ -58,4 +58,8 @@ class EditorInputTest {
         assertEquals(TraySide.Right, dropSide(1500f, 1200f, w, h))
         assertEquals(TraySide.Left, dropSide(80f, 300f, w, h))
     }
+
+    @Test fun fingersNeverDrawBeforeSettingsLoad() {
+        assertTrue(EditorUiState().input.stylusOnly)
+    }
 }

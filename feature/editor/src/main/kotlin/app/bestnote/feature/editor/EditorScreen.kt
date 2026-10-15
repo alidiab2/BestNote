@@ -41,6 +41,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -142,7 +143,8 @@ data class EditorUiState(
     val title: String = "",
     val template: PaperTemplate = PaperTemplate.Ruled,
     val pageCount: Int = 1,
-    val input: FingerInput = FingerInput(),
+    /** Until settings load, fingers never draw (stylus-first); then the real setting applies. */
+    val input: FingerInput = FingerInput.BeforeSettings,
     val dock: ToolbarDock = ToolbarDock.Top,
     val leftHanded: Boolean = false,
     val quickPalette: Boolean = true,
@@ -245,6 +247,7 @@ private val ChromeEdge = 20.dp
 private val TopRowTop = 12.dp
 private val TopRowHeight = 64.dp
 private val TrayTop = 66.dp
+private val ChromeGap = 12.dp
 
 /** Below this width the top dock floats the tools capsule on its own, down the end edge. */
 private val WideTopTray = 960.dp
@@ -405,6 +408,9 @@ fun EditorScreen(
     var gripOrigin by remember { mutableStateOf(Offset.Zero) }
     var dragFrom by remember { mutableStateOf(Offset.Zero) }
     var screen by remember { mutableStateOf(Offset.Zero) }
+
+    /** Height (px) of the expanded tray on the top dock, measured; it sets where page 1 starts. */
+    var trayHeight by remember { mutableIntStateOf(0) }
     val trayGrip = Modifier.onGloballyPositioned { gripOrigin = it.positionInRoot() }.pointerInput(Unit) {
         detectDragGestures(
             onDragStart = { start ->
@@ -446,7 +452,12 @@ fun EditorScreen(
         val density = LocalDensity.current
         // The chrome floats over the page: no reserved bar. Only the first page starts below the
         // title row (so the title never hides its top); everything scrolls under the chrome.
-        val topInsetPx = with(density) { WindowInsets.safeDrawing.getTop(this) + TopRowHeight.roundToPx() }
+        // Page 1 starts fully visible below the chrome: the title row, plus the tray when it floats on top.
+        val topInsetPx = with(density) {
+            val chrome = if (side == TraySide.Top && trayHeight > 0) TrayTop.roundToPx() + trayHeight + ChromeGap.roundToPx() else TopRowHeight.roundToPx()
+            WindowInsets.safeDrawing.getTop(this) + chrome
+        }
+        val bottomInsetPx = with(density) { WindowInsets.safeDrawing.getBottom(this) }
 
         // ---- the pages: real sheets on the desk, full screen. They never mirror (forced LTR) ----
         CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
@@ -477,6 +488,7 @@ fun EditorScreen(
                 onIndicatorClick = { managerPage = canvas?.currentPage?.coerceAtLeast(0) ?: 0 },
                 onPenSeen = ::onPenSeen,
                 topInsetPx = topInsetPx,
+                bottomInsetPx = bottomInsetPx,
                 modifier = Modifier
                     .fillMaxSize()
                     .onGloballyPositioned { pageOrigin = it.positionInRoot() },
@@ -522,6 +534,7 @@ fun EditorScreen(
             ) {
                 val tray: @Composable () -> Unit = {
                     PenTray(
+                        modifier = Modifier.onSizeChanged { if (side == TraySide.Top && it.height > 0) trayHeight = it.height },
                         toolbox = toolbox,
                         side = side,
                         temporary = temporary,
