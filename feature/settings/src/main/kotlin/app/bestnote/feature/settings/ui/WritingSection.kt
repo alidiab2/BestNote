@@ -117,7 +117,7 @@ internal fun WritingSection(
         row {
             StackedRow(stringResource(R.string.settings_template)) {
                 Row(horizontalArrangement = Arrangement.spacedBy(Spacing.M)) {
-                    PaperTemplate.entries.forEach { template ->
+                    DefaultTemplates.forEach { template ->
                         TemplateCard(template, template == writing.template, Modifier.weight(1f)) {
                             update { it.copy(template = template) }
                         }
@@ -241,6 +241,7 @@ private fun TemplateCard(template: PaperTemplate, selected: Boolean, modifier: M
         PaperTemplate.Ruled -> stringResource(R.string.settings_template_ruled)
         PaperTemplate.Grid -> stringResource(R.string.settings_template_grid)
         PaperTemplate.Dotted -> stringResource(R.string.settings_template_dotted)
+        else -> template.name
     }
     Column(
         modifier
@@ -287,6 +288,7 @@ private fun TemplateCard(template: PaperTemplate, selected: Boolean, modifier: M
                         y += gap
                     }
                 }
+                else -> Unit
             }
         }
         Text(
@@ -307,3 +309,6 @@ private val TemplateWidth = 64.dp
 private const val PageAspect = 0.707f
 private const val TemplateDivisions = 7f
 private val DotColor = Color(0xFFB9C2D0)
+
+/** The default-template picker offers the four basic papers; the editor's Pages menu has the rest. */
+private val DefaultTemplates = listOf(PaperTemplate.Blank, PaperTemplate.Ruled, PaperTemplate.Grid, PaperTemplate.Dotted)
