@@ -11,7 +11,6 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.absoluteOffset
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.round
@@ -403,13 +402,18 @@ fun EditorScreen(
 
     // The tray can be dragged to the top or a side; it docks where it is dropped.
     var trayDrag by remember { mutableStateOf(Offset.Zero) }
-    var trayCenter by remember { mutableStateOf(Offset.Zero) }
+    var gripOrigin by remember { mutableStateOf(Offset.Zero) }
+    var dragFrom by remember { mutableStateOf(Offset.Zero) }
     var screen by remember { mutableStateOf(Offset.Zero) }
-    val trayGrip = Modifier.pointerInput(Unit) {
+    val trayGrip = Modifier.onGloballyPositioned { gripOrigin = it.positionInRoot() }.pointerInput(Unit) {
         detectDragGestures(
-            onDragStart = { picker = null },
+            onDragStart = { start ->
+                picker = null
+                dragFrom = gripOrigin + start
+            },
             onDragEnd = {
-                val at = trayCenter + trayDrag
+                // Docks where the finger lets go of the grip.
+                val at = dragFrom + trayDrag
                 viewModel.setDock(dockFor(dropSide(at.x, at.y, screen.x, screen.y), state.leftHanded))
                 trayDrag = Offset.Zero
             },
@@ -514,7 +518,6 @@ fun EditorScreen(
                 modifier = Modifier
                     .align(trayAlignment)
                     .then(trayPadding)
-                    .onGloballyPositioned { trayCenter = it.boundsInRoot().center }
                     .absoluteOffset { trayDrag.round() },
             ) {
                 val tray: @Composable () -> Unit = {
