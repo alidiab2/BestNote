@@ -4,6 +4,12 @@ plugins {
     alias(libs.plugins.bestnote.android.hilt)
 }
 
+android {
+    defaultConfig {
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+    }
+}
+
 dependencies {
     api(projects.core.model)
     api(projects.core.storage)
@@ -20,4 +26,5 @@ dependencies {
 
     androidTestImplementation(libs.androidx.test.runner)
     androidTestImplementation(libs.androidx.test.ext.junit)
+    androidTestImplementation(libs.kotlinx.coroutines.core)
 }
