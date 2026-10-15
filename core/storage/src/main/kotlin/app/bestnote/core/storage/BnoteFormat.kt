@@ -9,9 +9,7 @@ import app.bestnote.core.model.PaperTemplate
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.int
 import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
 
 @Serializable
 internal data class ManifestJson(
@@ -53,7 +51,8 @@ internal data class PageJson(
  * Shared by the unpacked directory store and the zip archive so both stay byte-identical.
  */
 object BnoteFormat {
-    const val VERSION = 1
+    /** Current layout. History: 1 = DOC-01 draft, 2 = page metadata always carries `paper` (see [FormatMigrations]). */
+    const val VERSION = 2
     const val MANIFEST = "manifest.json"
     const val PAGES_DIR = "pages/"
     const val ASSETS_DIR = "assets/"
@@ -94,8 +93,7 @@ object BnoteFormat {
         val pages = manifest.pages.map { pageId ->
             if (!PageContent.PAGE_ID_PATTERN.matches(pageId)) throw CorruptChunkException("Invalid page id '$pageId'")
             val metaBytes = entry(pageMetaPath(pageId)) ?: throw CorruptChunkException("Missing page $pageId")
-            val meta = decode("page $pageId", metaBytes) { json.decodeFromString(PageJson.serializer(), it) }
-            if (meta.format > VERSION) throw UnsupportedFormatVersionException(meta.format, VERSION, "Page")
+            val meta = decode("page $pageId", metaBytes) { parsePage(it) }
             if (!INK_NAME.matches(meta.ink)) throw CorruptChunkException("Invalid ink name '${meta.ink}'")
             val ink = entry(PAGES_DIR + meta.ink) ?: throw CorruptChunkException("Missing ink for page $pageId")
             val page = construct("page $pageId") { Page(nid, meta.index, template(meta.template), meta.widthPt, meta.heightPt, paperColor(meta.paper), pdfRef(meta)) }
@@ -114,10 +112,19 @@ object BnoteFormat {
     internal fun parseManifest(bytes: ByteArray): ManifestJson {
         val text = bytes.decodeToString()
         // Check the version before the schema, so a future manifest layout is refused rather than "corrupt".
-        val format = decode(MANIFEST, text) { json.parseToJsonElement(it).jsonObject["format"]!!.jsonPrimitive.int }
+        val tree = decode(MANIFEST, text) { json.parseToJsonElement(it).jsonObject }
+        val format = decode(MANIFEST, text) { FormatMigrations.formatOf(tree) }
         if (format > VERSION) throw UnsupportedFormatVersionException(format, VERSION, "Notebook format")
         if (format < 1) throw CorruptChunkException("Bad format $format")
-        return decode(MANIFEST, text) { json.decodeFromString(ManifestJson.serializer(), it) }
+        return decode(MANIFEST, text) { json.decodeFromJsonElement(ManifestJson.serializer(), FormatMigrations.upgradeManifest(tree)) }
+    }
+
+    private fun parsePage(text: String): PageJson {
+        val tree = json.parseToJsonElement(text).jsonObject
+        val format = FormatMigrations.formatOf(tree)
+        if (format > VERSION) throw UnsupportedFormatVersionException(format, VERSION, "Page")
+        if (format < 1) throw CorruptChunkException("Bad page format $format")
+        return json.decodeFromJsonElement(PageJson.serializer(), FormatMigrations.upgradePage(tree))
     }
 
     private fun encodeManifest(pkg: NotebookPackage): String {
