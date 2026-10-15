@@ -6,7 +6,10 @@
  *    through androidx.graphics' front-buffered renderer, fed with unbuffered MotionEvents
  *    and [MotionEventPredictor] samples for minimum perceived latency;
  *  - **dry ink**: a regular View drawing the paper template and finished strokes with
- *    :engine:ink's [InkRenderer] (highlighters under ink);
+ *    :engine:ink's [InkRenderer] (highlighters under ink). A highlighter stroke in progress is
+ *    drawn here too ([WetHighlighter]), inside its highlight layer, so it is under the ink from
+ *    the first frame; paper + highlights and ink are separate child views, so a highlight in
+ *    progress never redraws the ink;
  *  - **cursor**: a tiny View on top drawing the stylus hover cursor, so hovering never redraws
  *    the page (cost stays constant however many strokes the page holds).
  * Input is classified by :engine:stylus ([StylusEventMapper] + [PalmRejection]); the S Pen side
@@ -19,6 +22,7 @@ import android.annotation.SuppressLint
 import android.content.Context
 import android.graphics.Canvas
 import android.graphics.Matrix
+import android.graphics.DashPathEffect
 import android.graphics.Paint
 import android.os.SystemClock
 import android.util.Log
@@ -29,6 +33,7 @@ import android.widget.FrameLayout
 import androidx.ink.authoring.InProgressStrokeId
 import androidx.ink.authoring.InProgressStrokesFinishedListener
 import androidx.ink.authoring.InProgressStrokesView
+import androidx.ink.strokes.InProgressStroke
 import androidx.ink.strokes.Stroke
 import androidx.input.motionprediction.MotionEventPredictor
 import app.bestnote.core.model.InkBrush
@@ -36,9 +41,11 @@ import app.bestnote.core.model.PaperTemplate
 import app.bestnote.core.model.PenStyle
 import app.bestnote.core.model.Tool
 import app.bestnote.engine.ink.BrushCatalog
+import app.bestnote.engine.ink.InkLayers
 import app.bestnote.engine.ink.InkPalette
 import app.bestnote.engine.ink.InkRenderer
 import app.bestnote.engine.stylus.HoverButtonGestures
+import app.bestnote.engine.ink.InkTextures
 import app.bestnote.engine.stylus.HoverCursorStyle
 import app.bestnote.engine.stylus.HoverTracker
 import app.bestnote.engine.stylus.InputDecision
@@ -142,6 +149,9 @@ class PageCanvasView(context: Context) : FrameLayout(context), InProgressStrokes
     /** pointerId -> wet stroke being drawn. */
     private val inking = HashMap<Int, InProgressStrokeId>()
 
+    /** The highlighter stroke being drawn (one at a time), drawn by the dry layer under the ink. */
+    private var highlighting: WetHighlighter? = null
+
     /** The brush each stroke was started with (captured at pen-down, kept for storage). */
     private val strokeBrushes = StrokeBrushes<InProgressStrokeId, Stroke>()
 
@@ -153,6 +163,7 @@ class PageCanvasView(context: Context) : FrameLayout(context), InProgressStrokes
         addView(wet, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
         addView(cursor, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
         wet.addFinishedStrokesListener(this)
+        wet.textureBitmapStore = InkTextures
     }
 
     /** Undo depth, e.g. for tests and diagnostics. */
@@ -228,11 +239,13 @@ class PageCanvasView(context: Context) : FrameLayout(context), InProgressStrokes
                     when {
                         pointerId in erasing -> stylusEvent.samples.forEach { eraseAt(pointerId, it.x, it.y) }
                         pointerId in inking -> wet.addToStroke(event, pointerId, inking.getValue(pointerId), predicted)
+                        highlighting?.pointerId == pointerId -> highlighting?.let { it.add(event, predicted); dry.wetChanged() }
                     }
                     rates[pointerId]?.let { meter -> stylusEvent.samples.forEach { meter.add(it.timeMillis) } }
                 }
                 StylusAction.Up -> {
                     inking.remove(pointerId)?.let { wet.finishStroke(event, pointerId, it) }
+                    finishHighlight(pointerId, event)
                     finishErase(pointerId)
                     sideButton.onEnd(pointerId)
                     rates.remove(pointerId)?.let { logRate(it) }
@@ -335,12 +348,41 @@ class PageCanvasView(context: Context) : FrameLayout(context), InProgressStrokes
 
     private fun startInk(event: MotionEvent, pointerId: Int, strokeTool: Tool) {
         val brush = BrushCatalog.brush(strokeTool, penStyle, colorArgb, brushSize) ?: return
+        if (strokeTool == Tool.Highlighter) return startHighlight(event, pointerId, strokeTool, brush)
         val id = wet.startStroke(event, pointerId, brush, IDENTITY, IDENTITY)
         inking[pointerId] = id
         StrokeBrushes.capture(strokeTool, penStyle, colorArgb, brushSize)?.let { strokeBrushes.begin(id, it) }
     }
 
+    private fun startHighlight(event: MotionEvent, pointerId: Int, strokeTool: Tool, brush: androidx.ink.brush.Brush) {
+        highlighting?.let { cancelHighlight(it.pointerId) } // one wet highlight at a time
+        val h = WetHighlighter(pointerId, brush, event.downTime)
+        highlighting = h
+        StrokeBrushes.capture(strokeTool, penStyle, colorArgb, brushSize)?.let { strokeBrushes.begin(h.id, it) }
+        h.add(event, null)
+        dry.beginWet(h.stroke, brush.colorIntArgb)
+    }
+
+    private fun finishHighlight(pointerId: Int, event: MotionEvent) {
+        val h = highlighting?.takeIf { it.pointerId == pointerId } ?: return
+        highlighting = null
+        val stroke = h.finish(event)
+        strokeBrushes.finish(h.id, stroke)
+        dry.endWet()
+        dry.add(listOf(stroke))
+        history.record(CanvasEdit.Added(listOf(stroke)))
+        notifyHistory()
+    }
+
+    private fun cancelHighlight(pointerId: Int) {
+        val h = highlighting?.takeIf { it.pointerId == pointerId } ?: return
+        highlighting = null
+        strokeBrushes.cancel(h.id)
+        dry.endWet()
+    }
+
     private fun cancelInk(pointerId: Int, event: MotionEvent) {
+        cancelHighlight(pointerId)
         inking.remove(pointerId)?.let {
             wet.cancelStroke(it, event)
             strokeBrushes.cancel(it)
@@ -378,8 +420,14 @@ class PageCanvasView(context: Context) : FrameLayout(context), InProgressStrokes
 
     private fun notifyHistory() = historyListener?.onHistoryChanged(history.canUndo, history.canRedo)
 
-    /** Paper template + finished strokes. */
-    private class DryLayer(context: Context) : View(context), StrokeTarget {
+    /**
+     * Paper template + finished strokes, plus the highlighter stroke in progress, as two stacked
+     * child views: [under] = paper and highlight layers (the wet highlight inside its color's
+     * layer), [over] = ink. While a highlight is drawn only [under] redraws; the ink view keeps its
+     * display list, so the wet highlight is under the ink from its first frame and costs no more
+     * than the page's highlights.
+     */
+    private class DryLayer(context: Context) : FrameLayout(context), StrokeTarget {
         private val renderer = InkRenderer()
         val strokes = ArrayList<Stroke>()
         private val density = resources.displayMetrics.density
@@ -387,27 +435,69 @@ class PageCanvasView(context: Context) : FrameLayout(context), InProgressStrokes
         private val marginPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = PAPER_MARGIN; strokeWidth = 1.5f * density }
         private val dotPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = PAPER_DOT }
 
+        private var wet: InProgressStroke? = null
+        private var wetColor = 0
+        private var layers: InkLayers<Stroke>? = null
+        private val under = Sheet(context, ::drawUnder)
+        private val over = Sheet(context) { renderer.drawInk(it, layers().ink, IDENTITY) }
+
+        init {
+            addView(under, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
+            addView(over, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
+        }
+
         var template = PaperTemplate.Ruled
             set(value) {
                 field = value
-                invalidate()
+                under.invalidate()
             }
 
         override fun add(more: Collection<Stroke>) {
             strokes += more
-            invalidate()
+            changed(more)
         }
 
         override fun remove(gone: Collection<Stroke>) {
             val set = gone.toHashSet()
             strokes.removeAll { it in set }
-            invalidate()
+            changed(gone)
         }
 
-        override fun onDraw(canvas: Canvas) {
+        /** A highlighter stroke started; [colorArgb] is its real (translucent) color. */
+        fun beginWet(stroke: InProgressStroke, colorArgb: Int) {
+            wet = stroke
+            wetColor = colorArgb
+            layers = null
+            under.invalidate()
+        }
+
+        /** The wet highlight's shape changed. */
+        fun wetChanged() = under.invalidate()
+
+        fun endWet() {
+            wet = null
+            layers = null
+            under.invalidate()
+        }
+
+        private fun changed(strokes: Collection<Stroke>) {
+            layers = null
+            under.invalidate()
+            if (strokes.any { !BrushCatalog.isHighlighter(it.brush) }) over.invalidate()
+        }
+
+        private fun layers(): InkLayers<Stroke> =
+            layers ?: renderer.layers(strokes, if (wet != null) wetColor else null).also { layers = it }
+
+        private fun drawUnder(canvas: Canvas) {
             canvas.drawColor(PAPER_PAGE)
             drawTemplate(canvas)
-            renderer.draw(canvas, strokes, IDENTITY)
+            val l = layers()
+            l.highlights.forEachIndexed { i, g -> renderer.drawHighlightGroup(canvas, g, IDENTITY, if (i == l.wetGroup) wet else null, null) }
+        }
+
+        private class Sheet(context: Context, private val content: (Canvas) -> Unit) : View(context) {
+            override fun onDraw(canvas: Canvas) = content(canvas)
         }
 
         private fun drawTemplate(canvas: Canvas) {
@@ -448,6 +538,16 @@ class PageCanvasView(context: Context) : FrameLayout(context), InProgressStrokes
         private var x = 0f
         private var y = 0f
         private var style: HoverCursorStyle? = null
+        private var dashEffect: DashPathEffect? = null
+        private var dashKey = 0f to 0f
+
+        private fun dash(on: Float, off: Float): DashPathEffect {
+            if (dashEffect == null || dashKey != on to off) {
+                dashEffect = DashPathEffect(floatArrayOf(on, off), 0f)
+                dashKey = on to off
+            }
+            return dashEffect!!
+        }
 
         fun show(x: Float, y: Float, style: HoverCursorStyle) {
             this.x = x
@@ -468,6 +568,7 @@ class PageCanvasView(context: Context) : FrameLayout(context), InProgressStrokes
             canvas.drawCircle(x, y, s.ringRadius, fill)
             ring.color = s.colorArgb
             ring.strokeWidth = s.ringStroke
+            ring.pathEffect = if (s.dashPx > 0f) dash(s.dashPx, s.gapPx) else null
             canvas.drawCircle(x, y, s.ringRadius, ring)
             if (s.dotRadius > 0f) {
                 dot.color = s.colorArgb

@@ -23,6 +23,7 @@ import app.bestnote.core.model.PaperSizes
 import app.bestnote.core.model.PenStyle
 import app.bestnote.core.model.Tool
 import app.bestnote.engine.canvas.StrokeBrushes
+import app.bestnote.engine.canvas.WetHighlighter
 import app.bestnote.engine.ink.BrushCatalog
 import app.bestnote.engine.ink.InkPalette
 import app.bestnote.engine.layout.document.DocumentMetrics
@@ -195,6 +196,13 @@ class PagedDocumentView(context: Context) : FrameLayout(context), InProgressStro
 
     /** pointerId -> (page, wet stroke). */
     private val inking = HashMap<Int, Pair<Int, InProgressStrokeId>>()
+
+    /**
+     * The highlighter stroke being drawn (one at a time) and its page. It is not drawn by the
+     * front-buffered wet view (always on top): its page slot draws it inside its highlight layer,
+     * under the ink, from the first frame.
+     */
+    private var highlighting: Pair<Int, WetHighlighter>? = null
     private val strokePages = HashMap<InProgressStrokeId, Int>()
 
     /** The brush each stroke was started with (sizes in page points, canonical ink colors). */
@@ -277,7 +285,7 @@ class PagedDocumentView(context: Context) : FrameLayout(context), InProgressStro
         val tracker = velocity ?: VelocityTracker.obtain().also { velocity = it }
         tracker.addMovement(event)
         predictor.record(event)
-        val predicted = if (event.actionMasked == MotionEvent.ACTION_MOVE && inking.isNotEmpty()) predictor.predict() else null
+        val predicted = if (event.actionMasked == MotionEvent.ACTION_MOVE && (inking.isNotEmpty() || highlighting != null)) predictor.predict() else null
         try {
             handle(event, predicted)
         } finally {
@@ -309,7 +317,7 @@ class PagedDocumentView(context: Context) : FrameLayout(context), InProgressStro
                 StylusAction.Down -> onDown(event, se, decision)
                 StylusAction.Move -> {
                     sideButton.onMove(se)?.let { switch ->
-                        val page = inking[id]?.first ?: erasing[id]?.first
+                        val page = inking[id]?.first ?: erasing[id]?.first ?: highlighting?.takeIf { it.second.pointerId == id }?.first
                         cancelInk(id, event)
                         finishErase(id)
                         if (page != null) begin(event, se, switch.tool, page)
@@ -317,6 +325,7 @@ class PagedDocumentView(context: Context) : FrameLayout(context), InProgressStro
                     when {
                         id in erasing -> se.samples.forEach { eraseAt(id, it.x, it.y) }
                         id in inking -> wet.addToStroke(event, id, inking.getValue(id).second, predicted)
+                        highlighting?.second?.pointerId == id -> highlighting?.let { (page, h) -> h.add(event, predicted); pages.invalidatePage(page) }
                         id in scrolling -> {
                             val y = se.latest.y
                             scrollDy += y - scrolling.getValue(id)
@@ -327,6 +336,7 @@ class PagedDocumentView(context: Context) : FrameLayout(context), InProgressStro
                 }
                 StylusAction.Up -> {
                     inking.remove(id)?.let { (_, strokeId) -> wet.finishStroke(event, id, strokeId) }
+                    finishHighlight(id, event)
                     finishErase(id)
                     sideButton.onEnd(id)
                     cardTaps.remove(id)?.let { (x, y) -> if (isTapOnCard(x, y, se.latest.x, se.latest.y)) addPage() }
@@ -342,7 +352,7 @@ class PagedDocumentView(context: Context) : FrameLayout(context), InProgressStro
                 else -> Unit
             }
         }
-        if (scrollMoves > 0 && inking.isEmpty() && erasing.isEmpty()) {
+        if (scrollMoves > 0 && inking.isEmpty() && erasing.isEmpty() && highlighting == null) {
             pages.scrollToY(pages.scrollY - (scrollDy / scrollMoves).roundToInt())
         }
         notifyTemporaryTool()
@@ -350,7 +360,7 @@ class PagedDocumentView(context: Context) : FrameLayout(context), InProgressStro
     }
 
     private fun notifyWriting() {
-        val now = inking.isNotEmpty() || erasing.isNotEmpty()
+        val now = inking.isNotEmpty() || erasing.isNotEmpty() || highlighting != null
         if (now != writing) {
             writing = now
             writingListener?.onWritingChanged(now)
@@ -409,7 +419,7 @@ class PagedDocumentView(context: Context) : FrameLayout(context), InProgressStro
 
     override fun onGenericMotionEvent(event: MotionEvent): Boolean {
         if (event.isFromSource(InputDevice.SOURCE_CLASS_POINTER) && event.actionMasked == MotionEvent.ACTION_SCROLL &&
-            inking.isEmpty()
+            inking.isEmpty() && highlighting == null
         ) {
             val v = event.getAxisValue(MotionEvent.AXIS_VSCROLL)
             if (v != 0f) {
@@ -449,6 +459,7 @@ class PagedDocumentView(context: Context) : FrameLayout(context), InProgressStro
         val brush = BrushCatalog.brush(strokeTool, penStyle, PaperInk.colorOn(colorArgb, paper), sizePt) ?: return
         val strokeToView = Matrix()
         if (!pageToView(page, strokeToView)) return
+        if (strokeTool == Tool.Highlighter) return startHighlight(event, pointerId, strokeTool, page, brush, strokeToView, sizePt)
         // World = view pixels; the stroke itself is recorded in page points.
         val strokeId = wet.startStroke(event, pointerId, brush, IDENTITY, strokeToView)
         inking[pointerId] = page to strokeId
@@ -456,7 +467,35 @@ class PagedDocumentView(context: Context) : FrameLayout(context), InProgressStro
         StrokeBrushes.capture(strokeTool, penStyle, colorArgb, sizePt)?.let { strokeBrushes.begin(strokeId, it) }
     }
 
+    private fun startHighlight(event: MotionEvent, pointerId: Int, strokeTool: Tool, page: Int, brush: androidx.ink.brush.Brush, strokeToView: Matrix, sizePt: Float) {
+        highlighting?.let { cancelHighlight(it.second.pointerId) } // one wet highlight at a time
+        val viewToStroke = Matrix().also { strokeToView.invert(it) }
+        val h = WetHighlighter(pointerId, brush, event.downTime, viewToStroke)
+        highlighting = page to h
+        StrokeBrushes.capture(strokeTool, penStyle, colorArgb, sizePt)?.let { strokeBrushes.begin(h.id, it) }
+        h.add(event, null)
+        pages.setWetHighlight(page, h.stroke, brush.colorIntArgb)
+    }
+
+    private fun finishHighlight(pointerId: Int, event: MotionEvent) {
+        val (page, h) = highlighting?.takeIf { it.second.pointerId == pointerId } ?: return
+        highlighting = null
+        val stroke = h.finish(event)
+        strokeBrushes.finish(h.id, stroke)
+        pages.setWetHighlight(page, null, 0)
+        val doc = document
+        if (doc != null && page in 0 until doc.size) doc.addStrokes(page, listOf(stroke))
+    }
+
+    private fun cancelHighlight(pointerId: Int) {
+        val (page, h) = highlighting?.takeIf { it.second.pointerId == pointerId } ?: return
+        highlighting = null
+        strokeBrushes.cancel(h.id)
+        pages.setWetHighlight(page, null, 0)
+    }
+
     private fun cancelInk(pointerId: Int, event: MotionEvent) {
+        cancelHighlight(pointerId)
         inking.remove(pointerId)?.let { (_, strokeId) ->
             wet.cancelStroke(strokeId, event)
             strokePages.remove(strokeId)
@@ -465,6 +504,7 @@ class PagedDocumentView(context: Context) : FrameLayout(context), InProgressStro
     }
 
     private fun cancelAllInput() {
+        highlighting?.let { cancelHighlight(it.second.pointerId) }
         inking.values.forEach { (_, strokeId) ->
             wet.cancelStroke(strokeId)
             strokeBrushes.cancel(strokeId)

@@ -105,6 +105,41 @@ Engine code was **not** changed; these are for the INK / CANVAS owners. Most sev
 | D8 | Highlighter default width covers only ~⅓ of the x-height and has round caps (no chisel), so a pass under a line reads as an underline, not a highlight. | highlighter | `qaink-highlighter-over-text.png` |
 | D9 | Hover cursor with the side button held (eraser) is a grey disc almost identical to the pen cursor. The erase itself works: holding the button erased "wrong" and returned to the pen. | hover | [`d9-hover-pen.png`](real-writing/d9-hover-pen.png), [`d9-hover-button-eraser.png`](real-writing/d9-hover-button-eraser.png); full: `qaink-hover-erase-end.png` |
 
+### Fix status (INK-QA)
+Re-checked by replaying the corpus on the emulator (AuraTablet) into the paged notebook view
+(`PagedDocumentView`, 11.7 px/mm replay scale for files that fit) with the fixes in place. Before/after
+crops are in [`real-writing/after/`](real-writing/after/).
+
+- [x] **D1** Wet highlighter is now drawn inside its highlight layer, under the ink: frames captured with
+  the pen still down are pixel-identical to the finished page in the highlighted area (no olive tint, no
+  pop on pen-up, earlier highlights stay). In the paged view the page slot draws the wet highlight
+  ([`WetHighlighter`](../../engine/canvas/src/main/kotlin/app/bestnote/engine/canvas/WetHighlighter.kt)),
+  so a highlight in progress redraws only its own page. (A first attempt cached the page in
+  `RenderNode`s, which blanked the page while highlighting on the emulator.)
+  [`after/d1-highlighter-wet-under-ink.png`](real-writing/after/d1-highlighter-wet-under-ink.png)
+- [x] **D2** Taps leave round dots in every pen, drawn 1.5× the line width; short dashes (Ruqaa two-dot
+  dashes, t-bars) keep their body instead of being all taper. With the dot boost, fountain Arabic dots
+  have ~2.2× the area of the first fix and two-dot dashes +35 %; the `·` in dy/du · du/dx and every
+  i-dot are solid (no rings); brush keeps its dots. [`after/d2-dots-fountain-arabic.png`](real-writing/after/d2-dots-fountain-arabic.png),
+  [`after/d2-d4-brush.png`](real-writing/after/d2-d4-brush.png)
+- [x] **D3** Sliding-window input smoothing (28 ms, upsampled to 360 Hz) and a finer simplification
+  tolerance: slow large writing and hand-drawn circles show no facets.
+  [`after/d3-curves.png`](real-writing/after/d3-curves.png)
+- [ ] **D4** Brush is thinner at normal pressure with shorter tapers and keeps its dots, but 1.5 mm notes
+  still fill in at the default size (see [`after/d2-d4-brush.png`](real-writing/after/d2-d4-brush.png)).
+  Normal-size lecture text with the brush was not re-checked. Still open.
+- [x] **D5** Fountain responds to pressure and speed, tapers at both ends and has a slightly oval nib at
+  a fixed angle: thick/thin is visible in the lecture paragraph.
+  [`after/d5-d7-fountain-pencil.png`](real-writing/after/d5-d7-fountain-pencil.png)
+- [ ] **D6** Knobs at cusps were not targeted directly (smoothing may soften them) and were not re-checked.
+- [x] **D7** Pencil has a paper-grain texture fixed to the page, pressure darkens it, and it is wider and
+  darker at 1.5 mm. Tilt shading only starts past ~57° from vertical, so the corpus (35–55°) doesn't show it.
+  [`after/d5-d7-fountain-pencil.png`](real-writing/after/d5-d7-fountain-pencil.png)
+- [x] **D8** Highlighter default is a 45 px chisel (9× size, narrow in x, nearly square corners): a pass
+  covers the x-height of 3.2 mm writing (visible in the D1 crop).
+- [x] **D9** With the side button held the hover cursor is a dashed neutral ring of the real erase
+  radius (8 even dashes around the ring in the captured frames), clearly unlike the solid pen cursor. [`after/d9-hover-cursors.png`](real-writing/after/d9-hover-cursors.png)
+
 **Not seen:** broken Arabic joins (connected letters stay connected), blobs at stroke *start*, prediction
 overshoot tails, dropped samples (the stylus log reports 238–240 Hz per stroke).
 

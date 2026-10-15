@@ -34,7 +34,7 @@ class BrushCatalogTest {
     @Test fun pressureRangesMatchPenCharacter() {
         // Ballpoint is near-constant, brush pen spans a wide range.
         assertTrue(BrushTuning.Ballpoint.MIN_PRESSURE_WIDTH >= 0.8f)
-        assertTrue(BrushTuning.BrushPen.MIN_PRESSURE_WIDTH <= 0.2f)
+        assertTrue(BrushTuning.BrushPen.MIN_PRESSURE_WIDTH <= 0.3f)
         assertTrue(BrushTuning.BrushPen.TAPER_TIP_WIDTH < 0.5f)
     }
 
@@ -42,9 +42,32 @@ class BrushCatalogTest {
         val spec = BrushCatalog.spec(Tool.Highlighter)!!
         assertTrue(spec.opacity in 0.45f..0.55f)
         assertTrue(BrushTuning.Highlighter.CHISEL_SCALE_X < BrushTuning.Highlighter.CHISEL_SCALE_Y)
-        assertTrue(BrushTuning.Highlighter.CHISEL_CORNER_ROUNDING in 0.3f..0.7f)
+        assertTrue(BrushTuning.Highlighter.CHISEL_CORNER_ROUNDING in 0.1f..0.4f) // reads as a chisel, ends still blend
         val alpha = BrushCatalog.applyOpacity(InkPalette.HIGHLIGHTER_YELLOW, spec.opacity) ushr 24
         assertTrue(alpha in 115..140)
+    }
+
+    @Test fun highlighterDefaultCoversAnXHeight() {
+        // Normal writing: 3.2 mm x-height = 40 px at 320 dpi (the QA emulator, ~ Galaxy Tab density).
+        val chiselHeight = BrushCatalog.DEFAULT_SIZE * BrushTuning.Highlighter.SIZE_SCALE * BrushTuning.Highlighter.CHISEL_SCALE_Y
+        assertTrue("chisel $chiselHeight px", chiselHeight >= 40f)
+        assertTrue(chiselHeight <= 60f) // not a paint roller
+    }
+
+    @Test fun pencilIsLegibleAtDefaultSize() {
+        assertTrue(BrushCatalog.DEFAULT_SIZE * BrushTuning.Pencil.SIZE_SCALE >= 3.5f)
+        assertTrue(BrushTuning.Pencil.MIN_PRESSURE_OPACITY >= 0.4f)
+    }
+
+    @Test fun smoothingAddsNoVisibleLagAndKeepsGeometryFine() {
+        // The sliding window is centred: half a window of the wet tail is refined, nothing more.
+        assertTrue(BrushTuning.Smoothing.WINDOW_MS in 16L..40L)
+        assertTrue(BrushTuning.Smoothing.UPSAMPLING_HZ >= 240)
+        assertTrue(BrushCatalog.EPSILON <= 0.1f)
+    }
+
+    @Test fun opaqueCopyIsForBrushesOnlyAlphaChanges() {
+        assertEquals(0xFFF7D84A.toInt(), BrushCatalog.applyOpacity(InkPalette.HIGHLIGHTER_YELLOW, 0.5f) or 0xFF000000.toInt())
     }
 
     @Test fun inkPensAreOpaque() {

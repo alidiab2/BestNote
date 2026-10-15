@@ -64,8 +64,8 @@ class ToolboxTest {
     }
 
     @Test fun widthLabelInMillimeters() {
-        // Fountain 5 units at 320 dpi = 5 / 12.6 px per mm ≈ 0.4 mm.
-        assertEquals("0.4", PenDefaults.formatMm(PenDefaults.widthMm(PenKind.Fountain, 5f, 320)))
+        // Fountain 5 units x 1.15 nib scale at 320 dpi = 5.75 / 12.6 px per mm ≈ 0.46 mm.
+        assertEquals("0.5", PenDefaults.formatMm(PenDefaults.widthMm(PenKind.Fountain, 5f, 320)))
         assertEquals("12", PenDefaults.formatMm(12.3f))
     }
 

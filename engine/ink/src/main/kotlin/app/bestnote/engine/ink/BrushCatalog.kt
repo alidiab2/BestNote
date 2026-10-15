@@ -16,7 +16,7 @@ import app.bestnote.core.model.Tool
 
 /** Stable keys for BestNote's brush families; storage persists [key]/[clientId] with each stroke. */
 enum class InkFamily(val key: String) {
-    /** Pressure-sensitive width (stock pressure pen). */
+    /** Fine nib: pressure and speed response, gentle tapers. */
     Fountain("fountain.v1"),
 
     /** Near-constant width. */
@@ -25,7 +25,7 @@ enum class InkFamily(val key: String) {
     /** Wide pressure range, tapered ends. */
     BrushPen("brush-pen.v1"),
 
-    /** Constant-width graphite placeholder until INK-02. */
+    /** Graphite: pressure darkens, paper grain texture, tilt shades. */
     Pencil("pencil.v1"),
 
     /** Flat chisel; translucent, drawn under ink, overlaps don't darken. */
@@ -53,8 +53,8 @@ object BrushCatalog {
     /** Default width in stroke units (view px at 1x zoom). */
     const val DEFAULT_SIZE = 5f
 
-    /** Geometry simplification tolerance in stroke units; 0.1 is androidx.ink's recommendation for screen units. */
-    const val EPSILON = 0.1f
+    /** Geometry simplification tolerance in stroke units (see [BrushTuning.Smoothing.EPSILON]). */
+    const val EPSILON = BrushTuning.Smoothing.EPSILON
 
     /** @return null for tools that don't lay down ink (Eraser, Lasso). */
     fun spec(tool: Tool, penStyle: PenStyle = PenStyle.Fountain): BrushSpec? = when (tool) {
@@ -75,6 +75,9 @@ object BrushCatalog {
 
     /** Which BestNote family [brush] uses, or null for brushes BestNote didn't create. */
     fun familyOf(brush: Brush): InkFamily? = BrushFamilies.identify(brush.family)
+
+    /** [brush] with its color made fully opaque: how a highlighter is drawn inside its layer. */
+    fun opaque(brush: Brush): Brush = brush.copyWithColorIntArgb(brush.colorIntArgb or 0xFF000000.toInt())
 
     /** Applies [opacity] to an ARGB color int. */
     fun applyOpacity(colorArgb: Int, opacity: Float): Int {

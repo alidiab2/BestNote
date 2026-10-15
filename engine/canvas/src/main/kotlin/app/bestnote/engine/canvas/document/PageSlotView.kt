@@ -7,6 +7,7 @@ import android.graphics.Matrix
 import android.graphics.Paint
 import android.view.View
 import androidx.core.graphics.withTranslation
+import androidx.ink.strokes.InProgressStroke
 import androidx.ink.strokes.Stroke
 import app.bestnote.engine.ink.InkRenderer
 import app.bestnote.engine.layout.document.PxRect
@@ -32,6 +33,8 @@ internal class PageSlotView(context: Context, private val style: SheetStyle) : V
     private val inkMatrix = Matrix()
     private val tinted = WeakHashMap<Stroke, Stroke>()
     private val drawList = ArrayList<Stroke>()
+    private var wet: InProgressStroke? = null
+    private var wetColor = 0
 
     init {
         // Never hit-tested: the document view routes all input.
@@ -56,9 +59,21 @@ internal class PageSlotView(context: Context, private val style: SheetStyle) : V
         invalidate()
     }
 
+    /**
+     * A highlighter stroke in progress on this page (in page points, started with an opaque brush),
+     * drawn inside its highlight layer under the ink; [colorArgb] is its real color. Null clears it.
+     */
+    fun setWet(stroke: InProgressStroke?, colorArgb: Int) {
+        if (stroke == null && wet == null) return
+        wet = stroke
+        wetColor = colorArgb
+        invalidate()
+    }
+
     fun unbind() {
         index = -1
         page = null
+        wet = null
         drawList.clear()
         visibility = INVISIBLE
     }
@@ -82,7 +97,7 @@ internal class PageSlotView(context: Context, private val style: SheetStyle) : V
             scale(s, s)
             // The renderer needs the stroke-to-pixel scale for crisp anti-aliasing (translation doesn't matter).
             inkMatrix.setScale(s, s)
-            ink.draw(this, readable(p.strokes, colors), inkMatrix)
+            ink.draw(this, readable(p.strokes, colors), inkMatrix, wet, PaperInk.colorOn(wetColor, colors))
         }
     }
 

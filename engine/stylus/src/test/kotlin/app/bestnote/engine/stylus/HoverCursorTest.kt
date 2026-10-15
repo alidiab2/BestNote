@@ -46,6 +46,16 @@ class HoverCursorTest {
         assertEquals(0f, s.dotRadius)
     }
 
+    @Test fun eraserRingIsDashedAndPenRingIsSolid() {
+        val eraser = HoverCursorStyle.of(Tool.Eraser, 0xFF000000.toInt(), brushWidthPx = 5f, eraseRadiusPx = 20f, density = density)
+        assertEquals(HoverCursorStyle.ERASER_DASH_DP * density, eraser.dashPx, 1e-4f)
+        assertTrue(eraser.gapPx > 0f)
+        assertTrue(eraser.ringStroke > HoverCursorStyle.RING_STROKE_DP * density)
+        val pen = HoverCursorStyle.of(Tool.Pen, 0xFF000000.toInt(), brushWidthPx = 5f, eraseRadiusPx = 20f, density = density)
+        assertEquals(0f, pen.dashPx)
+        assertTrue(pen.dotRadius > 0f)
+    }
+
     @Test fun showsOnHoverHidesOnExitAndTouch() {
         val h = HoverTracker()
         assertTrue(h.onEvent(ev(StylusAction.HoverEnter)))
