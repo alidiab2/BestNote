@@ -44,6 +44,7 @@ dependencies {
     implementation(projects.feature.library)
     implementation(projects.feature.editor)
     implementation(projects.feature.settings)
+    implementation(projects.feature.smartboard)
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.activity.compose)

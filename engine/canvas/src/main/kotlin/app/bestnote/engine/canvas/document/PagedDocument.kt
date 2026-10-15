@@ -113,6 +113,25 @@ class PagedDocument {
         notifyHistory()
     }
 
+    /** Strokes for several pages added as one undo step (a Smart Board insert). */
+    fun addStrokes(byPage: Map<Int, Collection<Stroke>>) {
+        val edits = byPage.filterValues { it.isNotEmpty() }.map { (index, strokes) ->
+            _pages[index].mutableStrokes += strokes
+            PageEdit(index, CanvasEdit.Added(strokes.toList()))
+        }
+        if (edits.isEmpty()) return
+        history.record(edits.singleOrNull() ?: Batch(edits))
+        edits.forEach { contentChanged(it.page) }
+        notifyHistory()
+    }
+
+    /** Several page edits undone and redone together. */
+    data class Batch(val edits: List<PageEdit>) : Command<PagedDocument> {
+        override val retainedBytes: Long get() = edits.sumOf { it.retainedBytes }
+        override fun apply(target: PagedDocument) = edits.forEach { it.apply(target) }
+        override fun revert(target: PagedDocument) = edits.asReversed().forEach { it.revert(target) }
+    }
+
     /** Removes [strokes] from page [index] now; [commitErase] records the gesture as one undo step. */
     internal fun removeStrokes(index: Int, strokes: Collection<Stroke>) {
         if (strokes.isEmpty()) return

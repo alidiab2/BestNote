@@ -82,6 +82,7 @@ import app.bestnote.core.designsystem.theme.Elevation
 import app.bestnote.core.designsystem.theme.Motion
 import app.bestnote.core.designsystem.theme.reducedMotion
 import app.bestnote.core.designsystem.theme.softShadow
+import app.bestnote.core.model.InkStroke
 import app.bestnote.core.model.NotebookId
 import app.bestnote.core.model.Page
 import app.bestnote.core.model.PaperTemplate
@@ -89,7 +90,9 @@ import app.bestnote.core.model.Tool
 import app.bestnote.engine.canvas.document.PagedDocument
 import app.bestnote.engine.canvas.document.PagedDocumentView
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -108,8 +111,20 @@ data class EditorRoute(val notebookId: String)
 
 fun NavController.navigateToEditor(id: NotebookId) = navigate(EditorRoute(id.value))
 
-fun NavGraphBuilder.editorScreen(onBack: () -> Unit, onOpenSettings: () -> Unit = {}) {
-    composable<EditorRoute> { EditorScreen(onBack, onOpenSettings) }
+/** Ink written elsewhere (Smart Board), waiting to be inserted as new pages of the open notebook. */
+class InkInsert(val template: PaperTemplate, val pages: List<List<InkStroke>>)
+
+/**
+ * @param onSmartBoard opens Smart Board for the notebook, with the page being read (its size and paper).
+ * @param takeInsert hands over (once) ink to insert when the editor comes back.
+ */
+fun NavGraphBuilder.editorScreen(
+    onBack: () -> Unit,
+    onOpenSettings: () -> Unit = {},
+    onSmartBoard: (NotebookId, Page) -> Unit = { _, _ -> },
+    takeInsert: () -> InkInsert? = { null },
+) {
+    composable<EditorRoute> { EditorScreen(onBack, onOpenSettings, onSmartBoard, takeInsert) }
 }
 
 data class EditorUiState(
@@ -177,6 +192,7 @@ internal fun traySide(dock: ToolbarDock, leftHanded: Boolean): TraySide = when (
     ToolbarDock.Right -> if (leftHanded) TraySide.Left else TraySide.Right
 }
 
+private const val INSERT_POLL_MS = 50L
 private val ChromeEdge = 20.dp
 private val TopRowHeight = 72.dp
 private val TrayTop = 76.dp
@@ -187,7 +203,13 @@ private const val DeskCenterY = 0.45f
 private const val DeskRadius = 0.62f
 
 @Composable
-fun EditorScreen(onBack: () -> Unit, onOpenSettings: () -> Unit = {}, viewModel: EditorViewModel = hiltViewModel()) {
+fun EditorScreen(
+    onBack: () -> Unit,
+    onOpenSettings: () -> Unit = {},
+    onSmartBoard: (NotebookId, Page) -> Unit = { _, _ -> },
+    takeInsert: () -> InkInsert? = { null },
+    viewModel: EditorViewModel = hiltViewModel(),
+) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val toolbox by viewModel.toolbox.collectAsStateWithLifecycle()
     var canvas by remember { mutableStateOf<PagedDocumentView?>(null) }
@@ -266,6 +288,10 @@ fun EditorScreen(onBack: () -> Unit, onOpenSettings: () -> Unit = {}, viewModel:
         onDock = { picker = null; viewModel.setDock(it) },
         onLeftHanded = { viewModel.setLeftHanded(it) },
         onClearPage = ::clearPage,
+        onSmartBoard = {
+            val index = canvas?.currentPage?.takeIf { it >= 0 } ?: 0
+            document.pages.getOrNull(index)?.page?.let { onSmartBoard(viewModel.notebookId, it) }
+        },
         pagesMenu = { PaperMenuButton(canvas) },
         onOpenSettings = onOpenSettings,
     )
@@ -277,6 +303,28 @@ fun EditorScreen(onBack: () -> Unit, onOpenSettings: () -> Unit = {}, viewModel:
                 PenPickerContent(toolbox.active, toolbox, viewModel::updateToolbox, startWithCustom = anchor == PickerAnchor.Colors)
             }
         }
+    }
+
+    // AI-07: Smart Board's handwriting arrives as new pages after the last one, as one undo step.
+    val insertedFormat = stringResource(R.string.editor_smart_board_inserted)
+    LaunchedEffect(Unit) {
+        val insert = takeInsert() ?: return@LaunchedEffect
+        while (!document.isLoaded) delay(INSERT_POLL_MS)
+        val pages = withContext(Dispatchers.Default) {
+            insert.pages.map { page -> page.mapNotNull { model -> runCatching { model to InkConversion.toInk(model) }.getOrNull() } }
+        }
+        val base = document.pages.getOrNull(canvas?.currentPage ?: -1)?.page ?: document.pages.lastOrNull()?.page ?: document.blankPage ?: return@LaunchedEffect
+        val byPage = LinkedHashMap<Int, List<androidx.ink.strokes.Stroke>>()
+        for (page in pages) {
+            val index = document.addPage(base.copy(template = insert.template))
+            if (index < 0) continue
+            viewModel.session.adopt(page)
+            byPage[index] = page.map { it.second }
+        }
+        document.addStrokes(byPage)
+        byPage.keys.firstOrNull()?.let { first -> canvas?.scrollToPage(first) }
+        snackbar.currentSnackbarData?.dismiss()
+        if (snackbar.showSnackbar(insertedFormat.format(byPage.size), actionLabel = undoText) == SnackbarResult.ActionPerformed) document.undo()
     }
 
     val desk = BestNoteTheme.colors

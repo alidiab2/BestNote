@@ -103,6 +103,11 @@ internal class DocumentSession(
         document.addListener(this)
     }
 
+    /** Strokes made elsewhere (Smart Board) whose stored form is already known; call before adding them. */
+    fun adopt(strokes: List<Pair<InkStroke, Stroke>>) {
+        for ((model, stroke) in strokes) models[stroke] = model
+    }
+
     /** The view that draws (for pen-down brushes). Call again after a configuration change. */
     fun attach(view: PagedDocumentView) {
         this.view = view
