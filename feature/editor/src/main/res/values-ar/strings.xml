@@ -10,6 +10,7 @@
     <string name="editor_layers">الطبقات</string>
     <string name="editor_export">تصدير</string>
     <string name="editor_more">المزيد</string>
+    <string name="editor_settings">الإعدادات</string>
     <string name="editor_coming_soon">%1$s قريبًا</string>
 
     <string name="pen_fountain">قلم حبر</string>

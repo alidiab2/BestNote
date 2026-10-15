@@ -14,6 +14,12 @@ android {
         versionName = "0.1.0"
     }
 
+    androidResources {
+        // Per-app language (Settings → Appearance): only the languages we ship.
+        localeFilters += listOf("en", "ar")
+        generateLocaleConfig = true
+    }
+
     buildTypes {
         debug {
             // -PdebugIdSuffix=.qaink installs side by side with other agents' builds on the shared emulator.
@@ -33,6 +39,7 @@ dependencies {
     implementation(projects.core.designsystem)
     implementation(projects.core.database)
     implementation(projects.core.datastore)
+    implementation(projects.ai.visionGemini)
 
     implementation(projects.feature.library)
     implementation(projects.feature.editor)

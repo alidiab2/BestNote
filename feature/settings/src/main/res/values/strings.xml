@@ -1,0 +1,211 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="settings_title">Settings</string>
+    <string name="settings_back">Back</string>
+    <string name="settings_app_name" translatable="false">BestNote</string>
+    <string name="settings_coming_soon">Coming soon</string>
+    <string name="settings_off">Off</string>
+
+    <!-- Categories -->
+    <string name="settings_cat_stylus">S Pen &amp; input</string>
+    <string name="settings_cat_gestures">Gestures</string>
+    <string name="settings_cat_writing">Writing</string>
+    <string name="settings_cat_ai">Smart Board AI</string>
+    <string name="settings_cat_appearance">Appearance</string>
+    <string name="settings_cat_storage">Storage &amp; backup</string>
+    <string name="settings_cat_about">About</string>
+    <string name="settings_sum_stylus_eraser">Hold button: eraser</string>
+    <string name="settings_sum_stylus_lasso">Hold button: lasso</string>
+    <string name="settings_sum_stylus_off">Side button off</string>
+    <string name="settings_sum_gestures">Undo, redo, zoom</string>
+    <string name="settings_sum_writing">Pen, paper, toolbar</string>
+    <string name="settings_sum_ai">Your key, your provider</string>
+    <string name="settings_sum_storage">%1$s used</string>
+    <string name="settings_sum_about">Version %1$s</string>
+
+    <!-- S Pen -->
+    <string name="settings_stylus_desc">How the pen, its side button and your hand behave on the page.</string>
+    <string name="settings_stylus_hold_group">Side button held while writing</string>
+    <string name="settings_hold_eraser">Temporary eraser</string>
+    <string name="settings_hold_eraser_sub">Erase while held, back to your pen on release</string>
+    <string name="settings_hold_lasso">Lasso</string>
+    <string name="settings_hold_lasso_sub">Select and move while held</string>
+    <string name="settings_hold_off_sub">The button does nothing while writing</string>
+    <string name="settings_stylus_click_group">Side button click while hovering</string>
+    <string name="settings_click_illustration">Hover the pen just above the page and click the side button.</string>
+    <string name="settings_click_palette">Quick palette</string>
+    <string name="settings_click_palette_sub">A ring of tools and colors opens at the pen tip</string>
+    <string name="settings_click_undo">Double-click to undo</string>
+    <string name="settings_click_undo_sub">Two quick clicks while hovering undo the last change</string>
+    <string name="settings_palm_group">Palm rejection</string>
+    <string name="settings_palm_pen">Strict while a pen is in use</string>
+    <string name="settings_palm_pen_sub">Touches near the pen, or while it hovers, never leave marks</string>
+    <string name="settings_finger_draws">Finger draws</string>
+    <string name="settings_finger_never">Never</string>
+    <string name="settings_finger_nopen">No pen detected</string>
+    <string name="settings_finger_always">Always</string>
+    <string name="settings_finger_never_sub">Only the pen writes. Fingers scroll and zoom.</string>
+    <string name="settings_finger_nopen_sub">Fingers draw until BestNote sees a pen, then only the pen writes.</string>
+    <string name="settings_finger_always_sub">Fingers draw whenever no pen is touching or hovering.</string>
+    <string name="settings_feel_group">Feel</string>
+    <string name="settings_hover_cursor">Hover cursor</string>
+    <string name="settings_hover_cursor_sub">Shows the tip size and color before you touch</string>
+    <string name="settings_tilt">Tilt shading</string>
+    <string name="settings_tilt_sub">Tilt the pencil to shade with its side</string>
+    <string name="settings_pressure">Pressure curve</string>
+    <string name="settings_pressure_sub">Softer gives thicker lines with a light touch</string>
+    <string name="settings_pressure_soft">Soft</string>
+    <string name="settings_pressure_normal">Normal</string>
+    <string name="settings_pressure_firm">Firm</string>
+    <string name="settings_pressure_try">Try it here with your pen</string>
+    <string name="settings_pressure_clear">Clear the preview</string>
+
+    <!-- Gestures -->
+    <string name="settings_gestures_desc">Finger gestures work even when only the pen writes.</string>
+    <string name="settings_gestures_touch">Touch</string>
+    <string name="settings_gesture_undo">Two-finger tap</string>
+    <string name="settings_gesture_undo_sub">Undo</string>
+    <string name="settings_gesture_redo">Three-finger tap</string>
+    <string name="settings_gesture_redo_sub">Redo</string>
+    <string name="settings_gesture_pinch">Pinch to zoom</string>
+    <string name="settings_gesture_pinch_sub">Two fingers zoom the page</string>
+    <string name="settings_gesture_scroll">Finger scrolling</string>
+    <string name="settings_gesture_scroll_sub">One finger scrolls when it doesn\'t draw</string>
+    <string name="settings_gestures_pen">With the pen</string>
+    <string name="settings_gesture_pen_double">Double-tap the pen</string>
+    <string name="settings_gesture_pen_double_sub">Switch to the last tool you used</string>
+
+    <!-- Writing -->
+    <string name="settings_writing_desc">Defaults for new notebooks. Each notebook remembers its own last pen.</string>
+    <string name="settings_default_pen">Default pen</string>
+    <string name="settings_pen_type">Type</string>
+    <string name="settings_pen_fountain">Fountain</string>
+    <string name="settings_pen_ball">Ballpoint</string>
+    <string name="settings_pen_brush">Brush</string>
+    <string name="settings_pen_color">Color</string>
+    <string name="settings_pen_size">Thickness</string>
+    <string name="settings_pen_size_value">Size %1$d</string>
+    <string name="settings_new_notebooks">New notebooks</string>
+    <string name="settings_template">Paper</string>
+    <string name="settings_template_blank">Blank</string>
+    <string name="settings_template_ruled">Ruled</string>
+    <string name="settings_template_grid">Grid</string>
+    <string name="settings_template_dotted">Dotted</string>
+    <string name="settings_paper_size">Page size</string>
+    <string name="settings_paper_a4">A4</string>
+    <string name="settings_paper_a5">A5</string>
+    <string name="settings_paper_letter">Letter</string>
+    <string name="settings_layout_group">Toolbar</string>
+    <string name="settings_click_off_sub">A click while hovering does nothing</string>
+    <string name="settings_dock">Pen tray position</string>
+    <string name="settings_dock_sub">Where the tools float in the editor</string>
+    <string name="settings_dock_top">Top</string>
+    <string name="settings_dock_left">Left</string>
+    <string name="settings_dock_right">Right</string>
+    <string name="settings_left_handed">Left-handed</string>
+    <string name="settings_left_handed_sub">Side trays and popovers move to the other side of the screen</string>
+
+    <!-- Smart Board -->
+    <string name="settings_ai_desc">Turns a photo of a lecture board into neat notes in your handwriting.</string>
+    <string name="settings_ai_provider">Provider</string>
+    <string name="settings_ai_gemini">Google Gemini</string>
+    <string name="settings_ai_gemini_sub">Strong at handwriting, math and diagrams</string>
+    <string name="settings_ai_claude">Anthropic Claude</string>
+    <string name="settings_ai_claude_sub">Claude models</string>
+    <string name="settings_ai_openai">OpenAI</string>
+    <string name="settings_ai_openai_sub">GPT models</string>
+    <string name="settings_ai_key_group">Your API key</string>
+    <string name="settings_ai_key_saved">Key saved</string>
+    <string name="settings_ai_key_none">No key yet</string>
+    <string name="settings_ai_key_none_sub">Add your own Gemini API key to use Smart Board</string>
+    <string name="settings_ai_key_hint">Ends in %1$s · encrypted on this device</string>
+    <string name="settings_ai_key_remove">Remove</string>
+    <string name="settings_ai_key_field">API key</string>
+    <string name="settings_ai_key_replace">New API key</string>
+    <string name="settings_ai_model">Model</string>
+    <string name="settings_ai_model_sub">Default: %1$s</string>
+    <string name="settings_ai_model_reset">Reset</string>
+    <string name="settings_ai_test">Test key</string>
+    <string name="settings_ai_testing">Testing…</string>
+    <string name="settings_ai_save">Save</string>
+    <string name="settings_ai_saved">Saved.</string>
+    <string name="settings_ai_ok">The key works with this model.</string>
+    <string name="settings_ai_err_nokey">Enter a key first.</string>
+    <string name="settings_ai_err_invalid">The key was rejected. Check that you copied all of it.</string>
+    <string name="settings_ai_err_model">The key works, but this model isn\'t available to it.</string>
+    <string name="settings_ai_err_rate">The provider is busy (rate limited). Try again in a minute.</string>
+    <string name="settings_ai_err_offline">No connection. Check your internet and try again.</string>
+    <string name="settings_ai_err_failed">The provider didn\'t answer as expected. Try again later.</string>
+    <string name="settings_ai_get_key">Get a free key</string>
+    <string name="settings_ai_get_key_sub">Google AI Studio · aistudio.google.com</string>
+    <string name="settings_ai_privacy_group">Privacy</string>
+    <string name="settings_ai_privacy_title">What leaves your device</string>
+    <string name="settings_ai_privacy_body">Only the image you choose, sent straight from this device to the provider you picked, with your own key. There is no BestNote account and no BestNote server in between.</string>
+
+    <!-- Appearance -->
+    <string name="settings_appearance_desc">How BestNote looks. Paper and ink colors never change with these.</string>
+    <string name="settings_theme">Theme</string>
+    <string name="settings_theme_system">System</string>
+    <string name="settings_theme_light">Light</string>
+    <string name="settings_theme_dark">Dark</string>
+    <string name="settings_dynamic_color">Dynamic color</string>
+    <string name="settings_dynamic_color_sub">Accent from your wallpaper</string>
+    <string name="settings_warmth">Paper chrome</string>
+    <string name="settings_warmth_sub">How warm the backgrounds and sidebars are. Pages stay the same.</string>
+    <string name="settings_warmth_warm">Warm</string>
+    <string name="settings_warmth_soft">Soft</string>
+    <string name="settings_warmth_neutral">Neutral</string>
+    <string name="settings_language">Language</string>
+    <string name="settings_lang_system">System default</string>
+    <string name="settings_sum_theme">Theme: %1$s</string>
+    <string name="settings_lang_system_sub">Follow your Android language</string>
+    <string name="settings_lang_unsupported">Picking a language for one app needs Android 13 or newer</string>
+    <string name="settings_lang_english" translatable="false">English</string>
+    <string name="settings_lang_arabic" translatable="false">العربية</string>
+    <string name="settings_lang_arabic_sub">Arabic · right to left</string>
+    <string name="settings_motion_group">Motion</string>
+    <string name="settings_reduce_motion">Reduce motion</string>
+    <string name="settings_reduce_motion_sub">Fades instead of movement. Also follows Android\'s “Remove animations”.</string>
+
+    <!-- Storage -->
+    <string name="settings_storage_desc">Everything is stored on this device, in BestNote\'s private folder.</string>
+    <string name="settings_storage_used">Used by BestNote</string>
+    <string name="settings_storage_notebooks">Notebooks &amp; ink</string>
+    <string name="settings_storage_cache">Thumbnails &amp; cache</string>
+    <string name="settings_storage_location">Where notebooks live</string>
+    <string name="settings_storage_location_sub">On this device, private to BestNote</string>
+    <string name="settings_backup_group">Backup</string>
+    <string name="settings_export_all">Export all notebooks</string>
+    <string name="settings_export_all_sub">As .bnote files and PDFs, to a folder you pick</string>
+    <string name="settings_cleanup_group">Clean up</string>
+    <string name="settings_trash_retention">Keep deleted notebooks</string>
+    <string name="settings_trash_never">Forever</string>
+    <string name="settings_trash_never_sub">Trash is only emptied when you empty it</string>
+    <plurals name="settings_trash_days_sub">
+        <item quantity="one">Trash is emptied after %1$d day</item>
+        <item quantity="other">Trash is emptied after %1$d days</item>
+    </plurals>
+    <plurals name="settings_days_short">
+        <item quantity="one">%1$d day</item>
+        <item quantity="other">%1$d days</item>
+    </plurals>
+    <string name="settings_clear_cache">Clear thumbnails &amp; cache</string>
+    <string name="settings_clear_cache_sub">%1$s · rebuilt when needed</string>
+    <string name="settings_clear">Clear</string>
+    <string name="settings_clearing">Clearing…</string>
+
+    <!-- About -->
+    <string name="settings_about_desc">An open-source notebook for your pen.</string>
+    <string name="settings_version">Version %1$s</string>
+    <string name="settings_about_tagline">No account · No ads · Works offline</string>
+    <string name="settings_project_group">Project</string>
+    <string name="settings_source_code">Source code</string>
+    <string name="settings_source_code_sub">github.com/alidiab2/BestNote</string>
+    <string name="settings_licenses">Open-source licenses</string>
+    <string name="settings_licenses_sub">Fonts and libraries BestNote is built with</string>
+    <string name="settings_licenses_desc">BestNote stands on the work of these projects. Thank you.</string>
+    <string name="settings_licenses_fonts">Fonts</string>
+    <string name="settings_licenses_libraries">Libraries</string>
+    <string name="settings_license_ofl">SIL Open Font License 1.1</string>
+    <string name="settings_license_apache">Apache License 2.0</string>
+</resources>

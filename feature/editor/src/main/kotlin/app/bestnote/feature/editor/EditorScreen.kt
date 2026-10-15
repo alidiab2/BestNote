@@ -108,8 +108,8 @@ data class EditorRoute(val notebookId: String)
 
 fun NavController.navigateToEditor(id: NotebookId) = navigate(EditorRoute(id.value))
 
-fun NavGraphBuilder.editorScreen(onBack: () -> Unit) {
-    composable<EditorRoute> { EditorScreen(onBack) }
+fun NavGraphBuilder.editorScreen(onBack: () -> Unit, onOpenSettings: () -> Unit = {}) {
+    composable<EditorRoute> { EditorScreen(onBack, onOpenSettings) }
 }
 
 data class EditorUiState(
@@ -187,7 +187,7 @@ private const val DeskCenterY = 0.45f
 private const val DeskRadius = 0.62f
 
 @Composable
-fun EditorScreen(onBack: () -> Unit, viewModel: EditorViewModel = hiltViewModel()) {
+fun EditorScreen(onBack: () -> Unit, onOpenSettings: () -> Unit = {}, viewModel: EditorViewModel = hiltViewModel()) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val toolbox by viewModel.toolbox.collectAsStateWithLifecycle()
     var canvas by remember { mutableStateOf<PagedDocumentView?>(null) }
@@ -267,6 +267,7 @@ fun EditorScreen(onBack: () -> Unit, viewModel: EditorViewModel = hiltViewModel(
         onLeftHanded = { viewModel.setLeftHanded(it) },
         onClearPage = ::clearPage,
         pagesMenu = { PaperMenuButton(canvas) },
+        onOpenSettings = onOpenSettings,
     )
     val pickerContent: @Composable (PickerAnchor) -> Unit = { anchor ->
         AnchoredPopover(side, onDismissed = { if (picker == anchor) picker = null }) {

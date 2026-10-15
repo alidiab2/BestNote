@@ -24,26 +24,32 @@ internal val LocalBestNoteTextStyles = staticCompositionLocalOf { bestNoteTextSt
  * @param dynamicColor opt-in Material You colors on Android 12+. Off by default; only chrome follows
  *   it. Paper, ink, cover and semantic colors in [BestNoteTheme.colors] never do.
  * @param reducedMotion defaults to the system "Remove animations" setting.
+ * @param chromeWarmth 1 = the Atelier warm paper chrome, 0 = neutral grays of the same lightness.
+ *   Applies to chrome only (backgrounds, sidebar, desk, outlines); the page and ink never change.
  */
 @Composable
 fun BestNoteTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
     dynamicColor: Boolean = false,
     reducedMotion: Boolean = systemReducedMotion(),
+    chromeWarmth: Float = 1f,
     content: @Composable () -> Unit,
 ) {
     val context = LocalContext.current
-    val colorScheme = when {
+    val baseScheme = when {
         dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S ->
             if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
         darkTheme -> DarkAtelierScheme
         else -> LightAtelierScheme
     }
+    val colorScheme = remember(baseScheme, chromeWarmth) { baseScheme.withChromeWarmth(chromeWarmth) }
+    val baseColors = if (darkTheme) DarkBestNoteColors else LightBestNoteColors
+    val bestNoteColors = remember(baseColors, chromeWarmth) { baseColors.withChromeWarmth(chromeWarmth) }
     val arabic = LocalConfiguration.current.locales[0].language == "ar"
     val typography = remember(arabic) { bestNoteTypography(arabic) }
     val textStyles = remember(arabic) { bestNoteTextStyles(arabic) }
     CompositionLocalProvider(
-        LocalBestNoteColors provides if (darkTheme) DarkBestNoteColors else LightBestNoteColors,
+        LocalBestNoteColors provides bestNoteColors,
         LocalBestNoteTextStyles provides textStyles,
         LocalReducedMotion provides reducedMotion,
     ) {

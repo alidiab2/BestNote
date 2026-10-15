@@ -1,0 +1,195 @@
+package app.bestnote.feature.settings.ui
+
+import android.content.Intent
+import androidx.core.net.toUri
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.OpenInNew
+import androidx.compose.material.icons.outlined.CheckCircle
+import androidx.compose.material.icons.outlined.ErrorOutline
+import androidx.compose.material.icons.outlined.Key
+import androidx.compose.material.icons.outlined.Shield
+import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.bestnote.ai.vision.gemini.GeminiConfig
+import app.bestnote.core.designsystem.theme.BestNoteShapes
+import app.bestnote.core.designsystem.theme.BestNoteTheme
+import app.bestnote.core.designsystem.theme.Motion
+import app.bestnote.core.designsystem.theme.Spacing
+import app.bestnote.core.designsystem.theme.reducedMotion
+import app.bestnote.feature.settings.R
+import app.bestnote.feature.settings.SmartBoardViewModel
+import app.bestnote.feature.settings.data.AiProvider
+import app.bestnote.feature.settings.data.KeyTestResult
+
+private const val AI_STUDIO_URL = "https://aistudio.google.com/apikey"
+
+@Composable
+internal fun SmartBoardSection(viewModel: SmartBoardViewModel) {
+    val state by viewModel.state.collectAsStateWithLifecycle()
+    val context = LocalContext.current
+    DetailHeader(stringResource(R.string.settings_cat_ai), stringResource(R.string.settings_ai_desc))
+
+    SettingsGroup(stringResource(R.string.settings_ai_provider)) {
+        AiProvider.entries.forEach { provider ->
+            row {
+                RadioRow(
+                    title = provider.label(),
+                    selected = provider == state.provider,
+                    onSelect = {},
+                    subtitle = provider.subtitle(),
+                    enabled = provider.available,
+                    trailing = { if (!provider.available) ComingSoonChip() },
+                )
+            }
+        }
+    }
+
+    SettingsGroup(stringResource(R.string.settings_ai_key_group)) {
+        row {
+            SettingsRow(
+                title = if (state.stored.hasKey) stringResource(R.string.settings_ai_key_saved) else stringResource(R.string.settings_ai_key_none),
+                subtitle = state.stored.hint?.let { stringResource(R.string.settings_ai_key_hint, it) } ?: stringResource(R.string.settings_ai_key_none_sub),
+                icon = Icons.Outlined.Key,
+            ) {
+                if (state.stored.hasKey) RowAction(stringResource(R.string.settings_ai_key_remove), viewModel::removeKey)
+            }
+        }
+        row {
+            Column(Modifier.fillMaxWidth().padding(Spacing.L), verticalArrangement = Arrangement.spacedBy(Spacing.M)) {
+                OutlinedTextField(
+                    value = state.keyDraft,
+                    onValueChange = viewModel::onKeyChange,
+                    label = { Text(stringResource(if (state.stored.hasKey) R.string.settings_ai_key_replace else R.string.settings_ai_key_field)) },
+                    singleLine = true,
+                    visualTransformation = PasswordVisualTransformation(),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, autoCorrectEnabled = false, imeAction = ImeAction.Next),
+                    shape = BestNoteShapes.Control,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                OutlinedTextField(
+                    value = state.modelDraft,
+                    onValueChange = viewModel::onModelChange,
+                    label = { Text(stringResource(R.string.settings_ai_model)) },
+                    supportingText = { Text(stringResource(R.string.settings_ai_model_sub, GeminiConfig.DEFAULT_MODEL)) },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri, autoCorrectEnabled = false, imeAction = ImeAction.Done),
+                    trailingIcon = {
+                        if (state.modelDraft.trim() != GeminiConfig.DEFAULT_MODEL) {
+                            TextButton(onClick = viewModel::resetModel) { Text(stringResource(R.string.settings_ai_model_reset)) }
+                        }
+                    },
+                    shape = BestNoteShapes.Control,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(Spacing.S), verticalArrangement = Arrangement.spacedBy(Spacing.S)) {
+                    OutlinedButton(onClick = viewModel::test, enabled = state.canTest) {
+                        if (state.testing) {
+                            CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
+                            Text(stringResource(R.string.settings_ai_testing), Modifier.padding(start = Spacing.S))
+                        } else {
+                            Text(stringResource(R.string.settings_ai_test))
+                        }
+                    }
+                    Button(onClick = viewModel::save, enabled = state.canSave) { Text(stringResource(R.string.settings_ai_save)) }
+                }
+                TestResult(state.result, state.justSaved)
+            }
+        }
+        row {
+            SettingsRow(
+                title = stringResource(R.string.settings_ai_get_key),
+                subtitle = stringResource(R.string.settings_ai_get_key_sub),
+                modifier = Modifier.clickable(role = Role.Button) {
+                    context.startActivity(Intent(Intent.ACTION_VIEW, AI_STUDIO_URL.toUri()))
+                },
+            ) { Icon(Icons.AutoMirrored.Outlined.OpenInNew, null, tint = BestNoteTheme.colors.muted) }
+        }
+    }
+
+    SettingsGroup(stringResource(R.string.settings_ai_privacy_group)) {
+        row {
+            Row(Modifier.fillMaxWidth().padding(Spacing.L), horizontalArrangement = Arrangement.spacedBy(Spacing.M)) {
+                IconTile(Icons.Outlined.Shield, tint = BestNoteTheme.colors.success, background = BestNoteTheme.colors.success.copy(alpha = 0.12f))
+                Column(Modifier.weight(1f)) {
+                    Text(stringResource(R.string.settings_ai_privacy_title), style = MaterialTheme.typography.bodyLarge)
+                    Text(stringResource(R.string.settings_ai_privacy_body), style = MaterialTheme.typography.bodySmall, color = BestNoteTheme.colors.muted)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun TestResult(result: KeyTestResult?, justSaved: Boolean) {
+    val reduced = reducedMotion()
+    AnimatedVisibility(visible = result != null || justSaved, enter = Motion.Enter.content(reduced), exit = Motion.Exit.content(reduced)) {
+        val ok = result == null || result == KeyTestResult.Ok
+        val color = if (ok) BestNoteTheme.colors.success else MaterialTheme.colorScheme.error
+        val text = when (result) {
+            null -> stringResource(R.string.settings_ai_saved)
+            KeyTestResult.Ok -> stringResource(R.string.settings_ai_ok)
+            KeyTestResult.NoKey -> stringResource(R.string.settings_ai_err_nokey)
+            KeyTestResult.Invalid -> stringResource(R.string.settings_ai_err_invalid)
+            KeyTestResult.ModelUnavailable -> stringResource(R.string.settings_ai_err_model)
+            KeyTestResult.RateLimited -> stringResource(R.string.settings_ai_err_rate)
+            KeyTestResult.Offline -> stringResource(R.string.settings_ai_err_offline)
+            KeyTestResult.Failed -> stringResource(R.string.settings_ai_err_failed)
+        }
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .clip(BestNoteShapes.Control)
+                .background(color.copy(alpha = 0.10f))
+                .padding(Spacing.M),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(Spacing.S),
+        ) {
+            Icon(if (ok) Icons.Outlined.CheckCircle else Icons.Outlined.ErrorOutline, null, tint = color)
+            Text(text, style = MaterialTheme.typography.bodyMedium, color = color)
+        }
+    }
+}
+
+@Composable
+private fun AiProvider.label(): String = when (this) {
+    AiProvider.Gemini -> stringResource(R.string.settings_ai_gemini)
+    AiProvider.Claude -> stringResource(R.string.settings_ai_claude)
+    AiProvider.OpenAi -> stringResource(R.string.settings_ai_openai)
+}
+
+@Composable
+private fun AiProvider.subtitle(): String = when (this) {
+    AiProvider.Gemini -> stringResource(R.string.settings_ai_gemini_sub)
+    AiProvider.Claude -> stringResource(R.string.settings_ai_claude_sub)
+    AiProvider.OpenAi -> stringResource(R.string.settings_ai_openai_sub)
+}
