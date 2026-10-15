@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="editor_back">Back to library</string>
+    <string name="editor_untitled">Untitled notebook</string>
+    <string name="editor_page_of">Page %1$d of %2$d</string>
+    <string name="editor_undo">Undo</string>
+    <string name="editor_redo">Redo</string>
+    <string name="editor_smart_board">Smart Board</string>
+    <string name="editor_pages">Pages</string>
+    <string name="editor_layers">Layers</string>
+    <string name="editor_export">Export</string>
+    <string name="editor_more">More</string>
+    <string name="editor_coming_soon">%1$s is coming soon</string>
+
+    <string name="pen_fountain">Fountain pen</string>
+    <string name="pen_ballpoint">Ballpoint</string>
+    <string name="pen_brush">Brush pen</string>
+    <string name="pen_pencil">Pencil</string>
+    <string name="pen_highlighter">Highlighter</string>
+    <string name="pen_eraser">Eraser</string>
+    <string name="pen_selected">%1$s, selected. Tap again for settings</string>
+    <string name="pen_color">Color %1$s</string>
+    <string name="pen_color_selected">Color %1$s, selected</string>
+    <string name="pen_more_colors">More colors</string>
+    <string name="pen_stroke_width">Stroke width %1$s mm</string>
+    <string name="pen_mm">%1$s mm</string>
+
+    <string name="tool_lasso">Lasso</string>
+    <string name="tool_shapes">Shapes</string>
+    <string name="tool_text">Text</string>
+    <string name="tool_image">Image</string>
+    <string name="tool_audio">Record audio</string>
+    <string name="tool_ruler">Ruler</string>
+
+    <string name="toolbar_hide">Hide toolbar</string>
+    <string name="toolbar_show">Show toolbar</string>
+    <string name="toolbar_position">Toolbar position</string>
+    <string name="toolbar_top">Top</string>
+    <string name="toolbar_left">Left</string>
+    <string name="toolbar_right">Right</string>
+    <string name="toolbar_left_handed">Left-handed mode</string>
+
+    <string name="picker_presets">Presets</string>
+    <string name="picker_colors">Colors</string>
+    <string name="picker_custom">Custom color</string>
+    <string name="picker_hue">Hue</string>
+    <string name="picker_saturation">Saturation and brightness</string>
+    <string name="picker_size">Size</string>
+    <string name="picker_opacity">Opacity</string>
+    <string name="picker_preview">Stroke preview</string>
+    <string name="picker_preset">Preset %1$d</string>
+
+    <string name="eraser_stroke">Stroke eraser</string>
+    <string name="eraser_stroke_hint">Removes every stroke it touches</string>
+    <string name="eraser_pixel">Pixel eraser</string>
+    <string name="eraser_highlighter_only">Erase highlighter only</string>
+    <string name="eraser_side_button">Hold the S Pen button to erase with any pen</string>
+    <string name="editor_clear_page">Clear page</string>
+    <string name="editor_page_cleared">Page cleared</string>
+
+    <string name="quick_palette">Quick palette</string>
+    <string name="quick_palette_all">All pen settings</string>
+    <string name="quick_palette_size">Size %1$s mm. Tap to change</string>
+</resources>

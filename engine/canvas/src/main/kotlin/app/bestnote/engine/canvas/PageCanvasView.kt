@@ -11,7 +11,7 @@
  *    the page (cost stays constant however many strokes the page holds).
  * Input is classified by :engine:stylus ([StylusEventMapper] + [PalmRejection]); the S Pen side
  * button picks a temporary tool per stroke ([SideButtonTool]); brushes come from :engine:ink.
- * Edits (add / erase) go through an [UndoStack].
+ * Edits (add / erase) go through the page's bounded [CommandStack] (CANVAS-03).
  */
 package app.bestnote.engine.canvas
 
@@ -38,6 +38,7 @@ import app.bestnote.core.model.Tool
 import app.bestnote.engine.ink.BrushCatalog
 import app.bestnote.engine.ink.InkPalette
 import app.bestnote.engine.ink.InkRenderer
+import app.bestnote.engine.stylus.HoverButtonGestures
 import app.bestnote.engine.stylus.HoverCursorStyle
 import app.bestnote.engine.stylus.HoverTracker
 import app.bestnote.engine.stylus.InputDecision
@@ -49,12 +50,6 @@ import app.bestnote.engine.stylus.StylusAction
 import app.bestnote.engine.stylus.StylusEvent
 import app.bestnote.engine.stylus.StylusEventMapper
 
-/** A reversible change to the page's finished strokes. */
-sealed interface CanvasEdit {
-    data class Added(val strokes: List<Stroke>) : CanvasEdit
-    data class Erased(val strokes: List<Stroke>) : CanvasEdit
-}
-
 @SuppressLint("ViewConstructor")
 class PageCanvasView(context: Context) : FrameLayout(context), InProgressStrokesFinishedListener {
 
@@ -64,6 +59,34 @@ class PageCanvasView(context: Context) : FrameLayout(context), InProgressStrokes
     }
 
     var historyListener: HistoryListener? = null
+
+    /** Called with true when a pen or finger starts inking/erasing and false once every pointer lifted. */
+    fun interface WritingListener {
+        fun onWritingChanged(writing: Boolean)
+    }
+
+    var writingListener: WritingListener? = null
+
+    /** S Pen side button clicked while hovering: open the quick palette at ([x], [y]) in view px. */
+    fun interface QuickPaletteListener {
+        fun onQuickPalette(x: Float, y: Float)
+    }
+
+    var quickPaletteListener: QuickPaletteListener? = null
+
+    /** Setting "Side button click while hovering": false = Off. */
+    var quickPaletteEnabled: Boolean
+        get() = hoverGestures.enabled
+        set(value) {
+            hoverGestures.enabled = value
+        }
+
+    /** Setting: double-click the side button while hovering = undo. */
+    var hoverDoubleClickUndo: Boolean
+        get() = hoverGestures.doubleClickUndo
+        set(value) {
+            hoverGestures.doubleClickUndo = value
+        }
     var tool: Tool = Tool.Pen
     var penStyle: PenStyle = PenStyle.Fountain
     var colorArgb: Int = InkPalette.BLACK
@@ -96,16 +119,19 @@ class PageCanvasView(context: Context) : FrameLayout(context), InProgressStrokes
     val canRedo: Boolean get() = history.canRedo
 
     private val palm = PalmRejection()
-    private val history = UndoStack<CanvasEdit>()
+    private val history = CommandStack<StrokeTarget>()
     private val wet = InProgressStrokesView(context)
     private val dry = DryLayer(context)
     private val cursor = CursorLayer(context)
     private val predictor = MotionEventPredictor.newInstance(this)
     private val sideButton = SideButtonTool()
     private val hover = HoverTracker()
+    private val hoverGestures = HoverButtonGestures()
+    private val resolveHoverClick = Runnable { hoverGestures.onTick(SystemClock.uptimeMillis())?.let(::onHoverGesture) }
     private val density = resources.displayMetrics.density
     private val eraseRadius = ERASE_RADIUS_DP * density
     private var temporaryShown: Tool? = null
+    private var writing = false
 
     /** Stylus pointerId -> sample-rate meter for the stroke (logged on lift, SPEN-01). */
     private val rates = HashMap<Int, SampleRateMeter>()
@@ -129,27 +155,22 @@ class PageCanvasView(context: Context) : FrameLayout(context), InProgressStrokes
         wet.addFinishedStrokesListener(this)
     }
 
+    /** Undo depth, e.g. for tests and diagnostics. */
+    val undoDepth: Int get() = history.undoDepth
+
     fun undo() {
-        when (val edit = history.undo() ?: return) {
-            is CanvasEdit.Added -> dry.remove(edit.strokes)
-            is CanvasEdit.Erased -> dry.add(edit.strokes)
-        }
+        history.undo(dry) ?: return
         notifyHistory()
     }
 
     fun redo() {
-        when (val edit = history.redo() ?: return) {
-            is CanvasEdit.Added -> dry.add(edit.strokes)
-            is CanvasEdit.Erased -> dry.remove(edit.strokes)
-        }
+        history.redo(dry) ?: return
         notifyHistory()
     }
 
     fun clear() {
         if (dry.strokes.isEmpty()) return
-        val all = dry.strokes.toList()
-        dry.remove(all)
-        history.push(CanvasEdit.Erased(all))
+        history.execute(CanvasEdit.Erased(dry.strokes.toList()), dry)
         notifyHistory()
     }
 
@@ -187,6 +208,7 @@ class PageCanvasView(context: Context) : FrameLayout(context), InProgressStrokes
             val decision = palm.decide(stylusEvent)
             palm.drainCancels().forEach { cancelInk(it, event); sideButton.onEnd(it) }
             if (hover.onEvent(stylusEvent)) refreshHover() // touching hides the hover cursor
+            hoverGestures.onEvent(stylusEvent) // touching abandons a pending side-button click
             when (stylusEvent.action) {
                 StylusAction.Down -> if (decision == InputDecision.Draw || decision == InputDecision.Erase) {
                     // Deliver every digitizer sample as it arrives instead of batching per vsync.
@@ -225,6 +247,15 @@ class PageCanvasView(context: Context) : FrameLayout(context), InProgressStrokes
             }
         }
         notifyTemporaryTool()
+        notifyWriting()
+    }
+
+    private fun notifyWriting() {
+        val now = inking.isNotEmpty() || erasing.isNotEmpty()
+        if (now != writing) {
+            writing = now
+            writingListener?.onWritingChanged(now)
+        }
     }
 
     /** Start a stroke for [stylusEvent]'s pointer with [strokeTool]. */
@@ -247,7 +278,10 @@ class PageCanvasView(context: Context) : FrameLayout(context), InProgressStrokes
         for (hoverEvent in events) {
             palm.decide(hoverEvent) // a hovering pen keeps fingers from inking
             changed = hover.onEvent(hoverEvent) || changed
+            hoverGestures.onEvent(hoverEvent)?.let(::onHoverGesture)
         }
+        removeCallbacks(resolveHoverClick)
+        hoverGestures.deadline?.let { postDelayed(resolveHoverClick, (it - SystemClock.uptimeMillis()).coerceAtLeast(0L)) }
         if (changed) refreshHover()
         removeCallbacks(expireHover)
         if (hover.position != null) postDelayed(expireHover, HoverTracker.STALE_MS)
@@ -265,8 +299,16 @@ class PageCanvasView(context: Context) : FrameLayout(context), InProgressStrokes
         }
     }
 
+    private fun onHoverGesture(gesture: HoverButtonGestures.Gesture) {
+        when (gesture) {
+            is HoverButtonGestures.Gesture.QuickPalette -> quickPaletteListener?.onQuickPalette(gesture.x, gesture.y)
+            HoverButtonGestures.Gesture.Undo -> undo()
+        }
+    }
+
     override fun onDetachedFromWindow() {
         removeCallbacks(expireHover)
+        removeCallbacks(resolveHoverClick)
         super.onDetachedFromWindow()
     }
 
@@ -320,7 +362,7 @@ class PageCanvasView(context: Context) : FrameLayout(context), InProgressStrokes
     private fun finishErase(pointerId: Int) {
         val removed = erasing.remove(pointerId) ?: return
         if (removed.isNotEmpty()) {
-            history.push(CanvasEdit.Erased(removed))
+            history.record(CanvasEdit.Erased(removed))
             notifyHistory()
         }
     }
@@ -330,19 +372,20 @@ class PageCanvasView(context: Context) : FrameLayout(context), InProgressStrokes
         strokes.forEach { (id, stroke) -> strokeBrushes.finish(id, stroke) }
         dry.add(strokes.values)
         wet.removeFinishedStrokes(strokes.keys)
-        history.push(CanvasEdit.Added(strokes.values.toList()))
+        history.record(CanvasEdit.Added(strokes.values.toList()))
         notifyHistory()
     }
 
     private fun notifyHistory() = historyListener?.onHistoryChanged(history.canUndo, history.canRedo)
 
     /** Paper template + finished strokes. */
-    private class DryLayer(context: Context) : View(context) {
+    private class DryLayer(context: Context) : View(context), StrokeTarget {
         private val renderer = InkRenderer()
         val strokes = ArrayList<Stroke>()
         private val density = resources.displayMetrics.density
-        private val linePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0x332D5BFF; strokeWidth = density }
-        private val dotPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0x552D5BFF }
+        private val linePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = PAPER_RULE; strokeWidth = density }
+        private val marginPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = PAPER_MARGIN; strokeWidth = 1.5f * density }
+        private val dotPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = PAPER_DOT }
 
         var template = PaperTemplate.Ruled
             set(value) {
@@ -350,19 +393,19 @@ class PageCanvasView(context: Context) : FrameLayout(context), InProgressStrokes
                 invalidate()
             }
 
-        fun add(more: Collection<Stroke>) {
+        override fun add(more: Collection<Stroke>) {
             strokes += more
             invalidate()
         }
 
-        fun remove(gone: Collection<Stroke>) {
+        override fun remove(gone: Collection<Stroke>) {
             val set = gone.toHashSet()
             strokes.removeAll { it in set }
             invalidate()
         }
 
         override fun onDraw(canvas: Canvas) {
-            canvas.drawColor(if (template == PaperTemplate.Blank) 0xFFFFFFFF.toInt() else 0xFFFFFDF7.toInt())
+            canvas.drawColor(PAPER_PAGE)
             drawTemplate(canvas)
             renderer.draw(canvas, strokes, IDENTITY)
         }
@@ -376,6 +419,8 @@ class PageCanvasView(context: Context) : FrameLayout(context), InProgressStrokes
                 PaperTemplate.Ruled -> {
                     var y = gap * 2
                     while (y < h) { canvas.drawLine(0f, y, w, y, linePaint); y += gap }
+                    val margin = MARGIN_DP * density
+                    canvas.drawLine(margin, 0f, margin, h, marginPaint)
                 }
                 PaperTemplate.Grid -> {
                     var y = gap
@@ -434,6 +479,13 @@ class PageCanvasView(context: Context) : FrameLayout(context), InProgressStrokes
     private companion object {
         const val TAG = "BestNote/Stylus"
         val IDENTITY = Matrix()
+
+        // Atelier paper (AtelierPalette.Page / RuledLine / MarginLine): paper never follows the theme.
+        const val PAPER_PAGE = 0xFFFFFEFB.toInt()
+        const val PAPER_RULE = 0xFFDCE5F1.toInt()
+        const val PAPER_MARGIN = 0x73E27869
+        const val PAPER_DOT = 0xFFB9C6D8.toInt()
+        const val MARGIN_DP = 72f
 
         /** Eraser hit radius around a stroke's bounds; the hover cursor previews exactly this. */
         const val ERASE_RADIUS_DP = 10f
