@@ -1,0 +1,84 @@
+package app.bestnote.ai.vision.gemini
+
+import app.bestnote.ai.vision.AiDocument
+import app.bestnote.ai.vision.BoardRequest
+import app.bestnote.ai.vision.Prompts
+import app.bestnote.ai.vision.VisionError
+import app.bestnote.ai.vision.VisionImage
+import app.bestnote.ai.vision.VisionProvider
+import kotlinx.coroutines.delay
+import okhttp3.OkHttpClient
+import java.io.IOException
+
+/**
+ * Gemini [VisionProvider] (AI-03) over the `generateContent` REST API, called with the user's own
+ * key from [GeminiSettings]. Sends [Prompts] as the system instruction and constrains output with
+ * JSON mode + [GeminiSchema] (`responseJsonSchema`; if an endpoint rejects that field, retried
+ * once with the OpenAPI-style `responseSchema`). One retry on 5xx. Never logs the key.
+ */
+class GeminiVisionProvider(
+    http: OkHttpClient,
+    private val settings: GeminiSettings,
+    private val config: GeminiConfig = GeminiConfig(),
+) : VisionProvider {
+
+    private val transport = GeminiHttp(http, config)
+
+    override suspend fun reconstructBoard(image: VisionImage, request: BoardRequest): AiDocument =
+        generate(Prompts.board(request), BOARD_USER_TEXT, image)
+
+    override suspend fun beautify(selection: VisionImage, widthPt: Float, heightPt: Float): AiDocument =
+        generate(Prompts.beautify(), beautifyUserText(widthPt, heightPt), selection)
+
+    private suspend fun generate(system: String, user: String, image: VisionImage): AiDocument {
+        val key = settings.apiKey()?.trim()?.takeIf { it.isNotEmpty() } ?: throw VisionError.MissingKey()
+        val model = settings.model().trim().ifEmpty { GeminiConfig.DEFAULT_MODEL }
+        val mime = GeminiRequests.sniffMime(image.bytes, image.mimeType)
+        var schemaField = SchemaField.JsonSchema
+        var retriedServer = false
+        while (true) {
+            val body = GeminiRequests.generateContent(system, user, image.bytes, mime, config.temperature, schemaField).toString()
+            val response = try {
+                transport.post("v1beta/models/$model:generateContent", key, body)
+            } catch (e: IOException) {
+                throw VisionError.Network(e)
+            }
+            when {
+                response.code == 200 -> return GeminiResponses.document(GeminiResponses.candidateText(response.body))
+                schemaField == SchemaField.JsonSchema && GeminiResponses.rejectsJsonSchema(response.code, response.body) ->
+                    schemaField = SchemaField.OpenApi
+                response.code in 500..599 && !retriedServer -> {
+                    retriedServer = true
+                    delay(config.retryDelayMs)
+                }
+                else -> throw GeminiResponses.errorFor(response.code, response.body, response.retryAfter, model)
+            }
+        }
+    }
+
+    internal companion object {
+        const val BOARD_USER_TEXT = "This is a photo of the board. Copy it into your notebook as JSON matching the response schema."
+
+        fun beautifyUserText(widthPt: Float, heightPt: Float) =
+            "This is a selection of my handwritten notes, ${fmt(widthPt)} × ${fmt(heightPt)} pt. " +
+                "Rewrite it neatly as JSON matching the response schema; diagram coordinates use this size."
+
+        private fun fmt(v: Float) = if (v % 1f == 0f) v.toInt().toString() else "%.1f".format(java.util.Locale.ROOT, v)
+    }
+}
+
+/** Validates a key (and that it can see the model) with a cheap metadata call; for the settings screen. */
+class GeminiKeyChecker(http: OkHttpClient, config: GeminiConfig = GeminiConfig()) {
+    private val transport = GeminiHttp(http, config)
+
+    /** Returns normally when the key works for [model]; throws a [VisionError] otherwise. */
+    suspend fun check(apiKey: String, model: String = GeminiConfig.DEFAULT_MODEL) {
+        val key = apiKey.trim().takeIf { it.isNotEmpty() } ?: throw VisionError.MissingKey()
+        val response = try {
+            transport.get("v1beta/models/${model.trim()}", key)
+        } catch (e: IOException) {
+            throw VisionError.Network(e)
+        }
+        if (response.code != 200) throw GeminiResponses.errorFor(response.code, response.body, response.retryAfter, model)
+    }
+}

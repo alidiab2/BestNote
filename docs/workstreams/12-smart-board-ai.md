@@ -20,7 +20,7 @@ The model is told it is an elite, meticulous student copying the board into a no
 |---|---|---|---|---|---|
 | [x] AI-01 | Expert-student system prompt + provider-neutral schema | M2 | M | — | `PromptsTest` green |
 | [x] AI-02 | `LectureFlow`, margin/keep-with-next layout, `RulerGeometry`, `ColorSemantics` | M2 | L | — | `:engine:layout` tests green |
-| [ ] AI-03 | Gemini provider (BYOK, key in Android Keystore, JSON mode + response schema) in `:ai:vision-gemini` | M2 | M | ADR-0007 | Port from AuraNotes; MockWebServer tests |
+| [x] AI-03 | Gemini provider (BYOK, key in Android Keystore, JSON mode + response schema) in `:ai:vision-gemini` | M2 | M | ADR-0007 | Port from AuraNotes; MockWebServer tests |
 | [ ] AI-04 | Board capture: camera + document-edge crop + perspective fix | M2 | L | MEDIA-06 | Works without Play Services in `foss` |
 | [ ] AI-05 | **Handwritten output.** Render `PageBlock`s as real, editable ink strokes on notebook paper, as if the user wrote them neatly: text and math in a handwriting style (default neat hand; later learned from the user's own strokes), hand-underlined titles, pen-drawn boxes around key formulas, ruler-straight diagrams in ink, green margin notes with an arrow. No typeset cards, no markdown look. The page "writes itself" fast (≈3 s for a full page, left→right per line, lines drawn in order). | M2 | XL | DS-01, CANVAS-06, INK-01 | Matches design board v2 (Smart Board screen). Every output stroke is erasable and lasso-selectable like the user's own ink |
 | [ ] AI-06 | Real `BlockMeasurer` (text + LaTeX aware) | M2 | M | AI-05 | Layout has no overlaps on the evaluation set |

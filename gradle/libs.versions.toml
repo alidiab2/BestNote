@@ -37,6 +37,9 @@ junit4 = "4.13.2"
 androidxTestRunner = "1.7.0"
 androidxTestExtJunit = "1.3.0"
 
+# Networking (AI provider modules only)
+okhttp = "5.5.0"
+
 [libraries]
 # AndroidX core
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "androidxCore" }
@@ -88,6 +91,10 @@ kotlinx-serialization-json = { group = "org.jetbrains.kotlinx", name = "kotlinx-
 junit4 = { group = "junit", name = "junit", version.ref = "junit4" }
 androidx-test-runner = { group = "androidx.test", name = "runner", version.ref = "androidxTestRunner" }
 androidx-test-ext-junit = { group = "androidx.test.ext", name = "junit", version.ref = "androidxTestExtJunit" }
+
+# Networking (AI provider modules only)
+okhttp = { group = "com.squareup.okhttp3", name = "okhttp", version.ref = "okhttp" }
+okhttp-mockwebserver = { group = "com.squareup.okhttp3", name = "mockwebserver3", version.ref = "okhttp" }
 
 # build-logic (convention plugin compile classpath)
 android-gradlePlugin = { group = "com.android.tools.build", name = "gradle", version.ref = "agp" }
