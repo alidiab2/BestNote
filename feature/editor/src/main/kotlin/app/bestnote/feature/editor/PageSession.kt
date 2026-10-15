@@ -14,11 +14,9 @@ import app.bestnote.core.model.InkBrush
 import app.bestnote.core.model.InkStroke
 import app.bestnote.core.model.NotebookId
 import app.bestnote.core.model.PaperTemplate
-import app.bestnote.core.model.Tool
 import app.bestnote.core.storage.Autosaver
 import app.bestnote.core.storage.InkChunkCodec
 import app.bestnote.engine.canvas.PageCanvasView
-import app.bestnote.engine.ink.BrushCatalog
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -165,12 +163,12 @@ internal class PageSession(
         }
     }
 
-    /** The brush the canvas drew [stroke] with: the view's current tool, at the stroke's own size. */
-    private fun brushOf(view: PageCanvasView, stroke: Stroke): InkBrush {
-        val tool = view.tool.takeIf { it.inks } ?: Tool.Pen
-        val scale = BrushCatalog.spec(tool, view.penStyle)?.sizeScale ?: 1f
-        return InkBrush(tool, view.penStyle, view.colorArgb, stroke.brush.size / scale)
-    }
+    /**
+     * The brush captured at pen-down for [stroke]. The fallback (a stroke the canvas has no record
+     * of) identifies the family from the stroke's own androidx.ink brush, never from the toolbar.
+     */
+    private fun brushOf(view: PageCanvasView, stroke: Stroke): InkBrush =
+        view.brushOf(stroke) ?: InkConversion.brushFromInk(stroke.brush)
 
     /** Re-renders the thumbnail when the cached one predates the last save. @return true if rendered. */
     private suspend fun refreshThumbnail(saver: Autosaver, strokes: List<Stroke>): Boolean {

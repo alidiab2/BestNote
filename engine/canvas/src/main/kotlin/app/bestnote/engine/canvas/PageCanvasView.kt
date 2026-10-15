@@ -31,6 +31,7 @@ import androidx.ink.authoring.InProgressStrokesFinishedListener
 import androidx.ink.authoring.InProgressStrokesView
 import androidx.ink.strokes.Stroke
 import androidx.input.motionprediction.MotionEventPredictor
+import app.bestnote.core.model.InkBrush
 import app.bestnote.core.model.PaperTemplate
 import app.bestnote.core.model.PenStyle
 import app.bestnote.core.model.Tool
@@ -115,6 +116,9 @@ class PageCanvasView(context: Context) : FrameLayout(context), InProgressStrokes
     /** pointerId -> wet stroke being drawn. */
     private val inking = HashMap<Int, InProgressStrokeId>()
 
+    /** The brush each stroke was started with (captured at pen-down, kept for storage). */
+    private val strokeBrushes = StrokeBrushes<InProgressStrokeId, Stroke>()
+
     /** Pointers currently erasing, with the strokes they removed so far (one undo step per gesture). */
     private val erasing = HashMap<Int, MutableList<Stroke>>()
 
@@ -151,6 +155,9 @@ class PageCanvasView(context: Context) : FrameLayout(context), InProgressStrokes
 
     /** The page's finished strokes in drawing order (read on the main thread). */
     val strokes: List<Stroke> get() = dry.strokes
+
+    /** The exact brush [stroke] was drawn with, captured at pen-down; null for strokes set via [setStrokes]. */
+    fun brushOf(stroke: Stroke): InkBrush? = strokeBrushes.brushOf(stroke)
 
     /** Replaces the page's strokes (e.g. loaded from disk) and starts a fresh undo history. */
     fun setStrokes(strokes: Collection<Stroke>) {
@@ -286,11 +293,16 @@ class PageCanvasView(context: Context) : FrameLayout(context), InProgressStrokes
 
     private fun startInk(event: MotionEvent, pointerId: Int, strokeTool: Tool) {
         val brush = BrushCatalog.brush(strokeTool, penStyle, colorArgb, brushSize) ?: return
-        inking[pointerId] = wet.startStroke(event, pointerId, brush, IDENTITY, IDENTITY)
+        val id = wet.startStroke(event, pointerId, brush, IDENTITY, IDENTITY)
+        inking[pointerId] = id
+        StrokeBrushes.capture(strokeTool, penStyle, colorArgb, brushSize)?.let { strokeBrushes.begin(id, it) }
     }
 
     private fun cancelInk(pointerId: Int, event: MotionEvent) {
-        inking.remove(pointerId)?.let { wet.cancelStroke(it, event) }
+        inking.remove(pointerId)?.let {
+            wet.cancelStroke(it, event)
+            strokeBrushes.cancel(it)
+        }
     }
 
     /** Whole-stroke eraser: removes strokes whose bounds (plus a small radius) contain the point. */
@@ -315,6 +327,7 @@ class PageCanvasView(context: Context) : FrameLayout(context), InProgressStrokes
 
     override fun onStrokesFinished(strokes: Map<InProgressStrokeId, Stroke>) {
         // Hand off wet -> dry in the same frame so nothing flickers.
+        strokes.forEach { (id, stroke) -> strokeBrushes.finish(id, stroke) }
         dry.add(strokes.values)
         wet.removeFinishedStrokes(strokes.keys)
         history.push(CanvasEdit.Added(strokes.values.toList()))
