@@ -75,4 +75,13 @@ class ToolboxTest {
         assertEquals(TraySide.Right, traySide(ToolbarDock.Left, leftHanded = true))
         assertEquals(TraySide.Left, traySide(ToolbarDock.Right, leftHanded = true))
     }
+
+    @Test fun lassoTakesTheCanvasUntilAPenIsPicked() {
+        val t = Toolbox().select(PenKind.Ballpoint).withLasso(true)
+        assertEquals(Tool.Lasso, t.tool)
+        assertEquals(PenKind.Ballpoint, t.active) // the pen's settings are kept
+        val back = t.select(PenKind.Pencil)
+        assertEquals(false, back.lasso)
+        assertEquals(Tool.Pencil, back.tool)
+    }
 }

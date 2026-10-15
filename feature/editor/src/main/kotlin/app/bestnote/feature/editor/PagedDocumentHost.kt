@@ -54,6 +54,7 @@ internal fun PagedDocumentHost(
     var current by remember { mutableIntStateOf(-1) }
     var count by remember { mutableIntStateOf(0) }
     val muted = BestNoteTheme.colors.muted.toArgb()
+    val accent = MaterialTheme.colorScheme.primary.toArgb()
     Box(modifier) {
         AndroidView(
             factory = { context ->
@@ -80,6 +81,7 @@ internal fun PagedDocumentHost(
                 view.hoverDoubleClickUndo = doubleClickUndo
                 view.stylusOnly = stylusOnly
                 view.addCardColor = muted
+                view.selectionColor = accent
                 view.document = document
             },
             onRelease = { it.document = null },

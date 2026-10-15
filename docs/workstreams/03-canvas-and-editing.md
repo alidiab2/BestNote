@@ -13,10 +13,10 @@
 | [x] CANVAS-05 | Zoom & pan: pinch, fling, double-tap fit-to-width, zoom limits 25%–800% | M1 | L | — | 120 fps pan on a full page; ink sharp at every zoom |
 | [ ] CANVAS-06 | Dry-ink tile cache: rasterize finished strokes into tiles per zoom bucket | M1 | L | CANVAS-05 | Page with 5k strokes redraws in < 8 ms |
 | [x] CANVAS-07 | Paginated vertical document view with page recycling | M1 | L | DOC-01 | Scrolling a 300-page notebook stays at 120 fps, memory flat |
-| [ ] CANVAS-08 | Lasso select (freehand) with spatial index hit-testing | M2 | M | — | Selects partially enclosed strokes by a > 50% rule |
-| [ ] CANVAS-09 | Transform selection: move, resize, rotate with handles and snapping | M2 | L | CANVAS-08 | Handles animate in; rotation snaps at 0/45/90° with a haptic tick |
-| [ ] CANVAS-10 | Restyle selection: color, thickness, pen type | M2 | S | CANVAS-08 | One-tap recolor of a lasso selection |
-| [ ] CANVAS-11 | Cut/copy/paste/duplicate, across pages, notebooks and app instances | M2 | M | CANVAS-08 | Paste lands where the pen last touched |
+| [x] CANVAS-08 | Lasso select (freehand) with spatial index hit-testing | M2 | M | — | Selects partially enclosed strokes by a > 50% rule |
+| [x] CANVAS-09 | Transform selection: move, resize, rotate with handles and snapping | M2 | L | CANVAS-08 | Handles animate in; rotation snaps at 0/45/90° with a haptic tick |
+| [x] CANVAS-10 | Restyle selection: color, thickness, pen type | M2 | S | CANVAS-08 | One-tap recolor of a lasso selection (pen type: follow-up) |
+| [x] CANVAS-11 | Cut/copy/paste/duplicate, across pages, notebooks and app instances | M2 | M | CANVAS-08 | Paste lands where the pen last touched (app instances via the system clipboard: follow-up) |
 | [ ] CANVAS-12 | Layers (add, hide, reorder, per-layer lock) | M3 | XL | DOC-05 | Split into sub-tasks before starting |
 | [ ] CANVAS-13 | Lock objects (images, shapes, PDF backgrounds) | M3 | S | CANVAS-08 | Locked items ignore lasso and eraser |
 | [ ] CANVAS-14 | Group/ungroup, bring to front / send to back | M3 | M | CANVAS-08 | — |

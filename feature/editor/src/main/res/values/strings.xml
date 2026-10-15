@@ -33,6 +33,16 @@
     <string name="tool_audio">Record audio</string>
     <string name="tool_ruler">Ruler</string>
 
+    <string name="selection_cut">Cut</string>
+    <string name="selection_copy">Copy</string>
+    <string name="selection_duplicate">Duplicate</string>
+    <string name="selection_delete">Delete</string>
+    <string name="selection_paste">Paste</string>
+    <string name="selection_thinner">Thinner</string>
+    <string name="selection_thicker">Thicker</string>
+    <string name="selection_recolor">Recolor to %1$s</string>
+    <string name="selection_menu">Selection: %1$d strokes</string>
+
     <string name="toolbar_hide">Hide toolbar</string>
     <string name="toolbar_show">Show toolbar</string>
     <string name="toolbar_position">Toolbar position</string>

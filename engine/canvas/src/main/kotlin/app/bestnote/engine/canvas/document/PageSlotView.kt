@@ -44,6 +44,9 @@ internal class PageSlotView(context: Context, private val style: SheetStyle) : V
     private var wet: InProgressStroke? = null
     private var wetColor = 0
 
+    /** Strokes the selection layer is dragging (CANVAS-09): drawn there, so left out here. */
+    private var hidden: Set<Stroke> = emptySet()
+
     init {
         // Never hit-tested: the document view routes all input.
         isClickable = false
@@ -78,10 +81,17 @@ internal class PageSlotView(context: Context, private val style: SheetStyle) : V
         invalidate()
     }
 
+    fun setHidden(strokes: Set<Stroke>) {
+        if (strokes === hidden) return
+        hidden = strokes
+        invalidate()
+    }
+
     fun unbind() {
         index = -1
         page = null
         wet = null
+        hidden = emptySet()
         drawList.clear()
         visibility = INVISIBLE
     }
@@ -124,6 +134,7 @@ internal class PageSlotView(context: Context, private val style: SheetStyle) : V
     private fun readable(strokes: List<Stroke>, paper: PaperColors): List<Stroke> {
         drawList.clear()
         for (s in strokes) {
+            if (s in hidden) continue
             val color = s.brush.colorIntArgb
             val want = PaperInk.colorOn(color, paper)
             if (want == color) {

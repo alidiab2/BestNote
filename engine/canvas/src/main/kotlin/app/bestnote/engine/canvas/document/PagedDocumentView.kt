@@ -71,6 +71,12 @@ class PagedDocumentView(context: Context) : FrameLayout(context), InProgressStro
     }
 
     var tool: Tool = Tool.Pen
+        set(value) {
+            if (field == value) return
+            field = value
+            // Leaving the lasso drops its selection (and any paste offer).
+            if (value != Tool.Lasso) selection.clear()
+        }
 
     /** What the eraser (tool, side button or the pen's eraser end) removes. */
     var eraserMode: EraserMode = EraserMode.Stroke
@@ -123,6 +129,54 @@ class PagedDocumentView(context: Context) : FrameLayout(context), InProgressStro
             palm.stylusOnly = value
         }
 
+    /**
+     * The lasso's floating menu (CANVAS-10/11): where to show it, or null to hide it (no selection,
+     * or the pen is busy). A [SelectionMenu] with [SelectionMenu.count] 0 offers Paste at a point.
+     */
+    fun interface SelectionListener {
+        fun onSelectionMenu(menu: SelectionMenu?)
+    }
+
+    /** The selection's box on screen (view px), or a single point for a paste offer. */
+    data class SelectionMenu(val count: Int, val left: Float, val top: Float, val right: Float, val bottom: Float)
+
+    var selectionListener: SelectionListener?
+        get() = selection.listener
+        set(value) {
+            selection.listener = value
+        }
+
+    /** Lasso and selection color; the host passes a theme color. */
+    var selectionColor: Int
+        get() = selection.color
+        set(value) {
+            selection.color = value
+        }
+
+    /** Duration of the selection handles' entrance; the host passes a Motion token (0 = none). */
+    var selectionAppearMs: Int
+        get() = selection.appearDurationMs
+        set(value) {
+            selection.appearDurationMs = value
+        }
+
+    val hasSelection: Boolean get() = selection.hasSelection
+
+    fun clearSelection() = selection.clear()
+    fun deleteSelection() = selection.delete()
+    fun copySelection() = selection.copy()
+    fun cutSelection() = selection.cut()
+    fun duplicateSelection() = selection.duplicate()
+
+    /** Pastes the ink clipboard where the pen last touched. @return true if anything was pasted. */
+    fun paste(): Boolean = selection.paste()
+
+    /** Gives every selected stroke [colorArgb]'s color (its own opacity stays). One undo step. */
+    fun recolorSelection(colorArgb: Int) = selection.recolor(colorArgb)
+
+    /** Makes every selected stroke [factor] times as thick. One undo step. */
+    fun thickenSelection(factor: Float) = selection.thicken(factor)
+
     var pageIndicatorListener: PageIndicatorListener? = null
         set(value) {
             field = value
@@ -165,6 +219,7 @@ class PagedDocumentView(context: Context) : FrameLayout(context), InProgressStro
             field = value
             value?.addListener(documentListener)
             pages.document = value
+            selection.document = value
         }
 
     /** The page the reader is on, or -1 for an empty document. */
@@ -225,6 +280,9 @@ class PagedDocumentView(context: Context) : FrameLayout(context), InProgressStro
     /** The brush each stroke was started with (sizes in page points, canonical ink colors). */
     private val strokeBrushes = StrokeBrushes<InProgressStrokeId, Stroke>()
 
+    /** Lasso, selection and its handles (CANVAS-08..11). */
+    private val selection = SelectionLayer(context, pages, strokeBrushes)
+
     /** An eraser gesture on one page: one undo step, diffed against the strokes it started with. */
     private class EraseGesture(val page: Int, val before: List<Stroke>, val mode: EraserMode) {
         var lastX = Float.NaN
@@ -257,21 +315,27 @@ class PagedDocumentView(context: Context) : FrameLayout(context), InProgressStro
     private val documentListener = object : PagedDocument.Listener {
         override fun onPagesChanged() {
             pages.relayout()
+            selection.onPagesChanged()
         }
 
         override fun onPageContentChanged(index: Int) {
             pages.invalidatePage(index)
+            selection.onPageContentChanged(index)
         }
     }
 
     init {
         addView(pages, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
         addView(wet, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
+        addView(selection, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
         addView(cursor, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
         wet.addFinishedStrokesListener(this)
         // Set up the front-buffered renderer now, not on the first pen-down.
         wet.eagerInit()
-        pages.onViewportChanged = ::reportIndicator
+        pages.onViewportChanged = {
+            reportIndicator()
+            selection.onViewportChanged()
+        }
         // The pinch preview may draw pages beyond the pages layer's own bounds; clip to ours instead.
         clipChildren = false
         isFocusable = true
@@ -360,6 +424,7 @@ class PagedDocumentView(context: Context) : FrameLayout(context), InProgressStro
                         if (page != null) begin(event, se, switch.tool, page)
                     }
                     when {
+                        selection.owns(id) -> selectAlong(id, se)
                         id in erasing -> eraseAlong(id, se)
                         id in inking -> wet.addToStroke(event, id, inking.getValue(id).second, predicted)
                         highlighting?.second?.pointerId == id -> highlighting?.let { (page, h) -> h.add(event, predicted); pages.invalidatePage(page) }
@@ -371,6 +436,9 @@ class PagedDocumentView(context: Context) : FrameLayout(context), InProgressStro
                     }
                 }
                 StylusAction.Up -> {
+                    // The UP carries the pen's last position: a quick drag may have no move there.
+                    if (selection.owns(id)) selectAlong(id, se)
+                    selection.up(id)
                     inking.remove(id)?.let { (_, strokeId) -> wet.finishStroke(event, id, strokeId) }
                     finishHighlight(id, event)
                     finishErase(id)
@@ -384,6 +452,7 @@ class PagedDocumentView(context: Context) : FrameLayout(context), InProgressStro
                     }
                 }
                 StylusAction.Cancel -> {
+                    selection.cancel(id)
                     cancelInk(id, event)
                     finishErase(id)
                     sideButton.onEnd(id)
@@ -394,7 +463,7 @@ class PagedDocumentView(context: Context) : FrameLayout(context), InProgressStro
                 else -> Unit
             }
         }
-        if (scrollMoves > 0 && inking.isEmpty() && erasing.isEmpty() && highlighting == null) {
+        if (scrollMoves > 0 && inking.isEmpty() && erasing.isEmpty() && highlighting == null && !selection.active) {
             PinchStep.of(fingersBefore, scrolling)?.let(::panZoom)
         }
         notifyTemporaryTool()
@@ -402,7 +471,7 @@ class PagedDocumentView(context: Context) : FrameLayout(context), InProgressStro
     }
 
     private fun notifyWriting() {
-        val now = inking.isNotEmpty() || erasing.isNotEmpty() || highlighting != null
+        val now = inking.isNotEmpty() || erasing.isNotEmpty() || highlighting != null || selection.active
         if (now != writing) {
             writing = now
             writingListener?.onWritingChanged(now)
@@ -420,6 +489,12 @@ class PagedDocumentView(context: Context) : FrameLayout(context), InProgressStro
         val l = pages.layout
         if (l != null && l.addCard.contains(x + pages.scrollX, y + pages.scrollY)) {
             cardTaps[id] = x to y
+            return
+        }
+        if (decision == InputDecision.Draw && SideButtonTool.resolve(se.tool, se.primaryButtonPressed, tool, sideButton.temporaryTool) == Tool.Lasso && selection.gripAt(x, y) != null) {
+            // A selection handle may hang off the page (e.g. the rotate knob above the top edge).
+            requestUnbufferedDispatch(event)
+            selection.down(id, -1, x, y)
             return
         }
         if (decision == InputDecision.Draw || decision == InputDecision.Erase) {
@@ -592,14 +667,16 @@ class PagedDocumentView(context: Context) : FrameLayout(context), InProgressStro
     /** Start a stroke for [se]'s pointer with [strokeTool] on page [page]. */
     private fun begin(event: MotionEvent, se: StylusEvent, strokeTool: Tool, page: Int) {
         val id = se.pointerId
+        selection.touched(page, se.latest.x, se.latest.y)
         when {
+            strokeTool == Tool.Lasso -> selection.down(id, page, se.latest.x, se.latest.y)
             strokeTool == Tool.Eraser -> {
                 val doc = document ?: return
                 erasing[id] = EraseGesture(page, doc.strokesSnapshot(page), eraserMode)
                 eraseAlong(id, se)
             }
             strokeTool.inks -> startInk(event, id, strokeTool, page)
-            else -> Unit // Lasso: CANVAS-08.
+            else -> Unit
         }
     }
 
@@ -671,6 +748,7 @@ class PagedDocumentView(context: Context) : FrameLayout(context), InProgressStro
         inking.clear()
         strokePages.clear()
         erasing.keys.toList().forEach(::finishErase)
+        selection.cancelInput()
         scrolling.clear()
         tapCandidate = null
         settleZoom()
@@ -703,6 +781,14 @@ class PagedDocumentView(context: Context) : FrameLayout(context), InProgressStro
         if (result.isEmpty) return
         result.replacements.forEach { (original, pieces) -> pieces.forEach { strokeBrushes.inherit(it, original) } }
         doc.eraseStep(g.page, result.removed, result.replacements)
+    }
+
+    /** Feeds the lasso or the selection drag every sample of this event (historical ones too). */
+    private fun selectAlong(pointerId: Int, se: StylusEvent) {
+        val n = se.samples.size
+        val xs = FloatArray(n) { se.samples[it].x }
+        val ys = FloatArray(n) { se.samples[it].y }
+        selection.move(pointerId, xs, ys, n)
     }
 
     private fun finishErase(pointerId: Int) {

@@ -33,6 +33,16 @@
     <string name="tool_audio">تسجيل صوتي</string>
     <string name="tool_ruler">مسطرة</string>
 
+    <string name="selection_cut">قص</string>
+    <string name="selection_copy">نسخ</string>
+    <string name="selection_duplicate">تكرار</string>
+    <string name="selection_delete">حذف</string>
+    <string name="selection_paste">لصق</string>
+    <string name="selection_thinner">أرفع</string>
+    <string name="selection_thicker">أعرض</string>
+    <string name="selection_recolor">تغيير اللون إلى %1$s</string>
+    <string name="selection_menu">التحديد: %1$d خطوط</string>
+
     <string name="toolbar_hide">إخفاء الأدوات</string>
     <string name="toolbar_show">إظهار الأدوات</string>
     <string name="toolbar_position">موضع شريط الأدوات</string>
