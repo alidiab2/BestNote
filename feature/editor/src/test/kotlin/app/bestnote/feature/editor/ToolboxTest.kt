@@ -84,4 +84,14 @@ class ToolboxTest {
         assertEquals(false, back.lasso)
         assertEquals(Tool.Pencil, back.tool)
     }
+
+    @Test fun shapesToolSnapsOnlyWithAPenInHand() {
+        val t = Toolbox().withLasso(true).withShapes(true)
+        assertEquals(false, t.lasso)
+        assertEquals(true, t.snapsShapes)
+        assertEquals(false, t.withLasso(true).snapsShapes)
+        assertEquals(true, t.withLasso(true).select(PenKind.Ballpoint).snapsShapes)
+        assertEquals(false, t.select(PenKind.Eraser).snapsShapes)
+        assertEquals(false, t.withShapes(false).snapsShapes)
+    }
 }

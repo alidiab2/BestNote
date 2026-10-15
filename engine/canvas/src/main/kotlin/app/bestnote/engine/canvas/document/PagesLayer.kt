@@ -82,6 +82,20 @@ internal class PagesLayer(context: Context, private val sheet: SheetStyle, var m
         slot.bind(index, doc.pages[index], l.pageRect(index), l.scale)
         if (index == wetPage) slot.setWet(wetStroke, wetColor)
         slot.setHidden(if (index == hiddenPage) hidden else emptySet())
+        if (index == morphPage) slot.setMorph(morphTarget, morphFrame) else slot.setMorph(null, null)
+    }
+
+    private var morphPage = -1
+    private var morphTarget: androidx.ink.strokes.Stroke? = null
+    private var morphFrame: androidx.ink.strokes.Stroke? = null
+
+    /** INK-08: draws [frame] instead of [target] on page [index] while a snapped shape morphs; nulls stop it. */
+    fun setMorph(index: Int, target: androidx.ink.strokes.Stroke?, frame: androidx.ink.strokes.Stroke?) {
+        if (morphPage >= 0 && morphPage != index) window.slotFor(morphPage)?.setMorph(null, null)
+        morphPage = if (target != null) index else -1
+        morphTarget = target
+        morphFrame = frame
+        if (index >= 0) window.slotFor(index)?.setMorph(target, frame)
     }
 
     private var hiddenPage = -1

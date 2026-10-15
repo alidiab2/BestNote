@@ -9,6 +9,7 @@ import android.graphics.Matrix
 import android.graphics.Rect
 import android.graphics.Typeface
 import android.os.SystemClock
+import android.view.HapticFeedbackConstants
 import android.view.InputDevice
 import android.view.MotionEvent
 import android.view.PointerIcon
@@ -30,6 +31,8 @@ import app.bestnote.core.model.Tool
 import app.bestnote.engine.canvas.EraserMode
 import app.bestnote.engine.canvas.StrokeBrushes
 import app.bestnote.engine.canvas.erase.EraserCapsule
+import app.bestnote.engine.canvas.shape.HoldDetector
+import app.bestnote.engine.canvas.shape.ShapeSnapper
 import app.bestnote.engine.canvas.erase.InkEraser
 import app.bestnote.engine.canvas.WetHighlighter
 import app.bestnote.engine.ink.BrushCatalog
@@ -85,6 +88,16 @@ class PagedDocumentView(context: Context) : FrameLayout(context), InProgressStro
     var eraserMode: EraserMode = EraserMode.Stroke
     var penStyle: PenStyle = PenStyle.Fountain
     var colorArgb: Int = InkPalette.BLACK
+
+    /** INK-08 Shapes tool: every pen stroke that is a shape snaps to its clean form (no hold needed). */
+    var shapeTool: Boolean = false
+
+    /** Duration of the morph into a snapped shape; the host passes a Motion token (0 = none). */
+    var shapeMorphMs: Int
+        get() = snapper.morphDurationMs
+        set(value) {
+            snapper.morphDurationMs = value
+        }
 
     /** Brush size in the same units as [BrushCatalog.DEFAULT_SIZE]; converted to page points. */
     var brushSize: Float = BrushCatalog.DEFAULT_SIZE
@@ -260,6 +273,7 @@ class PagedDocumentView(context: Context) : FrameLayout(context), InProgressStro
             value?.addListener(documentListener)
             pages.document = value
             selection.document = value
+            snapper.reset()
         }
 
     /** The page the reader is on, or -1 for an empty document. */
@@ -327,6 +341,26 @@ class PagedDocumentView(context: Context) : FrameLayout(context), InProgressStro
 
     /** Lasso, selection and its handles (CANVAS-08..11). */
     private val selection = SelectionLayer(context, pages, strokeBrushes)
+
+    /** INK-08: pointerId -> hold detector of the stroke it is drawing (view px, uptime ms). */
+    private val holds = HashMap<Int, HoldDetector>()
+
+    /** Wet strokes whose pen was held still at the end (or drawn with the Shapes tool): snap once dry. */
+    private val snapRequested = HashSet<InProgressStrokeId>()
+    private val holdTick = Runnable { checkHolds() }
+
+    private val snapper = ShapeSnapper(this, object : ShapeSnapper.Pages {
+        override fun strokes(index: Int) = document?.pages?.getOrNull(index)?.strokes
+
+        override fun commit(index: Int, replace: Pair<Stroke, Stroke>, remove: Stroke?) {
+            strokeBrushes.derive(replace.second, replace.first) { it }
+            document?.replaceStrokes(index, mapOf(replace), listOfNotNull(remove))
+        }
+
+        override fun showMorph(index: Int, target: Stroke?, frame: Stroke?) = pages.setMorph(index, target, frame)
+
+        override val busy: Boolean get() = writing
+    })
 
     /** An eraser gesture on one page: one undo step, diffed against the strokes it started with. */
     private class EraseGesture(val page: Int, val before: List<Stroke>, val mode: EraserMode) {
@@ -471,8 +505,15 @@ class PagedDocumentView(context: Context) : FrameLayout(context), InProgressStro
                     when {
                         selection.owns(id) -> selectAlong(id, se)
                         id in erasing -> eraseAlong(id, se)
-                        id in inking -> wet.addToStroke(event, id, inking.getValue(id).second, predicted)
-                        highlighting?.second?.pointerId == id -> highlighting?.let { (page, h) -> h.add(event, predicted); pages.invalidatePage(page) }
+                        id in inking -> {
+                            wet.addToStroke(event, id, inking.getValue(id).second, predicted)
+                            trackHold(id, se)
+                        }
+                        highlighting?.second?.pointerId == id -> highlighting?.let { (page, h) ->
+                            h.add(event, predicted)
+                            pages.invalidatePage(page)
+                            trackHold(id, se)
+                        }
                         id in scrolling -> {
                             scrolling[id] = se.latest.x to se.latest.y
                             scrollMoves++
@@ -484,8 +525,12 @@ class PagedDocumentView(context: Context) : FrameLayout(context), InProgressStro
                     // The UP carries the pen's last position: a quick drag may have no move there.
                     if (selection.owns(id)) selectAlong(id, se)
                     selection.up(id)
-                    inking.remove(id)?.let { (_, strokeId) -> wet.finishStroke(event, id, strokeId) }
+                    inking.remove(id)?.let { (_, strokeId) ->
+                        if (holds[id]?.held == true || shapeTool) snapRequested += strokeId
+                        wet.finishStroke(event, id, strokeId)
+                    }
                     finishHighlight(id, event)
+                    holds.remove(id)
                     finishErase(id)
                     sideButton.onEnd(id)
                     cardTaps.remove(id)?.let { (x, y) -> if (isTapOnCard(x, y, se.latest.x, se.latest.y)) addPage() }
@@ -556,8 +601,11 @@ class PagedDocumentView(context: Context) : FrameLayout(context), InProgressStro
         // A palm (a finger landing while the pen writes or hovers) does nothing at all.
         if (finger && decision == InputDecision.Ignore) return
         scroller.forceFinished(true)
-        // Nothing moves under the pen: a pen lands on the final, settled layout.
-        if (!finger || decision == InputDecision.Draw || decision == InputDecision.Erase) settleZoom()
+        // Nothing moves under the pen: a pen lands on the final, settled layout (and a snapped shape at its end).
+        if (!finger || decision == InputDecision.Draw || decision == InputDecision.Erase) {
+            settleZoom()
+            snapper.endMorph()
+        }
         val x = se.latest.x
         val y = se.latest.y
         val l = pages.layout
@@ -773,6 +821,7 @@ class PagedDocumentView(context: Context) : FrameLayout(context), InProgressStro
         // World = view pixels; the stroke itself is recorded in page points.
         val strokeId = wet.startStroke(event, pointerId, brush, IDENTITY, strokeToView)
         inking[pointerId] = page to strokeId
+        startHold(event, pointerId)
         strokePages[strokeId] = page
         StrokeBrushes.capture(strokeTool, penStyle, colorArgb, sizePt)?.let { strokeBrushes.begin(strokeId, it) }
     }
@@ -785,6 +834,7 @@ class PagedDocumentView(context: Context) : FrameLayout(context), InProgressStro
         StrokeBrushes.capture(strokeTool, penStyle, colorArgb, sizePt)?.let { strokeBrushes.begin(h.id, it) }
         h.add(event, null)
         pages.setWetHighlight(page, h.stroke, brush.colorIntArgb)
+        startHold(event, pointerId)
     }
 
     private fun finishHighlight(pointerId: Int, event: MotionEvent) {
@@ -793,8 +843,12 @@ class PagedDocumentView(context: Context) : FrameLayout(context), InProgressStro
         val stroke = h.finish(event)
         strokeBrushes.finish(h.id, stroke)
         pages.setWetHighlight(page, null, 0)
+        val snap = holds.remove(pointerId)?.held == true || shapeTool
         val doc = document
-        if (doc != null && page in 0 until doc.size) doc.addStrokes(page, listOf(stroke))
+        if (doc != null && page in 0 until doc.size) {
+            doc.addStrokes(page, listOf(stroke))
+            snapper.onStrokeFinished(page, stroke, snap)
+        }
     }
 
     private fun cancelHighlight(pointerId: Int) {
@@ -805,6 +859,7 @@ class PagedDocumentView(context: Context) : FrameLayout(context), InProgressStro
     }
 
     private fun cancelInk(pointerId: Int, event: MotionEvent) {
+        holds.remove(pointerId)
         cancelHighlight(pointerId)
         inking.remove(pointerId)?.let { (_, strokeId) ->
             wet.cancelStroke(strokeId, event)
@@ -821,6 +876,8 @@ class PagedDocumentView(context: Context) : FrameLayout(context), InProgressStro
         }
         inking.clear()
         strokePages.clear()
+        holds.clear()
+        snapRequested.clear()
         erasing.keys.toList().forEach(::finishErase)
         selection.cancelInput()
         scrolling.clear()
@@ -874,10 +931,50 @@ class PagedDocumentView(context: Context) : FrameLayout(context), InProgressStro
         val doc = document
         strokes.forEach { (id, stroke) -> strokeBrushes.finish(id, stroke) }
         // Hand off wet -> dry in the same frame so nothing flickers.
-        strokes.entries.groupBy({ strokePages.remove(it.key) ?: -1 }, { it.value }).forEach { (page, list) ->
-            if (doc != null && page in 0 until doc.size) doc.addStrokes(page, list)
+        strokes.entries.groupBy { strokePages.remove(it.key) ?: -1 }.forEach { (page, entries) ->
+            if (doc != null && page in 0 until doc.size) {
+                doc.addStrokes(page, entries.map { it.value })
+                entries.forEach { (id, stroke) -> snapper.onStrokeFinished(page, stroke, snapRequested.remove(id)) }
+            }
         }
+        strokes.keys.forEach(snapRequested::remove)
         wet.removeFinishedStrokes(strokes.keys)
+    }
+
+    // ---------------------------------------------------------------- hold to snap (INK-08)
+
+    private fun startHold(event: MotionEvent, pointerId: Int) {
+        val index = event.findPointerIndex(pointerId).coerceAtLeast(0)
+        holds[pointerId] = HoldDetector(HOLD_SLOP_DP * density, HOLD_MIN_TRAVEL_DP * density).apply {
+            start(event.getX(index), event.getY(index), event.eventTime)
+        }
+        scheduleHoldCheck()
+    }
+
+    private fun trackHold(pointerId: Int, se: StylusEvent) {
+        val h = holds[pointerId] ?: return
+        var fired = false
+        for (sample in se.samples) fired = h.add(sample.x, sample.y, sample.timeMillis) || fired
+        if (fired) onHeld()
+        scheduleHoldCheck()
+    }
+
+    /** The pen may be perfectly still (no events): check again when the next hold could complete. */
+    private fun scheduleHoldCheck() {
+        removeCallbacks(holdTick)
+        val next = holds.values.mapNotNull { it.deadline }.minOrNull() ?: return
+        postDelayed(holdTick, (next - SystemClock.uptimeMillis()).coerceAtLeast(0L) + 1)
+    }
+
+    private fun checkHolds() {
+        val now = SystemClock.uptimeMillis()
+        if (holds.values.map { it.check(now) }.any { it }) onHeld()
+        scheduleHoldCheck()
+    }
+
+    /** A hold completed: a light tick, no animation (the pen is still down). The snap happens on lift. */
+    private fun onHeld() {
+        performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
     }
 
     // ---------------------------------------------------------------- hover
@@ -926,6 +1023,8 @@ class PagedDocumentView(context: Context) : FrameLayout(context), InProgressStro
         settleZoom()
         removeCallbacks(expireHover)
         removeCallbacks(resolveHoverClick)
+        removeCallbacks(holdTick)
+        snapper.endMorph()
         scroller.forceFinished(true)
         super.onDetachedFromWindow()
     }
@@ -966,6 +1065,10 @@ class PagedDocumentView(context: Context) : FrameLayout(context), InProgressStro
 
         /** Eraser hit radius around a stroke's bounds; the hover cursor previews exactly this. */
         const val ERASE_RADIUS_DP = 10f
+
+        /** Hold-to-snap: the pen counts as still within this radius, after drawing at least the travel. */
+        private const val HOLD_SLOP_DP = 6f
+        private const val HOLD_MIN_TRAVEL_DP = 24f
 
         private const val WHEEL_STEP_DP = 64f
         private const val WHEEL_ZOOM = 1.1f

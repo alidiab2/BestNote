@@ -61,6 +61,7 @@ internal fun PagedDocumentHost(
     colorArgb: Int,
     brushSize: Float,
     eraserMode: EraserMode,
+    shapeTool: Boolean,
     input: FingerInput,
     quickPalette: Boolean,
     doubleClickUndo: Boolean,
@@ -84,6 +85,7 @@ internal fun PagedDocumentHost(
                     view.addCardTypeface = runCatching { ResourcesCompat.getFont(context, DesignR.font.instrument_sans) }.getOrNull()
                     view.revealDurationMs = Motion.Duration.Long
                     view.zoomDurationMs = Motion.Duration.Standard
+                    view.shapeMorphMs = Motion.Duration.Medium
                     view.pageIndicatorListener = PagedDocumentView.PageIndicatorListener { page, total ->
                         current = page
                         count = total
@@ -100,6 +102,7 @@ internal fun PagedDocumentHost(
                 view.colorArgb = colorArgb
                 view.brushSize = brushSize
                 view.eraserMode = eraserMode
+                view.shapeTool = shapeTool
                 view.quickPaletteEnabled = quickPalette
                 view.hoverDoubleClickUndo = doubleClickUndo
                 view.stylusOnly = input.stylusOnly

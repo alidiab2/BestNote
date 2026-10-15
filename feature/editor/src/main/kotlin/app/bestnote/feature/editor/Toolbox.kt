@@ -42,6 +42,8 @@ data class Toolbox(
     val eraserMode: EraserMode = EraserMode.Stroke,
     /** The lasso (CANVAS-08) is the tool in hand instead of [active]; picking a pen puts it down. */
     val lasso: Boolean = false,
+    /** INK-08 Shapes tool: every pen stroke that is a shape snaps to a clean one. Picking the lasso keeps it for later. */
+    val shapes: Boolean = false,
 ) {
     /** The canvas tool in hand. */
     val tool: Tool get() = if (lasso) Tool.Lasso else active.tool
@@ -56,6 +58,12 @@ data class Toolbox(
     fun select(kind: PenKind) = copy(active = kind, lasso = false)
 
     fun withLasso(on: Boolean) = copy(lasso = on)
+
+    /** Shapes on puts the lasso down: it's a way of drawing. */
+    fun withShapes(on: Boolean) = copy(shapes = on, lasso = if (on) false else lasso)
+
+    /** Strokes auto-snap to shapes now: the Shapes tool is on and a pen (not the lasso or eraser) is in hand. */
+    val snapsShapes: Boolean get() = shapes && !lasso && active.inks
 
     /** Sets the active pen's color; a color not in the dots replaces the least recently added one. */
     fun withColor(colorArgb: Int, kind: PenKind = active): Toolbox {

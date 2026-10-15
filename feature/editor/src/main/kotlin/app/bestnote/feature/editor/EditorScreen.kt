@@ -197,6 +197,7 @@ class EditorViewModel @Inject constructor(
 
     fun selectPen(kind: PenKind) = toolboxState.update { it.select(kind) }
     fun setLasso(on: Boolean) = toolboxState.update { it.withLasso(on) }
+    fun setShapes(on: Boolean) = toolboxState.update { it.withShapes(on) }
     fun updateToolbox(toolbox: Toolbox) = toolboxState.update { toolbox }
     fun setDock(dock: ToolbarDock) = viewModelScope.launch { preferences.setToolbarDock(dock) }
     fun setLeftHanded(enabled: Boolean) = viewModelScope.launch { preferences.setLeftHanded(enabled) }
@@ -333,6 +334,11 @@ fun EditorScreen(
     fun toggleLasso() {
         picker = null
         viewModel.setLasso(!toolbox.lasso)
+    }
+    fun toggleShapes() {
+        picker = null
+        // From the lasso, Shapes means "draw shapes now"; otherwise it toggles.
+        viewModel.setShapes(toolbox.lasso || !toolbox.shapes)
     }
     fun onPen(kind: PenKind) {
         if (kind == toolbox.active && !toolbox.lasso) {
@@ -472,6 +478,7 @@ fun EditorScreen(
                 colorArgb = toolbox.current.brushColorArgb,
                 brushSize = toolbox.current.size,
                 eraserMode = toolbox.eraserMode,
+                shapeTool = toolbox.snapsShapes,
                 input = state.input,
                 quickPalette = state.quickPalette,
                 doubleClickUndo = state.doubleClickUndo,
@@ -525,7 +532,14 @@ fun EditorScreen(
                 TraySide.Right -> Modifier.absolutePadding(right = ChromeEdge, top = TopRowHeight)
             }
             val tools: @Composable (Boolean) -> Unit = { vertical ->
-                ToolsCapsule(vertical = vertical, onComingSoon = ::comingSoon, lassoActive = toolbox.lasso, onLasso = ::toggleLasso)
+                ToolsCapsule(
+                    vertical = vertical,
+                    onComingSoon = ::comingSoon,
+                    lassoActive = toolbox.lasso,
+                    onLasso = ::toggleLasso,
+                    shapesActive = toolbox.shapes && !toolbox.lasso,
+                    onShapes = ::toggleShapes,
+                )
             }
             AnimatedVisibility(
                 visible = trayShown,
