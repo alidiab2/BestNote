@@ -43,4 +43,23 @@ class InkLayersTest {
         assertTrue(l.highlights.isEmpty())
         assertEquals(1, l.ink.size)
     }
+
+    @Test fun wetHighlighterJoinsItsColorGroupUnderTheInk() {
+        val l = InkLayers.of(listOf(S("ink", false, InkPalette.BLACK), S("y1", true, yellow), S("g", true, green)), { it.highlighter }, { it.argb }, wetColorArgb = yellow)
+        assertEquals(0, l.wetGroup)
+        assertEquals(yellow ushr 24, l.highlights[l.wetGroup].alpha)
+        assertEquals(listOf("ink"), l.ink.map { it.name }) // ink is still drawn after every highlight layer
+    }
+
+    @Test fun wetHighlighterOfANewColorGetsItsOwnLayer() {
+        val l = InkLayers.of(listOf(S("ink", false, InkPalette.BLACK), S("g", true, green)), { it.highlighter }, { it.argb }, wetColorArgb = yellow)
+        assertEquals(2, l.highlights.size)
+        assertEquals(1, l.wetGroup)
+        assertTrue(l.highlights[l.wetGroup].items.isEmpty())
+        assertEquals(yellow ushr 24, l.highlights[l.wetGroup].alpha)
+    }
+
+    @Test fun noWetStrokeNoWetGroup() {
+        assertEquals(-1, layers(S("y", true, yellow)).wetGroup)
+    }
 }
