@@ -8,13 +8,9 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.io.File
-import java.io.FileOutputStream
 import java.io.IOException
 import java.io.InputStream
 import java.io.OutputStream
-import java.nio.file.AtomicMoveNotSupportedException
-import java.nio.file.Files
-import java.nio.file.StandardCopyOption
 
 /**
  * [NotebookStore] backed by unpacked `.bnote` directories: `<root>/<notebookId>/manifest.json`,
@@ -24,10 +20,14 @@ import java.nio.file.StandardCopyOption
  *
  * All I/O runs on [io] (never the caller's thread) and is serialized by one mutex.
  */
-class FileNotebookStore(
+class FileNotebookStore internal constructor(
     private val root: File,
-    private val io: CoroutineDispatcher = Dispatchers.IO,
+    private val io: CoroutineDispatcher,
+    /** Test hook called at every write step; throwing from it simulates a crash at that point. */
+    private val faults: (WriteStep) -> Unit,
 ) : NotebookStore {
+    constructor(root: File, io: CoroutineDispatcher = Dispatchers.IO) : this(root, io, {})
+
     private val mutex = Mutex()
 
     /** Notebooks whose manifest can be read. Damaged or newer-format notebooks are skipped. */
@@ -49,10 +49,31 @@ class FileNotebookStore(
      */
     override suspend fun read(id: NotebookId): NotebookPackage? = locked { readLocked(id) }
 
-    override suspend fun write(pkg: NotebookPackage) = locked {
+    override suspend fun write(pkg: NotebookPackage) = locked { writeLocked(pkg, changed = null) }
+
+    /**
+     * Rewrites only [changedPageIds]; any other entry that is missing on disk (a new page, a first
+     * save, an asset) is written too, so the committed manifest never points at a missing file.
+     */
+    override suspend fun writePages(pkg: NotebookPackage, changedPageIds: Set<String>) =
+        locked { writeLocked(pkg, changedPageIds) }
+
+    private fun writeLocked(pkg: NotebookPackage, changed: Set<String>?) {
         val dir = dirOf(pkg.notebook.id)
         val entries = BnoteFormat.toEntries(pkg)
-        for ((path, bytes) in entries) writeAtomically(File(dir, path), bytes) // manifest is last
+        val changedPaths = changed?.flatMapTo(HashSet()) { listOf(BnoteFormat.pageMetaPath(it), BnoteFormat.pageInkPath(it)) }
+        for ((path, bytes) in entries) { // manifest is last
+            val file = File(dir, path)
+            if (path == BnoteFormat.MANIFEST) {
+                // Page and asset renames must be durable before the manifest that points at them.
+                syncDirectory(File(dir, BnoteFormat.PAGES_DIR))
+                syncDirectory(File(dir, BnoteFormat.ASSETS_DIR))
+            }
+            if (changedPaths == null || path == BnoteFormat.MANIFEST || path in changedPaths || !file.isFile) {
+                writeAtomically(file, bytes)
+            }
+        }
+        syncDirectory(dir)
         removeUnreferenced(dir, entries.keys)
     }
 
@@ -90,19 +111,9 @@ class FileNotebookStore(
 
     private fun dirOf(id: NotebookId) = File(root, encodeDirName(id.value))
 
-    private fun writeAtomically(target: File, bytes: ByteArray) {
-        target.parentFile.mkdirs()
-        val tmp = File(target.parentFile, target.name + ".tmp")
-        FileOutputStream(tmp).use { out ->
-            out.write(bytes)
-            out.fd.sync()
-        }
-        try {
-            Files.move(tmp.toPath(), target.toPath(), StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING)
-        } catch (_: AtomicMoveNotSupportedException) {
-            Files.move(tmp.toPath(), target.toPath(), StandardCopyOption.REPLACE_EXISTING)
-        }
-    }
+    private fun writeAtomically(target: File, bytes: ByteArray) = AtomicFiles.write(target, bytes, faults)
+
+    private fun syncDirectory(dir: File) = AtomicFiles.syncDirectory(dir)
 
     /** Deletes page/asset files (and stale temp files) the just-committed manifest no longer references. */
     private fun removeUnreferenced(dir: File, keep: Set<String>) {

@@ -23,7 +23,10 @@ internal fun randomStrokes(count: Int, seed: Int = 42, maxSamples: Int = 48): Li
     return List(count) {
         var t = r.nextLong(0, 1L shl 42)
         InkStroke(
-            InkBrush(inkTools.random(r), PenStyle.entries.random(r), r.nextInt(), r.nextFloat() * 40f),
+            InkBrush(
+                inkTools.random(r), PenStyle.entries.random(r), r.nextInt(), r.nextFloat() * 40f,
+                family = listOf(null, "fountain.v1", "highlighter-chisel.v1", "قلم.v2").random(r),
+            ),
             List(r.nextInt(1, maxSamples + 1)) {
                 t += r.nextInt(0, 20)
                 StylusSample(f(), f(), r.nextFloat(), r.nextFloat() * 1.6f, r.nextFloat() * 6.3f - 3.15f, t)
@@ -88,5 +91,39 @@ class InkChunkCodecTest {
         val bytes = InkChunkCodec.encode(randomStrokes(2)).also { it[4] = 0; it[5] = (InkChunkCodec.VERSION + 1).toByte() }
         val e = assertThrows(UnsupportedFormatVersionException::class.java) { InkChunkCodec.decode(bytes) }
         assertEquals(InkChunkCodec.VERSION + 1, e.found)
+    }
+
+    @Test fun version1ChunksStillDecodeWithoutFamily() {
+        val strokes = randomStrokes(30, seed = 5).map { it.copy(brush = it.brush.copy(family = null)) }
+        assertEquals(strokes, InkChunkCodec.decode(encodeV1(strokes)))
+    }
+
+    @Test fun familyKeyRoundTrips() {
+        val s = randomStrokes(1)[0]
+        val withKey = s.copy(brush = s.brush.copy(family = "brush-pen.v1"))
+        assertEquals("brush-pen.v1", InkChunkCodec.decode(InkChunkCodec.encode(listOf(withKey)))[0].brush.family)
+    }
+
+    /** The original v1 layout (no family key), as written by DOC-01 builds. */
+    private fun encodeV1(strokes: List<InkStroke>): ByteArray {
+        val tools = mapOf(Tool.Pen to 0, Tool.Pencil to 1, Tool.Highlighter to 2)
+        val payload = java.io.ByteArrayOutputStream()
+        java.io.DataOutputStream(payload).run {
+            writeInt(strokes.size)
+            for (s in strokes) {
+                writeByte(tools.getValue(s.brush.tool)); writeByte(s.brush.penStyle.ordinal)
+                writeInt(s.brush.colorArgb); writeFloat(s.brush.size); writeInt(s.samples.size)
+                for (p in s.samples) {
+                    writeFloat(p.x); writeFloat(p.y); writeFloat(p.pressure); writeFloat(p.tiltRad); writeFloat(p.orientationRad); writeLong(p.timeMillis)
+                }
+            }
+        }
+        val body = payload.toByteArray()
+        val crc = java.util.zip.CRC32().apply { update(body) }.value
+        val out = java.io.ByteArrayOutputStream()
+        java.io.DataOutputStream(out).run {
+            write("BNIK".toByteArray()); writeShort(1); writeShort(0); writeInt(body.size); writeInt(crc.toInt()); write(body)
+        }
+        return out.toByteArray()
     }
 }

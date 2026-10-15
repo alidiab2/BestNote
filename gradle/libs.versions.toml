@@ -27,6 +27,7 @@ androidxInk = "1.1.0-alpha09"
 androidxMotionPrediction = "1.0.0"
 composeBom = "2026.09.00"
 material3Adaptive = "1.4.0"
+androidxSqlite = "2.6.2"
 
 # DI
 hilt = "2.60.1"
@@ -68,6 +69,7 @@ androidx-room-runtime = { group = "androidx.room", name = "room-runtime", versio
 androidx-room-ktx = { group = "androidx.room", name = "room-ktx", version.ref = "androidxRoom" }
 androidx-room-compiler = { group = "androidx.room", name = "room-compiler", version.ref = "androidxRoom" }
 androidx-datastore = { group = "androidx.datastore", name = "datastore", version.ref = "androidxDatastore" }
+androidx-sqlite-bundled = { group = "androidx.sqlite", name = "sqlite-bundled", version.ref = "androidxSqlite" }
 
 # Ink & low-latency rendering
 androidx-ink-authoring = { group = "androidx.ink", name = "ink-authoring", version.ref = "androidxInk" }

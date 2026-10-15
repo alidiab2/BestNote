@@ -34,16 +34,20 @@ On disk inside the app, a notebook lives **unpacked** as a directory with the sa
 - Write to `<file>.tmp`, `fsync`, then atomic rename.
 - `manifest.json` is written last, so a crash leaves the previous manifest pointing at valid pages.
 - Each `.ink` chunk has a header with magic bytes `BNIK`, the chunk version and a CRC32.
+- Autosave (`Autosaver`, DOC-03) rewrites only the pages edited since the last save, then the manifest. A crash leaves every page either fully old or fully new.
+- Inside the app, library thumbnails are cached outside the package (`files/thumbnails/<id>.webp`, DOC-10); `thumbs/` stays optional for exports.
 
-## `.ink` chunk v1 (implemented in `InkChunkCodec`)
-Big-endian; floats are raw IEEE-754 bits, so round-trips are bit-exact.
+## `.ink` chunk v2 (implemented in `InkChunkCodec`; v1 is still read)
+Big-endian; floats are raw IEEE-754 bits, so round-trips are bit-exact. The family key (e.g. `fountain.v1`) is the brush family captured at pen-down, so strokes keep rendering identically after brush tuning.
 ```
 header   "BNIK" | u16 version | u16 flags (0) | u32 payload length | u32 CRC32(payload)
 payload  u32 strokeCount, then per stroke:
            u8 tool (0 Pen, 1 Pencil, 2 Highlighter) | u8 penStyle (0 Fountain, 1 Ball, 2 Brush)
-           i32 colorArgb | f32 size | u32 sampleCount
+           i32 colorArgb | f32 size | u8 familyKeyLength | familyKeyLength x UTF-8 (v2 only; 0 = none) | u32 sampleCount
            sampleCount x (f32 x | f32 y | f32 pressure | f32 tiltRad | f32 orientationRad | i64 timeMillis)
 ```
+Versions: writers always write v2. Readers accept v1 (DOC-01 builds: no family key, read as `family = null`, drawn with the tool's current family) and v2. The key maps to `InkBrush.family` in `:core:model`.
+
 An androidx.ink storage encoding can be added later as a new chunk version behind `StrokeChunkCodec`.
 
 ## Open questions
