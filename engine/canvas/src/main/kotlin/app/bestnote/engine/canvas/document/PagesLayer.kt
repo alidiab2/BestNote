@@ -81,6 +81,18 @@ internal class PagesLayer(context: Context, private val sheet: SheetStyle, var m
         slot.backgrounds = doc.backgrounds
         slot.bind(index, doc.pages[index], l.pageRect(index), l.scale)
         if (index == wetPage) slot.setWet(wetStroke, wetColor)
+        slot.setHidden(if (index == hiddenPage) hidden else emptySet())
+    }
+
+    private var hiddenPage = -1
+    private var hidden: Set<androidx.ink.strokes.Stroke> = emptySet()
+
+    /** Leaves [strokes] out of page [index]'s drawing (the selection layer draws them while they move); empty restores. */
+    fun setHidden(index: Int, strokes: Set<androidx.ink.strokes.Stroke>) {
+        if (hiddenPage >= 0 && hiddenPage != index) window.slotFor(hiddenPage)?.setHidden(emptySet())
+        hiddenPage = if (strokes.isEmpty()) -1 else index
+        hidden = strokes
+        if (index >= 0) window.slotFor(index)?.setHidden(strokes)
     }
 
     private var wetPage = -1
@@ -169,6 +181,7 @@ internal class PagesLayer(context: Context, private val sheet: SheetStyle, var m
             translationX = value.tx
             translationY = value.ty
             if (value.scale < 1f) refreshWindow()
+            onViewportChanged?.invoke()
         }
 
     private fun clampScroll() {

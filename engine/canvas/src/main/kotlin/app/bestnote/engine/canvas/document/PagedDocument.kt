@@ -17,6 +17,10 @@ class DocumentPage internal constructor(page: Page, val id: String = newPageId()
 
     /** Finished strokes in drawing order, in page points (origin at the page's top-left). */
     val strokes: List<Stroke> get() = mutableStrokes
+
+    /** Bumped on every change of [strokes], so caches (the lasso's spatial index) know when to rebuild. */
+    var version: Int = 0
+        internal set
 }
 
 private const val ID_LENGTH = 12
@@ -264,6 +268,25 @@ class PagedDocument {
         notifyHistory()
     }
 
+    /**
+     * Swaps each key of [replacements] on page [index] for its value, at the same z-position, as one
+     * undoable step (CANVAS-09/10: a transform or restyle of a selection).
+     */
+    fun replaceStrokes(index: Int, replacements: Map<Stroke, Stroke>) {
+        if (index !in _pages.indices || replacements.isEmpty()) return
+        val before = strokesSnapshot(index)
+        eraseStep(index, emptyList(), replacements.mapValues { listOf(it.value) })
+        commitStrokeEdit(index, before)
+    }
+
+    /** Removes [strokes] from page [index] as one undoable step (CANVAS-11: cut, delete). */
+    fun deleteStrokes(index: Int, strokes: Collection<Stroke>) {
+        if (index !in _pages.indices || strokes.isEmpty()) return
+        val before = strokesSnapshot(index)
+        removeStrokes(index, strokes)
+        commitStrokeEdit(index, before)
+    }
+
     /** Erases every stroke of page [index] as one undoable step. */
     fun clearPage(index: Int) {
         val all = _pages.getOrNull(index)?.strokes?.toList().orEmpty()
@@ -308,7 +331,10 @@ class PagedDocument {
         const val SLOT_BYTES = 64L
     }
 
-    private fun contentChanged(index: Int) = listeners.forEach { it.onPageContentChanged(index) }
+    private fun contentChanged(index: Int) {
+        _pages.getOrNull(index)?.let { it.version++ }
+        listeners.forEach { it.onPageContentChanged(index) }
+    }
 
     private fun notifyHistory() = listeners.forEach { it.onHistoryChanged(history.canUndo, history.canRedo) }
 }

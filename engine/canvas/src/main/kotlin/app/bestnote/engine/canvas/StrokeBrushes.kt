@@ -38,6 +38,16 @@ class StrokeBrushes<I : Any, S : Any> {
         finished[original]?.let { finished[piece] = it }
     }
 
+    /** [stroke] (pasted or restyled) is stored with [brush]. */
+    fun put(stroke: S, brush: InkBrush) {
+        finished[stroke] = brush
+    }
+
+    /** [copy] was made from [original] (moved, resized, restyled): stored with [original]'s brush changed by [change]. */
+    fun derive(copy: S, original: S, change: (InkBrush) -> InkBrush) {
+        finished[original]?.let { finished[copy] = change(it) }
+    }
+
     companion object {
         /** The full brush for a stroke starting now with these canvas settings, or null if [tool] doesn't ink. */
         fun capture(tool: Tool, penStyle: PenStyle, colorArgb: Int, size: Float): InkBrush? {
