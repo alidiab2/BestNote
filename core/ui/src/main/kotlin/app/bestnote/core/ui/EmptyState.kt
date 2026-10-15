@@ -6,8 +6,6 @@
 package app.bestnote.core.ui
 
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.scaleIn
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -22,6 +20,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import app.bestnote.core.designsystem.theme.BestNoteTheme
 import app.bestnote.core.designsystem.theme.Motion
 import app.bestnote.core.designsystem.theme.Spacing
+import app.bestnote.core.designsystem.theme.reducedMotion
 
 /** Centered title + message shown when a list has nothing to display, with an optional action slot. */
 @Composable
@@ -33,7 +32,7 @@ fun EmptyState(
 ) {
     AnimatedVisibility(
         visible = true,
-        enter = fadeIn(Motion.tween(Motion.Duration.Medium)) + scaleIn(Motion.Spring.gentle(), initialScale = 0.96f),
+        enter = Motion.Enter.content(reducedMotion()),
         modifier = modifier,
     ) {
         Column(
@@ -56,7 +55,7 @@ fun EmptyState(
 @Preview(showBackground = true)
 @Composable
 private fun EmptyStatePreview() {
-    BestNoteTheme(dynamicColor = false) {
+    BestNoteTheme {
         EmptyState(title = "No notebooks yet", message = "Tap New notebook to start writing.")
     }
 }

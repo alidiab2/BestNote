@@ -32,8 +32,8 @@ data class UserPreferences(
     /** When true only a stylus draws; fingers never ink (palm rejection's strongest mode). */
     val stylusOnly: Boolean = false,
     val themeMode: ThemeMode = ThemeMode.System,
-    /** Material You colors on Android 12+. */
-    val dynamicColor: Boolean = true,
+    /** Material You colors on Android 12+ (chrome only). Opt-in: off by default (DS-01). */
+    val dynamicColor: Boolean = false,
 )
 
 object UserPreferencesSerializer : Serializer<UserPreferences> {

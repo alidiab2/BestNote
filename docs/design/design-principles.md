@@ -17,11 +17,14 @@ All motion uses tokens from `:core:designsystem` → `Motion`. **No raw duration
 
 | Token | Use | Spec |
 |---|---|---|
-| `Motion.Spring.Snappy` | Tool selection, toggles, small popovers | spring, dampingRatio 0.8, stiffness medium-high |
-| `Motion.Spring.Gentle` | Sheets, panels, page manager | spring, dampingRatio 0.9, stiffness low |
+| `Motion.Spring.Standard` | Container moves, cards, notebook open/close | spring, dampingRatio 0.85, stiffness 380 (~350 ms) |
+| `Motion.Spring.Snappy` | Tool selection, toggles, small popovers, tray lift | spring, dampingRatio 0.7, stiffness 600 (~280 ms) |
+| `Motion.Spring.Gentle` | Sheets, panels, page manager | spring, dampingRatio 0.9, stiffness 200 |
 | `Motion.Duration.Short` | Fades, color changes | 120 ms |
 | `Motion.Duration.Medium` | Container transforms | 250 ms |
 | `Motion.Duration.Long` | Library → editor "open notebook" | 400 ms |
+
+Enter/exit patterns live in `Motion.Enter` / `Motion.Exit` and degrade to fades under reduced motion. `MotionTokenGuardTest` (`:core:designsystem:test`) fails the build on raw durations, easing or spring parameters outside `Motion.kt`. Approved token values: [`approved-direction.md`](approved-direction.md).
 
 Rules:
 - **Motion explains space.** Opening a notebook zooms from its cover (shared element). The page manager zooms *out* from the current page. Closing reverses it.
@@ -40,7 +43,7 @@ Use sparingly, only for confirmations the eye might miss:
 ## 5. Visual language
 - Material 3 base, with a quieter palette: neutral surfaces and one accent. Paper colors are a separate "paper" palette and never follow dynamic color.
 - Dark mode: chrome goes dark. Paper stays white by default, with an optional "dark paper" that inverts ink colors smartly (black ↔ white; colors keep their hue).
-- Corner radius: 12 dp for cards, 20 dp for sheets, full pill for the floating toolbar.
+- Corner radius: 18 dp cards, 12 dp small controls, 24 dp tool tray, 28 dp sheets, full pill for the floating toolbar (see `approved-direction.md`).
 - Icons: custom tool icons (pen types differ visibly); Material Symbols Rounded for everything else.
 - Thumbnails and covers have a subtle paper texture and a 1 dp shadow. They should read as physical objects.
 
