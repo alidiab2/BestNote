@@ -436,6 +436,8 @@ class PagedDocumentView(context: Context) : FrameLayout(context), InProgressStro
                     }
                 }
                 StylusAction.Up -> {
+                    // The UP carries the pen's last position: a quick drag may have no move there.
+                    if (selection.owns(id)) selectAlong(id, se)
                     selection.up(id)
                     inking.remove(id)?.let { (_, strokeId) -> wet.finishStroke(event, id, strokeId) }
                     finishHighlight(id, event)

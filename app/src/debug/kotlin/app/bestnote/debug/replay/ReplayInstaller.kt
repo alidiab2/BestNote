@@ -8,7 +8,7 @@
  *       --es file lecture_en.json --es pen fountain --es color '#1E2433' --ef size 5 --ez clear true
  *
  * file   name under files/replay/ (push with run-as), or an absolute path the app can read
- * pen    fountain | ballpoint | brush | pencil | highlighter (default fountain)
+ * pen    fountain | ballpoint | brush | pencil | highlighter | lasso (default fountain)
  * color  #RRGGBB or #AARRGGBB (default: the tool's usual colour)
  * size   brush size in px (default BrushCatalog.DEFAULT_SIZE)
  * clear  clear the page first (default false)
@@ -202,6 +202,8 @@ class ReplayInstaller : ContentProvider() {
             "brush" to (Tool.Pen to PenStyle.Brush),
             "pencil" to (Tool.Pencil to PenStyle.Fountain),
             "highlighter" to (Tool.Highlighter to PenStyle.Fountain),
+            // CANVAS-08: replays a lasso loop (or a drag on the selection) instead of ink.
+            "lasso" to (Tool.Lasso to PenStyle.Fountain),
         )
     }
 }
