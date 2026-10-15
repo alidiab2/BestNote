@@ -6,11 +6,11 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class PalmRejectionTest {
-    private fun ev(id: Int, tool: PointerTool, action: StylusAction, button: Boolean = false) = StylusEvent(
+    private fun ev(id: Int, tool: PointerTool, action: StylusAction, button: Boolean = false, t: Long = 0L) = StylusEvent(
         pointerId = id,
         tool = tool,
         action = action,
-        samples = listOf(StylusSample(0f, 0f, 0.5f, 0f, 0f, 0L)),
+        samples = listOf(StylusSample(0f, 0f, 0.5f, 0f, 0f, t)),
         primaryButtonPressed = button,
         secondaryButtonPressed = false,
         canceled = action == StylusAction.Cancel,
@@ -47,10 +47,36 @@ class PalmRejectionTest {
         assertEquals(InputDecision.Ignore, palm.decide(ev(1, PointerTool.Stylus, StylusAction.Move)))
     }
 
-    @Test fun eraserEndAndSideButtonErase() {
+    @Test fun eraserEndErasesSideButtonIsLeftToSideButtonTool() {
         val palm = PalmRejection()
         assertEquals(InputDecision.Erase, palm.decide(ev(1, PointerTool.Eraser, StylusAction.Down)))
-        assertEquals(InputDecision.Erase, palm.decide(ev(2, PointerTool.Stylus, StylusAction.Down, button = true)))
+        assertEquals(InputDecision.Draw, palm.decide(ev(2, PointerTool.Stylus, StylusAction.Down, button = true)))
+    }
+
+    @Test fun fingerDoesNotInkWhileStylusTouches() {
+        val palm = PalmRejection(stylusOnly = false)
+        palm.decide(ev(1, PointerTool.Stylus, StylusAction.Down))
+        assertEquals(InputDecision.Ignore, palm.decide(ev(0, PointerTool.Finger, StylusAction.Down)))
+        assertEquals(InputDecision.Ignore, palm.decide(ev(0, PointerTool.Finger, StylusAction.Move)))
+    }
+
+    @Test fun fingerDoesNotInkWhileStylusHovers() {
+        val palm = PalmRejection(stylusOnly = false)
+        palm.decide(ev(1, PointerTool.Stylus, StylusAction.HoverMove, t = 1_000))
+        assertEquals(InputDecision.Ignore, palm.decide(ev(0, PointerTool.Finger, StylusAction.Down, t = 1_200)))
+    }
+
+    @Test fun hoverExitOrStaleHoverFreesFingers() {
+        val palm = PalmRejection(stylusOnly = false)
+        palm.decide(ev(1, PointerTool.Stylus, StylusAction.HoverMove, t = 1_000))
+        palm.decide(ev(1, PointerTool.Stylus, StylusAction.HoverExit, t = 1_010))
+        assertEquals(InputDecision.Draw, palm.decide(ev(0, PointerTool.Finger, StylusAction.Down, t = 1_020)))
+        palm.decide(ev(0, PointerTool.Finger, StylusAction.Up, t = 1_030))
+
+        // HOVER_EXIT missed: the hover stops counting after HOVER_GRACE_MS.
+        palm.decide(ev(1, PointerTool.Stylus, StylusAction.HoverMove, t = 2_000))
+        val late = 2_000 + PalmRejection.HOVER_GRACE_MS + 1
+        assertEquals(InputDecision.Draw, palm.decide(ev(0, PointerTool.Finger, StylusAction.Down, t = late)))
     }
 
     @Test fun hoverNeverDraws() {

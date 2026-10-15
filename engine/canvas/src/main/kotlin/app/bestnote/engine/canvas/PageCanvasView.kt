@@ -6,9 +6,12 @@
  *    through androidx.graphics' front-buffered renderer, fed with unbuffered MotionEvents
  *    and [MotionEventPredictor] samples for minimum perceived latency;
  *  - **dry ink**: a regular View drawing the paper template and finished strokes with
- *    :engine:ink's [InkRenderer] (highlighters under ink).
- * Input is classified by :engine:stylus ([StylusEventMapper] + [PalmRejection]); brushes come
- * from :engine:ink. Edits (add / erase) go through an [UndoStack].
+ *    :engine:ink's [InkRenderer] (highlighters under ink);
+ *  - **cursor**: a tiny View on top drawing the stylus hover cursor, so hovering never redraws
+ *    the page (cost stays constant however many strokes the page holds).
+ * Input is classified by :engine:stylus ([StylusEventMapper] + [PalmRejection]); the S Pen side
+ * button picks a temporary tool per stroke ([SideButtonTool]); brushes come from :engine:ink.
+ * Edits (add / erase) go through an [UndoStack].
  */
 package app.bestnote.engine.canvas
 
@@ -17,7 +20,10 @@ import android.content.Context
 import android.graphics.Canvas
 import android.graphics.Matrix
 import android.graphics.Paint
+import android.os.SystemClock
+import android.util.Log
 import android.view.MotionEvent
+import android.view.PointerIcon
 import android.view.View
 import android.widget.FrameLayout
 import androidx.ink.authoring.InProgressStrokeId
@@ -31,9 +37,15 @@ import app.bestnote.core.model.Tool
 import app.bestnote.engine.ink.BrushCatalog
 import app.bestnote.engine.ink.InkPalette
 import app.bestnote.engine.ink.InkRenderer
+import app.bestnote.engine.stylus.HoverCursorStyle
+import app.bestnote.engine.stylus.HoverTracker
 import app.bestnote.engine.stylus.InputDecision
 import app.bestnote.engine.stylus.PalmRejection
+import app.bestnote.engine.stylus.PointerTool
+import app.bestnote.engine.stylus.SampleRateMeter
+import app.bestnote.engine.stylus.SideButtonTool
 import app.bestnote.engine.stylus.StylusAction
+import app.bestnote.engine.stylus.StylusEvent
 import app.bestnote.engine.stylus.StylusEventMapper
 
 /** A reversible change to the page's finished strokes. */
@@ -56,6 +68,16 @@ class PageCanvasView(context: Context) : FrameLayout(context), InProgressStrokes
     var colorArgb: Int = InkPalette.BLACK
     var brushSize: Float = BrushCatalog.DEFAULT_SIZE
 
+    /** Tool used while the S Pen side button is held (default eraser); null = button does nothing. */
+    var sideButtonTool: Tool?
+        get() = sideButton.temporaryTool
+        set(value) {
+            sideButton.temporaryTool = value
+        }
+
+    /** Called with the temporary tool when the side button takes over, and null when it lets go. */
+    var temporaryToolListener: ((Tool?) -> Unit)? = null
+
     /** When true, fingers never draw. */
     var stylusOnly: Boolean
         get() = palm.stylusOnly
@@ -76,7 +98,19 @@ class PageCanvasView(context: Context) : FrameLayout(context), InProgressStrokes
     private val history = UndoStack<CanvasEdit>()
     private val wet = InProgressStrokesView(context)
     private val dry = DryLayer(context)
+    private val cursor = CursorLayer(context)
     private val predictor = MotionEventPredictor.newInstance(this)
+    private val sideButton = SideButtonTool()
+    private val hover = HoverTracker()
+    private val density = resources.displayMetrics.density
+    private val eraseRadius = ERASE_RADIUS_DP * density
+    private var temporaryShown: Tool? = null
+
+    /** Stylus pointerId -> sample-rate meter for the stroke (logged on lift, SPEN-01). */
+    private val rates = HashMap<Int, SampleRateMeter>()
+
+    /** Fallback for a missed HOVER_EXIT: no ghost cursor once hover samples stop. */
+    private val expireHover = Runnable { if (hover.expire(SystemClock.uptimeMillis())) refreshHover() }
 
     /** pointerId -> wet stroke being drawn. */
     private val inking = HashMap<Int, InProgressStrokeId>()
@@ -87,6 +121,7 @@ class PageCanvasView(context: Context) : FrameLayout(context), InProgressStrokes
     init {
         addView(dry, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
         addView(wet, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
+        addView(cursor, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
         wet.addFinishedStrokesListener(this)
     }
 
@@ -132,42 +167,114 @@ class PageCanvasView(context: Context) : FrameLayout(context), InProgressStrokes
         for (stylusEvent in StylusEventMapper.map(event)) {
             val pointerId = stylusEvent.pointerId
             val decision = palm.decide(stylusEvent)
-            palm.drainCancels().forEach { cancelInk(it, event) }
+            palm.drainCancels().forEach { cancelInk(it, event); sideButton.onEnd(it) }
+            if (hover.onEvent(stylusEvent)) refreshHover() // touching hides the hover cursor
             when (stylusEvent.action) {
-                StylusAction.Down -> when {
-                    decision == InputDecision.Erase || (decision == InputDecision.Draw && tool == Tool.Eraser) -> {
-                        erasing[pointerId] = ArrayList()
-                        eraseAt(pointerId, stylusEvent.latest.x, stylusEvent.latest.y)
+                StylusAction.Down -> if (decision == InputDecision.Draw || decision == InputDecision.Erase) {
+                    // Deliver every digitizer sample as it arrives instead of batching per vsync.
+                    requestUnbufferedDispatch(event)
+                    begin(event, stylusEvent, sideButton.onDown(stylusEvent, tool))
+                    if (stylusEvent.tool == PointerTool.Stylus || stylusEvent.tool == PointerTool.Eraser) {
+                        rates.getOrPut(pointerId) { SampleRateMeter() }.apply { start(); add(stylusEvent.latest.timeMillis) }
                     }
-                    decision == InputDecision.Draw -> startInk(event, pointerId)
                 }
-                StylusAction.Move -> when {
-                    pointerId in erasing -> stylusEvent.samples.forEach { eraseAt(pointerId, it.x, it.y) }
-                    pointerId in inking -> wet.addToStroke(event, pointerId, inking.getValue(pointerId), predicted)
+                StylusAction.Move -> {
+                    sideButton.onMove(stylusEvent)?.let { switch ->
+                        // Button reported a few samples late: drop the stray ink, redo the stroke.
+                        cancelInk(pointerId, event)
+                        finishErase(pointerId)
+                        begin(event, stylusEvent, switch.tool)
+                    }
+                    when {
+                        pointerId in erasing -> stylusEvent.samples.forEach { eraseAt(pointerId, it.x, it.y) }
+                        pointerId in inking -> wet.addToStroke(event, pointerId, inking.getValue(pointerId), predicted)
+                    }
+                    rates[pointerId]?.let { meter -> stylusEvent.samples.forEach { meter.add(it.timeMillis) } }
                 }
                 StylusAction.Up -> {
                     inking.remove(pointerId)?.let { wet.finishStroke(event, pointerId, it) }
                     finishErase(pointerId)
+                    sideButton.onEnd(pointerId)
+                    rates.remove(pointerId)?.let { logRate(it) }
                 }
                 StylusAction.Cancel -> {
                     cancelInk(pointerId, event)
                     finishErase(pointerId)
+                    sideButton.onEnd(pointerId)
+                    rates.remove(pointerId)
                 }
                 else -> Unit
             }
         }
+        notifyTemporaryTool()
+    }
+
+    /** Start a stroke for [stylusEvent]'s pointer with [strokeTool]. */
+    private fun begin(event: MotionEvent, stylusEvent: StylusEvent, strokeTool: Tool) {
+        val pointerId = stylusEvent.pointerId
+        when {
+            strokeTool == Tool.Eraser -> {
+                erasing[pointerId] = ArrayList()
+                stylusEvent.samples.forEach { eraseAt(pointerId, it.x, it.y) }
+            }
+            strokeTool.inks -> startInk(event, pointerId, strokeTool)
+            else -> Unit // Lasso: CANVAS-08.
+        }
     }
 
     override fun onHoverEvent(event: MotionEvent): Boolean {
-        val hover = StylusEventMapper.map(event).firstOrNull() ?: return super.onHoverEvent(event)
-        dry.hover = if (hover.action == StylusAction.HoverExit) null else hover.latest.x to hover.latest.y
+        val events = StylusEventMapper.map(event)
+        if (events.isEmpty()) return super.onHoverEvent(event)
+        var changed = false
+        for (hoverEvent in events) {
+            palm.decide(hoverEvent) // a hovering pen keeps fingers from inking
+            changed = hover.onEvent(hoverEvent) || changed
+        }
+        if (changed) refreshHover()
+        removeCallbacks(expireHover)
+        if (hover.position != null) postDelayed(expireHover, HoverTracker.STALE_MS)
+        notifyTemporaryTool()
         return true
     }
 
-    private fun startInk(event: MotionEvent, pointerId: Int) {
-        val brush = BrushCatalog.brush(tool, penStyle, colorArgb, brushSize) ?: return
-        // Deliver every digitizer sample as it arrives instead of batching per vsync.
-        requestUnbufferedDispatch(event)
+    /** Hide the system / Air View hover dot for pens: we draw our own cursor. */
+    override fun onResolvePointerIcon(event: MotionEvent, pointerIndex: Int): PointerIcon? {
+        val type = event.getToolType(pointerIndex)
+        return if (type == MotionEvent.TOOL_TYPE_STYLUS || type == MotionEvent.TOOL_TYPE_ERASER) {
+            PointerIcon.getSystemIcon(context, PointerIcon.TYPE_NULL)
+        } else {
+            super.onResolvePointerIcon(event, pointerIndex)
+        }
+    }
+
+    override fun onDetachedFromWindow() {
+        removeCallbacks(expireHover)
+        super.onDetachedFromWindow()
+    }
+
+    private fun refreshHover() {
+        val at = hover.position ?: return cursor.hide()
+        val hoverTool = SideButtonTool.resolve(at.pointer, at.buttonPressed, tool, sideButton.temporaryTool)
+        val width = BrushCatalog.brush(hoverTool, penStyle, colorArgb, brushSize)?.size ?: brushSize
+        cursor.show(at.x, at.y, HoverCursorStyle.of(hoverTool, colorArgb, width, eraseRadius, density))
+    }
+
+    private fun notifyTemporaryTool() {
+        val held = sideButton.temporaryActive || hover.position?.let { it.pointer == PointerTool.Stylus && it.buttonPressed } == true
+        val now = if (held) sideButton.temporaryTool else null
+        if (now != temporaryShown) {
+            temporaryShown = now
+            temporaryToolListener?.invoke(now)
+        }
+    }
+
+    private fun logRate(meter: SampleRateMeter) {
+        val hz = meter.hz ?: return
+        Log.d(TAG, "stylus stroke: ${meter.samples} samples in ${meter.durationMillis} ms = ${hz.toInt()} Hz")
+    }
+
+    private fun startInk(event: MotionEvent, pointerId: Int, strokeTool: Tool) {
+        val brush = BrushCatalog.brush(strokeTool, penStyle, colorArgb, brushSize) ?: return
         inking[pointerId] = wet.startStroke(event, pointerId, brush, IDENTITY, IDENTITY)
     }
 
@@ -179,8 +286,8 @@ class PageCanvasView(context: Context) : FrameLayout(context), InProgressStrokes
     private fun eraseAt(pointerId: Int, x: Float, y: Float) {
         val hits = dry.strokes.filter { stroke ->
             val box = stroke.shape.computeBoundingBox() ?: return@filter false
-            x >= box.xMin - ERASE_RADIUS && x <= box.xMax + ERASE_RADIUS &&
-                y >= box.yMin - ERASE_RADIUS && y <= box.yMax + ERASE_RADIUS
+            x >= box.xMin - eraseRadius && x <= box.xMax + eraseRadius &&
+                y >= box.yMin - eraseRadius && y <= box.yMax + eraseRadius
         }
         if (hits.isEmpty()) return
         dry.remove(hits)
@@ -205,22 +312,15 @@ class PageCanvasView(context: Context) : FrameLayout(context), InProgressStrokes
 
     private fun notifyHistory() = historyListener?.onHistoryChanged(history.canUndo, history.canRedo)
 
-    /** Paper template + finished strokes + stylus hover cursor. */
+    /** Paper template + finished strokes. */
     private class DryLayer(context: Context) : View(context) {
         private val renderer = InkRenderer()
         val strokes = ArrayList<Stroke>()
         private val density = resources.displayMetrics.density
         private val linePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0x332D5BFF; strokeWidth = density }
         private val dotPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0x552D5BFF }
-        private val hoverPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0x66000000; style = Paint.Style.STROKE; strokeWidth = density }
 
         var template = PaperTemplate.Ruled
-            set(value) {
-                field = value
-                invalidate()
-            }
-
-        var hover: Pair<Float, Float>? = null
             set(value) {
                 field = value
                 invalidate()
@@ -241,7 +341,6 @@ class PageCanvasView(context: Context) : FrameLayout(context), InProgressStrokes
             canvas.drawColor(if (template == PaperTemplate.Blank) 0xFFFFFFFF.toInt() else 0xFFFFFDF7.toInt())
             drawTemplate(canvas)
             renderer.draw(canvas, strokes, IDENTITY)
-            hover?.let { (x, y) -> canvas.drawCircle(x, y, 4 * density, hoverPaint) }
         }
 
         private fun drawTemplate(canvas: Canvas) {
@@ -272,8 +371,47 @@ class PageCanvasView(context: Context) : FrameLayout(context), InProgressStrokes
         }
     }
 
+    /** Stylus hover cursor: ring + faint fill + center dot, or the eraser outline. */
+    private class CursorLayer(context: Context) : View(context) {
+        private val fill = Paint(Paint.ANTI_ALIAS_FLAG)
+        private val ring = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE }
+        private val dot = Paint(Paint.ANTI_ALIAS_FLAG)
+        private var x = 0f
+        private var y = 0f
+        private var style: HoverCursorStyle? = null
+
+        fun show(x: Float, y: Float, style: HoverCursorStyle) {
+            this.x = x
+            this.y = y
+            this.style = style
+            invalidate()
+        }
+
+        fun hide() {
+            if (style == null) return
+            style = null
+            invalidate()
+        }
+
+        override fun onDraw(canvas: Canvas) {
+            val s = style ?: return
+            fill.color = s.fillArgb
+            canvas.drawCircle(x, y, s.ringRadius, fill)
+            ring.color = s.colorArgb
+            ring.strokeWidth = s.ringStroke
+            canvas.drawCircle(x, y, s.ringRadius, ring)
+            if (s.dotRadius > 0f) {
+                dot.color = s.colorArgb
+                canvas.drawCircle(x, y, s.dotRadius, dot)
+            }
+        }
+    }
+
     private companion object {
+        const val TAG = "BestNote/Stylus"
         val IDENTITY = Matrix()
-        const val ERASE_RADIUS = 8f
+
+        /** Eraser hit radius around a stroke's bounds; the hover cursor previews exactly this. */
+        const val ERASE_RADIUS_DP = 10f
     }
 }

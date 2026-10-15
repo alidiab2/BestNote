@@ -109,19 +109,31 @@ object StylusEventMapper {
     /** MotionEvent.FLAG_CANCELED (public since API 33, set by the framework earlier too). */
     const val FLAG_CANCELED = 0x20
 
+    /**
+     * Private action codes some older Samsung firmware sends instead of DOWN / UP / MOVE while the
+     * S Pen side button is held (**[verify]** in docs/platform/samsung-s-pen.md §4). Mapped to the
+     * standard actions with [StylusEvent.primaryButtonPressed] set, so nothing downstream knows.
+     */
+    const val SAMSUNG_ACTION_PEN_DOWN = 211
+    const val SAMSUNG_ACTION_PEN_UP = 212
+    const val SAMSUNG_ACTION_PEN_MOVE = 213
+
     fun map(event: MotionEvent): List<StylusEvent> = map(MotionEventSource(event))
 
     /**
      * Per-pointer events for one MotionEvent. MOVE / CANCEL / HOVER_* report every pointer;
-     * DOWN / UP variants report only the pointer that changed.
+     * DOWN / UP variants report only the pointer that changed. MOVE and HOVER_MOVE batch all
+     * historical samples (oldest first) before the current one, so nothing the digitizer
+     * reported between frames is lost.
      */
     fun map(src: PointerEventSource): List<StylusEvent> {
         val canceledFlag = (src.flags and FLAG_CANCELED) != 0
+        val legacyButton = src.actionMasked in SAMSUNG_ACTION_PEN_DOWN..SAMSUNG_ACTION_PEN_MOVE
         val (action, indices) = when (src.actionMasked) {
-            ACTION_DOWN, ACTION_POINTER_DOWN -> StylusAction.Down to listOf(src.actionIndex)
-            ACTION_UP, ACTION_POINTER_UP ->
+            ACTION_DOWN, ACTION_POINTER_DOWN, SAMSUNG_ACTION_PEN_DOWN -> StylusAction.Down to listOf(src.actionIndex)
+            ACTION_UP, ACTION_POINTER_UP, SAMSUNG_ACTION_PEN_UP ->
                 (if (canceledFlag) StylusAction.Cancel else StylusAction.Up) to listOf(src.actionIndex)
-            ACTION_MOVE -> StylusAction.Move to (0 until src.pointerCount).toList()
+            ACTION_MOVE, SAMSUNG_ACTION_PEN_MOVE -> StylusAction.Move to (0 until src.pointerCount).toList()
             ACTION_CANCEL -> StylusAction.Cancel to (0 until src.pointerCount).toList()
             ACTION_HOVER_ENTER -> StylusAction.HoverEnter to (0 until src.pointerCount).toList()
             ACTION_HOVER_MOVE -> StylusAction.HoverMove to (0 until src.pointerCount).toList()
@@ -135,7 +147,7 @@ object StylusEventMapper {
                 tool = toolOf(src.toolType(i)),
                 action = action,
                 samples = samplesOf(src, i, includeHistory = action == StylusAction.Move || action == StylusAction.HoverMove),
-                primaryButtonPressed = (buttons and BUTTON_STYLUS_PRIMARY) != 0,
+                primaryButtonPressed = legacyButton || (buttons and BUTTON_STYLUS_PRIMARY) != 0,
                 secondaryButtonPressed = (buttons and BUTTON_STYLUS_SECONDARY) != 0,
                 canceled = action == StylusAction.Cancel,
             )
