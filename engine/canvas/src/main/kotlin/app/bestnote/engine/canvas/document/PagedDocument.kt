@@ -201,13 +201,14 @@ class PagedDocument {
 
     /** Strokes for several pages added as one undo step (a Smart Board insert). */
     fun addStrokes(byPage: Map<Int, Collection<Stroke>>) {
-        val edits = byPage.filterValues { it.isNotEmpty() }.map { (index, strokes) ->
+        val changed = byPage.filterValues { it.isNotEmpty() }
+        val edits = changed.map { (index, strokes) ->
             _pages[index].mutableStrokes += strokes
-            PageEdit(index, CanvasEdit.Added(strokes.toList()))
+            PageEdit(_pages[index], CanvasEdit.Added(strokes.toList()))
         }
         if (edits.isEmpty()) return
         history.record(edits.singleOrNull() ?: Batch(edits))
-        edits.forEach { contentChanged(it.page) }
+        changed.keys.forEach(::contentChanged)
         notifyHistory()
     }
 
