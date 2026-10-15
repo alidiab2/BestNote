@@ -10,6 +10,7 @@ import androidx.ink.strokes.Stroke
 import app.bestnote.core.model.StylusSample
 import app.bestnote.engine.recognition.GeometricShapeRecognizer
 import app.bestnote.engine.recognition.ShapeMatch
+import java.util.WeakHashMap
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 
@@ -52,9 +53,13 @@ internal class ShapeSnapper(private val host: View, private val pages: Pages) {
     private var last: Triple<Int, Stroke, Long>? = null
     private var morph: ValueAnimator? = null
 
+    /** Raw stroke -> the clean stroke that replaced it, so a later arrow head finds its (already snapped) shaft. */
+    private val snapped = WeakHashMap<Stroke, Stroke>()
+
     fun reset() {
         generation++
         last = null
+        snapped.clear()
         endMorph()
     }
 
@@ -67,9 +72,8 @@ internal class ShapeSnapper(private val host: View, private val pages: Pages) {
         val strokes = pages.strokes(page) ?: return
         val samples = ShapeStroke.samplesOf(stroke)
         // The stroke drawn just before, on the same page, may be the shaft of an arrow whose head this is.
-        val shaft = prev?.takeIf { (p, s, t) ->
-            p == page && now - t < ARROW_PAIR_MS && strokes.size >= 2 && strokes[strokes.size - 2] === s && strokes.last() === stroke
-        }?.second
+        val at = strokes.indexOfLast { it === stroke }
+        val shaft = prev?.takeIf { (p, s, t) -> p == page && now - t < ARROW_PAIR_MS && at >= 1 && strokes[at - 1] === s }?.second
         val shaftSamples = shaft?.let(ShapeStroke::samplesOf)
         val gen = generation
         worker.execute {
@@ -81,13 +85,17 @@ internal class ShapeSnapper(private val host: View, private val pages: Pages) {
         }
     }
 
-    private fun apply(page: Int, raw: Stroke, samples: List<StylusSample>, shaft: Stroke?, shaftSamples: List<StylusSample>?, match: ShapeMatch) {
+    private fun apply(page: Int, raw: Stroke, samples: List<StylusSample>, rawShaft: Stroke?, shaftSamples: List<StylusSample>?, match: ShapeMatch) {
         val strokes = pages.strokes(page) ?: return
+        var shaft = rawShaft
+        while (shaft != null && strokes.none { it === shaft }) shaft = snapped[shaft]
         // Erased, undone or moved meanwhile: leave it as drawn.
         if (strokes.none { it === raw } || (shaft != null && strokes.none { it === shaft })) return
         val from = if (shaft != null) shaftSamples!! + samples else samples
         val clean = ShapeStroke.build(match.shape, shaft ?: raw, from)
         if (shaft != null) pages.commit(page, shaft to clean.stroke, raw) else pages.commit(page, raw to clean.stroke, null)
+        snapped[raw] = clean.stroke
+        if (shaft != null) snapped[shaft] = clean.stroke
         if (last?.second === raw) last = Triple(page, clean.stroke, last!!.third)
         startMorph(page, clean, Polyline(FloatArray(from.size) { from[it].x }, FloatArray(from.size) { from[it].y }))
     }
