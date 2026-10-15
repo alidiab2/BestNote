@@ -27,6 +27,12 @@ import javax.inject.Singleton
 
 enum class ThemeMode { System, Light, Dark }
 
+/** Where the editor's pen tray floats (DS-03). Physical sides: they do not mirror in RTL. */
+enum class ToolbarDock { Top, Left, Right }
+
+/** What clicking the S Pen side button while hovering does (quick palette). */
+enum class HoverButtonAction { QuickPalette, Off }
+
 @Serializable
 data class UserPreferences(
     /** When true only a stylus draws; fingers never ink (palm rejection's strongest mode). */
@@ -34,6 +40,14 @@ data class UserPreferences(
     val themeMode: ThemeMode = ThemeMode.System,
     /** Material You colors on Android 12+ (chrome only). Opt-in: off by default (DS-01). */
     val dynamicColor: Boolean = false,
+    /** Editor pen tray position (DS-03). */
+    val toolbarDock: ToolbarDock = ToolbarDock.Top,
+    /** Left-handed mode: side docks and popovers move to the other physical side (DS-03). */
+    val leftHanded: Boolean = false,
+    /** Settings: "Side button click while hovering: Quick palette / Off". */
+    val hoverButtonAction: HoverButtonAction = HoverButtonAction.QuickPalette,
+    /** Settings: double-click the side button while hovering to undo. Opt-in. */
+    val hoverDoubleClickUndo: Boolean = false,
 )
 
 object UserPreferencesSerializer : Serializer<UserPreferences> {
@@ -64,6 +78,22 @@ class UserPreferencesRepository @Inject constructor(private val store: DataStore
 
     suspend fun setDynamicColor(enabled: Boolean) {
         store.updateData { it.copy(dynamicColor = enabled) }
+    }
+
+    suspend fun setToolbarDock(dock: ToolbarDock) {
+        store.updateData { it.copy(toolbarDock = dock) }
+    }
+
+    suspend fun setLeftHanded(enabled: Boolean) {
+        store.updateData { it.copy(leftHanded = enabled) }
+    }
+
+    suspend fun setHoverButtonAction(action: HoverButtonAction) {
+        store.updateData { it.copy(hoverButtonAction = action) }
+    }
+
+    suspend fun setHoverDoubleClickUndo(enabled: Boolean) {
+        store.updateData { it.copy(hoverDoubleClickUndo = enabled) }
     }
 }
 

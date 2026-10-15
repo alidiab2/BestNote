@@ -19,3 +19,4 @@
 | [ ] SPEN-11 | Air actions via S Pen Remote SDK, `samsung` build flavor only | M4 | L | D4 | Button click = next page / undo (configurable) in presentation mode |
 | [ ] SPEN-12 | Foldables: Flex mode layout (tools on the bottom half) | M3 | M | DS-05 | Fold 6/7 half-open shows the canvas top and tools bottom |
 | [ ] SPEN-13 | Device matrix test pass + latency measurement report | M1 | M | QA-04 | Report committed to `docs/platform/reports/` |
+| [x] SPEN-14 | Quick palette: side-button click while hovering opens a radial pen/color/size palette at the tip (double-click = undo, opt-in); setting `HoverButtonAction` | M1 | M | SPEN-04 | Click in the air opens it; button held while writing stays the temporary eraser. **[verify]** on a Tab: Samsung Air Command may claim the hover click |
