@@ -5,7 +5,7 @@ enum class InputDecision {
     /** Lay down ink with the current tool. */
     Draw,
 
-    /** Erase regardless of the selected tool (eraser end, or stylus side button held). */
+    /** Erase regardless of the selected tool (the stylus' eraser end). The side button is [SideButtonTool]'s job. */
     Erase,
 
     /** Not for drawing: leave it to scroll/zoom or ignore it. */
@@ -21,13 +21,18 @@ enum class InputDecision {
  * Rules:
  *  1. ACTION_CANCEL / FLAG_CANCELED always cancel (the system identified an accidental touch).
  *  2. Hover never draws.
- *  3. Stylus draws (or erases with the eraser end / side button held). Mouse draws.
- *  4. Fingers draw only when [stylusOnly] is off **and** no stylus is currently touching.
+ *  3. Stylus draws (the eraser end erases). Mouse draws.
+ *  4. Fingers draw only when [stylusOnly] is off **and** no stylus is touching **or hovering**
+ *     (a palm lands while the pen hovers just above the page). A hover counts for
+ *     [HOVER_GRACE_MS] after its last sample, so a missed HOVER_EXIT can't lock fingers out.
  *  5. A stylus touching down cancels in-flight finger strokes (the palm usually lands first).
  */
 class PalmRejection(var stylusOnly: Boolean = false) {
     private val stylusDown = HashSet<Int>()
     private val fingerDrawing = HashSet<Int>()
+
+    /** Event time of the last stylus hover sample, or null when the pen left (HOVER_EXIT). */
+    private var lastStylusHoverAt: Long? = null
 
     /** Decide for [event]. After a Down, call [drainCancels] for finger strokes to abort. */
     fun decide(event: StylusEvent): InputDecision {
@@ -35,7 +40,12 @@ class PalmRejection(var stylusOnly: Boolean = false) {
             release(event.pointerId)
             return InputDecision.Cancel
         }
-        if (event.isHover) return InputDecision.Ignore
+        if (event.isHover) {
+            if (event.tool == PointerTool.Stylus || event.tool == PointerTool.Eraser) {
+                lastStylusHoverAt = if (event.action == StylusAction.HoverExit) null else event.latest.timeMillis
+            }
+            return InputDecision.Ignore
+        }
         return when (event.action) {
             StylusAction.Down -> onDown(event)
             StylusAction.Up -> {
@@ -60,7 +70,10 @@ class PalmRejection(var stylusOnly: Boolean = false) {
         stylusDown.clear()
         fingerDrawing.clear()
         pendingCancels.clear()
+        lastStylusHoverAt = null
     }
+
+    private fun stylusHovering(now: Long): Boolean = lastStylusHoverAt?.let { now - it <= HOVER_GRACE_MS } ?: false
 
     private fun onDown(event: StylusEvent): InputDecision = when (event.tool) {
         PointerTool.Stylus, PointerTool.Eraser -> {
@@ -69,11 +82,12 @@ class PalmRejection(var stylusOnly: Boolean = false) {
                 pendingCancels += fingerDrawing
                 fingerDrawing.clear()
             }
-            if (event.tool == PointerTool.Eraser || event.primaryButtonPressed) InputDecision.Erase else InputDecision.Draw
+            lastStylusHoverAt = null
+            if (event.tool == PointerTool.Eraser) InputDecision.Erase else InputDecision.Draw
         }
         PointerTool.Mouse -> InputDecision.Draw
         PointerTool.Finger, PointerTool.Unknown ->
-            if (!stylusOnly && stylusDown.isEmpty() && fingerDrawing.isEmpty()) {
+            if (!stylusOnly && stylusDown.isEmpty() && fingerDrawing.isEmpty() && !stylusHovering(event.latest.timeMillis)) {
                 fingerDrawing += event.pointerId
                 InputDecision.Draw
             } else {
@@ -89,5 +103,10 @@ class PalmRejection(var stylusOnly: Boolean = false) {
     private fun release(pointerId: Int) {
         stylusDown -= pointerId
         fingerDrawing -= pointerId
+    }
+
+    companion object {
+        /** How long a hover sample keeps fingers from inking when HOVER_EXIT never arrives. */
+        const val HOVER_GRACE_MS = 1_000L
     }
 }
