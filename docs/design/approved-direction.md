@@ -29,7 +29,9 @@ builds `adb shell am start -n app.bestnote.debug/app.bestnote.core.designsystem.
 
 ## Type
 Fraunces (display, titles), Instrument Sans (UI), Caveat (handwriting samples only), IBM Plex Sans Arabic
-(swapped in for display + UI when the locale is Arabic). Downloadable Google Fonts with system fallback.
+(swapped in for display + UI when the locale is Arabic). Bundled in `res/font`, subset, SIL OFL
+(licenses in `core/designsystem/src/main/assets/licenses`); works offline and without Play services.
+Fraunces uses its `opsz` axis: 40 for display, 22 for titles/headlines.
 
 | Role | Size / line | Slot |
 |---|---|---|

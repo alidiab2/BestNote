@@ -2,47 +2,56 @@ package app.bestnote.core.designsystem.theme
 
 import androidx.compose.material3.Typography
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontVariation
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.googlefonts.GoogleFont
 import androidx.compose.ui.text.style.LineHeightStyle
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import app.bestnote.core.designsystem.R
-import androidx.compose.ui.text.googlefonts.Font as googleFont
 
 /*
- * Fonts are downloadable Google Fonts (fetched once by Play services and cached system-wide), so
- * the APK stays small. While a font downloads, or on a device without Play services, Compose
- * renders with the platform default, and any glyph a family lacks (e.g. Arabic in Instrument
- * Sans) falls back per glyph to the system font. When the UI locale is Arabic, [bestNoteTypography]
- * swaps the UI family for IBM Plex Sans Arabic, which also covers Latin, so mixed strings match.
+ * Fonts are bundled in res/font (SIL OFL, subset; licenses in assets/licenses), so typography works
+ * offline and on devices without Google Play services. Any glyph a family lacks (e.g. Arabic in
+ * Instrument Sans) falls back per glyph to the system font. When the UI locale is Arabic,
+ * [bestNoteTypography] swaps in IBM Plex Sans Arabic, which also covers Latin, so mixed strings match.
  */
-private val provider = GoogleFont.Provider(
-    providerAuthority = "com.google.android.gms.fonts",
-    providerPackage = "com.google.android.gms",
-    certificates = R.array.com_google_android_gms_fonts_certs,
-)
 
-private fun family(name: String, vararg weights: FontWeight): FontFamily =
-    FontFamily(weights.map { googleFont(GoogleFont(name), provider, it) })
+private fun variable(res: Int, weight: FontWeight, vararg extra: FontVariation.Setting) =
+    Font(res, weight, variationSettings = FontVariation.Settings(FontVariation.weight(weight.weight), *extra))
+
+private val DisplayWeights = listOf(FontWeight.Light, FontWeight.Normal, FontWeight.Medium, FontWeight.SemiBold)
+
+/** Fraunces at a fixed optical size (its `opsz` axis, 9–144): real optical sizing per role. */
+private fun fraunces(opticalSize: Float): FontFamily =
+    FontFamily(DisplayWeights.map { variable(R.font.fraunces, it, FontVariation.Setting("opsz", opticalSize)) })
 
 /** Font families of the Atelier direction. */
 object BestNoteFonts {
-    /**
-     * Fraunces: display and titles. The provider serves static instances, so optical size is
-     * approximated per role: large sizes use lighter weights, small titles heavier ones.
-     */
-    val Display: FontFamily = family("Fraunces", FontWeight.Light, FontWeight.Normal, FontWeight.Medium, FontWeight.SemiBold)
+    /** Fraunces for display sizes (opsz 40). */
+    val Display: FontFamily = fraunces(40f)
+
+    /** Fraunces for titles and headlines (opsz 22). */
+    val Title: FontFamily = fraunces(22f)
 
     /** Instrument Sans: body, labels, buttons. */
-    val Ui: FontFamily = family("Instrument Sans", FontWeight.Normal, FontWeight.Medium, FontWeight.SemiBold)
+    val Ui: FontFamily = FontFamily(
+        listOf(FontWeight.Normal, FontWeight.Medium, FontWeight.SemiBold).map { variable(R.font.instrument_sans, it) },
+    )
 
     /** IBM Plex Sans Arabic: Arabic UI and text boxes (has Latin too). */
-    val Arabic: FontFamily = family("IBM Plex Sans Arabic", FontWeight.Normal, FontWeight.Medium, FontWeight.SemiBold)
+    val Arabic: FontFamily = FontFamily(
+        Font(R.font.ibm_plex_sans_arabic_regular, FontWeight.Normal),
+        Font(R.font.ibm_plex_sans_arabic_medium, FontWeight.Medium),
+        Font(R.font.ibm_plex_sans_arabic_semibold, FontWeight.SemiBold),
+    )
 
     /** Caveat: handwriting samples only (pen previews, onboarding). Never for UI text. */
-    val Hand: FontFamily = family("Caveat", FontWeight.Normal, FontWeight.SemiBold)
+    val Hand: FontFamily = FontFamily(
+        variable(R.font.caveat, FontWeight.Normal),
+        variable(R.font.caveat, FontWeight.SemiBold),
+    )
 }
 
 private val trim = LineHeightStyle(LineHeightStyle.Alignment.Center, LineHeightStyle.Trim.None)
@@ -60,21 +69,22 @@ private fun style(family: FontFamily, size: Float, lineHeight: Float, weight: Fo
 /**
  * Type scale (sp): display 40/1.1, title-large 25, title 19, body 15, label 13–14, caption 12.5,
  * overline 12 with 0.12em tracking. Material slots map as:
- * display* / headline* → Fraunces; title* → Fraunces (Large, Medium) and UI (Small);
+ * display* → Fraunces (opsz 40); headline*, titleLarge/Medium → Fraunces (opsz 22); titleSmall → UI;
  * body* / label* → UI family.
  */
 fun bestNoteTypography(arabic: Boolean = false): Typography {
     val display = if (arabic) BestNoteFonts.Arabic else BestNoteFonts.Display
+    val title = if (arabic) BestNoteFonts.Arabic else BestNoteFonts.Title
     val ui = if (arabic) BestNoteFonts.Arabic else BestNoteFonts.Ui
     return Typography(
         displayLarge = style(display, 48f, 52f, FontWeight.Light, -0.01f),
         displayMedium = style(display, 40f, 44f, FontWeight.Normal, -0.01f),
         displaySmall = style(display, 32f, 38f, FontWeight.Normal),
-        headlineLarge = style(display, 28f, 34f, FontWeight.Normal),
-        headlineMedium = style(display, 25f, 31f, FontWeight.Medium),
-        headlineSmall = style(display, 22f, 28f, FontWeight.Medium),
-        titleLarge = style(display, 24f, 30f, FontWeight.Medium),
-        titleMedium = style(display, 19f, 25f, FontWeight.Medium),
+        headlineLarge = style(title, 28f, 34f, FontWeight.Normal),
+        headlineMedium = style(title, 25f, 31f, FontWeight.Medium),
+        headlineSmall = style(title, 22f, 28f, FontWeight.Medium),
+        titleLarge = style(title, 24f, 30f, FontWeight.Medium),
+        titleMedium = style(title, 19f, 25f, FontWeight.Medium),
         titleSmall = style(ui, 15f, 21f, FontWeight.SemiBold),
         bodyLarge = style(ui, 16f, 24f, FontWeight.Normal),
         bodyMedium = style(ui, 15f, 22f, FontWeight.Normal),

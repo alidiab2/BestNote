@@ -4,6 +4,5 @@ plugins {
 }
 
 dependencies {
-    implementation(libs.androidx.compose.ui.text.google.fonts)
     debugImplementation(libs.androidx.activity.compose)
 }
