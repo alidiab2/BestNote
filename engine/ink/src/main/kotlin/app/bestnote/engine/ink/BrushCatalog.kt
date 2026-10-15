@@ -1,30 +1,46 @@
 /**
- * :engine:ink — BestNote's brushes, defined on top of androidx.ink's stock brush families.
+ * :engine:ink — BestNote's brushes, defined on top of androidx.ink brush families.
  *
  * [BrushSpec] is the pure, testable description of how a [Tool]/[PenStyle] pair should look
  * (which ink family, size scale, opacity). [BrushCatalog.brush] turns it into an
- * androidx.ink [Brush]. Specs are versioned by [InkFamily] so stored strokes keep rendering
- * identically after brush tuning.
+ * androidx.ink [Brush]; [InkRenderer] draws finished strokes with highlighters under ink.
+ * Families are versioned by [InkFamily] key (persisted next to each stroke) so stored strokes
+ * keep rendering identically after brush tuning. Tuning constants live in [BrushTuning].
  */
 package app.bestnote.engine.ink
 
 import androidx.ink.brush.Brush
 import androidx.ink.brush.BrushFamily
-import androidx.ink.brush.SelfOverlap
-import androidx.ink.brush.StockBrushes
 import app.bestnote.core.model.PenStyle
 import app.bestnote.core.model.Tool
 
-/** Stable keys for the androidx.ink stock families BestNote uses (persisted with strokes). */
+/** Stable keys for BestNote's brush families; storage persists [key]/[clientId] with each stroke. */
 enum class InkFamily(val key: String) {
-    /** Pressure-sensitive width: fountain pen and brush. */
-    PressurePen("pressure-pen.v1"),
+    /** Pressure-sensitive width (stock pressure pen). */
+    Fountain("fountain.v1"),
 
-    /** Constant width: ballpoint and pencil. */
-    Marker("marker.v1"),
+    /** Near-constant width. */
+    Ballpoint("ballpoint.v1"),
 
-    /** Translucent, overlapping strokes don't darken. */
-    Highlighter("highlighter.v1"),
+    /** Wide pressure range, tapered ends. */
+    BrushPen("brush-pen.v1"),
+
+    /** Constant-width graphite placeholder until INK-02. */
+    Pencil("pencil.v1"),
+
+    /** Flat chisel; translucent, drawn under ink, overlaps don't darken. */
+    Highlighter("highlighter-chisel.v1"),
+    ;
+
+    /** Namespaced id to persist with strokes (androidx.ink 1.1 keeps its own family ids internal). */
+    val clientId: String get() = ID_PREFIX + key
+
+    companion object {
+        const val ID_PREFIX = "bestnote:"
+
+        /** The family a stored stroke was drawn with, or null for foreign/unknown ids. */
+        fun fromClientId(id: String?): InkFamily? = entries.firstOrNull { it.clientId == id }
+    }
 }
 
 /**
@@ -43,20 +59,22 @@ object BrushCatalog {
     /** @return null for tools that don't lay down ink (Eraser, Lasso). */
     fun spec(tool: Tool, penStyle: PenStyle = PenStyle.Fountain): BrushSpec? = when (tool) {
         Tool.Pen -> when (penStyle) {
-            PenStyle.Fountain -> BrushSpec(InkFamily.PressurePen, sizeScale = 1f, opacity = 1f)
-            PenStyle.Ball -> BrushSpec(InkFamily.Marker, sizeScale = 0.7f, opacity = 1f)
-            PenStyle.Brush -> BrushSpec(InkFamily.PressurePen, sizeScale = 2.4f, opacity = 1f)
+            PenStyle.Fountain -> BrushSpec(InkFamily.Fountain, BrushTuning.Fountain.SIZE_SCALE, opacity = 1f)
+            PenStyle.Ball -> BrushSpec(InkFamily.Ballpoint, BrushTuning.Ballpoint.SIZE_SCALE, opacity = 1f)
+            PenStyle.Brush -> BrushSpec(InkFamily.BrushPen, BrushTuning.BrushPen.SIZE_SCALE, opacity = 1f)
         }
-        Tool.Pencil -> BrushSpec(InkFamily.Marker, sizeScale = 0.5f, opacity = 0.75f)
-        Tool.Highlighter -> BrushSpec(InkFamily.Highlighter, sizeScale = 4f, opacity = 0.4f)
+        Tool.Pencil -> BrushSpec(InkFamily.Pencil, BrushTuning.Pencil.SIZE_SCALE, BrushTuning.Pencil.OPACITY)
+        Tool.Highlighter -> BrushSpec(InkFamily.Highlighter, BrushTuning.Highlighter.SIZE_SCALE, BrushTuning.Highlighter.OPACITY)
         Tool.Eraser, Tool.Lasso -> null
     }
 
-    fun family(family: InkFamily): BrushFamily = when (family) {
-        InkFamily.PressurePen -> StockBrushes.pressurePen(StockBrushes.PressurePenVersion.V1)
-        InkFamily.Marker -> StockBrushes.marker(StockBrushes.MarkerVersion.V1)
-        InkFamily.Highlighter -> StockBrushes.highlighter(SelfOverlap.DISCARD, StockBrushes.HighlighterVersion.V1)
-    }
+    fun family(family: InkFamily): BrushFamily = BrushFamilies[family]
+
+    /** True when [brush] is a BestNote highlighter (drawn under ink by [InkRenderer]). */
+    fun isHighlighter(brush: Brush): Boolean = familyOf(brush) == InkFamily.Highlighter
+
+    /** Which BestNote family [brush] uses, or null for brushes BestNote didn't create. */
+    fun familyOf(brush: Brush): InkFamily? = BrushFamilies.identify(brush.family)
 
     /** Applies [opacity] to an ARGB color int. */
     fun applyOpacity(colorArgb: Int, opacity: Float): Int {

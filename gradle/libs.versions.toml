@@ -1,5 +1,5 @@
 # BestNote version catalog. Latest stable releases on Google Maven / Maven Central
-# as of 2026-10. androidx.ink is pinned to the 1.0.x stable line (1.1.0 is still alpha).
+# as of 2026-10, except androidx.ink (see below).
 
 [versions]
 # Toolchain
@@ -20,7 +20,10 @@ androidxHilt = "1.4.0"
 androidxRoom = "2.8.5"
 androidxDatastore = "1.2.1"
 androidxGraphics = "1.0.4"
-androidxInk = "1.0.0"
+# androidx.ink is on the 1.1 alpha on purpose: 1.0.x keeps the custom-brush API (tips, behaviors)
+# library-internal, which the brush pen and chisel highlighter need, and 1.1 fixes the stroke-end
+# glitch. Pin exactly 1.1.0-alpha09 (no ranges, no auto-bumps) until 1.1 is stable.
+androidxInk = "1.1.0-alpha09"
 androidxMotionPrediction = "1.0.0"
 composeBom = "2026.09.00"
 material3Adaptive = "1.4.0"

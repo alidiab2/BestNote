@@ -7,9 +7,9 @@
 
 | ID | Task | M | Size | Depends on | Done when |
 |---|---|---|---|---|---|
-| [ ] INK-01 | Brush presets: Fountain (pressure), Ball (constant width), Brush (high pressure range, tapered) | M1 | M | — | Three pens selectable; side-by-side screenshot reviewed by DS |
+| [x] INK-01 | Brush presets: Fountain (pressure), Ball (constant width), Brush (high pressure range, tapered) | M1 | M | — | Three pens selectable; side-by-side screenshot reviewed by DS |
 | [ ] INK-02 | Pencil: graphite texture, tilt widens and softens the stroke | M1 | L | SPEN-05 | Tilting the S Pen visibly shades; texture doesn't swim when zooming |
-| [ ] INK-03 | Highlighter: translucent, drawn *under* ink, no darkening where strokes overlap | M1 | M | — | Overlapping strokes stay the same tone; ink stays crisp on top |
+| [x] INK-03 | Highlighter: translucent, drawn *under* ink, no darkening where strokes overlap | M1 | M | — | Overlapping strokes stay the same tone; ink stays crisp on top |
 | [ ] INK-04 | Pressure curve per pen + "pressure sensitivity" slider | M1 | S | SPEN-06 | Slider at 0 gives constant width; at max follows the curve in the spec |
 | [ ] INK-05 | Stroke stabilization (smoothing) setting, 0–100 | M1 | M | — | 100 removes visible hand jitter without lag over 1 frame |
 | [ ] INK-06 | Color + thickness model, saved custom colors, favorite pen presets | M1 | M | DS-04 | Presets persist; switching preset is one tap |
