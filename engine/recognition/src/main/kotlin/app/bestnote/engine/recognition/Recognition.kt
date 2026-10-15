@@ -24,15 +24,65 @@ interface HandwritingRecognizer {
     suspend fun recognize(strokes: List<InkStrokeSamples>, languageTag: String): List<TextCandidate>
 }
 
+/** What a [RecognizedShape] is, for UI and tests. */
+enum class ShapeKind { Line, Arrow, Circle, Ellipse, Rectangle, Triangle, Polygon }
+
+/**
+ * A clean shape, in the same coordinates as the samples it was recognized from. Closed outlines
+ * list their points in drawing order (same start and direction as the hand-drawn stroke).
+ */
 sealed interface RecognizedShape {
-    data class Line(val x0: Float, val y0: Float, val x1: Float, val y1: Float) : RecognizedShape
-    data class Ellipse(val cx: Float, val cy: Float, val rx: Float, val ry: Float, val rotationRad: Float) : RecognizedShape
-    data class Polygon(val points: List<Pair<Float, Float>>, val closed: Boolean) : RecognizedShape
+    val kind: ShapeKind
+
+    data class Line(val x0: Float, val y0: Float, val x1: Float, val y1: Float) : RecognizedShape {
+        override val kind get() = ShapeKind.Line
+    }
+
+    /** A shaft from (x0, y0) to the tip (x1, y1), with a two-barbed head: barbs at [barbs] (1 or 2 points). */
+    data class Arrow(
+        val x0: Float,
+        val y0: Float,
+        val x1: Float,
+        val y1: Float,
+        val barbs: List<Pair<Float, Float>>,
+    ) : RecognizedShape {
+        override val kind get() = ShapeKind.Arrow
+    }
+
+    /** [startAngleRad] is where the hand-drawn loop began; [clockwise] its direction on screen (y down). */
+    data class Ellipse(
+        val cx: Float,
+        val cy: Float,
+        val rx: Float,
+        val ry: Float,
+        val rotationRad: Float,
+        val startAngleRad: Float = 0f,
+        val clockwise: Boolean = true,
+    ) : RecognizedShape {
+        override val kind get() = if (rx == ry) ShapeKind.Circle else ShapeKind.Ellipse
+    }
+
+    data class Polygon(
+        val points: List<Pair<Float, Float>>,
+        val closed: Boolean,
+        override val kind: ShapeKind = ShapeKind.Polygon,
+    ) : RecognizedShape
+}
+
+/** A recognized shape and how sure the recognizer is, 0..1. */
+data class ShapeMatch(val shape: RecognizedShape, val confidence: Float) {
+    val kind: ShapeKind get() = shape.kind
 }
 
 interface ShapeRecognizer {
     /** A clean shape for a hand-drawn stroke, or null when it isn't confidently a shape. */
-    suspend fun recognize(stroke: InkStrokeSamples): RecognizedShape?
+    suspend fun recognize(stroke: InkStrokeSamples): ShapeMatch?
+
+    /**
+     * An arrow made of a straight [shaft] and a separately drawn [head] stroke (a "V" at one of its
+     * ends), or null when [head] isn't an arrow head for it.
+     */
+    suspend fun recognizeArrow(shaft: InkStrokeSamples, head: InkStrokeSamples): ShapeMatch? = null
 }
 
 data class SearchHit(val notebookId: NotebookId, val pageIndex: Int, val snippet: String)
@@ -50,7 +100,7 @@ object NoOpHandwritingRecognizer : HandwritingRecognizer {
 }
 
 object NoOpShapeRecognizer : ShapeRecognizer {
-    override suspend fun recognize(stroke: InkStrokeSamples): RecognizedShape? = null
+    override suspend fun recognize(stroke: InkStrokeSamples): ShapeMatch? = null
 }
 
 object NoOpSearchIndex : SearchIndex {

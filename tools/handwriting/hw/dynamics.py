@@ -105,8 +105,11 @@ def tap(center, w, t_start, flick=None, heavy=1.0):
     return out, out[-1]["t_ms"]
 
 
-def stroke(pts, w, t_start, speed=1.0, pressure_scale=1.0):
-    """Timed samples along a dense polyline. Returns (samples, t_end_abs)."""
+def stroke(pts, w, t_start, speed=1.0, pressure_scale=1.0, hold_ms=0.0):
+    """Timed samples along a dense polyline. Returns (samples, t_end_abs).
+
+    hold_ms keeps the pen down and (nearly) still at the end before lifting, like a hold-to-snap shape.
+    """
     rng = w.rng
     ds = 0.04
     path = geom.resample(pts, ds)
@@ -135,7 +138,7 @@ def stroke(pts, w, t_start, speed=1.0, pressure_scale=1.0):
     for i in range(1, len(path)):
         tt.append(tt[-1] + 1000.0 * ds / (0.5 * (v[i] + v[i - 1])))
     dwell = rng.uniform(0.0, 10.0)
-    total = tt[-1] + dwell
+    total = tt[-1] + dwell + hold_ms
     ramp = rng.uniform(18.0, 34.0)
     fade = rng.uniform(22.0, 40.0)
     base = w.pressure * pressure_scale * rng.uniform(0.94, 1.06)
@@ -162,6 +165,9 @@ def stroke(pts, w, t_start, speed=1.0, pressure_scale=1.0):
         p = base * env_in * env_out * speed_term * curve_term * (1.0 + w._p_noise(t0 + t))
         # sub-pixel digitizer noise
         pos = (pos[0] + rng.gauss(0, 0.008), pos[1] + rng.gauss(0, 0.008))
+        if hold_ms and tm > tt[-1]:
+            # resting hand tremor while holding still
+            pos = (pos[0] + rng.gauss(0, 0.03), pos[1] + rng.gauss(0, 0.03))
         out.append(_sample(t0, t, pos, p, w))
         if t >= total:
             break
