@@ -44,6 +44,7 @@ include(":engine:layout")
 
 include(":ai:math")
 include(":ai:vision-api")
+include(":ai:vision-gemini")
 
 include(":feature:library")
 include(":feature:editor")

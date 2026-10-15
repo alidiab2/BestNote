@@ -1,0 +1,17 @@
+{
+  "candidates": [
+    {
+      "content": {
+        "role": "model",
+        "parts": [
+          { "text": "Reading the board left to right…", "thought": true },
+          { "text": "{\"title\":\"Derivatives\",\"blocks\":[{\"type\":\"definition\",\"id\":\"d1\",\"order\":0,\"role\":\"main\",\"title\":\"Derivative\",\"text\":\"The limit of the difference quotient.\",\"semantic\":\"regular\",\"ink_color\":\"white\"},{\"type\":\"math\",\"id\":\"m1\",\"order\":1,\"latex\":\"f'(x)=\\\\lim_{h\\\\to 0}\\\\frac{f(x+h)-f(x)}{h}\",\"boxed\":true,\"semantic\":\"essential\",\"ink_color\":\"red\",\"source_box\":[0.1,0.2,0.6,0.35]},{\"type\":\"margin_note\",\"order\":2,\"annotates\":\"m1\",\"text\":\"h is small, not zero\",\"semantic\":\"annotation\"},{\"type\":\"diagram\",\"order\":3,\"diagram\":{\"size\":[200,100],\"shapes\":[{\"kind\":\"arrow\",\"points\":[0,100,200,100]},{\"kind\":\"label\",\"points\":[190,90],\"text\":\"x\",\"latex\":true}]}}]}" }
+        ]
+      },
+      "finishReason": "STOP",
+      "index": 0
+    }
+  ],
+  "usageMetadata": { "promptTokenCount": 1290, "candidatesTokenCount": 220, "totalTokenCount": 1510 },
+  "modelVersion": "gemini-2.5-flash"
+}
