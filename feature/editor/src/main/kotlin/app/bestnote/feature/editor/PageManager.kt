@@ -46,6 +46,8 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.ui.composed
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
@@ -301,10 +303,14 @@ private fun originOf(grid: LazyGridState, shownIndex: Int): TransformOrigin {
 private fun Modifier.reorderGestures(
     grid: LazyGridState,
     reorder: ReorderState,
-    shown: List<DocumentPage>,
+    shownPages: List<DocumentPage>,
     scope: kotlinx.coroutines.CoroutineScope,
     onMoved: (from: Int, to: Int) -> Unit,
-): Modifier = pointerInput(shown.map { it.id }) {
+): Modifier = composed {
+    // The gesture must outlive the order changes it causes, so it is keyed on nothing and reads fresh state.
+    val latestShown by rememberUpdatedState(shownPages)
+    val latestMoved by rememberUpdatedState(onMoved)
+    pointerInput(Unit) {
     fun itemAt(p: Offset): LazyGridItemInfo? = grid.layoutInfo.visibleItemsInfo.firstOrNull {
         p.x >= it.offset.x && p.x < it.offset.x + it.size.width && p.y >= it.offset.y && p.y < it.offset.y + it.size.height
     }
@@ -312,9 +318,9 @@ private fun Modifier.reorderGestures(
     detectDragGesturesAfterLongPress(
         onDragStart = { start ->
             val hit = itemAt(start) ?: return@detectDragGesturesAfterLongPress
-            val id = shown.getOrNull(hit.index)?.id ?: return@detectDragGesturesAfterLongPress
+            val id = latestShown.getOrNull(hit.index)?.id ?: return@detectDragGesturesAfterLongPress
             from = hit.index
-            reorder.order = shown.map { it.id }
+            reorder.order = latestShown.map { it.id }
             reorder.dragId = id
             reorder.pointer = start
             reorder.grab = start - Offset(hit.offset.x.toFloat(), hit.offset.y.toFloat())
@@ -347,7 +353,7 @@ private fun Modifier.reorderGestures(
                 reorder.settleId = id
                 reorder.dragId = null
                 reorder.order = null
-                if (from >= 0 && to >= 0 && from != to) onMoved(from, to)
+                if (from >= 0 && to >= 0 && from != to) latestMoved(from, to)
                 scope.launch {
                     reorder.settle.snapTo(residual)
                     reorder.settle.animateTo(Offset.Zero, Motion.Spring.snappy())
@@ -360,6 +366,7 @@ private fun Modifier.reorderGestures(
             reorder.order = null
         },
     )
+    }
 }
 
 /** While a page is dragged near the top or bottom edge, the grid scrolls (frame by frame). */
