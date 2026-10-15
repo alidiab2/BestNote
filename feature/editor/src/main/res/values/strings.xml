@@ -58,6 +58,7 @@
     <string name="eraser_side_button">Hold the S Pen button to erase with any pen</string>
     <string name="editor_clear_page">Clear page</string>
     <string name="editor_page_cleared">Page cleared</string>
+    <string name="editor_smart_board_inserted">Inserted %1$d page(s) from Smart Board</string>
 
     <string name="quick_palette">Quick palette</string>
     <string name="quick_palette_all">All pen settings</string>

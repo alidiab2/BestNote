@@ -58,6 +58,7 @@
     <string name="eraser_side_button">اضغط زر S Pen مطولًا للمسح بأي قلم</string>
     <string name="editor_clear_page">مسح الصفحة</string>
     <string name="editor_page_cleared">تم مسح الصفحة</string>
+    <string name="editor_smart_board_inserted">أُضيفت %1$d صفحة من السبورة الذكية</string>
 
     <string name="quick_palette">اللوحة السريعة</string>
     <string name="quick_palette_all">كل إعدادات القلم</string>

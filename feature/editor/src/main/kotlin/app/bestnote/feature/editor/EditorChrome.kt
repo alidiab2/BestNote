@@ -50,6 +50,7 @@ internal data class ChromeActions(
     val onDock: (ToolbarDock) -> Unit,
     val onLeftHanded: (Boolean) -> Unit,
     val onClearPage: () -> Unit,
+    val onSmartBoard: () -> Unit,
     /** The Pages pill: paper template, color and size of the page being read. */
     val pagesMenu: @Composable () -> Unit,
     val onOpenSettings: () -> Unit = {},
@@ -99,7 +100,7 @@ internal fun ActionPills(
             ChromeIconButton(AtelierIcons.Undo, stringResource(R.string.editor_undo), actions.onUndo, enabled = canUndo, size = 44.dp)
             ChromeIconButton(AtelierIcons.Redo, stringResource(R.string.editor_redo), actions.onRedo, enabled = canRedo, size = 44.dp)
         }
-        SmartBoardPill { actions.onComingSoon(it) }
+        SmartBoardPill { actions.onSmartBoard() }
         val layers = stringResource(R.string.editor_layers)
         val export = stringResource(R.string.editor_export)
         Row(Modifier.chromeSurface().padding(horizontal = 2.dp)) {
@@ -112,7 +113,7 @@ internal fun ActionPills(
 }
 
 @Composable
-private fun SmartBoardPill(onClick: (String) -> Unit) {
+private fun SmartBoardPill(onClick: () -> Unit) {
     val label = stringResource(R.string.editor_smart_board)
     val colors = BestNoteTheme.colors
     Row(
@@ -120,7 +121,7 @@ private fun SmartBoardPill(onClick: (String) -> Unit) {
             .softShadow(Elevation.Low, BestNoteShapes.Pill)
             .clip(BestNoteShapes.Pill)
             .background(colors.strongButton)
-            .clickable(role = Role.Button, onClickLabel = label) { onClick(label) }
+            .clickable(role = Role.Button, onClickLabel = label) { onClick() }
             .height(44.dp)
             .padding(start = 13.dp, end = 16.dp),
         verticalAlignment = Alignment.CenterVertically,

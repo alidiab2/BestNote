@@ -67,10 +67,19 @@ object ColorSemantics {
  * [InkSemantic], so every reconstructed note looks like it came from the same careful student.
  */
 object NotebookPalette {
-    const val INK = 0xFF1F1F1FL
-    const val ESSENTIAL = 0xFFC62828L
-    const val ANNOTATION = 0xFF2E7D32L
-    const val EMPHASIS = 0xFF1565C0L
+    // The Atelier pen inks (`InkPalette` in :engine:ink), so Smart Board ink matches the pen tray.
+    const val INK = 0xFF1E2433L
+    const val ESSENTIAL = 0xFFD9462BL
+    const val ANNOTATION = 0xFF2F7D57L
+    const val EMPHASIS = 0xFF2A4BD7L
+
+    /** The semantic a palette colour stands for (Regular for anything else). */
+    fun semanticOf(argb: Long): InkSemantic = when (argb or 0xFF000000L) {
+        ESSENTIAL -> InkSemantic.Essential
+        ANNOTATION -> InkSemantic.Annotation
+        EMPHASIS -> InkSemantic.Emphasis
+        else -> InkSemantic.Regular
+    }
 
     fun ink(s: InkSemantic): Long = when (s) {
         InkSemantic.Regular -> INK

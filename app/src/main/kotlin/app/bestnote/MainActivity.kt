@@ -10,6 +10,7 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.core.content.pm.ShortcutInfoCompat
 import androidx.core.content.pm.ShortcutManagerCompat
 import androidx.core.graphics.drawable.IconCompat
@@ -21,6 +22,7 @@ import app.bestnote.core.datastore.UserPreferences
 import app.bestnote.core.datastore.UserPreferencesRepository
 import app.bestnote.core.designsystem.theme.BestNoteTheme
 import app.bestnote.core.designsystem.theme.systemReducedMotion
+import app.bestnote.feature.editor.InkInsert
 import app.bestnote.feature.editor.editorScreen
 import app.bestnote.feature.editor.navigateToEditor
 import app.bestnote.feature.library.LibraryRoute
@@ -28,6 +30,8 @@ import app.bestnote.feature.library.QuicknoteRequests
 import app.bestnote.feature.library.libraryScreen
 import app.bestnote.feature.settings.SettingsRoute
 import app.bestnote.feature.settings.settingsScreen
+import app.bestnote.feature.smartboard.navigateToSmartBoard
+import app.bestnote.feature.smartboard.smartBoardScreen
 import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
 
@@ -92,12 +96,32 @@ private fun BestNoteNavHost(quicknotes: QuicknoteRequests) {
     LaunchedEffect(quicknoteRequested) {
         if (quicknoteRequested) nav.popBackStack(LibraryRoute, inclusive = false)
     }
+    // Smart Board → editor hand-off: the handwritten pages wait here until the editor takes them.
+    val inbox = remember { InkInbox() }
     NavHost(nav, startDestination = LibraryRoute) {
         libraryScreen(
             onOpenNotebook = { nav.navigateToEditor(it) },
             onOpenSettings = { nav.navigate(SettingsRoute) },
         )
-        editorScreen(onBack = nav::popBackStack, onOpenSettings = { nav.navigate(SettingsRoute) })
+        editorScreen(
+            onBack = nav::popBackStack,
+            onOpenSettings = { nav.navigate(SettingsRoute) },
+            onSmartBoard = { notebook, page -> nav.navigateToSmartBoard(notebook, page) },
+            takeInsert = inbox::take,
+        )
+        smartBoardScreen(
+            onClose = nav::popBackStack,
+            onInsert = { result ->
+                inbox.pending = InkInsert(result.template, result.pages)
+                nav.popBackStack()
+            },
+        )
         settingsScreen(onBack = nav::popBackStack)
     }
+}
+
+private class InkInbox {
+    var pending: InkInsert? = null
+
+    fun take(): InkInsert? = pending.also { pending = null }
 }
