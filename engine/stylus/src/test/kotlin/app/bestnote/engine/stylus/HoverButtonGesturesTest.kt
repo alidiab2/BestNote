@@ -49,6 +49,15 @@ class HoverButtonGesturesTest {
         assertNull(g.onEvent(ev(StylusAction.HoverMove, false, 260))) // released in the air afterwards
     }
 
+    @Test fun afterWritingWithTheButtonANewClickStillWorks() {
+        val g = HoverButtonGestures()
+        g.onEvent(ev(StylusAction.Down, true, 0))
+        g.onEvent(ev(StylusAction.Up, true, 100))
+        assertNull(g.onEvent(ev(StylusAction.HoverMove, true, 110)))
+        assertNull(g.onEvent(ev(StylusAction.HoverMove, false, 150))) // the held button let go: no palette
+        assertEquals(Gesture.QuickPalette(100f, 200f), g.click(at = 400))
+    }
+
     @Test fun pressAlreadyHeldWhenHoverStartsIsNotAClick() {
         val g = HoverButtonGestures()
         g.onEvent(ev(StylusAction.Up, true, 0))

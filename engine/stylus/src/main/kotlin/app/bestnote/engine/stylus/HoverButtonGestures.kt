@@ -32,6 +32,9 @@ class HoverButtonGestures(
     private var press: Press? = null
     private var pending: Click? = null
 
+    /** False after the tip touched until a hover sample shows the button up: a button still held from writing is no click. */
+    private var armed = true
+
     /** Time at which [onTick] resolves a waiting single click, or null. */
     val deadline: Long? get() = pending?.let { it.at + doubleClickMs }
 
@@ -46,15 +49,17 @@ class HoverButtonGestures(
             // The tip touched: a held button is the temporary eraser, and a click just before writing
             // must not pop anything over the page.
             reset()
+            armed = false
             return null
         }
+        if (!event.primaryButtonPressed) armed = true
         if (event.action == StylusAction.HoverExit) {
             press = null
             return null
         }
         val current = press
         return when {
-            event.primaryButtonPressed && current == null -> {
+            event.primaryButtonPressed && current == null && armed -> {
                 press = Press(s.timeMillis, s.x, s.y)
                 null
             }
