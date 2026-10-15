@@ -4,7 +4,7 @@
  * [BrushSpec] is the pure, testable description of how a [Tool]/[PenStyle] pair should look
  * (which ink family, size scale, opacity). [BrushCatalog.brush] turns it into an
  * androidx.ink [Brush]; [InkRenderer] draws finished strokes with highlighters under ink.
- * Families are versioned by [InkFamily] key (stored as the family's client id) so stored strokes
+ * Families are versioned by [InkFamily] key (persisted next to each stroke) so stored strokes
  * keep rendering identically after brush tuning. Tuning constants live in [BrushTuning].
  */
 package app.bestnote.engine.ink
@@ -14,7 +14,7 @@ import androidx.ink.brush.BrushFamily
 import app.bestnote.core.model.PenStyle
 import app.bestnote.core.model.Tool
 
-/** Stable keys for BestNote's brush families (persisted with strokes as the client family id). */
+/** Stable keys for BestNote's brush families; storage persists [key]/[clientId] with each stroke. */
 enum class InkFamily(val key: String) {
     /** Pressure-sensitive width (stock pressure pen). */
     Fountain("fountain.v1"),
@@ -32,7 +32,7 @@ enum class InkFamily(val key: String) {
     Highlighter("highlighter-chisel.v1"),
     ;
 
-    /** The id stored in [BrushFamily.clientBrushFamilyId]. */
+    /** Namespaced id to persist with strokes (androidx.ink 1.1 keeps its own family ids internal). */
     val clientId: String get() = ID_PREFIX + key
 
     companion object {
@@ -71,7 +71,10 @@ object BrushCatalog {
     fun family(family: InkFamily): BrushFamily = BrushFamilies[family]
 
     /** True when [brush] is a BestNote highlighter (drawn under ink by [InkRenderer]). */
-    fun isHighlighter(brush: Brush): Boolean = InkFamily.fromClientId(brush.family.clientBrushFamilyId) == InkFamily.Highlighter
+    fun isHighlighter(brush: Brush): Boolean = familyOf(brush) == InkFamily.Highlighter
+
+    /** Which BestNote family [brush] uses, or null for brushes BestNote didn't create. */
+    fun familyOf(brush: Brush): InkFamily? = BrushFamilies.identify(brush.family)
 
     /** Applies [opacity] to an ARGB color int. */
     fun applyOpacity(colorArgb: Int, opacity: Float): Int {
