@@ -46,9 +46,9 @@ object BrushTuning {
         /** Opacity of the whole highlight layer (0.45..0.55 per the Atelier spec). */
         const val OPACITY = 0.5f
 
-        /** Chisel nib: narrow in x, full height in y, nearly square corners. */
+        /** Chisel nib: narrow in x, full height in y; softened corners so where strokes overlap, their ends blend instead of looking like boxes. */
         const val CHISEL_SCALE_X = 0.3f
         const val CHISEL_SCALE_Y = 1f
-        const val CHISEL_CORNER_ROUNDING = 0.15f
+        const val CHISEL_CORNER_ROUNDING = 0.5f
     }
 }
