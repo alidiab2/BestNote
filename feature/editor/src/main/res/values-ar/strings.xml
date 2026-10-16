@@ -139,4 +139,9 @@
     <string name="convert_downloading">جارٍ تنزيل نماذج الخط اليدوي…</string>
     <string name="convert_reading">جارٍ قراءة خطك…</string>
     <string name="convert_nothing">تعذّرت قراءة هذا الخط. جرّب تحديد أسطر أقل.</string>
+    <string name="convert_lang_auto">تلقائي</string>
+    <string name="convert_lang_ar">العربية</string>
+    <string name="convert_lang_en">English</string>
+    <string name="convert_review">راجع النص</string>
+    <string name="convert_insert">إدراج</string>
 </resources>

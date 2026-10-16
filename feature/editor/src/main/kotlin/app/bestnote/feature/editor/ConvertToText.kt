@@ -1,5 +1,6 @@
 package app.bestnote.feature.editor
 
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
@@ -44,16 +45,25 @@ internal class InkConverter(
     private val onSelecting: () -> Unit,
     private val message: suspend (Int) -> Unit,
 ) {
-    enum class Step { Idle, NeedsModels, Downloading, DownloadFailed, Reading }
+    enum class Step { Idle, NeedsModels, Downloading, DownloadFailed, Reading, Confirm }
+
+    /** Which language to read: null = pick per line from how it was written. */
+    var language by mutableStateOf<String?>(null)
+        private set
+
+    /** The reading shown for confirmation; the user may edit it before it becomes a text box. */
+    var draft by mutableStateOf("")
 
     var step by mutableStateOf(Step.Idle)
         private set
 
     private var pending: PagedDocumentView.SelectedInk? = null
+    private var samples: List<List<app.bestnote.core.model.StylusSample>> = emptyList()
 
     fun convert() {
         val selected = canvas()?.selectedInk() ?: return
         pending = selected
+        language = null
         if (models.state.value.isReady) read(selected) else step = Step.NeedsModels
     }
 
@@ -70,26 +80,40 @@ internal class InkConverter(
     fun dismiss() {
         step = Step.Idle
         pending = null
+        samples = emptyList()
+    }
+
+    /** Re-reads the selection in [tag] (null = automatic), e.g. from the language chips in the confirmation. */
+    fun readAs(tag: String?) {
+        language = tag
+        pending?.let(::read)
     }
 
     private fun read(selected: PagedDocumentView.SelectedInk) {
         step = Step.Reading
         scope.launch {
             try {
-                val transcript = withContext(Dispatchers.Default) {
-                    Transcriber(recognizer).transcribe(selected.strokes.map(InkConversion::samplesOf))
-                }
-                if (transcript.isEmpty) {
+                if (samples.isEmpty()) samples = withContext(Dispatchers.Default) { selected.strokes.map(InkConversion::samplesOf) }
+                val transcript = withContext(Dispatchers.Default) { Transcriber(recognizer).transcribe(samples, language) }
+                if (transcript.isEmpty && language == null) {
                     message(R.string.convert_nothing)
+                    dismiss()
                 } else {
-                    replaceWithText(selected, transcript.lines)
+                    draft = transcript.text
+                    step = Step.Confirm
                 }
             } catch (e: CancellationException) {
                 throw e
-            } finally {
-                dismiss()
             }
         }
+    }
+
+    /** Puts the (edited) [draft] on the page in place of the selected ink. */
+    fun insert() {
+        val selected = pending
+        val lines = draft.lines().map { it.trimEnd() }.filter { it.isNotBlank() }
+        if (selected != null && lines.isNotEmpty()) replaceWithText(selected, lines)
+        dismiss()
     }
 
     private fun replaceWithText(selected: PagedDocumentView.SelectedInk, lines: List<String>) {
@@ -146,8 +170,35 @@ internal class InkConverter(
                     null
                 },
             )
+            Step.Confirm -> AlertDialog(
+                onDismissRequest = ::dismiss,
+                title = { Text(title) },
+                text = {
+                    androidx.compose.foundation.layout.Column(verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(12.dp)) {
+                        androidx.compose.foundation.layout.Row(horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp)) {
+                            LanguageChip(R.string.convert_lang_auto, language == null) { readAs(null) }
+                            LanguageChip(R.string.convert_lang_ar, language == "ar") { readAs("ar") }
+                            LanguageChip(R.string.convert_lang_en, language == "en-US") { readAs("en-US") }
+                        }
+                        androidx.compose.material3.OutlinedTextField(
+                            value = draft,
+                            onValueChange = { draft = it },
+                            label = { Text(stringResource(R.string.convert_review)) },
+                            placeholder = { Text(stringResource(R.string.convert_nothing)) },
+                            modifier = androidx.compose.ui.Modifier.fillMaxWidth(),
+                        )
+                    }
+                },
+                confirmButton = { TextButton(::insert, enabled = draft.isNotBlank()) { Text(stringResource(R.string.convert_insert)) } },
+                dismissButton = { TextButton(::dismiss) { Text(stringResource(R.string.dialog_cancel)) } },
+            )
             Step.Idle -> Unit
         }
+    }
+
+    @Composable
+    private fun LanguageChip(label: Int, selected: Boolean, onClick: () -> Unit) {
+        androidx.compose.material3.FilterChip(selected = selected, onClick = onClick, label = { Text(stringResource(label)) })
     }
 
     private companion object {

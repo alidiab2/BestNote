@@ -139,4 +139,9 @@
     <string name="convert_downloading">Downloading handwriting models…</string>
     <string name="convert_reading">Reading your handwriting…</string>
     <string name="convert_nothing">Couldn\'t read that handwriting. Try selecting fewer lines.</string>
+    <string name="convert_lang_auto">Auto</string>
+    <string name="convert_lang_ar">العربية</string>
+    <string name="convert_lang_en">English</string>
+    <string name="convert_review">Check the text</string>
+    <string name="convert_insert">Insert</string>
 </resources>
