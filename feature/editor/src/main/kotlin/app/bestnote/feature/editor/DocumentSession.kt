@@ -42,6 +42,7 @@ import java.io.ByteArrayOutputStream
 import java.io.File
 import java.util.Collections
 import java.util.IdentityHashMap
+import java.util.WeakHashMap
 import kotlin.math.roundToInt
 
 /**
@@ -72,7 +73,12 @@ internal class DocumentSession(
 
     /** Stored strokes this build cannot draw (unknown brush), per page id; kept so saving never drops them. */
     private val preserved = HashMap<String, List<InkStroke>>()
-    private val models = IdentityHashMap<Stroke, InkStroke>()
+    /**
+     * Storage model of each stroke, so a save converts only new strokes. Weak keys (androidx.ink
+     * strokes compare by identity): erased, split or undone-and-dropped strokes leave with the last
+     * reference (the page or the undo history) instead of piling up while the editor stays open.
+     */
+    private val models = WeakHashMap<Stroke, InkStroke>()
     private var view: PagedDocumentView? = null
 
     /** The notebook's picture files by archive path (MEDIA-01); read by the image cache on its own thread. */

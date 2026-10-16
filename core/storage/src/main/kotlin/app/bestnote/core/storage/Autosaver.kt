@@ -42,7 +42,14 @@ sealed interface SaveState {
  *
  * A save starts once edits have been quiet for [debounceMillis], and at the latest [maxDelayMillis]
  * after the first unsaved edit, so continuous writing still reaches the disk every few seconds.
- * Only pages edited since the last save are re-encoded and rewritten. [updateLayout] adds pages and
+ * Only pages edited since the last save are re-encoded and rewritten.
+ *
+ * A page is always encoded whole, so one save costs as many bytes (allocated, checksummed and
+ * written) as the pages it touches: ~30 MB for a page of 5k strokes. While writing continuously on
+ * such a page, saving every few seconds turned into tens of MB/s of garbage and disk traffic. So the
+ * worker waits at least `encoded bytes / [saveBytesPerSecond]` (at most [maxCooldownMillis]) after
+ * a save before starting the next one; edits made meanwhile are coalesced into it. Normal pages
+ * (a few hundred KB) are unaffected; [flush] and [close] never wait. [updateLayout] adds pages and
  * changes their paper or size (PAGES-01/02); only new or changed pages are rewritten. Callers should [flush] when
  * the app goes to the background, so a later process kill finds everything on disk.
  *
@@ -58,12 +65,15 @@ class Autosaver(
     private val cpu: CoroutineDispatcher = Dispatchers.Default,
     private val debounceMillis: Long = DEFAULT_DEBOUNCE_MILLIS,
     private val maxDelayMillis: Long = DEFAULT_MAX_DELAY_MILLIS,
+    private val saveBytesPerSecond: Long = DEFAULT_SAVE_BYTES_PER_SECOND,
+    private val maxCooldownMillis: Long = DEFAULT_MAX_COOLDOWN_MILLIS,
     private val clock: () -> Long = System::currentTimeMillis,
     private val timeSource: TimeSource = TimeSource.Monotonic,
     private val onSaved: suspend (NotebookPackage) -> Unit = {},
 ) {
     init {
         require(debounceMillis in 1..maxDelayMillis) { "Need 0 < debounce <= max delay" }
+        require(saveBytesPerSecond > 0 && maxCooldownMillis >= 0) { "Need a positive save budget" }
     }
 
     private val lock = Any()
@@ -88,6 +98,9 @@ class Autosaver(
     private var closed = false
 
     private val signal = Channel<Unit>(Channel.CONFLATED)
+
+    /** Ink bytes encoded by the last save (worker thread only via [saveLocked]); sets the cooldown. */
+    @Volatile private var lastEncodedBytes = 0L
     private val saveMutex = Mutex()
     private val _state = MutableStateFlow<SaveState>(SaveState.Saved)
 
@@ -214,6 +227,9 @@ class Autosaver(
             }
             retryDelay = try {
                 flush()
+                // Big pages: keep the background save traffic within the budget (see class doc).
+                val cooldown = (lastEncodedBytes * MILLIS_PER_SECOND / saveBytesPerSecond).coerceAtMost(maxCooldownMillis)
+                if (cooldown > 0) delay(cooldown)
                 RETRY_MIN_MILLIS
             } catch (e: CancellationException) {
                 throw e
@@ -234,7 +250,10 @@ class Autosaver(
         val base: NotebookPackage
         val audio: PendingAudio?
         synchronized(lock) {
-            if (pending.isEmpty() && pendingElements.isEmpty() && pendingAssets.isEmpty() && pendingLayout == null && pendingAudio == null) return
+            if (pending.isEmpty() && pendingElements.isEmpty() && pendingAssets.isEmpty() && pendingLayout == null && pendingAudio == null) {
+                lastEncodedBytes = 0
+                return
+            }
             batch = LinkedHashMap(pending)
             pending.clear()
             elements = LinkedHashMap(pendingElements)
@@ -249,6 +268,7 @@ class Autosaver(
         }
         val pkg = try {
             val encoded = withContext(cpu) { batch.mapValues { (_, strokes) -> codec.encode(strokes) } }
+            lastEncodedBytes = encoded.values.sumOf { it.size.toLong() }
             val (pages, changed) = if (layout == null) {
                 base.pages.map { p ->
                     val ink = encoded[p.id]
@@ -321,6 +341,11 @@ class Autosaver(
     companion object {
         const val DEFAULT_DEBOUNCE_MILLIS = 500L
         const val DEFAULT_MAX_DELAY_MILLIS = 2_000L
+
+        /** Background save budget: a 30 MB page saves every ~7 s while written on, a 300 KB one every 2 s. */
+        const val DEFAULT_SAVE_BYTES_PER_SECOND = 4L * 1024 * 1024
+        const val DEFAULT_MAX_COOLDOWN_MILLIS = 10_000L
+        private const val MILLIS_PER_SECOND = 1_000L
         private const val RETRY_MIN_MILLIS = 1_000L
         private const val RETRY_MAX_MILLIS = 30_000L
     }

@@ -129,9 +129,23 @@ class ReplayInstaller : ContentProvider() {
             // CANVAS-06 A/B: --ez tiles false draws without the dry-ink tile cache.
             if (intent.hasExtra("tiles")) canvas.tileCacheEnabled = intent.getBooleanExtra("tiles", true)
             val strokes = canvas.document?.pages?.sumOf { it.strokes.size } ?: -1
-            val line = "done state zoom=${canvas.zoom} page=${canvas.currentPage} scrollX=${canvas.scrollOffsetX} scrollY=${canvas.scrollOffsetY} strokes=$strokes ${canvas.renderStats}"
+            val line = "done state zoom=${canvas.zoom} page=${canvas.currentPage} scrollX=${canvas.scrollOffsetX} scrollY=${canvas.scrollOffsetY} strokes=$strokes ${canvas.renderStats} ${memStats()}"
             Log.i(TAG, line)
             status.writeText(line + "\n")
+        }
+
+        /**
+         * Memory counters for leak checks, read without forcing a GC (dumpsys meminfo does force one):
+         * javaAllocMb = bytes ever allocated on the Java heap (rate = churn), javaUsedMb = live + garbage
+         * not yet collected, nativeMb = malloc'd bytes in use (bitmap pixels, ink meshes, paths).
+         */
+        private fun memStats(): String {
+            val rt = Runtime.getRuntime()
+            val alloc = android.os.Debug.getRuntimeStat("art.gc.bytes-allocated")?.toLongOrNull() ?: -1L
+            val gcs = android.os.Debug.getRuntimeStat("art.gc.gc-count") ?: "?"
+            return "javaAllocMb=%.1f javaUsedMb=%.1f nativeMb=%.1f gcs=%s".format(
+                alloc / MB, (rt.totalMemory() - rt.freeMemory()) / MB, android.os.Debug.getNativeHeapAllocatedSize() / MB, gcs,
+            )
         }
 
         /**
@@ -262,6 +276,7 @@ class ReplayInstaller : ContentProvider() {
 
     private companion object {
         const val TAG = "BestNoteReplay"
+        const val MB = 1024.0 * 1024.0
         const val ACTION = "app.bestnote.debug.REPLAY"
         const val PINCH = "app.bestnote.debug.PINCH"
         const val STATE = "app.bestnote.debug.STATE"
