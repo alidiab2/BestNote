@@ -188,4 +188,11 @@ class NoteWireTest {
     private fun tokens(s: String): Int = (s.count { it.code < 128 } / 4.0 + s.count { it.code >= 128 } / 2.0).toInt()
 
     private fun pct(a: Int, b: Int) = "-${100 - b * 100 / a}%"
+
+    @Test fun emptyElementsAreDroppedAndMarginTargetsFollow() {
+        // Live DeepSeek answer shape: an empty Summary and Glossary, a remark pointing past them.
+        val doc = NoteWire.answer("""{"elements":[{"e":"Title","t":"T"},{"e":"Summary"},{"e":"Formula","m":"x=1"},{"e":"Glossary"},{"e":"MarginRemark","t":"see","target":2}]}""")
+        assertEquals(listOf(NoteElement.Title, NoteElement.Formula, NoteElement.MarginRemark), doc.elements.map { it.element })
+        assertEquals(1, doc.elements.last().target)
+    }
 }

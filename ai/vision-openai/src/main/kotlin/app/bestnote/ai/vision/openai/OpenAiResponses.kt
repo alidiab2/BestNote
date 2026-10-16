@@ -41,6 +41,11 @@ object OpenAiResponses {
     }
 
     /** True when a 400 says the model or server does not take `reasoning_effort` (send without it). */
+    fun rejectsThinking(code: Int, body: String): Boolean {
+        if (code != 400 && code != 422) return false
+        return "thinking" in message(body).lowercase()
+    }
+
     fun rejectsReasoningEffort(code: Int, body: String): Boolean {
         if (code != 400 && code != 422) return false
         val m = message(body).lowercase()

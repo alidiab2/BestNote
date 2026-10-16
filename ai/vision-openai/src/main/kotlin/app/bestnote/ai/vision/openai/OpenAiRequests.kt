@@ -25,6 +25,13 @@ data class OpenAiConfig(
     companion object {
         const val OPENAI_BASE_URL = "https://api.openai.com/v1/"
 
+        /**
+         * Servers whose models think unless told not to, and accept `thinking: {type: disabled}`.
+         * DeepSeek ignored `reasoning_effort: low` (owner's key: 4,399 of 5,392 output tokens were
+         * thinking); disabled, the same board reads just as well at a fraction of the cost and time.
+         */
+        fun turnsThinkingOff(baseUrl: String) = "api.deepseek.com" in baseUrl
+
         /** Last-resort id when the key's live model list is unavailable (newest flagship, 2026-10). */
         const val DEFAULT_MODEL = "gpt-5.6-terra"
 
@@ -71,9 +78,12 @@ object OpenAiRequests {
         maxTokens: Int = config.maxTokens,
         schema: JsonObject = AiSchema.document(AiSchema.Dialect.Closed),
         jsonHint: String = Prompts.JSON_ONLY_HINT,
+        /** DeepSeek-style `thinking: {type: disabled}`: no hidden reasoning tokens at all. */
+        thinkingOff: Boolean = false,
     ): JsonObject = buildJsonObject {
         put("model", model)
         reasoningEffort?.let { put("reasoning_effort", it) }
+        if (thinkingOff) putJsonObject("thinking") { put("type", "disabled") }
         putJsonArray("messages") {
             addJsonObject {
                 put("role", "system")
@@ -127,9 +137,12 @@ object OpenAiRequests {
         config: OpenAiConfig = OpenAiConfig(),
         reasoningEffort: String? = null,
         maxTokens: Int = config.maxTokens,
+        /** DeepSeek-style `thinking: {type: disabled}`: no hidden reasoning tokens at all. */
+        thinkingOff: Boolean = false,
     ): JsonObject = buildJsonObject {
         put("model", model)
         reasoningEffort?.let { put("reasoning_effort", it) }
+        if (thinkingOff) putJsonObject("thinking") { put("type", "disabled") }
         putJsonArray("messages") {
             addJsonObject {
                 put("role", "system")

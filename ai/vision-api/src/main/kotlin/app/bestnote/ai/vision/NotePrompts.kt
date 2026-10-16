@@ -72,6 +72,13 @@ object NotePrompts {
         append("Maths: inline in t as \\( … \\); display maths in m without delimiters; double every backslash in JSON (\"\\\\frac\").\n")
         append("In Hebrew or Arabic sentences only single symbols stay inline (x, e^x, 30!); put any fraction, limit, sum, root or multi-term expression in its own Formula element after the sentence.\n")
         append("Units in parentheses: 10\\,(m/s).\n")
+        // Live tests (owner's DeepSeek key, thinking off): the same computation came back as both a
+        // Derivation and a StepSolution, and Summary/Glossary came back empty.
+        val both = NoteElement.Derivation in t.elements && NoteElement.StepSolution in t.elements
+        append("Each piece of content appears ONCE")
+        append(if (both) ": one computation is one Derivation OR one StepSolution, never both" else "")
+        append("; do not restate a result as a Note.\n")
+        append("Never return an empty element: a Summary has 2–4 items, a Glossary has terms, otherwise leave it out.\n")
         append(instructions(t.ai, request.rtl))
         if (t.ai.note.isNotBlank()) {
             append("\n## The user's instruction (highest priority, follow it exactly)\n")
@@ -103,7 +110,7 @@ object NotePrompts {
             },
         )
         if (ai.stepByStep) append("- Solutions step by step, each step with a short reason.\n")
-        if (ai.glossary) append("- terms = [[term as in the notes, term in ${terms ?: "the board's language"}]] for each technical term on the page.\n")
+        if (ai.glossary) append("- REQUIRED, never empty: terms = [[term as in the notes, term in ${terms ?: "the board's language"}]] for every technical term on the page (usually 4–10).\n")
     }
 
     /** User turn sent with a board photo. */

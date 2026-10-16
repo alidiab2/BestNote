@@ -41,3 +41,9 @@ UI tasks (DS, LIB, PAGES, editor chrome, AI-05/07) start only after the [design 
 - Run module-scoped `verify.sh`, not the full build. Run the full `--app` build once at the end.
 - Use the `-q` Gradle output. On failure, read only the first error.
 - Keep the final report to 5 lines: task, what changed, test count, device check, PR URL.
+
+## Live AI tests (owner's DeepSeek key — limited budget)
+`scripts/agent/ai-live.sh IMAGE [template=…] [notes=ar] [terms=he] [note="…"] [rtl=1]` makes ONE real Smart Board call
+(key in `~/.config/bestnote/deepseek.env`, never in the repo; hard cap in `~/.config/bestnote/ai-budget`, counted
+before the call). Output: `build/ai-live/<time>/notes.json`, `raw.txt`, `summary.txt`. Ask the lead before using it;
+prefer recorded responses in unit tests.
