@@ -161,4 +161,8 @@
     <string name="tidy_error_other">Could not tidy this selection.</string>
     <string name="convert_lang_he">עברית</string>
     <string name="convert_hebrew_needs_ai">Hebrew handwriting is read by your AI provider. Add a key in Settings → Smart Board AI.</string>
+    <string name="editor_smart_board_choice_title">Smart Board page</string>
+    <string name="editor_smart_board_choice_body">Add a new photo of the board to this page (merged, repeats removed), or write new pages?</string>
+    <string name="editor_smart_board_continue">Continue / add photo</string>
+    <string name="editor_smart_board_new_pages">New pages</string>
 </resources>

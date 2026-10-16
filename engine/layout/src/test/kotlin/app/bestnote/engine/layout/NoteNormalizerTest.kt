@@ -122,4 +122,14 @@ class NoteNormalizerTest {
         assertNull(t.look.paper)
         assertFalse(NoteElement.Columns in classic.elements)
     }
+
+    @Test fun `user ink becomes reserved lines and survives the route encoding`() {
+        val paper = RuledPaper.of(PaperTemplate.Ruled, PageSize.A4)
+        val y = paper.lineY(4)
+        val lines = ReservedLines.of(paper, listOf(app.bestnote.core.model.RectPt(100f, y - paper.lineGap * 0.6f, 200f, y + 1f)))
+        assertEquals(setOf(4), lines)
+        val r = ReservedLines(mapOf(0 to setOf(4, 5), 2 to setOf(1)))
+        assertEquals(r, ReservedLines.decode(r.encode()))
+        assertTrue(ReservedLines.decode(null).isEmpty)
+    }
 }

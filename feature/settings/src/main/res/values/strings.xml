@@ -267,5 +267,6 @@
     <string name="settings_ai_style_colorful">Colorful</string>
     <string name="settings_ai_style_cornell">Cornell</string>
     <string name="settings_ai_style_cheatsheet">Cheat sheet</string>
+    <string name="settings_ai_style_study">Study notes (columns)</string>
     <string name="settings_ai_language_board">Same as the board</string>
 </resources>

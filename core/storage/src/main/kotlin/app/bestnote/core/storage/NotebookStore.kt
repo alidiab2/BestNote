@@ -84,4 +84,7 @@ interface NotebookStore {
 
     /** @return true if a notebook was removed. */
     suspend fun delete(id: NotebookId): Boolean
+
+    /** One notebook extra (e.g. Smart Board's `smartboard.json`) without loading the pages; null when absent. */
+    suspend fun readExtra(id: NotebookId, name: String): ByteArray? = read(id)?.extras?.get(name)
 }

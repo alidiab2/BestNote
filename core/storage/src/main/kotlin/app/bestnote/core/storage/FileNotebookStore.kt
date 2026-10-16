@@ -51,6 +51,11 @@ class FileNotebookStore internal constructor(
 
     override suspend fun write(pkg: NotebookPackage) = locked { writeLocked(pkg, changed = null) }
 
+    override suspend fun readExtra(id: NotebookId, name: String): ByteArray? = locked {
+        if (!NotebookPackage.EXTRA_NAME.matches(name)) return@locked null
+        File(dirOf(id), BnoteFormat.EXTRAS_DIR + name).takeIf { it.isFile }?.readBytes()
+    }
+
     /**
      * Rewrites only [changedPageIds]; any other entry that is missing on disk (a new page, a first
      * save, an asset) is written too, so the committed manifest never points at a missing file.

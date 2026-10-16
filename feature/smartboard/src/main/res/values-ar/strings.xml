@@ -111,4 +111,12 @@
     <string name="smartboard_review_stats_pages">%1$d صفحة · نص وحبر قابلان للتعديل · %2$.1f ث</string>
     <string name="smartboard_notes_in">لغة الملاحظات: %1$s</string>
     <string name="smartboard_language_board">مثل السبورة</string>
+<string name="smartboard_template">القالب</string>
+    <string name="smartboard_style_study">ملخص دراسي (أعمدة)</string>
+    <string name="smartboard_notice_look">تغيّر الشكل فقط: أعيد الرسم من نفس الملاحظات دون طلب جديد للذكاء الاصطناعي.</string>
+    <string name="smartboard_notice_ai">هذا القالب يطلب من الذكاء الاصطناعي شيئًا مختلفًا: تتم قراءة السبورة من جديد.</string>
+    <string name="smartboard_insert_glossary">مسرد الدفتر (%1$d مصطلح)</string>
+    <string name="smartboard_update_page">تحديث الصفحة</string>
+    <string name="smartboard_continue_title">إضافة إلى هذه الصفحة</string>
+    <string name="smartboard_continue_body">صوّر السبورة مرة أخرى (أو الجزء التالي). تُدمج الملاحظات في الصفحة: يضاف الجديد ويُحذف المكرر وكل شيء بترتيب الشرح. كتابتك تبقى مكانها.</string>
 </resources>
