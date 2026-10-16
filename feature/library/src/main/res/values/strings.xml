@@ -85,10 +85,10 @@
     <string name="library_menu_favorite">Add to Favorites</string>
     <string name="library_menu_unfavorite">Remove from Favorites</string>
     <string name="library_menu_export">Export</string>
+    <string name="library_menu_share">Share</string>
     <string name="library_menu_select">Select</string>
     <string name="library_copy_title">%1$s (copy)</string>
     <string name="library_duplicated">Duplicated as “%1$s”</string>
-    <string name="library_export_soon">Export is coming soon.</string>
     <plurals name="library_trashed_many">
         <item quantity="one">%d notebook moved to Trash</item>
         <item quantity="other">%d notebooks moved to Trash</item>

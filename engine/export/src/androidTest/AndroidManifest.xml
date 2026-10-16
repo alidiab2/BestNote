@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application>
+        <!-- A folder provider backed by a temp directory, so SafBackupTarget can be tested against real SAF calls. -->
+        <provider
+            android:name="app.bestnote.engine.export.TestDocumentsProvider"
+            android:authorities="app.bestnote.engine.export.test.docs"
+            android:exported="true"
+            android:grantUriPermissions="true"
+            android:permission="android.permission.MANAGE_DOCUMENTS" />
+    </application>
+</manifest>

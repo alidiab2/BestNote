@@ -89,6 +89,10 @@ import app.bestnote.core.designsystem.theme.Spacing
 import app.bestnote.core.designsystem.theme.hairline
 import app.bestnote.core.designsystem.theme.softShadow
 import app.bestnote.core.model.NotebookId
+import app.bestnote.engine.export.ExportDialog
+import app.bestnote.engine.export.ExportFormat
+import app.bestnote.engine.export.ExportRunner
+import app.bestnote.engine.export.rememberExportRunner
 import kotlinx.coroutines.launch
 import kotlinx.serialization.Serializable
 import java.util.Date
@@ -162,7 +166,7 @@ fun LibraryScreen(
             favorite = viewModel::setFavorite,
             trash = { viewModel.moveToTrash(it) },
             restore = { viewModel.restore(it) },
-            export = { viewModel.exportSoon() },
+            exportRunner = rememberExportRunner(),
             startSelection = viewModel::startSelection,
             toggleSelected = viewModel::toggleSelected,
             selectAll = viewModel::selectAll,
@@ -187,7 +191,6 @@ private fun quicknoteTitle(): String {
 }
 
 private fun noticeText(resources: android.content.res.Resources, event: LibraryEvent.Message): String = when (event.notice) {
-    Notice.ExportSoon -> resources.getString(R.string.library_export_soon)
     Notice.ImportingPdf -> resources.getString(R.string.library_importing_pdf)
     Notice.ImportPdfFailed -> resources.getString(R.string.library_import_pdf_failed)
     Notice.Duplicated -> resources.getString(R.string.library_duplicated, event.name)
@@ -226,7 +229,8 @@ internal data class LibraryCallbacks(
     val favorite: (Collection<NotebookId>, Boolean) -> Unit = { _, _ -> },
     val trash: (Collection<NotebookId>) -> Unit = {},
     val restore: (NotebookId) -> Unit = {},
-    val export: (NotebookId) -> Unit = {},
+    /** Runs exports for the Export / Share menu items; null in previews and tests. */
+    val exportRunner: ExportRunner? = null,
     val startSelection: (NotebookId?) -> Unit = {},
     val toggleSelected: (NotebookId) -> Unit = {},
     val selectAll: () -> Unit = {},
@@ -247,6 +251,9 @@ private sealed interface LibraryDialog {
     data class NewFolder(val parentId: String?, val moveIds: List<NotebookId> = emptyList()) : LibraryDialog
     data class EditFolder(val id: String) : LibraryDialog
     data class DeleteFolder(val id: String) : LibraryDialog
+
+    /** Export dialog for one notebook; [share] skips the format choice and shares a PDF straight away. */
+    data class Export(val id: NotebookId, val share: Boolean) : LibraryDialog
 }
 
 /** Below this width the sidebar is hidden and the header controls tighten. */
@@ -281,7 +288,8 @@ internal fun LibraryContent(
                 NotebookMenuAction.Duplicate -> ui.duplicate(item.id, copyTitle.format(item.title))
                 NotebookMenuAction.Move -> dialog = LibraryDialog.Move(listOf(item.id))
                 NotebookMenuAction.Favorite -> ui.favorite(listOf(item.id), !item.favorite)
-                NotebookMenuAction.Export -> ui.export(item.id)
+                NotebookMenuAction.Export -> dialog = LibraryDialog.Export(item.id, share = false)
+                NotebookMenuAction.Share -> dialog = LibraryDialog.Export(item.id, share = true)
                 NotebookMenuAction.Select -> ui.startSelection(item.id)
                 NotebookMenuAction.Trash -> ui.trash(listOf(item.id))
             }
@@ -400,6 +408,19 @@ private fun LibraryDialogs(dialog: LibraryDialog?, state: LibraryUiState, ui: Li
             NewNotebookSheet(folderName, onDismiss = dismiss) { spec ->
                 set(null)
                 ui.create(spec)
+            }
+        }
+        is LibraryDialog.Export -> {
+            val item = notebook(dialog.id)
+            val runner = ui.exportRunner
+            if (item != null && runner != null) {
+                ExportDialog(
+                    runner = runner,
+                    notebookId = item.id,
+                    pageCount = item.pageCount,
+                    onDismiss = dismiss,
+                    startWith = if (dialog.share) ExportFormat.Pdf else null,
+                )
             }
         }
         is LibraryDialog.Rename -> {

@@ -87,7 +87,7 @@ class FileNotebookStoreTest {
             files,
         )
         val manifest = File(dir, "manifest.json").readText()
-        assertTrue(manifest.contains("\"format\": 1"))
+        assertTrue(manifest.contains("\"format\": ${BnoteFormat.VERSION}"))
     }
 
     @Test fun rewriteRemovesDroppedPagesAndTempFiles() = runTest {
@@ -136,9 +136,9 @@ class FileNotebookStoreTest {
         val s = store()
         s.write(pkg("nb"))
         val manifest = File(tmp.root, "nb/manifest.json")
-        manifest.writeText(manifest.readText().replace("\"format\": 1", "\"format\": 2"))
+        manifest.writeText(manifest.readText().replace("\"format\": ${BnoteFormat.VERSION}", "\"format\": ${BnoteFormat.VERSION + 1}"))
         val e = expect<UnsupportedFormatVersionException> { s.read(NotebookId("nb")) }
-        assertEquals(2, e.found)
+        assertEquals(BnoteFormat.VERSION + 1, e.found)
         assertEquals(emptyList<Notebook>(), s.list())
 
         // A future manifest with an unknown schema is still reported as "newer", not "corrupt".
@@ -154,7 +154,7 @@ class FileNotebookStoreTest {
         val p = pkg("nb")
         s.write(p)
         val meta = File(tmp.root, "nb/pages/${p.pages[0].id}.json")
-        meta.writeText(meta.readText().replace("\"format\": 1", "\"format\": 3"))
+        meta.writeText(meta.readText().replace("\"format\": ${BnoteFormat.VERSION}", "\"format\": 99"))
         expect<UnsupportedFormatVersionException> { s.read(NotebookId("nb")) }
     }
 

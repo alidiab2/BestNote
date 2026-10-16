@@ -42,6 +42,7 @@ include(":engine:pdf")
 include(":engine:recognition")
 include(":engine:layout")
 include(":engine:handwriting")
+include(":engine:export")
 
 include(":ai:math")
 include(":ai:vision-api")

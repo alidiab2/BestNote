@@ -101,6 +101,8 @@ import app.bestnote.core.model.PaperTemplate
 import app.bestnote.core.model.Tool
 import app.bestnote.engine.canvas.document.PagedDocument
 import app.bestnote.engine.canvas.document.PagedDocumentView
+import app.bestnote.engine.export.ExportDialog
+import app.bestnote.engine.export.rememberExportRunner
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -280,6 +282,7 @@ fun EditorScreen(
     var pageNumber by remember { mutableStateOf(1 to 1) }
     var managerPage by remember { mutableStateOf<Int?>(null) }
     var selectionMenu by remember { mutableStateOf<PagedDocumentView.SelectionMenu?>(null) }
+    var exporting by remember { mutableStateOf(false) }
     val snackbar = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     val reduce = reducedMotion()
@@ -353,6 +356,7 @@ fun EditorScreen(
         },
         pagesMenu = { PaperMenuButton(canvas, onManage = { picker = null; managerPage = canvas?.currentPage?.coerceAtLeast(0) ?: 0 }) },
         onOpenSettings = onOpenSettings,
+        onExport = { picker = null; exporting = true },
     )
     val pickerContent: @Composable (PickerAnchor) -> Unit = { anchor ->
         AnchoredPopover(side, onDismissed = { if (picker == anchor) picker = null }) {
@@ -630,6 +634,18 @@ fun EditorScreen(
                     managerPage = null
                     if (page != null) canvas?.scrollToPage(page)
                 },
+            )
+        }
+
+        // ---- export (DOC-06/07): PDF, PNG or .bnote, then the share sheet ----
+        if (exporting) {
+            ExportDialog(
+                runner = rememberExportRunner(),
+                notebookId = viewModel.notebookId,
+                pageCount = document.pages.size.coerceAtLeast(1),
+                currentPage = canvas?.currentPage?.coerceAtLeast(0) ?: 0,
+                onDismiss = { exporting = false },
+                beforeExport = { viewModel.session.flush() },
             )
         }
 

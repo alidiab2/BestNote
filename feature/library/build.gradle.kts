@@ -9,5 +9,6 @@ dependencies {
     implementation(projects.core.storage)
     implementation(projects.engine.pdf)
     implementation(libs.androidx.activity.compose)
+    implementation(projects.engine.export)
     implementation(libs.androidx.compose.material.icons.extended)
 }

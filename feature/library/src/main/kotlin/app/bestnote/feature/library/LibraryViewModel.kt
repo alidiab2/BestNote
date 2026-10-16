@@ -54,7 +54,7 @@ class QuicknoteRequests @Inject constructor() {
 }
 
 /** Short messages the screen shows in a snackbar. */
-enum class Notice { ExportSoon, ImportingPdf, ImportPdfFailed, Duplicated, Moved, FolderCreated, FolderDeleted, AddedToFavorites, RemovedFromFavorites }
+enum class Notice { ImportingPdf, ImportPdfFailed, Duplicated, Moved, FolderCreated, FolderDeleted, AddedToFavorites, RemovedFromFavorites }
 
 sealed interface LibraryEvent {
     data class Open(val id: NotebookId) : LibraryEvent
@@ -110,7 +110,12 @@ class LibraryViewModel @Inject constructor(
     fun refresh() {
         // Before the first load (metadata load + seeding) a reload would show a half-seeded library.
         if (notebooks.value == null) return
-        viewModelScope.launch { reload() }
+        viewModelScope.launch {
+            // A restore (Settings → Backup & restore) rewrites the metadata file behind our back.
+            metadata.load()
+            reload()
+            metaChanged()
+        }
     }
 
     // region View controls
@@ -264,10 +269,6 @@ class LibraryViewModel @Inject constructor(
             ids.forEach { repository.restore(it) }
             reload()
         }
-    }
-
-    fun exportSoon() {
-        events.trySend(LibraryEvent.Message(Notice.ExportSoon))
     }
 
     /** Runs a pending "Open with" PDF import, if any. */

@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="export_title">تصدير</string>
+    <string name="export_pdf">ملف PDF</string>
+    <string name="export_pdf_sub">كل الصفحات، والحبر يبقى حادًا عند أي تكبير</string>
+    <string name="export_png">صور (PNG)</string>
+    <string name="export_png_sub">صورة لكل صفحة</string>
+    <string name="export_bnote">ملف BestNote</string>
+    <string name="export_bnote_sub">يحفظ كل شيء ويُفتح في BestNote</string>
+    <string name="export_this_page">هذه الصفحة</string>
+    <string name="export_all_pages">كل الصفحات (%1$d)</string>
+    <string name="export_share">مشاركة</string>
+    <string name="export_cancel">إلغاء</string>
+    <string name="export_working">تجهيز الصفحة %1$d من %2$d</string>
+    <string name="export_failed">تعذّر التصدير: %1$s</string>
+
+    <string name="backup_title">النسخ الاحتياطي والاستعادة</string>
+    <string name="backup_folder">مجلد النسخ الاحتياطي</string>
+    <string name="backup_no_folder">لم يُختر مجلد</string>
+    <string name="backup_choose">اختيار</string>
+    <string name="backup_change">تغيير</string>
+    <string name="backup_never">لا توجد نسخة احتياطية بعد</string>
+    <string name="backup_last">آخر نسخة احتياطية %1$s</string>
+    <string name="backup_now">انسخ احتياطيًا الآن</string>
+    <string name="backup_restore">استعادة</string>
+    <string name="backup_close">تم</string>
+    <string name="backup_running">نسخ %1$d من %2$d</string>
+    <string name="backup_restoring">استعادة %1$d من %2$d</string>
+    <string name="backup_hint">تُحفظ النسخ في مجلد «BestNote Backup» داخل المجلد الذي تختاره، ولا يُعاد كتابة سوى الدفاتر التي تغيّرت.</string>
+    <string name="backup_restore_title">الاستعادة من نسخة احتياطية؟</string>
+    <string name="backup_restore_body">اختر المجلد الذي يحوي نسختك. تُضاف الدفاتر غير الموجودة على هذا الجهاز، ولا يُستبدل دفتر موجود إلا إذا كانت نسخة الاحتياط أحدث.</string>
+    <string name="backup_restore_confirm">اختيار المجلد</string>
+    <string name="backup_not_found">لم يُعثر على نسخة BestNote في هذا المجلد.</string>
+    <string name="backup_failed">توقفت العملية: %1$s</string>
+    <string name="backup_unreadable">تعذّرت قراءة: %1$s.</string>
+    <plurals name="backup_done">
+        <item quantity="zero">لا دفاتر.</item>
+        <item quantity="one">نُسخ دفتر واحد.</item>
+        <item quantity="two">نُسخ دفتران.</item>
+        <item quantity="few">نُسخت %d دفاتر.</item>
+        <item quantity="many">نُسخ %d دفترًا.</item>
+        <item quantity="other">نُسخ %d دفتر.</item>
+    </plurals>
+    <plurals name="backup_restored">
+        <item quantity="zero">لم يُستعد أي دفتر.</item>
+        <item quantity="one">استُعيد دفتر واحد.</item>
+        <item quantity="two">استُعيد دفتران.</item>
+        <item quantity="few">استُعيدت %d دفاتر.</item>
+        <item quantity="many">استُعيد %d دفترًا.</item>
+        <item quantity="other">استُعيد %d دفتر.</item>
+    </plurals>
+    <plurals name="backup_kept_newer">
+        <item quantity="zero">لم يُبقَ أي دفتر.</item>
+        <item quantity="one">أُبقي دفتر واحد لأن نسخته على الجهاز أحدث.</item>
+        <item quantity="two">أُبقي دفتران لأن نسخهما على الجهاز أحدث.</item>
+        <item quantity="few">أُبقيت %d دفاتر لأن نسخها على الجهاز أحدث.</item>
+        <item quantity="many">أُبقي %d دفترًا لأن نسخها على الجهاز أحدث.</item>
+        <item quantity="other">أُبقي %d دفتر لأن نسخها على الجهاز أحدث.</item>
+    </plurals>
+</resources>

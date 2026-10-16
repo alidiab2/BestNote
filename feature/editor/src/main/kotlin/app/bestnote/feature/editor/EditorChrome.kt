@@ -55,6 +55,8 @@ internal data class ChromeActions(
     /** The Pages pill: paper template, color and size of the page being read. */
     val pagesMenu: @Composable () -> Unit,
     val onOpenSettings: () -> Unit = {},
+    /** Opens the Export dialog (PDF / PNG / .bnote, then the share sheet). */
+    val onExport: () -> Unit = {},
 )
 
 /**
@@ -113,7 +115,7 @@ internal fun ActionPills(
         Row(Modifier.chromeSurface().padding(horizontal = 2.dp)) {
             actions.pagesMenu()
             ChromeIconButton(AtelierIcons.Layers, layers, { actions.onComingSoon(layers) }, size = 44.dp)
-            ChromeIconButton(AtelierIcons.Export, export, { actions.onComingSoon(export) }, size = 44.dp)
+            ChromeIconButton(AtelierIcons.Export, export, { actions.onExport() }, size = 44.dp)
             MoreMenu(dock, leftHanded, actions)
         }
     }
@@ -173,6 +175,11 @@ private fun MoreMenu(dock: ToolbarDock, leftHanded: Boolean, actions: ChromeActi
                 onClick = { actions.onLeftHanded(!leftHanded) },
             )
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.editor_export)) },
+                leadingIcon = { Icon(AtelierIcons.Export, null, modifier = Modifier.size(20.dp)) },
+                onClick = { actions.onExport(); open = false },
+            )
             DropdownMenuItem(
                 text = { Text(stringResource(R.string.editor_settings)) },
                 leadingIcon = { Icon(Icons.Default.Settings, null, modifier = Modifier.size(20.dp)) },

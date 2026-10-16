@@ -97,10 +97,10 @@
     <string name="library_menu_favorite">إضافة إلى المفضلة</string>
     <string name="library_menu_unfavorite">إزالة من المفضلة</string>
     <string name="library_menu_export">تصدير</string>
+    <string name="library_menu_share">مشاركة</string>
     <string name="library_menu_select">تحديد</string>
     <string name="library_copy_title">%1$s (نسخة)</string>
     <string name="library_duplicated">أُنشئت نسخة باسم «%1$s»</string>
-    <string name="library_export_soon">التصدير قادم قريبًا.</string>
     <plurals name="library_trashed_many">
         <item quantity="zero">لم يُنقل شيء إلى المحذوفات</item>
         <item quantity="one">نُقل دفتر واحد إلى المحذوفات</item>

@@ -146,6 +146,11 @@ internal class DocumentSession(
         for (page in document.pages) if (page.id !in known && page.strokes.isNotEmpty()) saver.updatePage(page.id, modelsOf(page))
     }
 
+    /** Gets every pending edit on disk (before exporting), so a file holds what is on screen. */
+    suspend fun flush() {
+        saver?.flush()
+    }
+
     /** App left the foreground: get everything on disk now. */
     fun onStop() {
         val saver = saver ?: return

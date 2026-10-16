@@ -27,8 +27,13 @@ notebook.bnote
 On disk inside the app, a notebook lives **unpacked** as a directory with the same layout, which makes partial writes cheap. The `.bnote` zip is produced for export, share and backup.
 
 ## Versioning
-- `manifest.json` → `"format": 1`. Readers must refuse versions newer than they know and offer "update the app".
-- Every migration ships as a test fixture (`core/storage/src/test/resources/fixtures/v<N>/`).
+- `manifest.json` and every `pages/<id>.json` carry `"format": N` (current: **2**). Readers refuse versions newer than they know and offer "update the app".
+- Older versions are upgraded in memory on read by `FormatMigrations` (one step per version, on the JSON tree); the next save writes the current version.
+- v1 → v2: page metadata always states `paper` (v1 drafts could omit it, meaning White).
+- Every migration ships as a test fixture (`core/storage/src/test/resources/fixtures/v<N>-notebook/`) with a test in `FormatMigrationTest`.
+
+## Backup (DOC-08)
+A backup folder holds `backup.json` (written last), `notebooks/<id>-<updatedAt>.bnote`, `trash/…` and `extras/library/metadata.json` (folders, covers, favorites). It is incremental and never deletes on restore; see `LibraryBackup`.
 
 ## Write safety
 - Write to `<file>.tmp`, `fsync`, then atomic rename.
