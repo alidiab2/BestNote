@@ -241,4 +241,20 @@
     <string name="settings_debug_ai_group">Smart Board AI</string>
     <string name="settings_debug_verbose">Verbose AI logging</string>
     <string name="settings_debug_verbose_sub">Keep the AI\'s raw answers for the debug log (they can contain your notes). Keys are never kept.</string>
+    <string name="settings_updates_group">Updates</string>
+    <string name="settings_updates_version">Version</string>
+    <string name="settings_updates_version_value">%1$s · code %2$d · %3$s</string>
+    <string name="settings_updates_check">Check for updates</string>
+    <string name="settings_updates_check_action">Check</string>
+    <string name="settings_updates_update">Update</string>
+    <string name="settings_updates_checking">Checking…</string>
+    <string name="settings_updates_up_to_date">You have the latest version.</string>
+    <string name="settings_updates_available">Version %1$s is available.</string>
+    <string name="settings_updates_downloading">Downloading the update…</string>
+    <string name="settings_updates_needs_permission">Allow installs from BestNote, then tap Update again.</string>
+    <string name="settings_updates_failed">Could not check: %1$s</string>
+    <string name="settings_updates_last">Last checked %1$s</string>
+    <string name="settings_updates_never">Not checked yet</string>
+    <string name="settings_updates_auto">Check automatically</string>
+    <string name="settings_updates_auto_sub">Looks for a new version once a day when BestNote starts.</string>
 </resources>

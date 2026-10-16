@@ -24,6 +24,8 @@ import app.bestnote.core.datastore.UserPreferences
 import app.bestnote.core.datastore.UserPreferencesRepository
 import app.bestnote.core.designsystem.theme.BestNoteTheme
 import app.bestnote.core.designsystem.theme.systemReducedMotion
+import app.bestnote.core.updater.UpdateHost
+import app.bestnote.core.updater.UpdateManager
 import app.bestnote.feature.editor.InkInsert
 import app.bestnote.feature.editor.editorScreen
 import app.bestnote.feature.editor.navigateToEditor
@@ -41,6 +43,8 @@ import javax.inject.Inject
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
     @Inject lateinit var preferences: UserPreferencesRepository
+
+    @Inject lateinit var updates: UpdateManager
 
     @Inject lateinit var quicknotes: QuicknoteRequests
 
@@ -64,7 +68,10 @@ class MainActivity : ComponentActivity() {
                 dynamicColor = prefs.dynamicColor,
                 reducedMotion = prefs.appearance.reduceMotion || systemReducedMotion(),
                 chromeWarmth = prefs.appearance.chromeWarmth.amount,
-            ) { BestNoteNavHost(quicknotes, pdfRequests) }
+            ) {
+                BestNoteNavHost(quicknotes, pdfRequests)
+                UpdateHost(updates)
+            }
         }
     }
 

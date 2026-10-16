@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="update_title">يتوفر تحديث</string>
+    <string name="update_versions">%1$s ← %2$s</string>
+    <string name="update_prerelease">نسخة تجريبية</string>
+    <string name="update_now">حدّث الآن</string>
+    <string name="update_retry">حاول مرة أخرى</string>
+    <string name="update_later">لاحقًا</string>
+    <string name="update_skip">تخطَّ هذا الإصدار</string>
+    <string name="update_hide">إخفاء</string>
+    <string name="update_downloading">جارٍ التنزيل… %1$s من %2$s</string>
+    <string name="update_needs_permission">اسمح لـ BestNote بتثبيت التطبيقات في شاشة الإعدادات التي فُتحت للتو، ثم عد واضغط «حدّث الآن». دفاترك محفوظة.</string>
+    <string name="update_failed">فشل التحديث: %1$s</string>
+</resources>

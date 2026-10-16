@@ -10,6 +10,9 @@ import app.bestnote.ai.vision.AiExchange
 import app.bestnote.ai.vision.VisionDiagnostics
 import app.bestnote.ai.vision.providers.KeystoreAiSettings
 import app.bestnote.core.common.CrashLog
+import app.bestnote.core.updater.BuildInfo
+import app.bestnote.core.updater.UpdateManager
+import dagger.Provides
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
 import java.io.File
@@ -34,6 +37,8 @@ class BestNoteApplication : Application() {
 
     @Inject lateinit var aiSettings: KeystoreAiSettings
 
+    @Inject lateinit var updates: UpdateManager
+
     override fun onCreate() {
         // First, so even a crash during start-up lands in Settings → Debug → Share debug log.
         CrashLog.install(CrashLog(File(filesDir, CRASH_DIR))) {
@@ -48,6 +53,8 @@ class BestNoteApplication : Application() {
         }
         // Handwriting and text search (REC-02): index pages in the background, battery-aware.
         searchIndexing.start(notebooks.backgroundScope)
+        // In-app updates (REL-01): at most one check per 24 h, if "Check automatically" is on.
+        updates.checkOnStart()
     }
 
     companion object {
@@ -82,4 +89,9 @@ private fun BestNoteApplication.setUpAiDiagnostics() {
 interface AppModule {
     @Binds
     fun dispatchers(impl: DefaultDispatcherProvider): DispatcherProvider
+
+    companion object {
+        @Provides
+        fun buildInfo(): BuildInfo = BuildInfo(BuildConfig.VERSION_NAME, BuildConfig.VERSION_CODE.toLong(), BuildConfig.GIT_COMMIT)
+    }
 }

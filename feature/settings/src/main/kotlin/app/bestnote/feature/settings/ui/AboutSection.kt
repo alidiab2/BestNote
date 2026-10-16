@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.Intent
 import androidx.core.net.toUri
 import androidx.compose.animation.AnimatedVisibility
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -107,6 +108,8 @@ internal fun AboutSection(showLicenses: Boolean, onShowLicenses: (Boolean) -> Un
                 .padding(horizontal = Spacing.L, vertical = Spacing.S),
         )
     }
+
+    UpdatesGroup(hiltViewModel())
 
     SettingsGroup(stringResource(R.string.settings_project_group)) {
         row {

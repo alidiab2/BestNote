@@ -5,21 +5,34 @@ plugins {
     alias(libs.plugins.kotlin.serialization)
 }
 
-// Short commit hash for the debug log; "unknown" outside a git checkout.
-val gitCommit = providers.exec {
-    commandLine("git", "rev-parse", "--short=10", "HEAD")
-    isIgnoreExitValue = true
-}.standardOutput.asText.map { it.trim().ifEmpty { "unknown" } }.orElse("unknown")
+// Git facts for the version. All fall back safely when git is missing (source tarball) or the
+// clone is shallow (CI default), so the build never fails because of them.
+fun git(vararg args: String): String? = runCatching {
+    providers.exec {
+        commandLine("git", *args)
+        isIgnoreExitValue = true
+    }.standardOutput.asText.get().trim().ifEmpty { null }
+}.getOrNull()
+
+val gitCommit = git("rev-parse", "--short=10", "HEAD") ?: "unknown"
+val shallow = git("rev-parse", "--is-shallow-repository") == "true"
+
+// versionCode = number of commits on HEAD, so it grows with every merge and releases compare by it.
+// Override with -PversionCodeOverride=N or BESTNOTE_VERSION_CODE; a shallow clone or no git gives 1.
+val commitCount: Int = (findProperty("versionCodeOverride") as String?)?.toIntOrNull()
+    ?: System.getenv("BESTNOTE_VERSION_CODE")?.toIntOrNull()
+    ?: (if (shallow) null else git("rev-list", "--count", "HEAD")?.toIntOrNull())
+    ?: 1
 
 android {
     namespace = "app.bestnote"
 
     defaultConfig {
         applicationId = "app.bestnote"
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = commitCount
+        versionName = "0.1.$commitCount-${gitCommit.take(7)}"
         // Settings → Debug log: which commit this build came from.
-        buildConfigField("String", "GIT_COMMIT", "\"${gitCommit.get()}\"")
+        buildConfigField("String", "GIT_COMMIT", "\"${gitCommit}\"")
     }
 
     buildFeatures {
@@ -51,6 +64,7 @@ dependencies {
     implementation(projects.core.designsystem)
     implementation(projects.core.database)
     implementation(projects.core.datastore)
+    implementation(projects.core.updater)
     implementation(projects.ai.visionGemini)
     implementation(projects.ai.visionProviders)
 
