@@ -24,7 +24,7 @@ class BoardReconstructor(
     suspend fun run(image: VisionImage, request: BoardRequest, size: PageSize): Reconstruction {
         val mapper = DocumentMapper(newId)
         val mapped = mapper.map(provider.reconstructBoard(image, request))
-        if (mapped.blocks.isEmpty()) throw VisionError.BadResponse("no usable blocks")
+        mapped.requireBlocks()
 
         val byKey = mapped.blocks.associateBy { it.item.key }
         val ordered = LectureFlow.order(mapped.blocks.map { it.item }, request.rtl).map { byKey.getValue(it.key) }
@@ -48,7 +48,7 @@ class NoteBeautifier(
     suspend fun run(selection: VisionImage, bounds: RectPt, spacing: Float = 8f): List<PageBlock> {
         val mapper = DocumentMapper(newId)
         val mapped = mapper.map(provider.beautify(selection, bounds.width, bounds.height))
-        if (mapped.blocks.isEmpty()) throw VisionError.BadResponse("no usable blocks")
+        mapped.requireBlocks()
         val ordered = LectureFlow.order(mapped.blocks.map { it.item }).let { items ->
             val byKey = mapped.blocks.associateBy { it.item.key }
             items.map { byKey.getValue(it.key) }
@@ -59,6 +59,18 @@ class NoteBeautifier(
             Placement(p.item.key, 0, RectPt(bounds.left, y, bounds.right, y + h)).also { y += h + spacing }
         }
         return mapper.realise(ordered, placements).map { it.second }
+    }
+}
+
+/**
+ * Records [DocumentMapper.Result.dropReasons] in [VisionDiagnostics] and fails with them when no
+ * block survived, so "nothing could be read" always comes with the reasons.
+ */
+fun DocumentMapper.Result.requireBlocks() {
+    VisionDiagnostics.recordOutcome(dropReasons = dropReasons)
+    if (blocks.isEmpty()) {
+        val why = if (dropReasons.isEmpty()) "the model returned no blocks" else dropReasons.take(5).joinToString("; ")
+        throw VisionError.BadResponse("no usable blocks ($why)")
     }
 }
 

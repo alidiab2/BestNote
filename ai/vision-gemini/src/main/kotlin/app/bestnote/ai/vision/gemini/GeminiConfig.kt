@@ -9,6 +9,7 @@ data class GeminiConfig(
     val retryDelayMs: Long = 1_500,
     /** Faithful transcription, not creativity. */
     val temperature: Double = 0.2,
+    val maxOutputTokens: Int = MAX_OUTPUT_TOKENS,
 ) {
     companion object {
         /**
@@ -16,6 +17,9 @@ data class GeminiConfig(
          * the id is a user setting ([GeminiSettings.model]), never hard-wired into requests.
          */
         const val DEFAULT_MODEL = "gemini-2.5-flash"
+
+        /** Room for a full board plus the model's thinking (2.5 models share this budget). */
+        const val MAX_OUTPUT_TOKENS = 32_768
     }
 }
 

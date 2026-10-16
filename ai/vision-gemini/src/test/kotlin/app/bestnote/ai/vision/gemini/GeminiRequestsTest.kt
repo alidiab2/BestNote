@@ -49,6 +49,9 @@ class GeminiRequestsTest {
         assertEquals("ARRAY", schema.obj("properties").obj("blocks").str("type"))
         assertEquals("STRING", block.obj("properties").obj("type").str("type"))
         assertFalse(schema.toString().contains("\"string\""))
+        // Without an explicit ordering Gemini writes properties alphabetically: type/text would come last.
+        assertEquals("type", block.getValue("propertyOrdering").jsonArray.first().jsonPrimitive.content)
+        assertEquals(GeminiConfig.MAX_OUTPUT_TOKENS.toString(), config.str("maxOutputTokens"))
     }
 
     @Test
@@ -57,7 +60,7 @@ class GeminiRequestsTest {
         val props = block.obj("properties")
         listOf("type", "id", "order", "role", "level", "title", "text", "items", "tone", "latex", "boxed", "steps",
             "annotates", "semantic", "ink_color", "diagram", "source_box").forEach { assertTrue(it, it in props) }
-        assertEquals(listOf("type"), block.getValue("required").jsonArray.map { it.jsonPrimitive.content })
+        assertEquals(listOf("type", "order", "text"), block.getValue("required").jsonArray.map { it.jsonPrimitive.content })
         val types = props.obj("type").getValue("enum").jsonArray.map { it.jsonPrimitive.content }
         assertTrue(types.containsAll(listOf("definition", "proof", "margin_note", "diagram")))
         val shape = props.obj("diagram").obj("properties").obj("shapes").obj("items")

@@ -29,8 +29,8 @@ class PipelinesTest {
         {"type": "margin_note", "annotates": "p", "text": "Ignore friction for now", "ink_color": "green"},
         {"type": "definition", "order": 0, "title": "Normal force", "text": "Perpendicular to the surface"},
         {"type": "math", "order": 2, "latex": "${'$'}${'$'}F = ma${'$'}${'$'}", "ink_color": "red"},
-        {"type": "math", "order": 4, "latex": "\\frac{a}{b"},
-        {"type": "sticker", "text": "?"},
+        {"type": "math", "order": 4, "latex": "\\input{secrets}"},
+        {"type": "sticker"},
         {"type": "diagram", "order": 1, "diagram": {"size": [200, 120], "shapes": [
           {"kind": "polygon", "points": [0,120, 199,118, 200,20]},
           {"kind": "arrow", "points": [125,65, 126,115], "color": "red"},
@@ -57,7 +57,7 @@ class PipelinesTest {
 
     @Test fun `keeps valid blocks and drops broken ones`() = runTest {
         val r = reconstruct()
-        assertEquals(2, r.dropped) // unbalanced LaTeX + unknown type
+        assertEquals(2, r.dropped) // forbidden LaTeX + unknown type with no words
         assertEquals(7, r.pages.flatten().size)
     }
 

@@ -1,15 +1,12 @@
 package app.bestnote.ai.vision.gemini
 
-import app.bestnote.ai.vision.AiBlock
+import app.bestnote.ai.vision.AiDocumentParser
 import app.bestnote.ai.vision.AiDocument
 import app.bestnote.ai.vision.VisionError
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.contentOrNull
-import kotlinx.serialization.json.decodeFromJsonElement
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -22,8 +19,13 @@ object GeminiResponses {
         isLenient = true
     }
 
+    /** The answer text; [truncated] when the model hit the output limit (what was written is salvaged). */
+    data class Answer(val text: String, val truncated: Boolean)
+
     /** The model's answer text from a 200 response, or the [VisionError] explaining why there is none. */
-    fun candidateText(raw: String): String {
+    fun candidateText(raw: String): String = answer(raw).text
+
+    fun answer(raw: String): Answer {
         val root = runCatching { json.parseToJsonElement(raw).jsonObject }
             .getOrElse { throw VisionError.BadResponse("response is not JSON", it) }
         root["promptFeedback"]?.jsonObject?.get("blockReason")?.jsonPrimitive?.contentOrNull?.let {
@@ -41,39 +43,24 @@ object GeminiResponses {
             .orEmpty()
         when (finish) {
             null, "STOP", "FINISH_REASON_UNSPECIFIED" -> Unit
-            "MAX_TOKENS" -> throw VisionError.BadResponse("the response was cut off (MAX_TOKENS)")
+            // Thinking can use the whole budget and leave no answer at all.
+            "MAX_TOKENS" -> if (text.isBlank()) throw VisionError.Truncated(null) else return Answer(text, truncated = true)
             "SAFETY", "PROHIBITED_CONTENT", "BLOCKLIST", "SPII", "RECITATION", "IMAGE_SAFETY" -> throw VisionError.Blocked(finish)
             else -> if (text.isBlank()) throw VisionError.BadResponse("stopped: $finish")
         }
         if (text.isBlank()) throw VisionError.BadResponse("empty response")
-        return text
+        return Answer(text, truncated = false)
     }
 
-    /**
-     * The model's JSON → [AiDocument]. Blocks are decoded one by one so a single malformed block
-     * is dropped instead of failing the whole page; [app.bestnote.ai.vision.DocumentMapper] then
-     * validates what is left.
-     */
-    fun document(text: String): AiDocument {
-        val root = runCatching { json.parseToJsonElement(stripFence(text)) }.getOrNull() as? JsonObject
-            ?: throw VisionError.BadResponse("the notes are not a JSON object")
-        val blocks = (root["blocks"] as? JsonArray)
-            ?: throw VisionError.BadResponse("the notes have no blocks")
-        val title = (root["title"] as? JsonPrimitive)?.takeIf { it.isString }?.content
-        val decoded = blocks.mapNotNull { runCatching { json.decodeFromJsonElement<AiBlock>(it) }.getOrNull() }
-        if (blocks.isNotEmpty() && decoded.isEmpty()) throw VisionError.BadResponse("no block matched the schema")
-        return AiDocument(title = title, blocks = decoded)
-    }
-
-    /** Some models wrap JSON in ``` fences even in JSON mode. */
-    private fun stripFence(text: String): String {
-        val t = text.trim()
-        if (!t.startsWith("```")) return t
-        return t.substringAfter('\n').substringBeforeLast("```").trim()
-    }
+    /** The model's JSON → [AiDocument] through the shared, forgiving [AiDocumentParser]. */
+    fun document(text: String, truncated: Boolean = false): AiDocument = AiDocumentParser.answer(text, truncated)
 
     /** True when a 400 says the endpoint does not know `responseJsonSchema` (retry with `responseSchema`). */
     fun rejectsJsonSchema(code: Int, body: String) = code == 400 && "responseJsonSchema" in body
+
+    /** True when a 400 rejects the OpenAPI `responseSchema` (unknown field, or "too many states" for a complex schema). */
+    fun rejectsResponseSchema(code: Int, body: String) =
+        code == 400 && ("responseSchema" in body || "schema" in body.lowercase() || "too many states" in body.lowercase())
 
     /** Maps a non-200 response to a [VisionError]. The message never contains the key. */
     fun errorFor(code: Int, body: String, retryAfterHeader: String?, model: String): VisionError {
@@ -84,11 +71,11 @@ object GeminiResponses {
         return when {
             code == 400 && keyProblem -> VisionError.InvalidKey()
             code == 401 -> VisionError.InvalidKey()
-            code == 403 && "model" in message.lowercase() -> VisionError.BadResponse("model $model is not available: $message")
+            code == 403 && "model" in message.lowercase() -> VisionError.ModelUnavailable(model, message)
             code == 403 -> VisionError.InvalidKey()
-            code == 404 -> VisionError.BadResponse("model $model is not available: $message")
+            code == 404 -> VisionError.ModelUnavailable(model, message)
             code == 429 -> VisionError.RateLimited(retryAfterSeconds(retryAfterHeader, error))
-            code in 500..599 -> VisionError.BadResponse("Gemini is unavailable (HTTP $code): $message")
+            code in 500..599 -> VisionError.ServiceUnavailable(code, message)
             else -> VisionError.BadResponse("HTTP $code: $message")
         }
     }

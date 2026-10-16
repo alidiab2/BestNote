@@ -3,6 +3,7 @@ package app.bestnote.ai.vision.gemini
 import app.bestnote.ai.vision.AiDocument
 import app.bestnote.ai.vision.BoardRequest
 import app.bestnote.ai.vision.Prompts
+import app.bestnote.ai.vision.VisionDiagnostics
 import app.bestnote.ai.vision.VisionError
 import app.bestnote.ai.vision.VisionImage
 import app.bestnote.ai.vision.VisionProvider
@@ -37,16 +38,22 @@ class GeminiVisionProvider(
         var schemaField = SchemaField.JsonSchema
         var retriedServer = false
         while (true) {
-            val body = GeminiRequests.generateContent(system, user, image.bytes, mime, config.temperature, schemaField).toString()
+            val body = GeminiRequests.generateContent(system, user, image.bytes, mime, config.temperature, schemaField, config.maxOutputTokens).toString()
             val response = try {
                 transport.post("v1beta/models/$model:generateContent", key, body)
             } catch (e: IOException) {
                 throw VisionError.Network(e)
             }
+            VisionDiagnostics.recordResponse("gemini", model, response.code, response.body)
             when {
-                response.code == 200 -> return GeminiResponses.document(GeminiResponses.candidateText(response.body))
+                response.code == 200 -> {
+                    val answer = GeminiResponses.answer(response.body)
+                    return GeminiResponses.document(answer.text, answer.truncated)
+                }
                 schemaField == SchemaField.JsonSchema && GeminiResponses.rejectsJsonSchema(response.code, response.body) ->
                     schemaField = SchemaField.OpenApi
+                schemaField == SchemaField.OpenApi && GeminiResponses.rejectsResponseSchema(response.code, response.body) ->
+                    schemaField = SchemaField.None
                 response.code in 500..599 && !retriedServer -> {
                     retriedServer = true
                     delay(config.retryDelayMs)

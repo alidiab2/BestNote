@@ -9,7 +9,13 @@ import kotlinx.serialization.json.putJsonObject
 import java.util.Base64
 
 /** Which structured-output field carries the schema. */
-enum class SchemaField { JsonSchema, OpenApi }
+enum class SchemaField {
+    JsonSchema,
+    OpenApi,
+
+    /** JSON mode without a schema: the last resort when an endpoint rejects both schema fields. */
+    None,
+}
 
 /** Builds `generateContent` request bodies. Pure: no key, no I/O. */
 object GeminiRequests {
@@ -20,6 +26,7 @@ object GeminiRequests {
         mimeType: String,
         temperature: Double,
         schemaField: SchemaField = SchemaField.JsonSchema,
+        maxOutputTokens: Int = GeminiConfig.MAX_OUTPUT_TOKENS,
     ): JsonObject = buildJsonObject {
         putJsonObject("systemInstruction") {
             putJsonArray("parts") { addJsonObject { put("text", system.trim()) } }
@@ -42,9 +49,12 @@ object GeminiRequests {
             put("responseMimeType", "application/json")
             when (schemaField) {
                 SchemaField.JsonSchema -> put("responseJsonSchema", GeminiSchema.document)
-                SchemaField.OpenApi -> put("responseSchema", GeminiSchema.toOpenApi(GeminiSchema.document))
+                SchemaField.OpenApi -> put("responseSchema", GeminiSchema.openApi)
+                SchemaField.None -> Unit
             }
             put("temperature", temperature)
+            // Explicit, so a dense board is not cut off by a lower server default; thinking shares it.
+            put("maxOutputTokens", maxOutputTokens)
         }
     }
 

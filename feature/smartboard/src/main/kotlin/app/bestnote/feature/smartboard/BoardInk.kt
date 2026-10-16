@@ -3,7 +3,7 @@ package app.bestnote.feature.smartboard
 import app.bestnote.ai.vision.AiDocument
 import app.bestnote.ai.vision.BoardRequest
 import app.bestnote.ai.vision.DocumentMapper
-import app.bestnote.ai.vision.VisionError
+import app.bestnote.ai.vision.requireBlocks
 import app.bestnote.ai.vision.VisionImage
 import app.bestnote.ai.vision.VisionProvider
 import app.bestnote.core.model.PageBlock
@@ -22,6 +22,8 @@ class BoardInk(
     val blocks: List<Pair<Int, PageBlock>>,
     val dropped: Int,
     val rtl: Boolean,
+    /** One content-free line per dropped block, for diagnostics. */
+    val dropReasons: List<String> = emptyList(),
 )
 
 /**
@@ -37,7 +39,7 @@ class BoardToInk(private val newId: () -> String) {
     fun write(doc: AiDocument, rtlHint: Boolean, paper: RuledPaper, style: HandwritingStyle = HandwritingStyle()): BoardInk {
         val mapper = DocumentMapper(newId)
         val mapped = mapper.map(doc)
-        if (mapped.blocks.isEmpty()) throw VisionError.BadResponse("no usable blocks")
+        mapped.requireBlocks()
         val rtl = rtlHint || mostlyArabic(doc)
         val byKey = mapped.blocks.associateBy { it.item.key }
         val ordered = LectureFlow.order(mapped.blocks.map { it.item }, rtl).map { byKey.getValue(it.key) }
@@ -51,7 +53,7 @@ class BoardToInk(private val newId: () -> String) {
             }
         }
         val placed = mapper.realise(ordered, flow.place(ordered.map { it.item }).map { it.placement })
-        return BoardInk(paper, composer.compose(placed), placed, mapped.dropped, rtl)
+        return BoardInk(paper, composer.compose(placed), placed, mapped.dropped, rtl, mapped.dropReasons)
     }
 
     private fun mostlyArabic(doc: AiDocument): Boolean {

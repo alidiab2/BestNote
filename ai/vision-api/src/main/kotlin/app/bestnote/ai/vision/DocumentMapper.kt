@@ -33,10 +33,13 @@ class DocumentMapper(
     private val newId: () -> String,
     private val ruler: RulerGeometry = RulerGeometry(),
 ) {
-    data class Result(val blocks: List<PendingBlock>, val dropped: Int)
+    /** [dropReasons] holds one short, content-free reason per dropped block ("block 3 (math): …"). */
+    data class Result(val blocks: List<PendingBlock>, val dropReasons: List<String> = emptyList()) {
+        val dropped: Int get() = dropReasons.size
+    }
 
     fun map(doc: AiDocument): Result {
-        var dropped = 0
+        val reasons = ArrayList<String>()
         val out = ArrayList<PendingBlock>()
         doc.title?.takeIf { it.isNotBlank() }?.let { t ->
             out += pending(RegionRole.Title, order = LectureFlow.FIRST, keepWithNext = true) { id, f ->
@@ -47,10 +50,12 @@ class DocumentMapper(
         val ids = doc.blocks.map { BlockId(newId()) }
         val idByModelId = doc.blocks.indices.mapNotNull { i -> doc.blocks[i].id?.let { it to ids[i] } }.toMap()
         for ((i, b) in doc.blocks.withIndex()) {
-            val block = mapBlock(b, ids[i], idByModelId)
-            if (block == null) dropped++ else out += block
+            when (val r = mapBlock(b, ids[i], idByModelId)) {
+                is Mapped.Ok -> out += r.block
+                is Mapped.Dropped -> reasons += "block $i (${b.type.ifBlank { "?" }}): ${r.reason}"
+            }
         }
-        return Result(out, dropped)
+        return Result(out, reasons)
     }
 
     /** Pair layout placements back with their pending blocks. */
@@ -59,44 +64,72 @@ class DocumentMapper(
         return pending.mapNotNull { p -> byKey[p.item.key]?.let { it.pageIndex to p.build(it.frame) } }
     }
 
-    private fun mapBlock(b: AiBlock, id: BlockId, ids: Map<String, BlockId>): PendingBlock? {
+    private sealed interface Mapped {
+        class Ok(val block: PendingBlock) : Mapped
+        class Dropped(val reason: String) : Mapped
+    }
+
+    private fun mapBlock(b: AiBlock, id: BlockId, ids: Map<String, BlockId>): Mapped {
         val role = roleOf(b.role)
         val semantic = ColorSemantics.resolve(b.semantic, b.inkColor)
         fun make(r: RegionRole = role, keep: Boolean = false, anchor: String? = null, build: (BlockId, RectPt) -> PageBlock) =
-            PendingBlock(FlowItem(id.value, r, keep, anchor, b.order, sourceBox(b.sourceBox))) { f -> build(id, f) }
+            Mapped.Ok(PendingBlock(FlowItem(id.value, r, keep, anchor, b.order, sourceBox(b.sourceBox))) { f -> build(id, f) })
 
-        return when (b.type.lowercase()) {
-            "heading" -> b.text.clean()?.let { t ->
+        // The block's words wherever the model put them; used when the type-specific field is missing.
+        val words = b.text.clean() ?: b.items?.mapNotNull { it.clean() }?.takeIf { it.isNotEmpty() }?.joinToString("\n")
+        fun paragraph(t: String) = make { i, f -> PageBlock.Paragraph(i, f, t, semantic) }
+        fun salvage(why: String): Mapped = (words ?: b.title.clean())?.let(::paragraph) ?: Mapped.Dropped(why)
+
+        return when (val type = typeOf(b.type)) {
+            "heading" -> (b.text.clean() ?: b.title.clean())?.let { t ->
                 val level = (b.level ?: 2).coerceIn(1, 3)
                 val r = if (level == 1 && b.role == null) RegionRole.Title else role
                 make(r, keep = true) { i, f -> PageBlock.Heading(i, f, level, t, semantic.orEmphasis()) }
-            }
-            "paragraph" -> b.text.clean()?.let { t -> make { i, f -> PageBlock.Paragraph(i, f, t, semantic) } }
-            "bullets" -> b.items?.mapNotNull { it.clean() }?.takeIf { it.isNotEmpty() }
+            } ?: Mapped.Dropped("no text")
+            "paragraph" -> salvage("no text")
+            "bullets" -> (b.items?.mapNotNull { it.clean() } ?: b.text?.let(AiDocumentParser::splitLines))
+                ?.takeIf { it.isNotEmpty() }
                 ?.let { items -> make { i, f -> PageBlock.Bullets(i, f, items, semantic = semantic) } }
+                ?: Mapped.Dropped("no items")
             // A definition stays with what follows it (usually its formula or example).
-            "definition" -> b.text.clean()?.let { t ->
-                make(keep = true) { i, f -> PageBlock.Callout(i, f, CalloutTone.Definition, b.title.clean(), t, semantic) }
+            "definition", "callout" -> {
+                val body = b.text.clean() ?: b.items?.mapNotNull { it.clean() }?.takeIf { it.isNotEmpty() }?.joinToString("\n")
+                    ?: b.latex.clean()?.let { "\\( $it \\)" }
+                val heading = b.title.clean()
+                if (body == null && heading == null) return Mapped.Dropped("no text")
+                val tone = if (type == "definition") CalloutTone.Definition else toneOf(b.tone) ?: toneOf(b.type) ?: NotebookPalette.defaultTone(semantic)
+                make(keep = type == "definition") { i, f ->
+                    PageBlock.Callout(i, f, tone, if (body == null) null else heading, body ?: heading!!, semantic)
+                }
             }
-            "callout" -> b.text.clean()?.let { t ->
-                val tone = toneOf(b.tone) ?: NotebookPalette.defaultTone(semantic)
-                make { i, f -> PageBlock.Callout(i, f, tone, b.title.clean(), t, semantic) }
+            "math" -> {
+                // The formula from `latex`, else from `text` (models often put it there); if it is not
+                // valid LaTeX, the words are kept as a paragraph rather than lost.
+                val tex = latex(b.latex) ?: latex(b.text)
+                when {
+                    tex != null -> {
+                        val boxed = b.boxed ?: (semantic == InkSemantic.Essential)
+                        make { i, f -> PageBlock.Math(i, f, tex, boxed = boxed, semantic = semantic) }
+                    }
+                    b.latex.clean() != null -> Mapped.Dropped("invalid LaTeX")
+                    else -> Mapped.Dropped("no formula")
+                }
             }
-            "math" -> latex(b.latex)?.let { tex ->
-                val boxed = b.boxed ?: (semantic == InkSemantic.Essential)
-                make { i, f -> PageBlock.Math(i, f, tex, boxed = boxed, semantic = semantic) }
+            "proof" -> {
+                val steps = b.steps?.mapNotNull(::step)?.takeIf { it.isNotEmpty() }
+                    ?: listOfNotNull(step(AiProofStep(latex = b.latex, text = b.text))).takeIf { it.isNotEmpty() }
+                steps?.let { make { i, f -> PageBlock.Proof(i, f, b.title.clean(), it, semantic) } } ?: salvage("no steps")
             }
-            "proof" -> b.steps?.mapNotNull(::step)?.takeIf { it.isNotEmpty() }?.let { steps ->
-                make { i, f -> PageBlock.Proof(i, f, b.title.clean(), steps, semantic) }
-            }
-            "margin_note" -> b.text.clean()?.let { t ->
+            "margin_note" -> (words ?: b.title.clean())?.let { t ->
                 val anchor = b.annotates?.let(ids::get)
                 make(RegionRole.Margin, anchor = anchor?.value) { i, f ->
                     PageBlock.MarginNote(i, f, t, anchor, ColorSemantics.parseSemantic(b.semantic) ?: InkSemantic.Annotation)
                 }
-            }
+            } ?: Mapped.Dropped("no text")
             "diagram" -> b.diagram?.let(::mapDiagram)?.let { d -> make { i, f -> PageBlock.Diagram(i, f, d) } }
-            else -> null
+                ?: salvage(if (b.diagram == null) "no diagram" else "no drawable shape")
+            // Unknown or missing type: keep the words.
+            else -> salvage("unknown type and no text")
         }
     }
 
@@ -108,6 +141,7 @@ class DocumentMapper(
     }
 
     internal fun mapDiagram(d: AiDiagram): VectorDiagram? {
+        if (d.shapes.isEmpty()) return null
         val w = d.size.getOrNull(0) ?: return null
         val h = d.size.getOrNull(1) ?: return null
         if (w <= 0f || h <= 0f) return null
@@ -144,7 +178,27 @@ class DocumentMapper(
 
         fun String?.clean() = this?.trim()?.takeIf { it.isNotEmpty() }
 
-        fun latex(raw: String?) = (raw?.let(LatexSanitizer::sanitize) as? LatexResult.Ok)?.latex
+        /** The model's type, normalised: case, spaces and common synonyms. */
+        fun typeOf(raw: String): String = when (val t = raw.trim().lowercase().replace(' ', '_').replace('-', '_')) {
+            "title", "header", "section", "subheading", "subtitle", "h1", "h2", "h3" -> "heading"
+            "text", "note", "notes", "body", "explanation", "sentence" -> "paragraph"
+            "list", "bullet", "bullet_list", "bulleted_list", "points", "numbered_list" -> "bullets"
+            "equation", "formula", "latex", "display_math", "expression" -> "math"
+            "derivation", "steps", "solution" -> "proof"
+            "margin", "marginnote", "aside", "remark", "side_note", "sidenote", "annotation" -> "margin_note"
+            "theorem", "law", "rule", "example", "warning", "key_result", "important", "box" -> "callout"
+            "figure", "drawing", "graph", "sketch", "image" -> "diagram"
+            else -> t
+        }
+
+        /** Sanitised LaTeX; a formula that only lacks closing braces (a cut-off slip) gets them. */
+        fun latex(raw: String?): String? {
+            val s = raw?.trim()?.takeIf { it.isNotEmpty() } ?: return null
+            (LatexSanitizer.sanitize(s) as? LatexResult.Ok)?.let { return it.latex }
+            val missing = s.count { it == '{' } - s.count { it == '}' } + s.windowed(2).count { it == "\\}" } - s.windowed(2).count { it == "\\{" }
+            if (missing !in 1..3) return null
+            return (LatexSanitizer.sanitize(s + "}".repeat(missing)) as? LatexResult.Ok)?.latex
+        }
 
         fun InkSemantic.orEmphasis() = if (this == InkSemantic.Regular) InkSemantic.Emphasis else this
 
