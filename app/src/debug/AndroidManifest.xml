@@ -10,6 +10,7 @@
         <receiver android:name="app.bestnote.debug.recognition.RecognitionEvalReceiver" android:exported="true">
             <intent-filter>
                 <action android:name="app.bestnote.debug.RECOGNIZE" />
+                <action android:name="app.bestnote.debug.CLIP" />
             </intent-filter>
         </receiver>
     </application>

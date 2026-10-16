@@ -18,7 +18,7 @@ internal class HighlightLayer(context: Context, private val pages: PagesLayer) :
     private val fill = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
     private val line = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE
-        strokeWidth = 1.5f * density
+        strokeWidth = 2f * density
     }
     private val box = RectF()
     private var page = -1
@@ -69,7 +69,7 @@ internal class HighlightLayer(context: Context, private val pages: PagesLayer) :
 
     private companion object {
         const val DEFAULT_COLOR = 0xFFE8A200.toInt()
-        const val FILL_ALPHA = 0x44
+        const val FILL_ALPHA = 0x66
         const val PAD_DP = 3f
         const val CORNER_DP = 5f
     }

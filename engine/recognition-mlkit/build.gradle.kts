@@ -11,6 +11,8 @@ dependencies {
     implementation(projects.core.database)
     // Page pictures for search results.
     implementation(projects.engine.export)
+    // Printed text of imported PDFs.
+    implementation(projects.engine.pdf)
     implementation(libs.androidx.work.runtime)
     implementation(libs.mlkit.digital.ink)
     implementation(libs.kotlinx.coroutines.android)

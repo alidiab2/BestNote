@@ -11,7 +11,10 @@ import app.bestnote.core.model.Notebook
 import app.bestnote.core.storage.InkChunkCodec
 import app.bestnote.core.storage.NotebookStore
 import app.bestnote.core.storage.PageContent
+import app.bestnote.core.model.PageRect
+import app.bestnote.core.model.SegmentKind
 import app.bestnote.engine.export.PageThumbnails
+import app.bestnote.engine.pdf.PdfTextExtractor
 import app.bestnote.engine.recognition.PageTextExtractor
 import app.bestnote.engine.recognition.SegmentDraft
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -65,6 +68,7 @@ class PageIndexer @Inject constructor(
         val before = dao.pages(nb.id.value).associateBy { it.pageId }
         var read = 0
         var inkComplete = ink
+        val pdfs = PdfTexts(pkg.assets, File(context.cacheDir, "search-pdf"))
         for ((i, content) in pkg.pages.withIndex()) {
             currentCoroutineContext().ensureActive()
             val signature = signatureOf(content)
@@ -74,7 +78,7 @@ class PageIndexer @Inject constructor(
                 continue
             }
             try {
-                if (!indexPage(nb, content, i, signature, extractor, ink)) inkComplete = false
+                if (!indexPage(nb, content, i, signature, extractor, ink, pdfs)) inkComplete = false
                 read++
             } catch (e: CancellationException) {
                 throw e
@@ -83,15 +87,17 @@ class PageIndexer @Inject constructor(
                 return read
             }
         }
+        pdfs.close()
         dao.retainPages(nb.id.value, pkg.pages.mapTo(HashSet()) { it.id })
         dao.upsertNotebook(SearchNotebookEntity(nb.id.value, nb.updatedAtMillis, inkComplete = inkComplete))
         return read
     }
 
-    private suspend fun indexPage(nb: Notebook, content: PageContent, index: Int, signature: String, extractor: PageTextExtractor, ink: Boolean): Boolean {
+    private suspend fun indexPage(nb: Notebook, content: PageContent, index: Int, signature: String, extractor: PageTextExtractor, ink: Boolean, pdfs: PdfTexts): Boolean {
         val strokes = InkChunkCodec.decode(content.strokes)
         val failuresBefore = recognizer.failures
         val drafts = ArrayList<SegmentDraft>(extractor.elements(content.elements))
+        content.page.pdf?.let { ref -> drafts += pdfs.drafts(ref.asset, ref.pageIndex) }
         if (ink && strokes.isNotEmpty()) drafts += extractor.ink(strokes.map { it.samples })
         val inkRead = ink && recognizer.failures == failuresBefore
         val thumbnail = if (drafts.isEmpty()) null else renderThumbnail(nb, content, strokes)
@@ -123,6 +129,28 @@ class PageIndexer @Inject constructor(
     } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
         Log.w(MlKitModels.TAG, "Page picture failed", e)
         null
+    }
+
+    /** Printed text of a notebook's imported PDFs; each PDF is opened once and only when a page of it is read. */
+    private class PdfTexts(private val assets: Map<String, ByteArray>, private val dir: File) {
+        private val readers = HashMap<String, PdfTextExtractor.Reader?>()
+
+        fun drafts(asset: String, pageIndex: Int): List<SegmentDraft> {
+            val reader = readers.getOrPut(asset) { open(asset) } ?: return emptyList()
+            return reader.text(pageIndex).map { run ->
+                SegmentDraft(SegmentKind.Pdf, run.text, SearchText.fold(run.text), PageRect(run.left, run.top, run.right, run.bottom))
+            }.filter { it.folded.isNotEmpty() }
+        }
+
+        private fun open(asset: String): PdfTextExtractor.Reader? {
+            if (!PdfTextExtractor.isSupported) return null
+            val bytes = assets[asset] ?: return null
+            val file = File(dir.apply { mkdirs() }, "${bytes.contentHashCode().toUInt().toString(16)}-${bytes.size}.pdf")
+            if (!file.isFile || file.length() != bytes.size.toLong()) file.writeBytes(bytes)
+            return PdfTextExtractor.open(file)
+        }
+
+        fun close() = readers.values.forEach { it?.close() }
     }
 
     internal companion object {

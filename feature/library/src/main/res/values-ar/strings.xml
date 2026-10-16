@@ -247,7 +247,7 @@
     </plurals>
     <string name="library_page_number">صفحة %1$d</string>
     <string name="library_models_title">ابحث في خط يدك</string>
-    <string name="library_models_body">نزّل نموذجَي الخط العربي والإنجليزي مرة واحدة. بعد ذلك تتم قراءة ملاحظاتك على هذا الجهاز، حتى دون اتصال.</string>
+    <string name="library_models_body">نزّل نموذجَي الخط العربي والإنجليزي مرة واحدة (نحو 50 ميغابايت). بعد ذلك تتم قراءة ملاحظاتك على هذا الجهاز، حتى دون اتصال.</string>
     <string name="library_models_failed">لم يكتمل التنزيل. تحقق من اتصالك وأعد المحاولة.</string>
     <string name="library_models_download">تنزيل</string>
     <string name="library_models_retry">أعد المحاولة</string>

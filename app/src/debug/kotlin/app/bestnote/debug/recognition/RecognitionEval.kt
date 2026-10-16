@@ -3,6 +3,8 @@
  *
  *   adb shell am broadcast -a app.bestnote.debug.RECOGNIZE -p app.bestnote.debug --es file arabic.json
  *
+ * Also: `-a app.bestnote.debug.CLIP` puts files/replay/clip.txt on the clipboard (to paste Arabic into the search box).
+ *
  * file    name under files/replay/ (the same place scripts/agent/replay.sh pushes to). The written text,
  *         lines separated by '|', is read from files/replay/<name>.expect.txt when present.
  *
@@ -42,6 +44,7 @@ interface RecognitionEvalEntryPoint {
 
 class RecognitionEvalReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
+        if (intent.action == CLIP) return copyToClipboard(context)
         val pending = goAsync()
         CoroutineScope(Dispatchers.Default).launch {
             val out = StringBuilder()
@@ -54,6 +57,13 @@ class RecognitionEvalReceiver : BroadcastReceiver() {
             out.lineSequence().forEach { Log.i("RecEval", it) }
             pending.finish()
         }
+    }
+
+    /** `--es file x.txt` (UTF-8, under files/replay/) goes to the clipboard, so scripts can paste Arabic with KEYCODE_PASTE. */
+    private fun copyToClipboard(context: Context) {
+        val text = File(File(context.filesDir, "replay"), "clip.txt").readText().trim()
+        (context.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager)
+            .setPrimaryClip(android.content.ClipData.newPlainText("debug", text))
     }
 
     private suspend fun run(context: Context, name: String, out: StringBuilder) {
@@ -125,6 +135,7 @@ class RecognitionEvalReceiver : BroadcastReceiver() {
     }
 
     private companion object {
+        const val CLIP = "app.bestnote.debug.CLIP"
         const val PT_PER_MM = 72f / 25.4f
     }
 }

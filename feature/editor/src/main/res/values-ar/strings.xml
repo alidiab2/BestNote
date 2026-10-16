@@ -132,7 +132,7 @@
 
     <string name="selection_convert">تحويل إلى نص</string>
     <string name="convert_title">تحويل إلى نص</string>
-    <string name="convert_models_needed">قراءة الخط اليدوي تحتاج نموذجَي العربية والإنجليزية. نزّلهما مرة واحدة، وبعدها يعمل دون اتصال.</string>
+    <string name="convert_models_needed">قراءة الخط اليدوي تحتاج نموذجَي العربية والإنجليزية. نزّلهما مرة واحدة (نحو 50 ميغابايت)، وبعدها يعمل دون اتصال.</string>
     <string name="convert_download">تنزيل</string>
     <string name="convert_retry">أعد المحاولة</string>
     <string name="convert_failed">لم يكتمل التنزيل. تحقق من اتصالك وأعد المحاولة.</string>

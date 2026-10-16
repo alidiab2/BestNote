@@ -56,6 +56,7 @@ class IndexWorker(context: Context, params: WorkerParameters) : CoroutineWorker(
  *  - after edits: [EDIT_DELAY_S] seconds after the last save, unless the battery is low;
  *    each new save pushes it back, so a writing session is indexed once, when the pen rests;
  *  - catch-up: about twice a day, but only while charging and idle, which covers a large first-time backlog;
+ *  - when the app is left, for changes the editor did not make (a PDF import);
  *  - right after the models finish downloading, so old handwriting becomes searchable.
  */
 @Singleton
@@ -77,6 +78,16 @@ class IndexScheduler @Inject constructor(
                 .setConstraints(Constraints.Builder().setRequiresCharging(true).setRequiresDeviceIdle(true).build())
                 .build(),
         )
+        // Changes that don't go through the editor (a PDF import, a restored notebook) are picked up when the app is left.
+        (context.applicationContext as? android.app.Application)?.registerActivityLifecycleCallbacks(object : android.app.Application.ActivityLifecycleCallbacks {
+            override fun onActivityStopped(activity: android.app.Activity) = afterEdit()
+            override fun onActivityCreated(activity: android.app.Activity, savedInstanceState: android.os.Bundle?) = Unit
+            override fun onActivityStarted(activity: android.app.Activity) = Unit
+            override fun onActivityResumed(activity: android.app.Activity) = Unit
+            override fun onActivityPaused(activity: android.app.Activity) = Unit
+            override fun onActivitySaveInstanceState(activity: android.app.Activity, outState: android.os.Bundle) = Unit
+            override fun onActivityDestroyed(activity: android.app.Activity) = Unit
+        })
         afterEdit()
     }
 

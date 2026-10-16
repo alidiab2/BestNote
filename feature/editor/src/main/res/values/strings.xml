@@ -132,7 +132,7 @@
 
     <string name="selection_convert">Convert to text</string>
     <string name="convert_title">Convert to text</string>
-    <string name="convert_models_needed">Reading handwriting needs the Arabic and English models. Download them once; after that this works offline.</string>
+    <string name="convert_models_needed">Reading handwriting needs the Arabic and English models. Download them once (about 50 MB); after that this works offline.</string>
     <string name="convert_download">Download</string>
     <string name="convert_retry">Try again</string>
     <string name="convert_failed">The download didn\'t finish. Check your connection and try again.</string>
