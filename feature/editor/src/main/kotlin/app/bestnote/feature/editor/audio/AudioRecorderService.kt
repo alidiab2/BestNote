@@ -82,7 +82,9 @@ class AudioRecorderService : Service() {
             try {
                 r.stop()
                 val done = AudioFiles.fileOf(this, a.notebookId, a.recordingId)
-                if (file.renameTo(done)) result = RecorderHub.Finished(a.notebookId, a.recordingId, a.startedAtMillis)
+                if (file.length() == 0L) {
+                    file.delete() // the microphone delivered nothing
+                } else if (file.renameTo(done)) result = RecorderHub.Finished(a.notebookId, a.recordingId, a.startedAtMillis)
             } catch (@Suppress("TooGenericExceptionCaught") e: RuntimeException) {
                 Log.w(TAG, "Recording had no audio", e) // stop() throws when stopped immediately
                 file.delete()

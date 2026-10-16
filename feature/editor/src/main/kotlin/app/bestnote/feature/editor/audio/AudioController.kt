@@ -95,6 +95,9 @@ internal class AudioController(
         val known = stored.mapTo(HashSet()) { it.id }
         val running = RecorderHub.active.value?.takeIf { it.notebookId == notebookId.value }?.recordingId
         val orphans = withContext(Dispatchers.IO) {
+            // A `.rec` that nothing is recording into was cut off (process killed): it has no index and can't play.
+            AudioFiles.dir(context, notebookId.value).listFiles { f -> f.name.endsWith(AudioFiles.RECORDING_SUFFIX) }.orEmpty()
+                .filter { it.name.removeSuffix(AudioFiles.RECORDING_SUFFIX) != running }.forEach { it.delete() }
             AudioFiles.dir(context, notebookId.value).listFiles { f -> f.isFile && f.name.endsWith(".m4a") }.orEmpty()
                 .map { it.name.removeSuffix(".m4a") }
                 .filter { it !in known && it != running && AudioRecording.ID_PATTERN.matches(it) }
@@ -129,7 +132,7 @@ internal class AudioController(
             ids.mapNotNull { id ->
                 val file = AudioFiles.fileOf(context, notebookId.value, id)
                 if (!file.isFile) return@mapNotNull null
-                val duration = AudioFiles.durationOf(file)
+                val duration = if (file.length() == 0L) null else AudioFiles.durationOf(file)
                 if (duration == null) {
                     file.delete() // unreadable: not a finished recording
                     return@mapNotNull null
