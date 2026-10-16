@@ -61,7 +61,14 @@ internal object FormatMigrations {
      */
     private val V6_TO_V7 = Step(from = 6, manifest = { it.withFormat(7) }, page = { it.withFormat(7) })
 
-    val steps: List<Step> = listOf(V1_TO_V2, V2_TO_V3, V3_TO_V4, V4_TO_V5, V5_TO_V6, V6_TO_V7)
+    /**
+     * v7 → v8: text elements may carry `underline`, `strike`, `runs`, `list`, `numerals` and `lineSpacing` (TEXT-02).
+     * All are optional with defaults that reproduce v7 text, so only the version changes; the bump makes a v7 app
+     * refuse the notebook rather than save over formatting it cannot see.
+     */
+    private val V7_TO_V8 = Step(from = 7, manifest = { it.withFormat(8) }, page = { it.withFormat(8) })
+
+    val steps: List<Step> = listOf(V1_TO_V2, V2_TO_V3, V3_TO_V4, V4_TO_V5, V5_TO_V6, V6_TO_V7, V7_TO_V8)
 
     fun formatOf(json: JsonObject): Int = json["format"]?.jsonPrimitive?.int ?: throw CorruptChunkException("Missing format")
 

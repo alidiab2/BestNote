@@ -173,4 +173,11 @@
     <string name="editor_smart_board_new_pages">New pages</string>
     <string name="text_font">Font: %1$s</string>
     <string name="text_font_default">Default</string>
+    <string name="text_align_justify">Justify</string>
+    <string name="text_list_bullets">• List</string>
+    <string name="text_list_numbers">1. List</string>
+    <string name="text_line_spacing">Line spacing</string>
+    <string name="text_spacing_tighter">Tighter lines</string>
+    <string name="text_spacing_looser">Looser lines</string>
+    <string name="text_applies_selection">Formatting the selected text</string>
 </resources>

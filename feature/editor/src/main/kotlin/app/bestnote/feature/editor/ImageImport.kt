@@ -57,4 +57,11 @@ internal object ElementPlacement {
         val k = minOf(pageW * maxFraction / picW, pageH * maxFraction / picH)
         return picW * k to picH * k
     }
+
+    /** The center for a [w] x [h] frame dropped at ([x], [y]) on a [pageW] x [pageH] page, kept fully on the page. */
+    fun centeredAt(x: Float, y: Float, w: Float, h: Float, pageW: Float, pageH: Float): Pair<Float, Float> {
+        val cx = if (w >= pageW) pageW / 2f else x.coerceIn(w / 2f, pageW - w / 2f)
+        val cy = if (h >= pageH) pageH / 2f else y.coerceIn(h / 2f, pageH - h / 2f)
+        return cx to cy
+    }
 }

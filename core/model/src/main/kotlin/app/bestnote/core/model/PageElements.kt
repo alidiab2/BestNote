@@ -4,7 +4,7 @@ import kotlin.math.cos
 import kotlin.math.sin
 
 /** Paragraph alignment of a [TextElement]. [Start] follows the text's direction: right for Arabic, left for English. */
-enum class TextAlignment { Start, Center, End }
+enum class TextAlignment { Start, Center, End, Justify }
 
 /** The visible part of an image, as fractions (0..1) of the stored picture. */
 data class CropRect(val left: Float = 0f, val top: Float = 0f, val right: Float = 1f, val bottom: Float = 1f) {
@@ -128,6 +128,16 @@ data class TextElement(
     override val locked: Boolean = false,
     /** Typeface family: null = the default sans; [FONT_HANDWRITING] = the bundled handwriting fonts (Smart Board). */
     val font: String? = null,
+    /** Underline / strikethrough of the whole box (TEXT-02); [runs] add more on top. */
+    val underline: Boolean = false,
+    val strike: Boolean = false,
+    /** Extra styling of parts of [text], additive to the box style (TEXT-02). */
+    val runs: List<TextRun> = emptyList(),
+    /** Every paragraph (line break separated) is a bullet or a numbered item. */
+    val list: ListStyle = ListStyle.None,
+    val numerals: Numerals = Numerals.Latin,
+    /** Line height as a multiple of the font size's natural line. */
+    val lineSpacing: Float = DEFAULT_LINE_SPACING,
 ) : PageElement {
     init {
         require(width > 0f && height > 0f) { "Text frame must be positive" }
@@ -145,6 +155,9 @@ data class TextElement(
         const val MIN_SIZE_PT = 6f
         const val MAX_SIZE_PT = 200f
         const val DEFAULT_COLOR = 0xFF1F1F1F.toInt()
+        const val DEFAULT_LINE_SPACING = 1.12f
+        const val MIN_LINE_SPACING = 0.8f
+        const val MAX_LINE_SPACING = 3f
 
         /** Handwriting font, Latin first (Caveat, then Aref Ruqaa for Arabic letters). */
         const val FONT_HANDWRITING = "hand"

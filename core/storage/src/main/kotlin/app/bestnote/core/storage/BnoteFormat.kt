@@ -10,7 +10,12 @@ import app.bestnote.core.model.PageElement
 import app.bestnote.core.model.PaperColor
 import app.bestnote.core.model.PdfPageRef
 import app.bestnote.core.model.PaperTemplate
+import app.bestnote.core.model.ListStyle
+import app.bestnote.core.model.Numerals
+import app.bestnote.core.model.RunStyle
 import app.bestnote.core.model.TextAlignment
+import app.bestnote.core.model.TextRun
+import app.bestnote.core.model.TextRuns
 import app.bestnote.core.model.TextElement
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.Serializable
@@ -90,6 +95,27 @@ internal data class ElementJson(
     val italic: Boolean = false,
     val align: String = "Start",
     val font: String? = null,
+    // text formatting (v8)
+    val underline: Boolean = false,
+    val strike: Boolean = false,
+    val runs: List<RunJson> = emptyList(),
+    val list: String = "None",
+    val numerals: String = "Latin",
+    val lineSpacing: Float = TextElement.DEFAULT_LINE_SPACING,
+)
+
+/** One styled part of a text element: characters [s] until [e]. Flags are only ever "on" additions. */
+@Serializable
+internal data class RunJson(
+    val s: Int,
+    val e: Int,
+    val b: Boolean = false,
+    val i: Boolean = false,
+    val u: Boolean = false,
+    val x: Boolean = false,
+    val color: Int? = null,
+    val font: String? = null,
+    val size: Float? = null,
 )
 
 /**
@@ -97,8 +123,8 @@ internal data class ElementJson(
  * Shared by the unpacked directory store and the zip archive so both stay byte-identical.
  */
 object BnoteFormat {
-    /** Current layout. History: 1 = DOC-01 draft, 2 = page metadata always carries `paper`, 3 = pages carry `elements`, 4 = manifest lists audio `recordings`, 5 = manifest lists `extras`, 6 = pages may have an edit journal `pages/<id>.jrnl`, 7 = strokes may carry a shape fill (see [FormatMigrations]). */
-    const val VERSION = 7
+    /** Current layout. History: 1 = DOC-01 draft, 2 = page metadata always carries `paper`, 3 = pages carry `elements`, 4 = manifest lists audio `recordings`, 5 = manifest lists `extras`, 6 = pages may have an edit journal `pages/<id>.jrnl`, 7 = strokes may carry a shape fill, 8 = text elements may carry underline/strike, style runs, lists and line spacing (see [FormatMigrations]). */
+    const val VERSION = 8
     const val MANIFEST = "manifest.json"
     const val PAGES_DIR = "pages/"
     const val ASSETS_DIR = "assets/"
@@ -217,6 +243,8 @@ object BnoteFormat {
         is TextElement -> ElementJson(
             "text", e.id, e.cx, e.cy, e.width, e.height, e.rotation, e.locked,
             text = e.text, size = e.sizePt, color = e.colorArgb, bold = e.bold, italic = e.italic, align = e.align.name, font = e.font,
+            underline = e.underline, strike = e.strike, list = e.list.name, numerals = e.numerals.name, lineSpacing = e.lineSpacing,
+            runs = e.runs.map { RunJson(it.start, it.end, it.style.bold, it.style.italic, it.style.underline, it.style.strike, it.style.colorArgb, it.style.font, it.style.sizePt) },
         )
     }
 
@@ -232,6 +260,14 @@ object BnoteFormat {
             "text" -> TextElement(
                 j.id, j.cx, j.cy, j.w, j.h, j.text.orEmpty(), j.size, j.color, j.bold, j.italic,
                 TextAlignment.entries.firstOrNull { it.name == j.align } ?: TextAlignment.Start, j.rot, j.locked, j.font,
+                j.underline, j.strike,
+                TextRuns.sanitized(
+                    j.runs.filter { it.s >= 0 && it.e > it.s }.map { TextRun(it.s, it.e, RunStyle(it.b, it.i, it.u, it.x, it.color, it.font, it.size?.takeIf { z -> z > 0f })) },
+                    j.text.orEmpty().length,
+                ),
+                ListStyle.entries.firstOrNull { it.name == j.list } ?: ListStyle.None,
+                Numerals.entries.firstOrNull { it.name == j.numerals } ?: Numerals.Latin,
+                j.lineSpacing.coerceIn(TextElement.MIN_LINE_SPACING, TextElement.MAX_LINE_SPACING),
             )
             else -> null
         }

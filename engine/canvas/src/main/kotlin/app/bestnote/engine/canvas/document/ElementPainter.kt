@@ -8,12 +8,19 @@ import android.graphics.Rect
 import android.graphics.RectF
 import android.graphics.Typeface
 import android.text.Layout
+import android.text.SpannableStringBuilder
+import android.text.Spanned
 import android.text.StaticLayout
 import android.text.TextDirectionHeuristics
 import android.text.TextPaint
+import android.text.style.LeadingMarginSpan
+import android.text.style.MetricAffectingSpan
 import android.util.LruCache
 import app.bestnote.core.model.ImageElement
+import app.bestnote.core.model.ListNumbering
+import app.bestnote.core.model.ListStyle
 import app.bestnote.core.model.PageElement
+import app.bestnote.core.model.RunStyle
 import app.bestnote.core.model.TextAlignment
 import app.bestnote.core.model.TextElement
 
@@ -61,7 +68,7 @@ class ElementPainter {
             is ImageElement -> drawImage(canvas, e, pxPerPt, images, onImageReady)
             is TextElement -> {
                 canvas.translate(-e.width / 2f, -e.height / 2f)
-                val layout = layoutOf(e, colorOf(e.colorArgb))
+                val layout = layoutOf(e, colorOf(e.colorArgb), colorOf)
                 canvas.scale(1f / SCALE, 1f / SCALE)
                 layout.draw(canvas)
             }
@@ -85,20 +92,22 @@ class ElementPainter {
 
     private val layouts = object : LruCache<LayoutKey, StaticLayout>(LAYOUT_CACHE) {}
 
-    private data class LayoutKey(
-        val text: String, val sizePt: Float, val color: Int, val bold: Boolean, val italic: Boolean,
-        val align: TextAlignment, val widthUnits: Int, val font: String?,
-    )
+    /** Everything that changes how a box looks, and nothing that only moves it. */
+    private data class LayoutKey(val look: TextElement, val color: Int, val runColors: List<Int?>, val widthUnits: Int)
 
-    private fun layoutOf(e: TextElement, color: Int): StaticLayout {
-        val key = LayoutKey(e.text, e.sizePt, color, e.bold, e.italic, e.align, (e.width * SCALE).toInt().coerceAtLeast(1), e.font)
+    private fun layoutOf(e: TextElement, color: Int, colorOf: (Int) -> Int = { it }): StaticLayout {
+        val look = e.copy(id = "", cx = 0f, cy = 0f, height = 1f, rotation = 0f, locked = false)
+        val key = LayoutKey(look, color, e.runs.map { r -> r.style.colorArgb?.let(colorOf) }, (e.width * SCALE).toInt().coerceAtLeast(1))
         layouts.get(key)?.let { return it }
+        val base = Typeface.create(e.font?.let(Fonts.resolve) ?: Typeface.DEFAULT, style(e))
         val paint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
             this.color = color
             textSize = e.sizePt * SCALE
-            typeface = Typeface.create(e.font?.let(Fonts.resolve) ?: Typeface.DEFAULT, style(e))
+            typeface = base
+            isUnderlineText = e.underline
+            isStrikeThruText = e.strike
         }
-        val built = build(e.text, paint, key.widthUnits, e.align)
+        val built = build(e, paint, key.widthUnits, key.runColors)
         layouts.put(key, built)
         return built
     }
@@ -110,19 +119,69 @@ class ElementPainter {
         else -> Typeface.NORMAL
     }
 
-    private fun build(text: String, paint: TextPaint, width: Int, align: TextAlignment): StaticLayout =
-        StaticLayout.Builder.obtain(text, 0, text.length, paint, width)
+    /** One styled part of a box: adds bold / italic / underline / strike / color / font / size to the base paint. */
+    private class RunSpan(val e: TextElement, val s: RunStyle, val color: Int?) : MetricAffectingSpan() {
+        override fun updateMeasureState(p: TextPaint) = apply(p)
+        override fun updateDrawState(p: TextPaint) = apply(p)
+        private fun apply(p: TextPaint) {
+            val bold = e.bold || s.bold
+            val italic = e.italic || s.italic
+            if (s.font != null || s.bold || s.italic) {
+                val face = s.font?.let(Fonts.resolve) ?: e.font?.let(Fonts.resolve) ?: Typeface.DEFAULT
+                p.typeface = Typeface.create(face, if (bold && italic) Typeface.BOLD_ITALIC else if (bold) Typeface.BOLD else if (italic) Typeface.ITALIC else Typeface.NORMAL)
+            }
+            s.sizePt?.let { p.textSize = it * SCALE }
+            color?.let { p.color = it }
+            if (s.underline) p.isUnderlineText = true
+            if (s.strike) p.isStrikeThruText = true
+        }
+    }
+
+    /** Draws a list marker in the leading margin: on the left of left-to-right paragraphs, on the right of right-to-left ones. */
+    private class MarkerSpan(val marker: String, val margin: Int, val paintOf: TextPaint) : LeadingMarginSpan {
+        override fun getLeadingMargin(first: Boolean) = margin
+        override fun drawLeadingMargin(c: Canvas, p: Paint, x: Int, dir: Int, top: Int, baseline: Int, bottom: Int, text: CharSequence, start: Int, end: Int, first: Boolean, layout: Layout) {
+            if (!first) return
+            val mp = TextPaint(paintOf).apply { isUnderlineText = false; isStrikeThruText = false }
+            val w = mp.measureText(marker)
+            val pad = margin * 0.2f
+            // dir is +1 when x is the left edge of the text, -1 when it is the right edge.
+            c.drawText(marker, if (dir >= 0) x + margin - pad - w else x - margin + pad, baseline.toFloat(), mp)
+        }
+    }
+
+    private fun build(e: TextElement, paint: TextPaint, width: Int, runColors: List<Int?>): StaticLayout {
+        val text = SpannableStringBuilder(e.text)
+        e.runs.forEachIndexed { i, r ->
+            val end = r.end.coerceAtMost(text.length)
+            if (r.start < end) text.setSpan(RunSpan(e, r.style, runColors[i]), r.start, end, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+        }
+        if (e.list != ListStyle.None) {
+            val markers = ListNumbering.markers(e.text, e.list, e.numerals)
+            val margin = (e.sizePt * SCALE * LIST_INDENT_EM).toInt()
+            var from = 0
+            e.text.split('\n').forEachIndexed { i, p ->
+                val m = markers[i]
+                // A paragraph includes its trailing line break so the span covers whole paragraphs.
+                val to = (from + p.length + 1).coerceAtMost(text.length)
+                if (m != null && from < to) text.setSpan(MarkerSpan(m, margin, paint), from, to, Spanned.SPAN_PARAGRAPH or Spanned.SPAN_INCLUSIVE_EXCLUSIVE)
+                from += p.length + 1
+            }
+        }
+        return StaticLayout.Builder.obtain(text, 0, text.length, paint, width)
             .setAlignment(
-                when (align) {
-                    TextAlignment.Start -> Layout.Alignment.ALIGN_NORMAL
+                when (e.align) {
+                    TextAlignment.Start, TextAlignment.Justify -> Layout.Alignment.ALIGN_NORMAL
                     TextAlignment.Center -> Layout.Alignment.ALIGN_CENTER
                     TextAlignment.End -> Layout.Alignment.ALIGN_OPPOSITE
                 },
             )
+            .setJustificationMode(if (e.align == TextAlignment.Justify) Layout.JUSTIFICATION_MODE_INTER_WORD else Layout.JUSTIFICATION_MODE_NONE)
             .setTextDirection(TextDirectionHeuristics.FIRSTSTRONG_LTR)
             .setIncludePad(false)
-            .setLineSpacing(0f, LINE_SPACING)
+            .setLineSpacing(0f, e.lineSpacing.coerceIn(TextElement.MIN_LINE_SPACING, TextElement.MAX_LINE_SPACING))
             .build()
+    }
 
     /** [e] with its height set to exactly what its text needs at its width (the box grows and shrinks with its text). */
     fun fitted(e: TextElement): TextElement {
@@ -138,7 +197,7 @@ class ElementPainter {
     companion object {
         /** Text is laid out at this many times its point size and drawn scaled down, for precise wrapping. */
         private const val SCALE = 4f
-        private const val LINE_SPACING = 1.12f
+        private const val LIST_INDENT_EM = 1.4f
         private const val MIN_LINES = 1.3f
         private const val LAYOUT_CACHE = 96
         private val PLACEHOLDER = Color.argb(40, 120, 120, 120)
