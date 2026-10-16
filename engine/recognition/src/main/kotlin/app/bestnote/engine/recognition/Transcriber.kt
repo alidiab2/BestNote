@@ -8,7 +8,7 @@ data class Transcript(val lines: List<String>) {
 
 /**
  * Handwriting → text for a lasso selection (REC-05). Each line is recognized in every language and the
- * most confident reading wins; the result keeps the page's own line breaks.
+ * reading in the script it was written in wins ([ReadingChooser]); the result keeps the page's own line breaks.
  */
 class Transcriber(private val recognizer: HandwritingRecognizer, private val languages: List<String> = listOf("ar", "en-US")) {
     suspend fun transcribe(strokes: List<InkStrokeSamples>): Transcript {
@@ -19,14 +19,13 @@ class Transcriber(private val recognizer: HandwritingRecognizer, private val lan
         return Transcript(lines.filter { it.isNotBlank() })
     }
 
-    /** The best reading of one line over all languages the recognizer has. */
+    /** The best reading of one line over all languages the recognizer has (see [ReadingChooser]). */
     suspend fun readLine(ink: List<InkStrokeSamples>): String {
-        var best: TextCandidate? = null
-        for (tag in languages.filter { it in recognizer.languages || recognizer.languages.isEmpty() }) {
-            val top = recognizer.recognize(ink, tag).firstOrNull() ?: continue
-            if (top.text.isBlank()) continue
-            if (best == null || top.score < best.score) best = top
+        val readings = LinkedHashMap<String, TextCandidate?>()
+        for (tag in languages) {
+            if (recognizer.languages.isNotEmpty() && tag !in recognizer.languages) continue
+            readings[tag] = recognizer.recognize(ink, tag).firstOrNull()
         }
-        return best?.text?.trim().orEmpty()
+        return ReadingChooser.pick(readings, ReadingChooser.direction(ink))?.second?.text?.trim().orEmpty()
     }
 }

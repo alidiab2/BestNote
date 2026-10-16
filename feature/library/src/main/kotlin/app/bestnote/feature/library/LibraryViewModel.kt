@@ -18,6 +18,7 @@ import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.mapLatest
+import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -103,6 +104,7 @@ class LibraryViewModel @Inject constructor(
     @OptIn(FlowPreview::class, ExperimentalCoroutinesApi::class)
     private val pageHits: Flow<List<PageSearchHit>> = combine(controls.map { it.query.trim() }.distinctUntilChanged().debounce(SEARCH_DEBOUNCE_MS), models.state) { q, _ -> q }
         .mapLatest { q -> if (q.isEmpty()) emptyList() else runCatching { pageSearch.search(q) }.getOrDefault(emptyList()) }
+        .onStart { emit(emptyList()) }
 
     private val base = combine(notebooks, trash, controls, thumbnails, metaVersion) { list, bin, c, thumbs, _ ->
         buildLibraryState(list, bin, c, metadata, CoverPalette.All.size, clock.now(), thumbnails = thumbs)

@@ -190,7 +190,7 @@
     <string name="library_empty_pdfs_body">PDF import is coming soon. Your imported PDFs will be listed here.</string>
     <string name="library_empty_filter_title">Nothing matches these filters</string>
     <string name="library_empty_filter_body">Try another filter, or clear them to see every notebook.</string>
-    <string name="library_empty_search_title">No titles match “%1$s”</string>
+    <string name="library_empty_search_title">Nothing matches “%1$s”</string>
     <string name="library_empty_search_body">Check the spelling or try fewer letters. Search looks at titles, handwriting and typed text.</string>
     <string name="library_just_now">Just now</string>
 

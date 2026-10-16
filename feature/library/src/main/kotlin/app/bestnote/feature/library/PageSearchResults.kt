@@ -52,17 +52,19 @@ import app.bestnote.engine.recognition.ModelsState
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
+/** Under the results title while searching: the ask to download the handwriting models, until they are on the device. */
+internal fun LazyListScope.handwritingModelsPrompt(state: LibraryUiState, callbacks: LibraryCallbacks) {
+    if (!state.searching || state.models.isReady) return
+    item(key = "models-card", contentType = "models") {
+        HandwritingModelsCard(state.models, callbacks.downloadModels, Modifier.padding(bottom = Spacing.XL))
+    }
+}
+
 /**
  * Below the title matches: the pages whose handwriting, typed text or PDF text match the query, as page
- * pictures with the matched words marked (REC-03), after a prompt to download the handwriting models when
- * they are missing (REC-01).
+ * pictures with the matched words marked (REC-03).
  */
 internal fun LazyListScope.pageSearchSection(state: LibraryUiState, columns: Int, callbacks: LibraryCallbacks) {
-    if (!state.models.isReady) {
-        item(key = "models-card", contentType = "models") {
-            HandwritingModelsCard(state.models, callbacks.downloadModels, Modifier.padding(top = Spacing.XXL))
-        }
-    }
     if (state.pageResults.isEmpty()) return
     item(key = "pages-header", contentType = "section") {
         Text(

@@ -64,6 +64,7 @@ class PageIndexer @Inject constructor(
         val pkg = store.read(nb.id) ?: return 0
         val before = dao.pages(nb.id.value).associateBy { it.pageId }
         var read = 0
+        var inkComplete = ink
         for ((i, content) in pkg.pages.withIndex()) {
             currentCoroutineContext().ensureActive()
             val signature = signatureOf(content)
@@ -73,7 +74,7 @@ class PageIndexer @Inject constructor(
                 continue
             }
             try {
-                indexPage(nb, content, i, signature, extractor, ink)
+                if (!indexPage(nb, content, i, signature, extractor, ink)) inkComplete = false
                 read++
             } catch (e: CancellationException) {
                 throw e
@@ -83,27 +84,30 @@ class PageIndexer @Inject constructor(
             }
         }
         dao.retainPages(nb.id.value, pkg.pages.mapTo(HashSet()) { it.id })
-        dao.upsertNotebook(SearchNotebookEntity(nb.id.value, nb.updatedAtMillis, inkComplete = ink))
+        dao.upsertNotebook(SearchNotebookEntity(nb.id.value, nb.updatedAtMillis, inkComplete = inkComplete))
         return read
     }
 
-    private suspend fun indexPage(nb: Notebook, content: PageContent, index: Int, signature: String, extractor: PageTextExtractor, ink: Boolean) {
+    private suspend fun indexPage(nb: Notebook, content: PageContent, index: Int, signature: String, extractor: PageTextExtractor, ink: Boolean): Boolean {
         val strokes = InkChunkCodec.decode(content.strokes)
+        val failuresBefore = recognizer.failures
         val drafts = ArrayList<SegmentDraft>(extractor.elements(content.elements))
         if (ink && strokes.isNotEmpty()) drafts += extractor.ink(strokes.map { it.samples })
+        val inkRead = ink && recognizer.failures == failuresBefore
         val thumbnail = if (drafts.isEmpty()) null else renderThumbnail(nb, content, strokes)
         val page = SearchPageEntity(
             notebookId = nb.id.value,
             pageId = content.id,
             pageIndex = index,
             signature = signature,
-            inkIndexed = ink,
+            inkIndexed = inkRead,
             indexedAtMillis = System.currentTimeMillis(),
             widthPt = content.page.widthPt,
             heightPt = content.page.heightPt,
             thumbnailPath = thumbnail?.path,
         )
         dao.replacePage(page, drafts.map { it.toEntity(nb.id.value, content.id) })
+        return inkRead || !ink
     }
 
     private suspend fun renderThumbnail(nb: Notebook, content: PageContent, strokes: List<app.bestnote.core.model.InkStroke>): File? = try {

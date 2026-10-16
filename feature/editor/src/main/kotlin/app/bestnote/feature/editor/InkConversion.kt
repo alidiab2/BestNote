@@ -16,7 +16,10 @@ import app.bestnote.engine.ink.InkFamily
 /** Maps between androidx.ink [Stroke]s on the canvas and the stored [InkStroke] model. */
 internal object InkConversion {
     /** Every input sample of [stroke], bit-exact, stored with [brush]. O(samples of this one stroke). */
-    fun toModel(stroke: Stroke, brush: InkBrush): InkStroke {
+    fun toModel(stroke: Stroke, brush: InkBrush): InkStroke = InkStroke(brush, samplesOf(stroke))
+
+    /** Every input sample of [stroke], bit-exact (what recognizers read). */
+    fun samplesOf(stroke: Stroke): List<StylusSample> {
         val inputs = stroke.inputs
         val input = StrokeInput()
         val samples = ArrayList<StylusSample>(inputs.size)
@@ -24,7 +27,7 @@ internal object InkConversion {
             inputs.populate(i, input)
             samples += StylusSample(input.x, input.y, input.pressure, input.tiltRadians, input.orientationRadians, input.elapsedTimeMillis)
         }
-        return InkStroke(brush, samples)
+        return samples
     }
 
     /** Rebuilds a renderable stroke (computes its mesh, so call it off the main thread). */

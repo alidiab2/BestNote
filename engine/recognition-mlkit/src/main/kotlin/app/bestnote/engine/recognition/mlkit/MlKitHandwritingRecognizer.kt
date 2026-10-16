@@ -19,6 +19,10 @@ import javax.inject.Singleton
 @Singleton
 class MlKitHandwritingRecognizer @Inject constructor(private val models: MlKitModels) : HandwritingRecognizer {
     private val clients = ConcurrentHashMap<String, DigitalInkRecognizer>()
+    private val failed = java.util.concurrent.atomic.AtomicInteger()
+
+    /** How many recognitions failed so far; the indexer compares it before and after a page to tell "no text" from "could not read". */
+    val failures: Int get() = failed.get()
 
     override val languages: Set<String> get() = models.state.value.ready
 
@@ -31,6 +35,7 @@ class MlKitHandwritingRecognizer @Inject constructor(private val models: MlKitMo
             throw e
         } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
             Log.w(MlKitModels.TAG, "Recognizing $languageTag failed", e)
+            failed.incrementAndGet()
             emptyList()
         }
     }
@@ -61,7 +66,7 @@ class MlKitHandwritingRecognizer @Inject constructor(private val models: MlKitMo
             val points = strokes.flatten()
             val w = (points.maxOfOrNull { it.x } ?: 0f) - (points.minOfOrNull { it.x } ?: 0f)
             val h = (points.maxOfOrNull { it.y } ?: 0f) - (points.minOfOrNull { it.y } ?: 0f)
-            return RecognitionContext.builder().setWritingArea(WritingArea(w.coerceAtLeast(1f), h.coerceAtLeast(1f))).build()
+            return RecognitionContext.builder().setPreContext("").setWritingArea(WritingArea(w.coerceAtLeast(1f), h.coerceAtLeast(1f))).build()
         }
     }
 }

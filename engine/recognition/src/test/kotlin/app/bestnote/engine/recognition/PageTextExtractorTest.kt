@@ -16,7 +16,7 @@ class PageTextExtractorTest {
     private val recognizer = object : HandwritingRecognizer {
         override val languages = setOf("ar", "en-US")
         override suspend fun recognize(strokes: List<InkStrokeSamples>, languageTag: String) =
-            if (languageTag == "en-US") listOf(TextCandidate("Newlon", 1f), TextCandidate("Newton", 2f)) else listOf(TextCandidate("ؤؤ", 9f))
+            if (languageTag == "en-US") listOf(TextCandidate("Newlon", 1f), TextCandidate("Newton", 2f)) else listOf(TextCandidate("xx", 9f))
     }
 
     @Test fun everyWordKeepsAllCandidatesForMatching() = runTest {

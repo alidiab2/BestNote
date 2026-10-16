@@ -24,18 +24,22 @@ class PageTextExtractor(
 ) {
     suspend fun ink(strokes: List<InkStrokeSamples>): List<SegmentDraft> {
         val out = ArrayList<SegmentDraft>()
-        for (word in InkSegmenter.words(strokes)) {
-            val ink = word.strokes.map { strokes[it] }
-            val readings = ArrayList<TextCandidate>()
-            for (tag in languages) {
-                readings += recognizer.recognize(ink, tag).filter { it.text.isNotBlank() }.take(candidatesPerLanguage)
-            }
-            val best = readings.minByOrNull { it.score } ?: continue
-            val folded = readings.map { SearchText.fold(it.text) }.filter { it.isNotEmpty() }.distinct().joinToString(" ")
-            if (folded.isEmpty()) continue
-            out += SegmentDraft(SegmentKind.Ink, best.text.trim(), folded, word.box)
+        for (line in InkSegmenter.lines(strokes)) {
+            // A word is too short to show which way it was written; its line is not.
+            val direction = ReadingChooser.direction(line.strokes.map { strokes[it] })
+            for (word in InkSegmenter.words(strokes, line)) out += read(word, strokes, direction) ?: continue
         }
         return out
+    }
+
+    private suspend fun read(word: InkSegment, strokes: List<InkStrokeSamples>, direction: WritingDirection): SegmentDraft? {
+        val ink = word.strokes.map { strokes[it] }
+        val byLanguage = LinkedHashMap<String, List<TextCandidate>>()
+        for (tag in languages) byLanguage[tag] = recognizer.recognize(ink, tag).filter { it.text.isNotBlank() }.take(candidatesPerLanguage)
+        val best = ReadingChooser.pick(byLanguage.mapValues { it.value.firstOrNull() }, direction)?.second ?: return null
+        val folded = byLanguage.values.flatten().map { SearchText.fold(it.text) }.filter { it.isNotEmpty() }.distinct().joinToString(" ")
+        if (folded.isEmpty()) return null
+        return SegmentDraft(SegmentKind.Ink, best.text.trim(), folded, word.box)
     }
 
     /** Typed text boxes: one segment each, boxed by the frame (turned boxes by the box around the turned frame). */

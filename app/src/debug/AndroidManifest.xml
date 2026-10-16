@@ -6,5 +6,11 @@
             android:name="app.bestnote.debug.replay.ReplayInstaller"
             android:authorities="${applicationId}.replay"
             android:exported="false" />
+        <!-- REC-01: scores the handwriting recognizer on corpus files (adb broadcast). -->
+        <receiver android:name="app.bestnote.debug.recognition.RecognitionEvalReceiver" android:exported="true">
+            <intent-filter>
+                <action android:name="app.bestnote.debug.RECOGNIZE" />
+            </intent-filter>
+        </receiver>
     </application>
 </manifest>

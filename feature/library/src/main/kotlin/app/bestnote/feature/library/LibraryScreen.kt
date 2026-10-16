@@ -556,6 +556,7 @@ private fun LazyListScope.notebooksSection(
         NotebooksHeader(state, callbacks, Modifier.padding(top = Spacing.XXL, bottom = Spacing.XL))
     }
     if (state.loading) return
+    handwritingModelsPrompt(state, callbacks)
     if (state.items.isEmpty()) {
         if (!state.searching || state.pageResults.isEmpty()) {
             item(key = "empty") {

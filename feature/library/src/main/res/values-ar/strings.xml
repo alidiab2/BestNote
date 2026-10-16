@@ -233,7 +233,7 @@
     <string name="library_empty_pdfs_body">استيراد ملفات PDF قادم قريبًا، وستظهر هنا.</string>
     <string name="library_empty_filter_title">لا شيء يطابق عوامل التصفية</string>
     <string name="library_empty_filter_body">جرّب عامل تصفية آخر، أو امسحها لرؤية كل الدفاتر.</string>
-    <string name="library_empty_search_title">لا عناوين تطابق «%1$s»</string>
+    <string name="library_empty_search_title">لا شيء يطابق «%1$s»</string>
     <string name="library_empty_search_body">تحقق من الإملاء أو جرّب أحرفًا أقل. يبحث البحث في العناوين والخط اليدوي والنصوص المكتوبة.</string>
     <string name="library_just_now">الآن</string>
 
