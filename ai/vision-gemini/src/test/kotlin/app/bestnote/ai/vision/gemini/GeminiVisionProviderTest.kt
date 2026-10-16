@@ -80,7 +80,7 @@ class GeminiVisionProviderTest {
         assertTrue(system.contains("elite, meticulous student"))
         assertTrue(system.contains("Cornell"))
         assertTrue(system.contains("right-to-left"))
-        assertTrue(system.contains("Write the notes in: Arabic"))
+        assertTrue(system.contains("write ALL the notes in Arabic"))
         val parts = body["contents"]!!.jsonArray[0].jsonObject["parts"]!!.jsonArray
         assertEquals("image/jpeg", parts[0].jsonObject["inlineData"]!!.jsonObject["mimeType"]!!.jsonPrimitive.content)
         assertEquals(GeminiVisionProvider.BOARD_USER_TEXT, parts[1].jsonObject["text"]!!.jsonPrimitive.content)
