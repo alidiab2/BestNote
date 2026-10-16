@@ -46,9 +46,12 @@ class OpenAiVisionProvider(
         val mime = OpenAiRequests.sniffMime(image.bytes, image.mimeType)
         val provider = if (official) "openai" else "openai-compatible"
         var format = ResponseFormat.JsonSchema
+        var effort: String? = config.reasoningEffort
+        var budget = config.maxTokens
         var retriedServer = false
+        var retriedBudget = false
         while (true) {
-            val body = OpenAiRequests.chat(model, system, user, image.bytes, mime, format, official, config).toString()
+            val body = OpenAiRequests.chat(model, system, user, image.bytes, mime, format, official, config, effort, budget).toString()
             val response = try {
                 transport.post(OpenAiHttp.url(base, "chat/completions"), OpenAiRequests.headers(key, base), body)
             } catch (e: IOException) {
@@ -59,9 +62,20 @@ class OpenAiVisionProvider(
             VisionDiagnostics.recordResponse(provider, model, response.code, response.body)
             when {
                 response.code == 200 -> {
-                    val answer = OpenAiResponses.answer(response.body)
+                    val answer = try {
+                        OpenAiResponses.answer(response.body)
+                    } catch (e: VisionError.Truncated) {
+                        // All of the budget went to thinking: one retry with the least effort and more room.
+                        if (retriedBudget) throw e
+                        retriedBudget = true
+                        if (effort != null) effort = MIN_EFFORT
+                        budget = (budget * 2).coerceAtMost(MAX_BUDGET)
+                        continue
+                    }
                     return AiDocumentParser.answer(answer.text, answer.truncated)
                 }
+                effort != null && OpenAiResponses.rejectsReasoningEffort(response.code, response.body) -> effort = null
+                budget > config.maxTokens && OpenAiResponses.rejectsMaxTokens(response.code, response.body) -> budget = config.maxTokens
                 format != ResponseFormat.None && OpenAiResponses.rejectsResponseFormat(response.code, response.body) ->
                     format = ResponseFormat.entries[format.ordinal + 1]
                 response.code in 500..599 && !retriedServer -> {
@@ -75,6 +89,10 @@ class OpenAiVisionProvider(
 
     companion object {
         fun isOfficial(baseUrl: String) = "api.openai.com" in baseUrl
+
+        /** Lowest `reasoning_effort` most thinking models accept; used for the one retry after a cut-off. */
+        private const val MIN_EFFORT = "low"
+        private const val MAX_BUDGET = 32_000
     }
 }
 

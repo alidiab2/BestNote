@@ -17,6 +17,8 @@ data class OpenAiConfig(
     val timeoutSeconds: Long = 240,
     val retryDelayMs: Long = 1_500,
     val maxTokens: Int = 16_000,
+    /** Thinking models: "low" answers a board well at a fraction of the time and tokens of the default. */
+    val reasoningEffort: String = "low",
     /** Sent to compatible endpoints only; OpenAI's reasoning models accept only their default. */
     val temperature: Double = 0.2,
 ) {
@@ -64,8 +66,12 @@ object OpenAiRequests {
         format: ResponseFormat,
         official: Boolean,
         config: OpenAiConfig = OpenAiConfig(),
+        /** `reasoning_effort` for thinking models ("low" keeps answers fast and cheap); null = omit. */
+        reasoningEffort: String? = null,
+        maxTokens: Int = config.maxTokens,
     ): JsonObject = buildJsonObject {
         put("model", model)
+        reasoningEffort?.let { put("reasoning_effort", it) }
         putJsonArray("messages") {
             addJsonObject {
                 put("role", "system")
@@ -102,9 +108,9 @@ object OpenAiRequests {
             ResponseFormat.None -> Unit
         }
         if (official) {
-            put("max_completion_tokens", config.maxTokens)
+            put("max_completion_tokens", maxTokens)
         } else {
-            put("max_tokens", config.maxTokens)
+            put("max_tokens", maxTokens)
             put("temperature", config.temperature)
         }
     }
