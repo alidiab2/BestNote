@@ -143,7 +143,7 @@ class TemplatesViewModel @Inject constructor(
         viewModelScope.launch {
             val msg = withContext(Dispatchers.IO) {
                 runCatching {
-                    val bytes = context.contentResolver.openInputStream(uri)?.use { it.readNBytes(TemplateExchange.MAX_BYTES + 1) } ?: error("unreadable")
+                    val bytes = context.contentResolver.openInputStream(uri)?.use { readCapped(it, TemplateExchange.MAX_BYTES + 1) } ?: error("unreadable")
                     if (bytes.size > TemplateExchange.MAX_BYTES) throw TemplateImportException(TemplateImportException.Kind.TooLarge, "large")
                     store.import(String(bytes, Charsets.UTF_8))
                     TemplatesMessage.Imported
@@ -210,4 +210,16 @@ class TemplatesViewModel @Inject constructor(
         val prev = e.undo.lastOrNull() ?: return@update s
         s.copy(editor = e.copy(draft = prev, undo = e.undo.dropLast(1)))
     }
+}
+
+/** Reads at most [limit] bytes (InputStream.readNBytes needs API 33). */
+private fun readCapped(input: java.io.InputStream, limit: Int): ByteArray {
+    val out = java.io.ByteArrayOutputStream()
+    val buf = ByteArray(8 * 1024)
+    while (out.size() < limit) {
+        val n = input.read(buf, 0, minOf(buf.size, limit - out.size()))
+        if (n < 0) break
+        out.write(buf, 0, n)
+    }
+    return out.toByteArray()
 }

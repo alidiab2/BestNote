@@ -128,7 +128,7 @@ object FontValidator {
             val len = b.getShort(r + 8).toInt() and 0xFFFF
             val off = b.getShort(r + 10).toInt() and 0xFFFF
             if (strings + off + len > b.limit()) continue
-            val raw = ByteArray(len).also { b.get(strings + off, it) }
+            val raw = ByteArray(len).also { b.duplicate().apply { position(strings + off) }.get(it) }
             val text = when (platform) {
                 0, 3 -> String(raw, Charsets.UTF_16BE)
                 1 -> String(raw, Charset.forName("x-MacRoman"))
