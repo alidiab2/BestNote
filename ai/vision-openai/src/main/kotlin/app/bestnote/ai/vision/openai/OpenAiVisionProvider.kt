@@ -57,11 +57,12 @@ class OpenAiVisionProvider(
         val model = credentials.model().trim().ifEmpty { if (official) OpenAiConfig.DEFAULT_MODEL else throw VisionError.ModelUnavailable("", "no model name set") }
         var format = if (json) ResponseFormat.JsonObject else ResponseFormat.None
         var effort: String? = config.reasoningEffort
+        var thinkingOff = OpenAiConfig.turnsThinkingOff(base)
         var budget = config.maxTokens
         var retriedServer = false
         var retriedBudget = false
         while (true) {
-            val body = OpenAiRequests.text(model, system, turns, format, official, config, effort, budget).toString()
+            val body = OpenAiRequests.text(model, system, turns, format, official, config, effort, budget, thinkingOff).toString()
             val response = try {
                 transport.post(OpenAiHttp.url(base, "chat/completions"), OpenAiRequests.headers(key, base), body)
             } catch (e: IOException) {
@@ -80,6 +81,8 @@ class OpenAiVisionProvider(
                         budget = (budget * 2).coerceAtMost(MAX_BUDGET)
                     }
                 }
+                thinkingOff && OpenAiResponses.rejectsThinking(response.code, response.body) -> thinkingOff = false
+                thinkingOff && OpenAiResponses.rejectsThinking(response.code, response.body) -> thinkingOff = false
                 effort != null && OpenAiResponses.rejectsReasoningEffort(response.code, response.body) -> effort = null
                 format == ResponseFormat.JsonObject && OpenAiResponses.rejectsResponseFormat(response.code, response.body) -> format = ResponseFormat.None
                 response.code in 500..599 && !retriedServer -> {
@@ -105,11 +108,12 @@ class OpenAiVisionProvider(
         val provider = if (official) "openai" else "openai-compatible"
         var format = ResponseFormat.JsonSchema
         var effort: String? = config.reasoningEffort
+        var thinkingOff = OpenAiConfig.turnsThinkingOff(base)
         var budget = config.maxTokens
         var retriedServer = false
         var retriedBudget = false
         while (true) {
-            val body = OpenAiRequests.chat(model, system, user, image.bytes, mime, format, official, config, effort, budget, schema, jsonHint).toString()
+            val body = OpenAiRequests.chat(model, system, user, image.bytes, mime, format, official, config, effort, budget, schema, jsonHint, thinkingOff).toString()
             val response = try {
                 transport.post(OpenAiHttp.url(base, "chat/completions"), OpenAiRequests.headers(key, base), body)
             } catch (e: IOException) {

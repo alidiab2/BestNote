@@ -45,7 +45,7 @@ object NoteWire {
     fun answer(text: String, truncated: Boolean = false): NoteDocument {
         val notes = ArrayList<String>()
         val doc = try {
-            parse(text, notes)
+            dropEmpty(parse(text, notes), notes)
         } catch (e: VisionError.BadResponse) {
             if (truncated) throw VisionError.Truncated(text)
             throw e
@@ -58,6 +58,28 @@ object NoteWire {
         }
         return doc
     }
+
+    /**
+     * Removes elements with nothing in them (models sometimes return an empty Summary or Glossary) and
+     * re-points margin remarks' [NoteBlock.target] at the same element afterwards.
+     */
+    fun dropEmpty(doc: NoteDocument, notes: MutableList<String> = ArrayList()): NoteDocument {
+        val keep = doc.elements.map { !it.isEmpty() }
+        if (keep.all { it }) return doc
+        val newIndex = IntArray(keep.size)
+        var n = 0
+        keep.forEachIndexed { i, k -> newIndex[i] = if (k) n++ else -1 }
+        val kept = doc.elements.filterIndexed { i, _ -> keep[i] }.map { b ->
+            val t = b.target ?: return@map b
+            b.copy(target = newIndex.getOrNull(t)?.takeIf { it >= 0 })
+        }
+        notes += "dropped ${keep.count { !it }} empty element(s)"
+        return doc.copy(elements = kept)
+    }
+
+    private fun NoteBlock.isEmpty(): Boolean =
+        text.isNullOrBlank() && head.isNullOrBlank() && math.isNullOrBlank() && items.isEmpty() && steps.isEmpty() &&
+            rows.isEmpty() && terms.isEmpty() && columns.all { it.isEmpty() } && parts.isEmpty() && diagram == null
 
     fun parse(text: String, notes: MutableList<String> = ArrayList()): NoteDocument {
         val root = AiDocumentParser.parseRoot(text, notes) ?: throw VisionError.BadResponse("the notes are not JSON", raw = text)

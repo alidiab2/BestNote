@@ -1,0 +1,61 @@
+package app.bestnote.ai.vision.openai.live
+
+import app.bestnote.ai.vision.NoteWire
+import app.bestnote.ai.vision.NotesRequest
+import app.bestnote.ai.vision.ProviderCredentials
+import app.bestnote.ai.vision.VisionDiagnostics
+import app.bestnote.ai.vision.VisionImage
+import app.bestnote.ai.vision.openai.OpenAiVisionProvider
+import app.bestnote.engine.layout.AiInstructions
+import app.bestnote.engine.layout.NoteTemplates
+import kotlinx.coroutines.runBlocking
+import okhttp3.OkHttpClient
+import org.junit.Assume.assumeTrue
+import org.junit.Test
+import java.awt.image.BufferedImage
+import java.io.ByteArrayOutputStream
+import java.io.File
+import javax.imageio.ImageIO
+
+/**
+ * One REAL Smart Board call against the owner's DeepSeek key, for improving prompts and elements.
+ * Never runs in CI or a normal `test`: it needs `scripts/agent/ai-live.sh`, which checks the call
+ * budget in ~/.config/bestnote/ai-budget and leaves a one-shot request file. The key lives only in
+ * ~/.config/bestnote/deepseek.env (outside the repo) and is never printed.
+ */
+class LiveBoardTest {
+    private val home = File(System.getProperty("user.home"), ".config/bestnote")
+
+    @Test fun boardPhotoToNotes() = runBlocking {
+        val request = File(home, "live-request")
+        assumeTrue("run through scripts/agent/ai-live.sh", request.exists())
+        val args = request.readLines().associate { it.substringBefore('=') to it.substringAfter('=') }
+        request.delete() // one call per request, even if this test fails
+        val env = File(home, "deepseek.env").readLines().filter { '=' in it && !it.startsWith("#") }
+            .associate { it.substringBefore('=') to it.substringAfter('=') }
+        val creds = object : ProviderCredentials {
+            override suspend fun apiKey() = env.getValue("DEEPSEEK_API_KEY")
+            override suspend fun model() = args["model"] ?: env.getValue("DEEPSEEK_MODEL")
+            override suspend fun baseUrl() = env.getValue("DEEPSEEK_BASE_URL")
+        }
+        val template = NoteTemplates.builtIns().first { it.id == (args["template"] ?: "study-columns") }.let {
+            it.copy(ai = it.ai.copy(notesLanguage = args["notes"]?.ifBlank { null }, termsLanguage = args["terms"]?.ifBlank { null }, note = args["note"].orEmpty()))
+        }
+        VisionDiagnostics.captureRaw = true
+        val started = System.currentTimeMillis()
+        val doc = OpenAiVisionProvider(OkHttpClient(), creds).writeNotes(jpeg(File(args.getValue("image"))), NotesRequest(template, rtl = args["rtl"] == "1"))
+        val out = File(args.getValue("out")).apply { mkdirs() }
+        File(out, "notes.json").writeText(NoteWire.encode(doc))
+        File(out, "raw.txt").writeText(VisionDiagnostics.latest()?.raw.orEmpty())
+        File(out, "summary.txt").writeText("ms=${System.currentTimeMillis() - started} elements=${doc.flatten().size} kinds=${doc.flatten().groupingBy { it.element }.eachCount()}\n")
+    }
+
+    /** The app's capture path: longest side 1600 px, JPEG. */
+    private fun jpeg(file: File): VisionImage {
+        val src = ImageIO.read(file)
+        val k = minOf(1f, 1600f / maxOf(src.width, src.height))
+        val img = BufferedImage((src.width * k).toInt(), (src.height * k).toInt(), BufferedImage.TYPE_INT_RGB)
+        img.createGraphics().apply { drawImage(src, 0, 0, img.width, img.height, null); dispose() }
+        return VisionImage(ByteArrayOutputStream().also { ImageIO.write(img, "jpg", it) }.toByteArray(), "image/jpeg")
+    }
+}
