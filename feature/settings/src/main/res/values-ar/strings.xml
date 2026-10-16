@@ -264,5 +264,6 @@
     <string name="settings_ai_style_colorful">ملوّن</string>
     <string name="settings_ai_style_cornell">كورنيل</string>
     <string name="settings_ai_style_cheatsheet">ملخص مكثف</string>
+    <string name="settings_ai_style_study">ملخص دراسي (أعمدة)</string>
     <string name="settings_ai_language_board">مثل السبورة</string>
 </resources>

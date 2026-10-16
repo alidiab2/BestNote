@@ -194,6 +194,19 @@ internal class DocumentSession(
         document.addListener(this)
     }
 
+    /** The notebook's Smart Board record (glossary, the notes of every page Smart Board wrote). */
+    fun smartBoardRecord(): app.bestnote.ai.vision.SmartBoardRecord =
+        app.bestnote.ai.vision.SmartBoardRecord.decode(saver?.extra(app.bestnote.ai.vision.SmartBoardRecord.EXTRA))
+
+    /** Saves [record] with the notebook (forgetting inserts whose pages were all deleted). */
+    fun saveSmartBoardRecord(record: app.bestnote.ai.vision.SmartBoardRecord) {
+        val live = document.pages.mapTo(HashSet()) { it.id }
+        saver?.updateExtra(app.bestnote.ai.vision.SmartBoardRecord.EXTRA, record.prune(live).encode())
+    }
+
+    /** The stored form of [stroke], when known (strokes loaded, drawn or adopted in this session). */
+    fun modelOf(stroke: Stroke): InkStroke? = models[stroke]
+
     /** Strokes made elsewhere (Smart Board) whose stored form is already known; call before adding them. */
     fun adopt(strokes: List<Pair<InkStroke, Stroke>>) {
         for ((model, stroke) in strokes) models[stroke] = model

@@ -90,8 +90,8 @@ class StoreLibraryRepository(
         val pkg = store.read(id) ?: return null
         val now = clock()
         val copy = pkg.notebook.copy(id = NotebookId(UUID.randomUUID().toString()), title = title.trim().ifEmpty { pkg.notebook.title }, createdAtMillis = now, updatedAtMillis = now)
-        val pages = pkg.pages.map { PageContent(it.page.copy(notebookId = copy.id), it.strokes.copyOf(), it.id) }
-        store.write(NotebookPackage(copy, pages, pkg.assets.mapValues { it.value.copyOf() }))
+        val pages = pkg.pages.map { PageContent(it.page.copy(notebookId = copy.id), it.strokes.copyOf(), it.id, it.elements) }
+        store.write(NotebookPackage(copy, pages, pkg.assets.mapValues { it.value.copyOf() }, pkg.recordings, pkg.extras))
         index.upsert(copy)
         return copy
     }
@@ -101,7 +101,7 @@ class StoreLibraryRepository(
         if (clean.isEmpty()) return null
         val pkg = store.read(id) ?: return null
         val renamed = pkg.notebook.copy(title = clean, updatedAtMillis = clock())
-        store.write(NotebookPackage(renamed, pkg.pages, pkg.assets))
+        store.write(NotebookPackage(renamed, pkg.pages, pkg.assets, pkg.recordings, pkg.extras))
         index.upsert(renamed)
         return renamed
     }
@@ -109,7 +109,7 @@ class StoreLibraryRepository(
     override suspend fun moveToTrash(id: NotebookId): Boolean {
         val pkg = store.read(id) ?: return false
         val marker = DELETED_AT_ASSET to clock().toString().toByteArray()
-        trashStore.write(NotebookPackage(pkg.notebook, pkg.pages, pkg.assets + marker))
+        trashStore.write(NotebookPackage(pkg.notebook, pkg.pages, pkg.assets + marker, pkg.recordings, pkg.extras))
         store.delete(id)
         index.remove(id)
         return true
@@ -117,7 +117,7 @@ class StoreLibraryRepository(
 
     override suspend fun restore(id: NotebookId): Boolean {
         val pkg = trashStore.read(id) ?: return false
-        val restored = NotebookPackage(pkg.notebook, pkg.pages, pkg.assets - DELETED_AT_ASSET)
+        val restored = NotebookPackage(pkg.notebook, pkg.pages, pkg.assets - DELETED_AT_ASSET, pkg.recordings, pkg.extras)
         store.write(restored)
         trashStore.delete(id)
         index.upsert(restored.notebook)

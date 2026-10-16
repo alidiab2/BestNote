@@ -8,6 +8,8 @@ dependencies {
     implementation(projects.ai.visionApi)
     implementation(projects.ai.visionProviders)
     implementation(projects.ai.boardScan)
+    // TPL-01: the notebook's Smart Board record (glossary, page notes for follow-up photos).
+    implementation(projects.core.storage)
     // Font output: TextElements drawn by the page renderer (preview uses the same painter).
     implementation(projects.engine.canvas)
     implementation(projects.engine.layout)

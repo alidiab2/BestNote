@@ -54,6 +54,8 @@ class AiProviders(private val http: OkHttpClient, val settings: KeystoreAiSettin
         override suspend fun beautify(selection: VisionImage, widthPt: Float, heightPt: Float, language: String?) = target().beautify(selection, widthPt, heightPt, language)
 
         override suspend fun transcribe(selection: VisionImage, language: String?) = target().transcribe(selection, language)
+
+        override suspend fun writeNotes(image: VisionImage, request: app.bestnote.ai.vision.NotesRequest) = target().writeNotes(image, request)
     }
 
     private fun createFor(kind: AiProviderKind, modelId: suspend () -> String): VisionProvider = when (kind) {

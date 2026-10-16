@@ -64,7 +64,7 @@ object AiDocumentParser {
         return Parsed(AiDocument(title = title?.trim()?.takeIf { it.isNotEmpty() }, blocks = blocks), notes)
     }
 
-    private fun parseRoot(text: String, notes: MutableList<String>): JsonElement? {
+    internal fun parseRoot(text: String, notes: MutableList<String>): JsonElement? {
         val extracted = extractJson(text)
         if (extracted != text.trim()) notes += "stripped text around the JSON"
         // "\frac" written with one backslash is valid JSON (form feed + "rac"): protect LaTeX first.
@@ -283,7 +283,7 @@ object AiDocumentParser {
         else -> null
     }
 
-    private fun diagram(o: JsonObject): AiDiagram {
+    internal fun diagram(o: JsonObject): AiDiagram {
         val shapes = (o["shapes"] as? JsonArray).orEmpty().mapNotNull { el ->
             val s = el as? JsonObject ?: return@mapNotNull null
             AiShape(

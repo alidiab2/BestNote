@@ -52,6 +52,7 @@ object ClaudeRequests {
         maxTokens: Int,
         structured: Boolean = true,
         fallbacks: Boolean = model in ClaudeConfig.FALLBACK_MODELS,
+        schema: JsonObject = AiSchema.document(AiSchema.Dialect.Closed),
     ): JsonObject = buildJsonObject {
         put("model", model)
         put("max_tokens", maxTokens)
@@ -79,7 +80,7 @@ object ClaudeRequests {
             putJsonObject("output_config") {
                 putJsonObject("format") {
                     put("type", "json_schema")
-                    put("schema", AiSchema.document(AiSchema.Dialect.Closed))
+                    put("schema", schema)
                 }
             }
         }

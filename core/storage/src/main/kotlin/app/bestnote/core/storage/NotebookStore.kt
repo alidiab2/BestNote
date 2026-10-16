@@ -48,10 +48,24 @@ class NotebookPackage(
     val assets: Map<String, ByteArray> = emptyMap(),
     /** Voice recordings (MEDIA-04); each one's audio is the asset at [AudioRecording.assetPath]. */
     val recordings: List<AudioRecording> = emptyList(),
+    /**
+     * Small notebook-level records that change over time (format 5), stored at `extras/<name>`: e.g.
+     * Smart Board's `smartboard.json` (notebook glossary + the element notes of every page it wrote).
+     * Unlike assets they are rewritten on every save. Names match [EXTRA_NAME].
+     */
+    val extras: Map<String, ByteArray> = emptyMap(),
 ) {
     init {
         require(pages.all { it.page.notebookId == notebook.id }) { "Pages must belong to ${notebook.id}" }
         require(pages.map { it.id }.toSet().size == pages.size) { "Page ids must be unique" }
+        require(extras.keys.all { EXTRA_NAME.matches(it) }) { "Invalid extra name" }
+    }
+
+    /** The same notebook with [extras] (everything else shared). */
+    fun withExtras(extras: Map<String, ByteArray>) = NotebookPackage(notebook, pages, assets, recordings, extras)
+
+    companion object {
+        val EXTRA_NAME = Regex("[a-z0-9_-]{1,40}\\.json")
     }
 }
 
@@ -70,4 +84,7 @@ interface NotebookStore {
 
     /** @return true if a notebook was removed. */
     suspend fun delete(id: NotebookId): Boolean
+
+    /** One notebook extra (e.g. Smart Board's `smartboard.json`) without loading the pages; null when absent. */
+    suspend fun readExtra(id: NotebookId, name: String): ByteArray? = read(id)?.extras?.get(name)
 }

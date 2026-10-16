@@ -161,4 +161,8 @@
     <string name="tidy_error_other">تعذّر ترتيب هذا التحديد.</string>
     <string name="convert_lang_he">עברית</string>
     <string name="convert_hebrew_needs_ai">يقرأ مزود الذكاء الخط العبري. أضف مفتاحًا في الإعدادات ← ذكاء السبورة.</string>
+    <string name="editor_smart_board_choice_title">صفحة السبورة الذكية</string>
+    <string name="editor_smart_board_choice_body">إضافة صورة جديدة للسبورة إلى هذه الصفحة (مع الدمج وحذف المكرر)، أم كتابة صفحات جديدة؟</string>
+    <string name="editor_smart_board_continue">متابعة / إضافة صورة</string>
+    <string name="editor_smart_board_new_pages">صفحات جديدة</string>
 </resources>

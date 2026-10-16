@@ -22,6 +22,8 @@ import app.bestnote.engine.layout.RuledPaper
 import app.bestnote.engine.layout.Decoration
 import app.bestnote.engine.layout.NoteRole
 import app.bestnote.engine.layout.StyleTemplate
+import app.bestnote.engine.layout.NoteTemplate
+import app.bestnote.engine.layout.TemplateChange
 import app.bestnote.engine.layout.StyleTemplates
 import app.bestnote.ai.vision.providers.WritingMode
 import app.bestnote.ai.vision.NotesLanguage
@@ -257,13 +259,14 @@ private fun CaptureStage(state: SmartBoardUiState, viewModel: SmartBoardViewMode
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(Spacing.L, Alignment.CenterVertically),
         ) {
-            Text(stringResource(R.string.smartboard_capture_title), style = MaterialTheme.typography.headlineSmall)
+            Text(stringResource(if (state.followUp) R.string.smartboard_continue_title else R.string.smartboard_capture_title), style = MaterialTheme.typography.headlineSmall)
             Text(
-                stringResource(R.string.smartboard_capture_body),
+                stringResource(if (state.followUp) R.string.smartboard_continue_body else R.string.smartboard_capture_body),
                 style = MaterialTheme.typography.bodyLarge,
                 color = BestNoteTheme.colors.muted,
                 modifier = Modifier.widthIn(max = 560.dp),
             )
+            TemplateChips(state, viewModel::setTemplate, Modifier.widthIn(max = 640.dp))
             if (state.loading > 0) {
                 CircularProgressIndicator()
                 Text(stringResource(R.string.smartboard_finding_edges), style = MaterialTheme.typography.bodyMedium, color = BestNoteTheme.colors.muted)
@@ -302,6 +305,7 @@ private fun CaptureStage(state: SmartBoardUiState, viewModel: SmartBoardViewMode
             }
         }
         PhotoStrip(state, onSelect = viewModel::select, onRemove = viewModel::removePhoto, onCamera = takePhoto, onGallery = choose)
+        TemplateChips(state, viewModel::setTemplate)
         FlowRow(
             verticalArrangement = Arrangement.Center,
             horizontalArrangement = Arrangement.spacedBy(Spacing.M),
@@ -613,10 +617,10 @@ private fun ReviewStage(review: SmartBoardStage.Review, state: SmartBoardUiState
                 review,
                 state = state,
                 afterPage = viewModel.afterPage,
-                onStyle = viewModel::setStyle,
+                onTemplate = viewModel::setTemplate,
                 onMode = viewModel::setMode,
                 onLanguage = viewModel::setLanguage,
-                onTemplate = viewModel::setTemplate,
+                onGlossary = viewModel::insertGlossary,
                 onReplay = { replay++ },
                 onRetake = viewModel::backToPhotos,
                 onInsert = { fresh -> viewModel.result(fresh)?.let(onInsert) },
@@ -644,6 +648,7 @@ private fun styleName(style: StyleTemplate) = stringResource(
         StyleTemplates.Colorful.id -> R.string.smartboard_style_colorful
         StyleTemplates.Cornell.id -> R.string.smartboard_style_cornell
         StyleTemplates.CheatSheet.id -> R.string.smartboard_style_cheatsheet
+        StyleTemplates.StudyColumns.id -> R.string.smartboard_style_study
         else -> R.string.smartboard_style_classic
     },
 )
@@ -665,53 +670,29 @@ private fun roleName(role: NoteRole) = stringResource(
 )
 
 /** A small sketch of a page in [style]: title, heading with its decoration, body lines, a boxed result, a margin note. */
+/**
+ * The note templates as compact chips, each with its colour dots; chosen BEFORE capture (and
+ * switchable on the review screen). Locked on a follow-up: the page keeps its template.
+ */
 @Composable
-private fun StyleSketch(style: StyleTemplate, modifier: Modifier = Modifier) {
-    val paper = BestNoteTheme.colors.paper
+private fun TemplateChips(state: SmartBoardUiState, onTemplate: (NoteTemplate) -> Unit, modifier: Modifier = Modifier) {
     val pen = MaterialTheme.colorScheme.onSurface
-    Canvas(modifier) {
-        drawRect(paper.page)
-        val gap = size.height / 9f
-        for (i in 1..8) drawLine(paper.ruledLine, Offset(0f, i * gap), Offset(size.width, i * gap), 1f)
-        fun c(r: NoteRole) = style.role(r).color?.let { Color(it) } ?: pen
-        fun bar(row: Int, x0: Float, x1: Float, color: Color, thick: Float, deco: Decoration) {
-            val y = row * gap - gap * 0.3f
-            if (deco == Decoration.Highlight) drawLine(Color(style.highlight), Offset(x0, y), Offset(x1, y), gap * 0.7f)
-            drawLine(color, Offset(x0, y), Offset(x1, y), thick, StrokeCap.Round)
-            if (deco == Decoration.Underline || deco == Decoration.DoubleUnderline) drawLine(color, Offset(x0, y + gap * 0.3f), Offset(x1, y + gap * 0.3f), 1.2f)
-            if (deco == Decoration.DoubleUnderline) drawLine(color, Offset(x0, y + gap * 0.45f), Offset(x1, y + gap * 0.45f), 1.2f)
-            if (deco == Decoration.Box) drawRect(color, Offset(x0 - 3f, y - gap * 0.45f), Size(x1 - x0 + 6f, gap * 0.8f), style = Stroke(1.2f))
-        }
-        val w = size.width
-        bar(1, w * 0.08f, w * 0.55f, c(NoteRole.Title), gap * 0.32f, style.role(NoteRole.Title).decoration)
-        bar(2, w * 0.08f, w * 0.4f, c(NoteRole.Heading), gap * 0.24f, style.role(NoteRole.Heading).decoration)
-        bar(3, w * 0.08f, w * 0.7f, c(NoteRole.Definition), gap * 0.14f, Decoration.None)
-        bar(4, w * 0.08f, w * 0.62f, c(NoteRole.Body), gap * 0.14f, Decoration.None)
-        bar(5, w * 0.16f, w * 0.48f, c(NoteRole.Result), gap * 0.16f, style.role(NoteRole.Result).decoration)
-        bar(5, w * 0.66f, w * 0.92f, c(NoteRole.Margin), gap * 0.12f, Decoration.None)
-        bar(6, w * 0.08f, w * 0.58f, c(NoteRole.Example), gap * 0.14f, Decoration.None)
-        bar(7, w * 0.12f, w * 0.5f, c(NoteRole.Step), gap * 0.14f, Decoration.None)
-    }
-}
-
-@Composable
-private fun StylePicker(selected: StyleTemplate, onStyle: (StyleTemplate) -> Unit) {
-    val accent = MaterialTheme.colorScheme.primary
-    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(Spacing.S)) {
-        StyleTemplates.all.forEach { style ->
-            val on = style.id == selected.id
-            Column(
-                Modifier
-                    .width(104.dp)
-                    .clip(BestNoteShapes.Control)
-                    .border(if (on) 2.dp else 1.dp, if (on) accent else MaterialTheme.colorScheme.outlineVariant, BestNoteShapes.Control)
-                    .clickable { onStyle(style) }
-                    .padding(Spacing.XS),
-                horizontalAlignment = Alignment.CenterHorizontally,
-            ) {
-                StyleSketch(style, Modifier.fillMaxWidth().height(72.dp).clip(BestNoteShapes.Control))
-                Text(styleName(style), style = MaterialTheme.typography.labelMedium, maxLines = 1, modifier = Modifier.padding(top = Spacing.XXS))
-            }
+    Row(modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(Spacing.S), verticalAlignment = Alignment.CenterVertically) {
+        Text(stringResource(R.string.smartboard_template), style = MaterialTheme.typography.labelLarge)
+        state.templates.forEach { t ->
+            FilterChip(
+                selected = t.id == state.noteTemplate.id,
+                onClick = { onTemplate(t) },
+                enabled = !state.followUp || t.id == state.noteTemplate.id,
+                label = { Text(if (t.builtIn) styleName(t.look) else t.name, maxLines = 1) },
+                leadingIcon = {
+                    Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                        listOf(NoteRole.Title, NoteRole.Definition, NoteRole.Result).forEach { r ->
+                            Box(Modifier.size(7.dp).background(t.look.role(r).color?.let { Color(it) } ?: pen, CircleShape))
+                        }
+                    }
+                },
+            )
         }
     }
 }
@@ -732,28 +713,14 @@ private fun ColorLegend(style: StyleTemplate) {
 }
 
 @Composable
-private fun templateName(t: PaperTemplate) = stringResource(
-    when (t) {
-        PaperTemplate.Ruled -> R.string.smartboard_paper_ruled
-        PaperTemplate.RuledNarrow -> R.string.smartboard_paper_narrow
-        PaperTemplate.RuledWide -> R.string.smartboard_paper_wide
-        PaperTemplate.Grid -> R.string.smartboard_paper_grid
-        PaperTemplate.Dotted -> R.string.smartboard_paper_dotted
-        PaperTemplate.Blank -> R.string.smartboard_paper_blank
-        PaperTemplate.Cornell -> R.string.smartboard_paper_cornell
-        PaperTemplate.MusicStaff -> R.string.smartboard_paper_ruled
-    },
-)
-
-@Composable
 private fun ReviewPanel(
     review: SmartBoardStage.Review,
     state: SmartBoardUiState,
     afterPage: Int,
-    onStyle: (StyleTemplate) -> Unit,
+    onTemplate: (NoteTemplate) -> Unit,
     onMode: (WritingMode) -> Unit,
     onLanguage: (NotesLanguage) -> Unit,
-    onTemplate: (PaperTemplate) -> Unit,
+    onGlossary: (Boolean) -> Unit,
     onReplay: () -> Unit,
     onRetake: () -> Unit,
     onInsert: (newNotebook: Boolean) -> Unit,
@@ -769,14 +736,22 @@ private fun ReviewPanel(
         if (review.demo) DemoChip()
         if (review.dropped > 0) Text(stringResource(R.string.smartboard_review_dropped, review.dropped), style = MaterialTheme.typography.bodySmall, color = BestNoteTheme.colors.warning)
         LanguagePicker(state.language, onLanguage)
-        Text(stringResource(R.string.smartboard_style), style = MaterialTheme.typography.labelLarge)
-        StylePicker(state.style, onStyle)
-        ColorLegend(state.style)
-        Text(stringResource(R.string.smartboard_paper), style = MaterialTheme.typography.labelLarge)
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(Spacing.S)) {
-            RuledPaper.writable.forEach { t ->
-                FilterChip(selected = t == state.template, onClick = { onTemplate(t) }, label = { Text(templateName(t)) })
+        TemplateChips(state, onTemplate)
+        state.notice?.let { change ->
+            val msg = when (change) {
+                TemplateChange.LookOnly -> R.string.smartboard_notice_look
+                TemplateChange.NeedsAi -> R.string.smartboard_notice_ai
+                TemplateChange.Same -> null
             }
+            msg?.let { Text(stringResource(it), style = MaterialTheme.typography.bodySmall, color = BestNoteTheme.colors.muted) }
+        }
+        ColorLegend(state.style)
+        if (state.glossarySize > 0 || review.notes.terms.isNotEmpty()) {
+            FilterChip(
+                selected = state.fullGlossary,
+                onClick = { onGlossary(!state.fullGlossary) },
+                label = { Text(stringResource(R.string.smartboard_insert_glossary, state.glossarySize)) },
+            )
         }
         Text(stringResource(R.string.smartboard_writing), style = MaterialTheme.typography.labelLarge)
         Row(horizontalArrangement = Arrangement.spacedBy(Spacing.S)) {
@@ -790,7 +765,11 @@ private fun ReviewPanel(
         Button(onClick = { onInsert(false) }, modifier = Modifier.fillMaxWidth()) {
             IconLabel(
                 Icons.AutoMirrored.Rounded.NoteAdd,
-                if (afterPage > 0) stringResource(R.string.smartboard_insert_after, afterPage) else stringResource(R.string.smartboard_insert),
+                when {
+                    state.followUp -> stringResource(R.string.smartboard_update_page)
+                    afterPage > 0 -> stringResource(R.string.smartboard_insert_after, afterPage)
+                    else -> stringResource(R.string.smartboard_insert)
+                },
             )
         }
         OutlinedButton(onClick = { onInsert(true) }, modifier = Modifier.fillMaxWidth()) {

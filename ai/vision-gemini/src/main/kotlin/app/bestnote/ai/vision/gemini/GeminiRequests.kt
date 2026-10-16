@@ -1,5 +1,7 @@
 package app.bestnote.ai.vision.gemini
 
+import app.bestnote.ai.vision.AiSchema
+
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.addJsonObject
 import kotlinx.serialization.json.buildJsonObject
@@ -35,6 +37,8 @@ object GeminiRequests {
         schemaField: SchemaField = SchemaField.JsonSchema,
         maxOutputTokens: Int = GeminiConfig.MAX_OUTPUT_TOKENS,
         thinking: Thinking = Thinking.None,
+        /** The response schema in a dialect: the old blocks ([AiSchema]) or a template's elements ([app.bestnote.ai.vision.NoteSchema]). */
+        schema: (AiSchema.Dialect) -> JsonObject = { AiSchema.document(it) },
     ): JsonObject = buildJsonObject {
         putJsonObject("systemInstruction") {
             putJsonArray("parts") { addJsonObject { put("text", system.trim()) } }
@@ -56,8 +60,8 @@ object GeminiRequests {
         putJsonObject("generationConfig") {
             put("responseMimeType", "application/json")
             when (schemaField) {
-                SchemaField.JsonSchema -> put("responseJsonSchema", GeminiSchema.document)
-                SchemaField.OpenApi -> put("responseSchema", GeminiSchema.openApi)
+                SchemaField.JsonSchema -> put("responseJsonSchema", schema(AiSchema.Dialect.JsonSchema))
+                SchemaField.OpenApi -> put("responseSchema", schema(AiSchema.Dialect.OpenApi))
                 SchemaField.None -> Unit
             }
             put("temperature", temperature)

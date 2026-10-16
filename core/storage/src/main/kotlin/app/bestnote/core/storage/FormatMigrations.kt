@@ -46,7 +46,10 @@ internal object FormatMigrations {
     /** v3 → v4: the manifest gains `recordings` (MEDIA-04). Absent means none, so only the version changes. */
     private val V3_TO_V4 = Step(from = 3, manifest = { it.withFormat(4) }, page = { it.withFormat(4) })
 
-    val steps: List<Step> = listOf(V1_TO_V2, V2_TO_V3, V3_TO_V4)
+    /** v4 → v5: the manifest gains `extras` (notebook-level records such as Smart Board's). Absent means none. */
+    private val V4_TO_V5 = Step(from = 4, manifest = { it.withFormat(5) }, page = { it.withFormat(5) })
+
+    val steps: List<Step> = listOf(V1_TO_V2, V2_TO_V3, V3_TO_V4, V4_TO_V5)
 
     fun formatOf(json: JsonObject): Int = json["format"]?.jsonPrimitive?.int ?: throw CorruptChunkException("Missing format")
 

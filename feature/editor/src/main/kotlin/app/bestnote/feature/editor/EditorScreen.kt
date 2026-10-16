@@ -163,16 +163,22 @@ class InkInsert(
     val freshNotebook: Boolean = false,
     /** Text boxes per page (Smart Board's handwriting-font output), parallel to [pages]. */
     val elements: List<List<PageElement>> = emptyList(),
+    /** TPL-01: the notes (compact element format) and template, recorded with the notebook. */
+    val notes: String? = null,
+    val templateId: String? = null,
+    /** A follow-up photo: these Smart Board pages are re-laid out instead of inserting new ones. */
+    val followUpPageIds: List<String> = emptyList(),
 )
 
 /**
- * @param onSmartBoard opens Smart Board for the notebook, with the page being read (its size and paper).
+ * @param onSmartBoard opens Smart Board for the notebook, with the page being read (its size and paper); on a
+ *   Smart Board page "Continue / add photo" also passes that page's storage id and the lines the user wrote on.
  * @param takeInsert hands over (once) ink to insert when the editor comes back.
  */
 fun NavGraphBuilder.editorScreen(
     onBack: () -> Unit,
     onOpenSettings: () -> Unit = {},
-    onSmartBoard: (NotebookId, Page) -> Unit = { _, _ -> },
+    onSmartBoard: (NotebookId, Page, String?, String?) -> Unit = { _, _, _, _ -> },
     takeInsert: () -> InkInsert? = { null },
 ) {
     composable<EditorRoute> { EditorScreen(onBack, onOpenSettings, onSmartBoard, takeInsert) }
@@ -326,7 +332,7 @@ private const val DeskRadius = 0.62f
 fun EditorScreen(
     onBack: () -> Unit,
     onOpenSettings: () -> Unit = {},
-    onSmartBoard: (NotebookId, Page) -> Unit = { _, _ -> },
+    onSmartBoard: (NotebookId, Page, String?, String?) -> Unit = { _, _, _, _ -> },
     takeInsert: () -> InkInsert? = { null },
     viewModel: EditorViewModel = hiltViewModel(),
 ) {
@@ -347,6 +353,8 @@ fun EditorScreen(
     var managerPage by remember { mutableStateOf<Int?>(null) }
     var selectionMenu by remember { mutableStateOf<PagedDocumentView.SelectionMenu?>(null) }
     var exporting by remember { mutableStateOf(false) }
+    // TPL-01: on a Smart Board page, Smart Board asks: continue this page (add a photo) or new pages.
+    var smartBoardChoice by remember { mutableStateOf<Int?>(null) }
     val snackbar = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     val messages = mapOf(R.string.image_failed to stringResource(R.string.image_failed), R.string.image_nothing_to_paste to stringResource(R.string.image_nothing_to_paste))
@@ -498,7 +506,12 @@ fun EditorScreen(
         onClearPage = ::clearPage,
         onSmartBoard = {
             val index = canvas?.currentPage?.takeIf { it >= 0 } ?: 0
-            document.pages.getOrNull(index)?.page?.let { onSmartBoard(viewModel.notebookId, it) }
+            val page = document.pages.getOrNull(index)
+            if (page != null && SmartBoardPages.groupOf(viewModel.session, page.id) != null) {
+                smartBoardChoice = index
+            } else {
+                page?.page?.let { onSmartBoard(viewModel.notebookId, it, null, null) }
+            }
         },
         pagesMenu = { PaperMenuButton(canvas, onManage = { picker = null; managerPage = canvas?.currentPage?.coerceAtLeast(0) ?: 0 }) },
         onOpenSettings = onOpenSettings,
@@ -536,12 +549,22 @@ fun EditorScreen(
             document.editContent(0, addedStrokes = pages[0].map { it.second }, elements = document.pages[0].elements + insert.elements.getOrNull(0).orEmpty())
             byPage[0] = pages[0].map { it.second }
         }
+        if (insert.followUpPageIds.isNotEmpty()) {
+            val written = SmartBoardPages.applyFollowUp(document, viewModel.session, insert, pages)
+            if (written != null) {
+                written.firstOrNull()?.let { first -> canvas?.scrollToPage(first) }
+                snackbar.currentSnackbarData?.dismiss()
+                if (snackbar.showSnackbar(insertedFormat.format(written.size), actionLabel = undoText) == SnackbarResult.ActionPerformed) document.undo()
+                return@LaunchedEffect
+            }
+        }
         val rest = if (emptyFirst) pages.drop(1) else pages
         val restElements = if (emptyFirst) insert.elements.drop(1) else insert.elements
         // After the page being read, not at the end; pages, ink and text are one undo step.
         val at = if (emptyFirst) 1 else current + 1
         document.insertPages(at, rest.map { page -> base.copy(template = insert.template) to page.map { it.second } }, restElements)
             .forEachIndexed { i, index -> byPage[index] = rest[i].map { it.second } }
+        SmartBoardPages.recordInsert(viewModel.session, byPage.keys.sorted().map { document.pages[it].id }, insert)
         byPage.keys.firstOrNull()?.let { first -> canvas?.scrollToPage(first) }
         snackbar.currentSnackbarData?.dismiss()
         if (snackbar.showSnackbar(insertedFormat.format(byPage.size), actionLabel = undoText) == SnackbarResult.ActionPerformed) document.undo()
@@ -833,6 +856,32 @@ fun EditorScreen(
                 onClose = { page ->
                     managerPage = null
                     if (page != null) canvas?.scrollToPage(page)
+                },
+            )
+        }
+
+        // ---- TPL-01: on a Smart Board page, continue it (add a photo) or start new pages ----
+        smartBoardChoice?.let { index ->
+            val page = document.pages.getOrNull(index)
+            androidx.compose.material3.AlertDialog(
+                onDismissRequest = { smartBoardChoice = null },
+                title = { androidx.compose.material3.Text(stringResource(R.string.editor_smart_board_choice_title)) },
+                text = { androidx.compose.material3.Text(stringResource(R.string.editor_smart_board_choice_body)) },
+                confirmButton = {
+                    androidx.compose.material3.TextButton(onClick = {
+                        smartBoardChoice = null
+                        val group = page?.let { SmartBoardPages.groupOf(viewModel.session, it.id) }
+                        if (page != null && group != null) {
+                            val reserved = SmartBoardPages.reserved(document, viewModel.session, group).encode()
+                            onSmartBoard(viewModel.notebookId, page.page, page.id, reserved)
+                        }
+                    }) { androidx.compose.material3.Text(stringResource(R.string.editor_smart_board_continue)) }
+                },
+                dismissButton = {
+                    androidx.compose.material3.TextButton(onClick = {
+                        smartBoardChoice = null
+                        page?.page?.let { onSmartBoard(viewModel.notebookId, it, null, null) }
+                    }) { androidx.compose.material3.Text(stringResource(R.string.editor_smart_board_new_pages)) }
                 },
             )
         }

@@ -13,8 +13,19 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.navigation.toRoute
 import app.bestnote.ai.scan.Quad
-import app.bestnote.ai.vision.AiDocument
-import app.bestnote.ai.vision.BoardRequest
+import app.bestnote.ai.vision.LegacyNotes
+import app.bestnote.ai.vision.NoteWire
+import app.bestnote.ai.vision.SmartBoardGroup
+import app.bestnote.ai.vision.SmartBoardRecord
+import app.bestnote.core.model.NotebookId
+import app.bestnote.core.storage.NotebookStore
+import app.bestnote.engine.handwriting.NotePages
+import app.bestnote.engine.layout.NoteDocument
+import app.bestnote.engine.layout.NoteElement
+import app.bestnote.engine.layout.NoteTemplate
+import app.bestnote.engine.layout.NoteTemplates
+import app.bestnote.engine.layout.ReservedLines
+import app.bestnote.engine.layout.TemplateChange
 import app.bestnote.ai.vision.NotesLanguage
 import app.bestnote.ai.vision.DemoVisionProvider
 import app.bestnote.ai.vision.VisionError
@@ -30,9 +41,7 @@ import app.bestnote.ai.vision.providers.WritingMode
 import app.bestnote.core.designsystem.font.HandwritingTypefaces
 import app.bestnote.core.model.PageElement
 import app.bestnote.engine.layout.StyleTemplate
-import app.bestnote.engine.layout.StyleTemplates
 import app.bestnote.core.model.InkStroke
-import app.bestnote.core.model.LayoutTemplate
 import app.bestnote.core.model.PageSize
 import app.bestnote.core.model.PaperTemplate
 import app.bestnote.engine.layout.RuledPaper
@@ -62,14 +71,15 @@ sealed interface SmartBoardStage {
     data class Reading(val step: Int, val photo: Int = 1, val photos: Int = 1) : SmartBoardStage
 
     /**
-     * The written page: [text] (handwriting fonts, the default) or [ink] (synthetic strokes). [doc] is
-     * kept so another paper, style or writing mode re-lays the same notes without a new AI call.
+     * The written page: [text] (handwriting fonts, the default) or [ink] (synthetic strokes). The AI's
+     * notes stay cached (in [TemplateNotes]) so another look or writing mode re-draws them without a
+     * new AI call; [notes] is what the page shows (normalised: maths out of RTL, numbers, glossary).
      */
-    data class Review(val ink: BoardInk?, val text: BoardText?, val demo: Boolean, val tookMs: Long, val doc: AiDocument) : SmartBoardStage {
+    data class Review(val ink: BoardInk?, val text: NotePages?, val demo: Boolean, val tookMs: Long, val notes: NoteDocument) : SmartBoardStage {
         val paper: RuledPaper get() = text?.paper ?: ink!!.paper
         val pageCount: Int get() = text?.pages?.pages?.size ?: ink!!.pages.pages.size
-        val dropped: Int get() = text?.dropped ?: ink!!.dropped
-        val dropReasons: List<String> get() = text?.dropReasons ?: ink!!.dropReasons
+        val dropped: Int get() = ink?.dropped ?: 0
+        val dropReasons: List<String> get() = ink?.dropReasons.orEmpty()
     }
 
     /** [diagnostics]: provider, error, drop reasons and raw answer, for "Copy raw AI response" (debug / verbose only). */
@@ -93,10 +103,19 @@ data class SmartBoardUiState(
     val enhance: Boolean = true,
     /** Photos still being decoded and searched for the board's edges. */
     val loading: Int = 0,
-    /** Paper the notes are written on (the review screen's template picker). */
+    /** Paper the notes are written on: the template's own, else the notebook page's (never asked). */
     val template: PaperTemplate = PaperTemplate.Ruled,
-    /** Design template: one colour, size and decoration per role (saved per notebook). */
-    val style: StyleTemplate = StyleTemplates.Classic,
+    /** The note template, chosen BEFORE capture (saved per notebook): its look, AI instructions and elements. */
+    val noteTemplate: NoteTemplate = NoteTemplates.byId(null),
+    val templates: List<NoteTemplate> = NoteTemplates.builtIns(),
+    /** What the last template switch on the review screen did (re-drawn, or read again). */
+    val notice: TemplateChange? = null,
+    /** Continue / add photo on an existing Smart Board page: the notes are merged into that page. */
+    val followUp: Boolean = false,
+    /** Terms in the notebook glossary (the "Insert glossary" action shows when there are any). */
+    val glossarySize: Int = 0,
+    /** The page's Glossary element lists the whole notebook glossary (inserted on demand). */
+    val fullGlossary: Boolean = false,
     val mode: WritingMode = WritingMode.Font,
     val hasKey: Boolean = false,
     val keyHint: String? = null,
@@ -108,7 +127,10 @@ data class SmartBoardUiState(
     val switcher: ModelSwitcher = ModelSwitcher(),
     /** The language the notes are written in ([NotesLanguage.Board] = the board's own), saved per notebook. */
     val language: NotesLanguage = NotesLanguage.Board,
-)
+) {
+    /** The look of [noteTemplate]. */
+    val style: StyleTemplate get() = noteTemplate.look
+}
 
 /** One choice in the header's quick switcher. [model] is an id, "" (automatic best) or [ModelCatalog.AUTO_FAST]. */
 data class ModelOption(val model: String, val label: String, val selected: Boolean, val favorite: Boolean = false)
@@ -135,6 +157,11 @@ class SmartBoardResult(
     /** Page size the ink was laid out for (points). */
     val widthPt: Float = 0f,
     val heightPt: Float = 0f,
+    /** The notes in the compact element format, stored with the pages (follow-up photos, glossary). */
+    val notes: String? = null,
+    val templateId: String? = null,
+    /** A follow-up: these Smart Board pages are re-laid out (their user ink kept); extra pages go after the last. */
+    val followUpPageIds: List<String> = emptyList(),
 )
 
 @HiltViewModel
@@ -143,6 +170,7 @@ class SmartBoardViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
     private val providers: AiProviders,
     private val styles: SmartBoardStyles,
+    private val store: NotebookStore,
 ) : ViewModel() {
     private val route = savedStateHandle.toRoute<SmartBoardRoute>()
 
@@ -157,32 +185,53 @@ class SmartBoardViewModel @Inject constructor(
     fun paperFor(template: PaperTemplate): RuledPaper = RuledPaper.of(template, pageSize)
 
     private val settings = providers.settings
-    private val startStyle = styles.styleFor(route.notebookId)
+    private val startNoteTemplate = NoteTemplates.byId(styles.styleFor(route.notebookId).id)
     private val state = MutableStateFlow(
         SmartBoardUiState(
-            template = startStyle.paper ?: startTemplate,
-            style = startStyle,
+            template = startNoteTemplate.look.paper ?: startTemplate,
+            noteTemplate = startNoteTemplate,
             mode = styles.writingMode,
             language = styles.languageFor(route.notebookId),
+            followUp = route.continuePageId != null,
         ),
     )
+
+    /** The notebook's Smart Board record (glossary, earlier pages), loaded once. */
+    private var record = SmartBoardRecord()
+
+    /** On a follow-up: the insert being continued. */
+    private var group: SmartBoardGroup? = null
+    private val reserved = ReservedLines.decode(route.reserved)
+    private val notes by lazy { TemplateNotes(measure) }
+
+    /** The template with the notebook's notes language applied (the language picker overrides the template's). */
+    private fun effective(s: SmartBoardUiState = state.value): NoteTemplate {
+        val t = s.noteTemplate
+        return if (s.language == NotesLanguage.Board) t else t.copy(ai = t.ai.copy(notesLanguage = s.language.code))
+    }
     private val measure by lazy {
         HandwritingTypefaces.init(context)
         PaintMeasure()
     }
 
-    /** Writes [doc] in the current mode, style and paper (off the main thread). */
-    private suspend fun render(doc: AiDocument, rtl: Boolean): Pair<BoardInk?, BoardText?> = withContext(Dispatchers.Default) {
+    /** Writes the cached notes in the current template, mode and paper (off the main thread). */
+    private suspend fun render(): Triple<BoardInk?, NotePages?, NoteDocument> = withContext(Dispatchers.Default) {
         val s = state.value
         val paper = paperFor(s.template)
-        if (s.mode == WritingMode.Strokes && BoardToInk.strokesCanWrite(doc)) pipeline.write(doc, rtl, paper) to null else null to pipeline.typeset(doc, rtl, paper, s.style, measure)
+        val pages = notes.render(effective(s), paper, record.glossary, s.fullGlossary, reserved, rtlHint = s.language.rtl)
+        val legacy = LegacyNotes.toAiDocument(pages.doc)
+        if (s.mode == WritingMode.Strokes && BoardToInk.strokesCanWrite(legacy)) {
+            Triple(pipeline.write(legacy, pages.rtl, paper), null, pages.doc)
+        } else {
+            Triple(null, pages, pages.doc)
+        }
     }
 
     private fun rerender() {
         val review = state.value.stage as? SmartBoardStage.Review ?: return
         viewModelScope.launch {
-            val (ink, text) = runCatching { render(review.doc, state.value.language.rtl) }.getOrNull() ?: return@launch
-            state.update { s -> if (s.stage === review) s.copy(stage = review.copy(ink = ink, text = text)) else s }
+            val (ink, text, shown) = runCatching { render() }.getOrNull() ?: return@launch
+            state.update { s -> if (s.stage === review) s.copy(stage = review.copy(ink = ink, text = text, notes = shown)) else s }
         }
     }
 
@@ -191,10 +240,25 @@ class SmartBoardViewModel @Inject constructor(
     /** The text boxes of a typed page, for the review preview (same elements that get inserted). */
     fun previewElements(page: app.bestnote.engine.handwriting.TypesetPage): List<PageElement> = TypesetElements.elements(page, measure, newId)
 
-    /** Picks a design template; it is remembered for this notebook so its pages stay consistent. */
-    fun setStyle(style: StyleTemplate) {
-        styles.setStyleFor(route.notebookId, style)
-        state.update { it.copy(style = style, template = style.paper ?: it.template) }
+    /**
+     * Picks the note template (remembered for this notebook so its pages match). Before capture it
+     * only preselects; on the review screen the cached notes are re-drawn without an AI call when only
+     * the look changed, and the board is read again when the AI instructions or elements changed.
+     */
+    fun setTemplate(template: NoteTemplate) {
+        val before = state.value
+        if (template.id == before.noteTemplate.id) return
+        styles.setStyleFor(route.notebookId, template.look)
+        state.update { it.copy(noteTemplate = template, template = template.look.paper ?: startTemplate) }
+        if (before.stage !is SmartBoardStage.Review) return
+        val change = TemplateChange.between(effective(before), effective())
+        state.update { it.copy(notice = change) }
+        if (change == TemplateChange.NeedsAi) read() else rerender()
+    }
+
+    /** Adds the notebook glossary (all its terms) at the end of the page; no AI call. */
+    fun insertGlossary(on: Boolean = true) {
+        state.update { it.copy(fullGlossary = on) }
         rerender()
     }
 
@@ -210,6 +274,12 @@ class SmartBoardViewModel @Inject constructor(
         get() = (context.applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0 || settings.verboseLogging
 
     init {
+        viewModelScope.launch {
+            record = runCatching { SmartBoardRecord.decode(store.readExtra(NotebookId(route.notebookId), SmartBoardRecord.EXTRA)) }.getOrDefault(SmartBoardRecord())
+            group = route.continuePageId?.let(record::groupFor)
+            group?.let { g -> state.update { it.copy(noteTemplate = NoteTemplates.byId(g.templateId), template = NoteTemplates.byId(g.templateId).look.paper ?: startTemplate) } }
+            state.update { it.copy(glossarySize = record.glossary.terms.size) }
+        }
         viewModelScope.launch {
             refreshKey()
             // Keep the live model list fresh (at most daily) so "automatic" means the newest model.
@@ -352,7 +422,10 @@ class SmartBoardViewModel @Inject constructor(
         if (language == state.value.language) return
         styles.setLanguageFor(route.notebookId, language)
         state.update { it.copy(language = language) }
-        if (state.value.stage is SmartBoardStage.Review) read()
+        if (state.value.stage is SmartBoardStage.Review) {
+            state.update { it.copy(notice = TemplateChange.NeedsAi) }
+            read()
+        }
     }
 
     /** Back to the photos (they are kept, so the corners can be fixed and read again). */
@@ -370,12 +443,6 @@ class SmartBoardViewModel @Inject constructor(
         state.update { it.copy(stage = SmartBoardStage.Capture, photos = emptyList(), current = 0, flatPreview = null) }
     }
 
-    /** Re-writes the same notes on another paper (no new AI call). */
-    fun setTemplate(template: PaperTemplate) {
-        state.update { it.copy(template = template) }
-        rerender()
-    }
-
     fun saveKey(key: String?) {
         viewModelScope.launch {
             settings.setApiKey(providers.selected, key)
@@ -383,7 +450,11 @@ class SmartBoardViewModel @Inject constructor(
         }
     }
 
-    /** Reads every photo (flattened, enhanced), or the built-in sample board when there is no photo or key. */
+    /**
+     * Reads every photo (flattened, enhanced) into the template's elements, or the built-in sample board
+     * when there is no photo or key. Each further photo is merged into the notes so far (a follow-up
+     * merges into the page's own notes), duplicates removed.
+     */
     fun read() {
         val s = state.value
         val photos = s.photos
@@ -394,32 +465,27 @@ class SmartBoardViewModel @Inject constructor(
             val startedAt = System.currentTimeMillis()
             val count = if (demo) 1 else photos.size
             try {
-                val docs = ArrayList<AiDocument>(count)
-                for (i in 0 until count) {
-                    val ticker = launch {
-                        for (step in 0 until STEPS - 1) {
-                            state.update { it.copy(stage = SmartBoardStage.Reading(step, i + 1, count)) }
-                            delay(STEP_MS)
-                        }
-                    }
-                    val image = if (demo) {
-                        VisionImage(ByteArray(0), "image/jpeg")
-                    } else {
-                        withContext(Dispatchers.Default) { VisionImage(BoardScan.jpeg(BoardScan.flatten(photos[i].bitmap, photos[i].quad, s.enhance)), "image/jpeg") }
-                    }
-                    val provider: VisionProvider = if (demo) DemoVisionProvider() else providers.create(s.provider)
-                    val request = BoardRequest(LayoutTemplate.LectureSummary, rtl = s.language.rtl, language = s.language.promptName)
-                    try {
-                        docs += provider.reconstructBoard(image, request)
-                    } finally {
-                        ticker.cancel()
+                val ticker = launch {
+                    for (i in 0 until count) for (step in 0 until STEPS - 1) {
+                        state.update { it.copy(stage = SmartBoardStage.Reading(step, i + 1, count)) }
+                        delay(STEP_MS)
                     }
                 }
+                val images = if (demo) {
+                    listOf(VisionImage(ByteArray(0), "image/jpeg"))
+                } else {
+                    withContext(Dispatchers.Default) { photos.map { VisionImage(BoardScan.jpeg(BoardScan.flatten(it.bitmap, it.quad, s.enhance)), "image/jpeg") } }
+                }
+                val provider: VisionProvider = if (demo) DemoVisionProvider() else providers.create(s.provider)
+                try {
+                    notes.read(provider, images, effective(), s.language.rtl, group?.notes)
+                } finally {
+                    ticker.cancel()
+                }
                 state.update { it.copy(stage = SmartBoardStage.Reading(STEPS - 1, count, count)) }
-                val doc = BoardMerge.merge(docs)
-                val (ink, text) = render(doc, s.language.rtl)
-                (text?.dropReasons ?: ink?.dropReasons).orEmpty().forEach { Log.i(TAG, "dropped $it") }
-                state.update { it.copy(stage = SmartBoardStage.Review(ink, text, demo, SystemClock.elapsedRealtime() - started, doc)) }
+                val (ink, text, shown) = render()
+                ink?.dropReasons.orEmpty().forEach { Log.i(TAG, "dropped $it") }
+                state.update { it.copy(stage = SmartBoardStage.Review(ink, text, demo, SystemClock.elapsedRealtime() - started, shown)) }
             } catch (e: CancellationException) {
                 throw e
             } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
@@ -454,20 +520,24 @@ class SmartBoardViewModel @Inject constructor(
         else -> SmartBoardStage.Reason.Other
     }
 
-    /** The reviewed pages as stored ink. */
+    /** The reviewed pages as stored ink, with their notes for the notebook's Smart Board record. */
     fun result(newNotebook: Boolean = false): SmartBoardResult? {
         val review = state.value.stage as? SmartBoardStage.Review ?: return null
         val text = review.text
         val newId = { UUID.randomUUID().toString() }
+        val title = review.notes.elements.firstOrNull { it.element == NoteElement.Title }?.let { it.text ?: it.head }
         return SmartBoardResult(
             template = review.paper.template,
             pages = text?.pages?.pages?.map { it.ink } ?: review.ink!!.pages.pages.map { page -> page.map { it.stroke } },
             elements = text?.pages?.pages?.map { TypesetElements.elements(it, measure, newId) }.orEmpty(),
             afterIndex = route.pageIndex,
             newNotebook = newNotebook,
-            title = review.doc.title?.takeIf { it.isNotBlank() },
+            title = title?.takeIf { it.isNotBlank() },
             widthPt = review.paper.width,
             heightPt = review.paper.height,
+            notes = NoteWire.encode(review.notes),
+            templateId = state.value.noteTemplate.id,
+            followUpPageIds = if (newNotebook) emptyList() else group?.pageIds.orEmpty(),
         )
     }
 

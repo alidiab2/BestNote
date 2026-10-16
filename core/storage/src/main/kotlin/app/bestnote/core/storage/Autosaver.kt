@@ -95,6 +95,9 @@ class Autosaver(
 
     /** New recording list and audio bytes not yet committed, or null (MEDIA-04). Guarded by [lock]. */
     private var pendingAudio: PendingAudio? = null
+
+    /** Extra name -> newest bytes not yet committed (format 5). Guarded by [lock]. */
+    private val pendingExtras = LinkedHashMap<String, ByteArray>()
     private var closed = false
 
     private val signal = Channel<Unit>(Channel.CONFLATED)
@@ -112,7 +115,24 @@ class Autosaver(
     /** Page ids in order, as last committed. */
     val pageIds: List<String> get() = synchronized(lock) { saved.pages.map { it.id } }
 
-    val hasUnsavedChanges: Boolean get() = synchronized(lock) { pending.isNotEmpty() || pendingElements.isNotEmpty() || pendingAssets.isNotEmpty() || pendingLayout != null || pendingAudio != null }
+    val hasUnsavedChanges: Boolean get() = synchronized(lock) { pending.isNotEmpty() || pendingElements.isNotEmpty() || pendingAssets.isNotEmpty() || pendingLayout != null || pendingAudio != null || pendingExtras.isNotEmpty() }
+
+    /** The newest bytes of the notebook extra [name] (pending or committed), or null. */
+    fun extra(name: String): ByteArray? = synchronized(lock) { pendingExtras[name] ?: saved.extras[name] }
+
+    /**
+     * Records [bytes] as the new content of the notebook extra [name] (e.g. `smartboard.json`) and
+     * schedules a save. Unlike [addAsset], an existing extra is replaced.
+     */
+    fun updateExtra(name: String, bytes: ByteArray) {
+        require(NotebookPackage.EXTRA_NAME.matches(name)) { "Invalid extra name '$name'" }
+        synchronized(lock) {
+            check(!closed) { "Autosaver is closed" }
+            pendingExtras[name] = bytes
+        }
+        _state.value = SaveState.Dirty
+        signal.trySend(Unit)
+    }
 
     /** The recordings as last committed. */
     val recordings: List<AudioRecording> get() = synchronized(lock) { saved.recordings }
@@ -249,8 +269,9 @@ class Autosaver(
         val layout: List<Pair<String, Page>>?
         val base: NotebookPackage
         val audio: PendingAudio?
+        val extras: Map<String, ByteArray>
         synchronized(lock) {
-            if (pending.isEmpty() && pendingElements.isEmpty() && pendingAssets.isEmpty() && pendingLayout == null && pendingAudio == null) {
+            if (pending.isEmpty() && pendingElements.isEmpty() && pendingAssets.isEmpty() && pendingLayout == null && pendingAudio == null && pendingExtras.isEmpty()) {
                 lastEncodedBytes = 0
                 return
             }
@@ -264,6 +285,8 @@ class Autosaver(
             pendingLayout = null
             audio = pendingAudio
             pendingAudio = null
+            extras = LinkedHashMap(pendingExtras)
+            pendingExtras.clear()
             base = saved
         }
         val pkg = try {
@@ -288,7 +311,7 @@ class Autosaver(
                 val keep = audio.recordings.mapTo(HashSet()) { it.assetPath }
                 (base.assets.filterKeys { !it.startsWith(AudioRecording.ASSET_DIR) || it in keep } + newAssets + audio.added) to audio.recordings
             }
-            NotebookPackage(notebook, pages, assets, recordings).also { store.writePages(it, changed) }
+            NotebookPackage(notebook, pages, assets, recordings, base.extras + extras).also { store.writePages(it, changed) }
         } catch (e: Throwable) {
             // Put the batch back unless the page was edited again meanwhile (newer content wins).
             synchronized(lock) {
@@ -297,13 +320,14 @@ class Autosaver(
                 newAssets.forEach { (path, bytes) -> pendingAssets.putIfAbsent(path, bytes) }
                 if (pendingLayout == null) pendingLayout = layout
                 if (audio != null && pendingAudio == null) pendingAudio = audio
+                extras.forEach { (name, bytes) -> pendingExtras.putIfAbsent(name, bytes) }
             }
             if (e !is CancellationException) _state.value = SaveState.Failed(e)
             throw e
         }
         val dirty = synchronized(lock) {
             saved = pkg
-            pending.isNotEmpty() || pendingElements.isNotEmpty() || pendingAssets.isNotEmpty()
+            pending.isNotEmpty() || pendingElements.isNotEmpty() || pendingAssets.isNotEmpty() || pendingExtras.isNotEmpty()
         }
         _state.value = if (dirty) SaveState.Dirty else SaveState.Saved
         try {

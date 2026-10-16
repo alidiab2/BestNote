@@ -26,6 +26,8 @@ internal data class ManifestJson(
     val assets: List<String> = emptyList(),
     /** Voice recordings (MEDIA-04, format 3); each one's audio is the asset `assets/audio/<id>.m4a`. */
     val recordings: List<RecordingJson> = emptyList(),
+    /** Names of the notebook's extras (format 5), each stored at `extras/<name>`. */
+    val extras: List<String> = emptyList(),
 )
 
 @Serializable
@@ -95,11 +97,12 @@ internal data class ElementJson(
  * Shared by the unpacked directory store and the zip archive so both stay byte-identical.
  */
 object BnoteFormat {
-    /** Current layout. History: 1 = DOC-01 draft, 2 = page metadata always carries `paper`, 3 = pages carry `elements`, 4 = manifest lists audio `recordings` (see [FormatMigrations]). */
-    const val VERSION = 4
+    /** Current layout. History: 1 = DOC-01 draft, 2 = page metadata always carries `paper`, 3 = pages carry `elements`, 4 = manifest lists audio `recordings`, 5 = manifest lists `extras` (see [FormatMigrations]). */
+    const val VERSION = 5
     const val MANIFEST = "manifest.json"
     const val PAGES_DIR = "pages/"
     const val ASSETS_DIR = "assets/"
+    const val EXTRAS_DIR = "extras/"
 
     private val INK_NAME = Regex("[A-Za-z0-9_-]{1,64}\\.ink")
 
@@ -127,6 +130,7 @@ object BnoteFormat {
             out[pageInkPath(p.id)] = p.strokes
         }
         pkg.assets.forEach { (k, v) -> out[k] = v }
+        pkg.extras.forEach { (k, v) -> out[EXTRAS_DIR + k] = v }
         out[MANIFEST] = encodeManifest(pkg).encodeToByteArray()
         return out
     }
@@ -152,7 +156,9 @@ object BnoteFormat {
         val recordings = manifest.recordings.mapNotNull { r ->
             construct("recording") { AudioRecording(r.id, r.title, r.startedAtMillis, r.durationMillis) }.takeIf { it.assetPath in assets }
         }
-        return construct("notebook") { NotebookPackage(manifest.notebook.toModel(), pages, assets, recordings) }
+        // An extra that is missing or badly named is skipped: extras are never worth failing the notebook for.
+        val extras = manifest.extras.filter { NotebookPackage.EXTRA_NAME.matches(it) }.mapNotNull { name -> entry(EXTRAS_DIR + name)?.let { name to it } }.toMap()
+        return construct("notebook") { NotebookPackage(manifest.notebook.toModel(), pages, assets, recordings, extras) }
     }
 
     /** Notebook metadata from a manifest, for listing without reading pages. */
@@ -184,6 +190,7 @@ object BnoteFormat {
             pages = pkg.pages.map { it.id },
             assets = pkg.assets.keys.toList(),
             recordings = pkg.recordings.map { RecordingJson(it.id, it.title, it.startedAtMillis, it.durationMillis) },
+            extras = pkg.extras.keys.sorted(),
         )
         return json.encodeToString(ManifestJson.serializer(), m)
     }

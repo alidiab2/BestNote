@@ -371,6 +371,7 @@ private fun styleLabel(id: String) = stringResource(
         "colorful" -> R.string.settings_ai_style_colorful
         "cornell" -> R.string.settings_ai_style_cornell
         "cheatsheet" -> R.string.settings_ai_style_cheatsheet
+        "study-columns" -> R.string.settings_ai_style_study
         else -> R.string.settings_ai_style_classic
     },
 )

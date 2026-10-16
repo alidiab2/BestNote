@@ -3,7 +3,15 @@ package app.bestnote.ai.vision.claude
 import app.bestnote.ai.vision.AiDocument
 import app.bestnote.ai.vision.AiDocumentParser
 import app.bestnote.ai.vision.AiModel
+import app.bestnote.ai.vision.AiSchema
 import app.bestnote.ai.vision.BoardRequest
+import app.bestnote.ai.vision.NoteMerge
+import app.bestnote.ai.vision.NotePrompts
+import app.bestnote.ai.vision.NoteSchema
+import app.bestnote.ai.vision.NoteWire
+import app.bestnote.ai.vision.NotesRequest
+import app.bestnote.engine.layout.NoteDocument
+import kotlinx.serialization.json.JsonObject
 import app.bestnote.ai.vision.Prompts
 import app.bestnote.ai.vision.ProviderCredentials
 import app.bestnote.ai.vision.VisionDiagnostics
@@ -32,13 +40,21 @@ class ClaudeVisionProvider(
     override suspend fun reconstructBoard(image: VisionImage, request: BoardRequest): AiDocument =
         generate(Prompts.board(request), Prompts.BOARD_USER, image)
 
+    override suspend fun writeNotes(image: VisionImage, request: NotesRequest): NoteDocument =
+        generate(NotePrompts.system(request), NotePrompts.user(request), image, NoteSchema.document(request.template, AiSchema.Dialect.Closed)) { text, truncated ->
+            NoteWire.answer(text, truncated).let { d -> if (request.current != null) NoteMerge.dedupe(d) else d }
+        }
+
     override suspend fun beautify(selection: VisionImage, widthPt: Float, heightPt: Float, language: String?): AiDocument =
         generate(Prompts.beautify(language), Prompts.beautifyUser(widthPt, heightPt), selection)
 
     override suspend fun transcribe(selection: VisionImage, language: String?): AiDocument =
         generate(Prompts.transcribe(language), Prompts.TRANSCRIBE_USER, selection)
 
-    private suspend fun generate(system: String, user: String, image: VisionImage): AiDocument {
+    private suspend fun generate(system: String, user: String, image: VisionImage): AiDocument =
+        generate(system, user, image, AiSchema.document(AiSchema.Dialect.Closed)) { text, truncated -> AiDocumentParser.answer(text, truncated) }
+
+    private suspend fun <T> generate(system: String, user: String, image: VisionImage, schema: JsonObject, parse: (String, Boolean) -> T): T {
         val key = credentials.apiKey()?.trim()?.takeIf { it.isNotEmpty() } ?: throw VisionError.MissingKey()
         val model = credentials.model().trim().ifEmpty { ClaudeConfig.DEFAULT_MODEL }
         val base = credentials.baseUrl()?.takeIf { it.isNotBlank() } ?: config.baseUrl
@@ -47,7 +63,7 @@ class ClaudeVisionProvider(
         var fallbacks = model in ClaudeConfig.FALLBACK_MODELS
         var retriedServer = false
         while (true) {
-            val body = ClaudeRequests.messages(model, system, user, image.bytes, mime, config.maxTokens, structured, fallbacks).toString()
+            val body = ClaudeRequests.messages(model, system, user, image.bytes, mime, config.maxTokens, structured, fallbacks, schema).toString()
             val response = try {
                 transport.post(ClaudeHttp.url(base, "v1/messages"), ClaudeRequests.headers(key, fallbacks), body)
             } catch (e: IOException) {
@@ -57,7 +73,7 @@ class ClaudeVisionProvider(
             when {
                 response.code == 200 -> {
                     val answer = ClaudeResponses.answer(response.body)
-                    return AiDocumentParser.answer(answer.text, answer.truncated)
+                    return parse(answer.text, answer.truncated)
                 }
                 fallbacks && ClaudeResponses.rejectsFallbacks(response.code, response.body) -> fallbacks = false
                 structured && ClaudeResponses.rejectsStructuredOutput(response.code, response.body) -> structured = false

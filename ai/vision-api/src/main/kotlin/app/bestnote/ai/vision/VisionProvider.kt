@@ -77,4 +77,15 @@ interface VisionProvider {
      */
     suspend fun transcribe(selection: VisionImage, language: String?): AiDocument =
         throw VisionError.BadResponse("this provider cannot transcribe handwriting")
+
+    /**
+     * Template first (TPL-01): board photo → the template's built-in elements in the compact format
+     * ([NoteWire], [NoteSchema], [NotePrompts]). With [NotesRequest.current] (a follow-up photo) the answer
+     * is ONE merged list of the page's notes and the new board. Providers without the element format
+     * fall back to [reconstructBoard] and convert the blocks.
+     */
+    suspend fun writeNotes(image: VisionImage, request: NotesRequest): app.bestnote.engine.layout.NoteDocument {
+        val fresh = LegacyNotes.fromAiDocument(reconstructBoard(image, request.legacy()))
+        return request.current?.let { NoteMerge.merge(it, fresh) } ?: fresh
+    }
 }

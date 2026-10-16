@@ -111,4 +111,12 @@
     <string name="smartboard_review_stats_pages">%1$d page(s) · editable text and ink · %2$.1f s</string>
     <string name="smartboard_notes_in">Notes in: %1$s</string>
     <string name="smartboard_language_board">Same as the board</string>
+<string name="smartboard_template">Template</string>
+    <string name="smartboard_style_study">Study notes (columns)</string>
+    <string name="smartboard_notice_look">Only the look changed: re-drawn from the same notes, no new AI call.</string>
+    <string name="smartboard_notice_ai">This template asks the AI differently: reading the board again.</string>
+    <string name="smartboard_insert_glossary">Notebook glossary (%1$d terms)</string>
+    <string name="smartboard_update_page">Update the page</string>
+    <string name="smartboard_continue_title">Add to this page</string>
+    <string name="smartboard_continue_body">Photograph the board again (or the next part). The notes are merged into the page: new content added, repeats removed, everything in teaching order. Your own writing stays where it is.</string>
 </resources>

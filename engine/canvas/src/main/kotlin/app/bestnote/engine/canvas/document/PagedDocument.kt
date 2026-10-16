@@ -234,7 +234,7 @@ class PagedDocument {
         _pages.forEachIndexed { i, p -> if (p.page.index != i) p.page = p.page.copy(index = i) }
         isLoaded = true
         val after = snapshot()
-        history.record(Restructure(before, after))
+        record(Restructure(before, after))
         listeners.forEach { it.onPagesChanged() }
         notifyHistory()
     }
@@ -257,7 +257,7 @@ class PagedDocument {
     fun addStrokes(index: Int, strokes: Collection<Stroke>) {
         if (strokes.isEmpty()) return
         _pages[index].mutableStrokes += strokes
-        history.record(PageEdit(_pages[index], CanvasEdit.Added(strokes.toList())))
+        record(PageEdit(_pages[index], CanvasEdit.Added(strokes.toList())))
         contentChanged(index)
         notifyHistory()
     }
@@ -270,7 +270,7 @@ class PagedDocument {
             PageEdit(_pages[index], CanvasEdit.Added(strokes.toList()))
         }
         if (edits.isEmpty()) return
-        history.record(edits.singleOrNull() ?: Batch(edits))
+        record(edits.singleOrNull() ?: Batch(edits))
         changed.keys.forEach(::contentChanged)
         notifyHistory()
     }
@@ -317,7 +317,7 @@ class PagedDocument {
     internal fun commitStrokeEdit(index: Int, before: List<Stroke>) {
         val page = _pages.getOrNull(index) ?: return
         val splice = StrokeSplice.diff(before, page.strokes) ?: return
-        history.record(PageEdit(page, CanvasEdit.Spliced(splice)))
+        record(PageEdit(page, CanvasEdit.Spliced(splice)))
         notifyHistory()
     }
 
@@ -395,7 +395,7 @@ class PagedDocument {
             steps += ElementEdit(page, elementsBefore, elements)
         }
         if (steps.isEmpty()) return
-        history.record(steps.singleOrNull() ?: Composite(steps))
+        record(steps.singleOrNull() ?: Composite(steps))
         notifyHistory()
     }
 
@@ -403,6 +403,31 @@ class PagedDocument {
         page.elements = elements
         val index = _pages.indexOf(page)
         if (index >= 0) listeners.forEach { it.onPageElementsChanged(index) }
+    }
+
+    /** Commands recorded while [asOneStep] runs, or null. */
+    private var group: ArrayList<Command<PagedDocument>>? = null
+
+    private fun record(command: Command<PagedDocument>) {
+        group?.add(command) ?: history.record(command)
+    }
+
+    /**
+     * Runs [block] (page inserts, ink and element edits on several pages) as ONE undo step: a Smart
+     * Board follow-up re-lays out its pages, removes its old writing and adds pages in one go.
+     */
+    fun asOneStep(block: () -> Unit) {
+        if (group != null) return block()
+        val steps = ArrayList<Command<PagedDocument>>()
+        group = steps
+        try {
+            block()
+        } finally {
+            group = null
+        }
+        if (steps.isEmpty()) return
+        history.record(steps.singleOrNull() ?: Composite(steps))
+        notifyHistory()
     }
 
     fun undo() {

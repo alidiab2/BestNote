@@ -1,7 +1,7 @@
 package app.bestnote.ai.vision.providers
 
-import app.bestnote.ai.vision.AiDocument
 import app.bestnote.ai.vision.BoardRequest
+import app.bestnote.ai.vision.NotesRequest
 import app.bestnote.ai.vision.VisionError
 import app.bestnote.ai.vision.VisionImage
 import app.bestnote.ai.vision.VisionProvider
@@ -22,7 +22,9 @@ internal class FallbackVisionProvider(
 
     override suspend fun transcribe(selection: VisionImage, language: String?) = attempt { it.transcribe(selection, language) }
 
-    private suspend fun attempt(call: suspend (VisionProvider) -> AiDocument): AiDocument {
+    override suspend fun writeNotes(image: VisionImage, request: NotesRequest) = attempt { it.writeNotes(image, request) }
+
+    private suspend fun <T> attempt(call: suspend (VisionProvider) -> T): T {
         val models = candidates().filterNot { it in skipped }.take(MAX_ATTEMPTS).ifEmpty { candidates().take(1) }
         var last: VisionError? = null
         for (model in models) {

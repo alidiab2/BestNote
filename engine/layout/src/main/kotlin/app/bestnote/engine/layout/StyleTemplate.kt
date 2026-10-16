@@ -172,7 +172,22 @@ object StyleTemplates {
         ),
     )
 
-    val all: List<StyleTemplate> = listOf(Classic, Minimal, Colorful, Cornell, CheatSheet)
+    /** "Study notes (columns)": calm blue body, red boxed key formulas, green remarks; paper follows the notebook. */
+    val StudyColumns = Classic.copy(
+        id = "study-columns",
+        spaceBeforeHeading = 0,
+        roles = Classic.roles + mapOf(
+            NoteRole.Title to RoleStyle(NAVY, 1.35f, Decoration.Underline),
+            NoteRole.Heading to RoleStyle(BLUE, 1.15f, Decoration.Underline),
+            NoteRole.Formula to RoleStyle(NAVY, 1f),
+            NoteRole.Result to RoleStyle(RED, 1f, Decoration.Box),
+            NoteRole.Example to RoleStyle(TEAL, 1f, Decoration.Underline),
+            NoteRole.Step to RoleStyle(BLACK, 1f),
+            NoteRole.Note to RoleStyle(ORANGE, 1f),
+        ),
+    )
+
+    val all: List<StyleTemplate> = listOf(Classic, Minimal, Colorful, Cornell, CheatSheet, StudyColumns)
 
     fun byId(id: String?): StyleTemplate = all.firstOrNull { it.id == id } ?: Classic
 }
