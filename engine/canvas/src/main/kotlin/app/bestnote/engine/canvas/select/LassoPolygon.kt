@@ -57,9 +57,14 @@ class LassoPolygon(private val xs: FloatArray, private val ys: FloatArray) {
      * How much of a stroke's centerline ([count] samples at [sx], [sy]) the lasso encloses, 0..1,
      * weighted by length: each piece of a segment (at most [STEP] long) counts by its midpoint. A single dot is in or out.
      */
-    fun fractionInside(sx: FloatArray, sy: FloatArray, count: Int = sx.size): Float {
-        if (count <= 0) return 0f
-        if (count == 1) return if (contains(sx[0], sy[0])) 1f else 0f
+    fun fractionInside(sx: FloatArray, sy: FloatArray, count: Int = sx.size): Float = coverage(sx, sy, count).fraction
+
+    /** Enclosed share of a stroke's centerline: as a fraction of its length and in page points. */
+    data class Coverage(val fraction: Float, val insideLength: Float)
+
+    fun coverage(sx: FloatArray, sy: FloatArray, count: Int = sx.size): Coverage {
+        if (count <= 0) return Coverage(0f, 0f)
+        if (count == 1) return if (contains(sx[0], sy[0])) Coverage(1f, 0f) else Coverage(0f, 0f)
         var total = 0f
         var inside = 0f
         for (i in 0 until count - 1) {
@@ -74,15 +79,24 @@ class LassoPolygon(private val xs: FloatArray, private val ys: FloatArray) {
             }
         }
         // Every sample at the same place: a dot drawn as several inputs.
-        if (total == 0f) return if (contains(sx[0], sy[0])) 1f else 0f
-        return inside / total
+        if (total == 0f) return if (contains(sx[0], sy[0])) Coverage(1f, 0f) else Coverage(0f, 0f)
+        return Coverage(inside / total, inside)
     }
 
-    /** The CANVAS-08 rule: a stroke is selected when more than half of it lies inside the lasso. */
-    fun selects(sx: FloatArray, sy: FloatArray, count: Int = sx.size): Boolean = fractionInside(sx, sy, count) > SELECT_FRACTION
+    /**
+     * A stroke is selected when a meaningful part of it lies inside the lasso: at least [SELECT_FRACTION]
+     * of its length, or [SELECT_LENGTH] points of it. Circling part of a big shape picks the whole shape,
+     * while a neighbour the lasso only grazes stays out.
+     */
+    fun selects(sx: FloatArray, sy: FloatArray, count: Int = sx.size): Boolean {
+        val c = coverage(sx, sy, count)
+        return c.fraction >= SELECT_FRACTION || c.insideLength >= SELECT_LENGTH
+    }
 
     companion object {
-        const val SELECT_FRACTION = 0.5f
+        const val SELECT_FRACTION = 0.1f
+        /** Page points (about 8 mm) of enclosed centerline that select any stroke, however long. */
+        const val SELECT_LENGTH = 24f
         /** Page points per probe along a stroke segment. */
         const val STEP = 4f
         private const val MAX_PIECES = 64

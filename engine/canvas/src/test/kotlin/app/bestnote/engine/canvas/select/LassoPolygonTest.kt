@@ -29,20 +29,19 @@ class LassoPolygonTest {
         assertTrue(square.selects(xs, ys))
     }
 
-    @Test fun moreThanHalfInsideIsSelected() {
-        val (xs, ys) = line(40f, 140f) // 60 of 100 pt inside
-        assertEquals(0.6f, square.fractionInside(xs, ys), 0.03f)
+    @Test fun partlyEnclosedStrokeIsSelected() {
+        val (xs, ys) = line(60f, 160f) // 40 of 100 pt inside
+        assertEquals(0.4f, square.fractionInside(xs, ys), 0.03f)
         assertTrue(square.selects(xs, ys))
     }
 
-    @Test fun lessThanHalfInsideIsNotSelected() {
-        val (xs, ys) = line(60f, 160f) // 40 of 100 pt inside
-        assertEquals(0.4f, square.fractionInside(xs, ys), 0.03f)
-        assertFalse(square.selects(xs, ys))
+    @Test fun circlingPartOfABigShapeSelectsIt() {
+        val (xs, ys) = line(70f, 1070f) // 30 of 1000 pt inside: 3%, but more than 24 pt
+        assertTrue(square.selects(xs, ys))
     }
 
-    @Test fun exactlyHalfIsNotSelected() {
-        val (xs, ys) = line(50f, 150f)
+    @Test fun grazedNeighbourIsNotSelected() {
+        val (xs, ys) = line(95f, 195f) // 5 of 100 pt inside
         assertFalse(square.selects(xs, ys))
     }
 
