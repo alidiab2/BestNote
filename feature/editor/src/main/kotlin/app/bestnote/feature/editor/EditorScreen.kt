@@ -320,6 +320,7 @@ private const val INSERT_POLL_MS = 50L
 /** Ctrl+= / Ctrl+- zoom by this factor per press. */
 private const val KEY_ZOOM_STEP = 1.25f
 private const val SEARCH_SETTLE_MS = 150L
+private const val SEARCH_MARK_HOLD_MS = 3_500L
 private val ChromeEdge = 20.dp
 private val TopRowTop = 12.dp
 private val TopRowHeight = 64.dp
@@ -621,6 +622,7 @@ fun EditorScreen(
         val target = viewModel.searchTarget() ?: return@LaunchedEffect
         delay(SEARCH_SETTLE_MS) // the pages lay out after the notebook loads
         view.highlightColor = highlightColor
+        view.setHighlightTiming(SEARCH_MARK_HOLD_MS, if (reduce) 0L else Motion.Duration.Long.toLong())
         if (target.rects.isEmpty()) return@LaunchedEffect view.scrollToPage(target.pageIndex)
         view.showHighlights(target.pageIndex, target.rects)
         view.focusOn(target.pageIndex, target.rects.reduce { a, b -> a.union(b) })

@@ -75,13 +75,33 @@ internal fun LazyListScope.pageSearchSection(state: LibraryUiState, columns: Int
         )
     }
     val perRow = columns.coerceIn(MIN_PAGE_COLUMNS, MAX_PAGE_COLUMNS)
-    val rows = state.pageResults.chunked(perRow)
-    itemsIndexed(rows, key = { _, row -> "p-" + row.first().hit.notebookId.value + row.first().hit.pageId }, contentType = { _, _ -> "pages" }) { _, row ->
-        Row(Modifier.fillMaxWidth().padding(bottom = Spacing.XL), horizontalArrangement = Arrangement.spacedBy(Spacing.XL)) {
-            row.forEach { r ->
-                PageResultCard(r, onClick = { callbacks.openPage(r.hit.notebookId, r.hit.pageId, state.controls.query.trim()) }, Modifier.weight(1f))
+    val query = state.controls.query.trim()
+    groupPageResults(state.pageResults).forEach { group ->
+        item(key = "g-" + group.notebookId.value, contentType = "group") {
+            Row(Modifier.fillMaxWidth().padding(bottom = Spacing.M), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.M)) {
+                Text(
+                    group.notebookTitle,
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onBackground,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false),
+                )
+                Text(
+                    pluralStringResource(R.plurals.library_page_results_in_notebook, group.pages.size, group.pages.size),
+                    style = BestNoteTheme.type.caption,
+                    color = BestNoteTheme.colors.muted,
+                    maxLines = 1,
+                )
             }
-            repeat(perRow - row.size) { Spacer(Modifier.weight(1f)) }
+        }
+        itemsIndexed(group.pages.chunked(perRow), key = { _, row -> "p-" + row.first().hit.notebookId.value + row.first().hit.pageId }, contentType = { _, _ -> "pages" }) { _, row ->
+            Row(Modifier.fillMaxWidth().padding(bottom = Spacing.XL), horizontalArrangement = Arrangement.spacedBy(Spacing.XL)) {
+                row.forEach { r ->
+                    PageResultCard(r, onClick = { callbacks.openPage(r.hit.notebookId, r.hit.pageId, query) }, Modifier.weight(1f))
+                }
+                repeat(perRow - row.size) { Spacer(Modifier.weight(1f)) }
+            }
         }
     }
 }
@@ -119,13 +139,7 @@ private fun androidx.compose.foundation.layout.RowScope.PageResultCard(result: P
                 }
             }
         }
-        Text(result.notebookTitle, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onBackground, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        Text(
-            stringResource(R.string.library_page_number, hit.pageIndex + 1),
-            style = BestNoteTheme.type.caption,
-            color = BestNoteTheme.colors.muted,
-            maxLines = 1,
-        )
+        Text(stringResource(R.string.library_page_number, hit.pageIndex + 1), style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onBackground, maxLines = 1)
         if (hit.snippet.isNotBlank()) {
             Text(hit.snippet, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis)
         }
