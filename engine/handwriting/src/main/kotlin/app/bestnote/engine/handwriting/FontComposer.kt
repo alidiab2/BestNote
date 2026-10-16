@@ -702,6 +702,6 @@ class FontComposer(
         const val INK = 0xFF1E2433.toInt()
         private const val DISPLAY_SCALE = 1.1f
         private const val HANG = 0.3f
-        private const val SYSTEM_SCALE = 0.78f
+        private const val SYSTEM_SCALE = 0.86f
     }
 }
