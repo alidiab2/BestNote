@@ -36,6 +36,7 @@ internal class PaintMeasure : TextMeasure {
         fun fontId(f: HandFont) = when (f) {
             HandFont.Caveat -> HandwritingTypefaces.LATIN_FIRST
             HandFont.ArefRuqaa -> HandwritingTypefaces.ARABIC_FIRST
+            HandFont.GveretLevin -> HandwritingTypefaces.HEBREW_FIRST
             HandFont.System -> HandwritingTypefaces.SYSTEM
         }
     }

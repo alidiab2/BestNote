@@ -45,9 +45,9 @@ data class RoleStyle(val color: Long? = null, val scale: Float = 1f, val decorat
 
 /**
  * The handwriting fonts a template writes with: Caveat (Latin, Cyrillic; SIL OFL), Aref Ruqaa
- * (Arabic; SIL OFL). [System] uses the device font (Hebrew and any script without a bundled hand).
+ * (Arabic; SIL OFL), Gveret Levin (Hebrew; SIL OFL). [System] uses the device font (any script without a bundled hand).
  */
-enum class HandFont { Caveat, ArefRuqaa, System }
+enum class HandFont { Caveat, ArefRuqaa, GveretLevin, System }
 
 /**
  * A Smart Board design template: paper, fonts, sizes, one colour per role, decorations and spacing.
@@ -64,7 +64,7 @@ data class StyleTemplate(
     val paper: PaperTemplate?,
     val latinFont: HandFont = HandFont.Caveat,
     val arabicFont: HandFont = HandFont.ArefRuqaa,
-    val hebrewFont: HandFont = HandFont.System,
+    val hebrewFont: HandFont = HandFont.GveretLevin,
     val bodyScale: Float = 0.9f,
     val roles: Map<NoteRole, RoleStyle>,
     val spaceBeforeHeading: Int = 1,
