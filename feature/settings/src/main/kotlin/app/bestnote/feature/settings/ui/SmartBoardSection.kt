@@ -220,7 +220,11 @@ private fun ModelPicker(state: SmartBoardUiState, viewModel: SmartBoardViewModel
             Column(Modifier.fillMaxWidth().padding(Spacing.L), verticalArrangement = Arrangement.spacedBy(Spacing.M)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
-                        Text(stringResource(R.string.settings_ai_model_current, stored.displayName(stored.resolvedModel)), style = MaterialTheme.typography.bodyLarge)
+                        Text(
+                            if (stored.resolvedModel.isBlank()) stringResource(R.string.settings_ai_model_none)
+                            else stringResource(R.string.settings_ai_model_current, stored.displayName(stored.resolvedModel)),
+                            style = MaterialTheme.typography.bodyLarge,
+                        )
                         Text(
                             when {
                                 state.loadingModels -> stringResource(R.string.settings_ai_models_loading)

@@ -28,11 +28,13 @@ The model is told it is an elite, meticulous student copying the board into a no
 | [ ] AI-08 | Beautify selection (lasso → tidy) | M3 | M | CANVAS-08, AI-05 | — |
 | [ ] AI-09 | Evaluation set: 50 real board photos (math, physics, CS; Arabic + English) with expected structure; score order, geometry, color, LaTeX | M2 | L | — | Score report committed; run before any prompt change |
 | [ ] AI-10 | On-device fallback (no network): local layout + LaTeX OCR model | M4 | XL | REC-01 | Split before starting |
+| [x] AI-11 | Real-photo fix (schema requires `type`/`order`/`text`, forgiving parser, salvaging mapper, drop reasons); Claude, OpenAI and OpenAI-compatible providers (`:ai:vision-claude`, `:ai:vision-openai`, `:ai:vision-providers`); live model lists with automatic Best/Fast; debug log; "Convert with AI" for REC-05 | M2 | L | AI-03, REC-05 | Recorded-answer tests green; Settings → Smart Board AI and Debug on the emulator |
 
 ## Status (AI-04..07 first cut)
 - `:engine:handwriting` writes blocks as timed ink: Hershey print/script hands, Aref Ruqaa forms for Arabic, LaTeX subset (fractions, scripts, roots, Greek, operators), pen-drawn boxes, ruler diagrams, green margin notes with an arrow. `PageComposer.measurer` is the AI-06 measurer.
 - `RuledFlow` + `RuledPaper.of(template, size)` put every line of writing on the editor's own ruled lines, inside the margin.
 - `:feature:smartboard`: photo (camera or picker) → crop → provider (Gemini with the user's key, else the offline `DemoVisionProvider`) → review page that writes itself → inserted as new pages, one undo step.
+- AI-11: any provider answer is parsed by `AiDocumentParser` (fences, prose, truncation, bad escapes, aliases) and mapped by `DocumentMapper`, which salvages text from alternate fields and records one reason per dropped block (`VisionDiagnostics`, Settings → Debug). Models are never hard-wired: `ModelCatalog` picks the newest pro-class (Best) or fast model from each provider's live list.
 - Left for later: AI-04 edge detection + perspective fix, template choice in review, Cornell/cheat-sheet paper, lasso (CANVAS-08), the user's own hand ("Mine").
 
 ## Output style (agreed with the maintainer)
