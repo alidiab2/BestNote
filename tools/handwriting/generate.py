@@ -95,6 +95,24 @@ def drawings():
     return d
 
 
+def shapes_hold():
+    """Every snap shape, each held still ~650 ms at the end (INK-08 hold-to-snap)."""
+    w = writer(55, xh=3.4, vmax=110.0, name="diagram")
+    d = hwdoc.Document("shapes_hold", "Hold-to-snap shapes: line, arrow, circle, ellipse, box, triangle, pentagon",
+                       PAGE_W, 120, w)
+    h = 650.0
+    shapes.line(d, w, (8, 12), (62, 14.5), hold_ms=h)
+    shapes.arrow_one_stroke(d, w, (78, 22), (120, 8), hold_ms=h)
+    shapes.circle(d, w, (150, 18), 13, hold_ms=h)
+    shapes.ellipse(d, w, (34, 50), 26, 12, rot_deg=8, hold_ms=h)
+    shapes.box(d, w, 74, 38, 44, 26, hold_ms=h)
+    shapes.polygon(d, w, [(150, 36), (172, 70), (128, 68)], hold_ms=h)
+    shapes.regular_polygon(d, w, (32, 96), 16, 5, hold_ms=h)
+    shapes.line(d, w, (66, 84), (110, 112), hold_ms=h)
+    shapes.circle(d, w, (146, 98), 8, hold_ms=0.0)  # no hold: stays hand-drawn
+    return d
+
+
 def scribble():
     w = writer(44, xh=3.2, vmax=200.0, vcurve=70.0, accel=4000.0, pressure=0.6, name="shader")
     d = hwdoc.Document("scribble", "Scribble shading: fast back-and-forth hatching in two boxes", PAGE_W, 50, w)
@@ -136,7 +154,8 @@ def hover_erase():
     return d
 
 
-ALL = [lecture_en, formulas, arabic_text, tiny_fast, slow_large, drawings, scribble, highlight_lecture, hover_erase]
+ALL = [lecture_en, formulas, arabic_text, tiny_fast, slow_large, drawings, scribble, highlight_lecture, hover_erase,
+       shapes_hold]
 NAMES = {"arabic": arabic_text}
 
 

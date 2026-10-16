@@ -279,6 +279,17 @@ class PagedDocument {
         commitStrokeEdit(index, before)
     }
 
+    /**
+     * Swaps each key of [replacements] for its value (same z-position) and removes [removed] on page
+     * [index], as one undoable step (INK-08: a raw stroke, or a shaft and its head, become a clean shape).
+     */
+    fun replaceStrokes(index: Int, replacements: Map<Stroke, Stroke>, removed: Collection<Stroke>) {
+        if (index !in _pages.indices || (replacements.isEmpty() && removed.isEmpty())) return
+        val before = strokesSnapshot(index)
+        eraseStep(index, removed, replacements.mapValues { listOf(it.value) })
+        commitStrokeEdit(index, before)
+    }
+
     /** Removes [strokes] from page [index] as one undoable step (CANVAS-11: cut, delete). */
     fun deleteStrokes(index: Int, strokes: Collection<Stroke>) {
         if (index !in _pages.indices || strokes.isEmpty()) return

@@ -44,6 +44,10 @@ internal class PageSlotView(context: Context, private val style: SheetStyle) : V
     private var wet: InProgressStroke? = null
     private var wetColor = 0
 
+    /** INK-08 snap morph: [morphFrame] is drawn in place of [morphTarget] while the shape settles. */
+    private var morphTarget: Stroke? = null
+    private var morphFrame: Stroke? = null
+
     /** Strokes the selection layer is dragging (CANVAS-09): drawn there, so left out here. */
     private var hidden: Set<Stroke> = emptySet()
 
@@ -87,10 +91,19 @@ internal class PageSlotView(context: Context, private val style: SheetStyle) : V
         invalidate()
     }
 
+    fun setMorph(target: Stroke?, frame: Stroke?) {
+        if (target == null && morphTarget == null) return
+        morphTarget = target
+        morphFrame = frame
+        invalidate()
+    }
+
     fun unbind() {
         index = -1
         page = null
         wet = null
+        morphTarget = null
+        morphFrame = null
         hidden = emptySet()
         drawList.clear()
         visibility = INVISIBLE
@@ -133,8 +146,9 @@ internal class PageSlotView(context: Context, private val style: SheetStyle) : V
     /** [strokes] with every ink color made readable on [paper] ([PaperInk]); unchanged strokes are reused. */
     private fun readable(strokes: List<Stroke>, paper: PaperColors): List<Stroke> {
         drawList.clear()
-        for (s in strokes) {
-            if (s in hidden) continue
+        for (stroke in strokes) {
+            if (stroke in hidden) continue
+            val s = if (stroke === morphTarget) morphFrame ?: stroke else stroke
             val color = s.brush.colorIntArgb
             val want = PaperInk.colorOn(color, paper)
             if (want == color) {
@@ -143,6 +157,8 @@ internal class PageSlotView(context: Context, private val style: SheetStyle) : V
                 val cached = tinted[s]
                 drawList += if (cached != null && cached.brush.colorIntArgb == want) {
                     cached
+                } else if (s === morphFrame) {
+                    s.copy(s.brush.copyWithColorIntArgb(want)) // a frame is drawn once: don't cache it
                 } else {
                     s.copy(s.brush.copyWithColorIntArgb(want)).also { tinted[s] = it }
                 }

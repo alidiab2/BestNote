@@ -14,7 +14,7 @@
 | [ ] INK-05 | Stroke stabilization (smoothing) setting, 0–100 | M1 | M | — | 100 removes visible hand jitter without lag over 1 frame |
 | [ ] INK-06 | Color + thickness model, saved custom colors, favorite pen presets | M1 | M | DS-04 | Presets persist; switching preset is one tap |
 | [ ] INK-07 | Hold-to-straighten line; dashed line option | M2 | M | — | Holding still for 500 ms snaps the stroke to a straight line with a subtle animation |
-| [ ] INK-08 | Shape snap: circle, ellipse, rectangle, triangle, arrow, line | M2 | L | REC interface | Hold-to-snap shapes; recognition runs off the main thread in < 30 ms |
+| [x] INK-08 | Shape snap: circle, ellipse, rectangle, triangle, arrow, line | M2 | L | REC interface | Hold-to-snap shapes; recognition runs off the main thread in < 30 ms |
 | [ ] INK-09 | Laser pointer (fading trail, presentation mode) | M3 | S | — | Trail fades over 1 s; never saved to the page |
 | [ ] INK-10 | Tip shape options (round / chisel) and tip sharpness | M3 | M | INK-01 | Chisel produces calligraphic variation by orientation |
 | [ ] INK-11 | Fill for closed shapes | M3 | S | INK-08 | Fill color/opacity editable after drawing |

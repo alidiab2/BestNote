@@ -27,10 +27,11 @@ GAPS = {
 
 
 class Item:
-    __slots__ = ("pts", "kind", "gap", "speed", "pressure", "button")
+    __slots__ = ("pts", "kind", "gap", "speed", "pressure", "button", "hold_ms")
 
-    def __init__(self, pts, kind, gap, speed, pressure, button):
+    def __init__(self, pts, kind, gap, speed, pressure, button, hold_ms=0.0):
         self.pts, self.kind, self.gap, self.speed, self.pressure, self.button = pts, kind, gap, speed, pressure, button
+        self.hold_ms = hold_ms
 
 
 class Document:
@@ -41,10 +42,11 @@ class Document:
         self.hover = hover
         self.items = []
 
-    def add(self, pts, gap="letter", kind="stroke", speed=1.0, pressure=1.0, button=False):
+    def add(self, pts, gap="letter", kind="stroke", speed=1.0, pressure=1.0, button=False, hold_ms=0.0):
+        """hold_ms: the pen stays down and still that long at the end (hold-to-snap)."""
         if not pts:
             return
-        self.items.append(Item(list(pts), kind, gap, speed, pressure, button))
+        self.items.append(Item(list(pts), kind, gap, speed, pressure, button, hold_ms))
 
     def add_dot(self, center, gap="deferred", pressure=1.0):
         self.items.append(Item([center], "dot", gap, 1.0, pressure, False))
@@ -72,7 +74,7 @@ class Document:
             if it.kind == "dot":
                 samples, t = dynamics.tap(first, w, t, heavy=it.pressure)
             else:
-                samples, t = dynamics.stroke(it.pts, w, t, speed=it.speed, pressure_scale=it.pressure)
+                samples, t = dynamics.stroke(it.pts, w, t, speed=it.speed, pressure_scale=it.pressure, hold_ms=it.hold_ms)
             strokes.append({"type": "ink", "button": bool(it.button), "samples": samples})
             last = (samples[-1]["x"], samples[-1]["y"])
         return {

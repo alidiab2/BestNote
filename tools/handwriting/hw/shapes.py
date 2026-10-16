@@ -21,7 +21,7 @@ def _line(a, b, w, bow=0.012):
     return geom.wobble(dense, rng, 0.05, 9.0)
 
 
-def circle(doc, w, c, r, gap="shape"):
+def circle(doc, w, c, r, gap="shape", hold_ms=0.0):
     rng = w.rng
     start = math.radians(rng.uniform(-120, -60))  # near the top
     sweep = 2 * math.pi + math.radians(rng.uniform(8, 30))  # overlap at the close
@@ -33,7 +33,7 @@ def circle(doc, w, c, r, gap="shape"):
         a = start - sweep * i / n  # counter-clockwise on screen, like most right-handers
         rr = r + rn(a) - 0.05 * r * (i / n)  # ends slightly inside
         pts.append((c[0] + math.cos(a) * rr * ex, c[1] + math.sin(a) * rr))
-    doc.add(geom.wobble(pts, rng, 0.04, 8.0), gap=gap)
+    doc.add(geom.wobble(pts, rng, 0.04, 8.0), gap=gap, hold_ms=hold_ms)
 
 
 def arrow_head(doc, w, tip, ang, size, gap="letter"):
@@ -52,7 +52,7 @@ def arrow(doc, w, a, b, gap="shape"):
     arrow_head(doc, w, b, math.atan2(b[1] - a[1], b[0] - a[0]), 3.2)
 
 
-def box(doc, w, x, y, bw, bh, gap="shape"):
+def box(doc, w, x, y, bw, bh, gap="shape", hold_ms=0.0):
     """One stroke, clockwise from the top-left corner, with a small overshoot where it closes."""
     rng = w.rng
     j = lambda: rng.gauss(0, 0.6)
@@ -63,7 +63,66 @@ def box(doc, w, x, y, bw, bh, gap="shape"):
         pts += seg if not pts else seg[1:]
     # overshoot past the start corner
     pts += _line(c[0], (c[0][0] + rng.uniform(1.0, 3.0), c[0][1] + j() * 0.3), w)[1:]
-    doc.add(pts, gap=gap)
+    doc.add(pts, gap=gap, hold_ms=hold_ms)
+
+
+def line(doc, w, a, b, gap="shape", hold_ms=0.0):
+    doc.add(_line(a, b, w, bow=0.02), gap=gap, hold_ms=hold_ms)
+
+
+def ellipse(doc, w, c, rx, ry, rot_deg=0.0, gap="shape", hold_ms=0.0):
+    """Like circle(), stretched and turned: one loop with a small overlap at the close."""
+    rng = w.rng
+    start = math.radians(rng.uniform(-150, -100))
+    sweep = 2 * math.pi + math.radians(rng.uniform(6, 22))
+    rn = geom.SmoothNoise(rng, 2 * math.pi, 0.03)
+    ca, sa = math.cos(math.radians(rot_deg)), math.sin(math.radians(rot_deg))
+    n = int(max(rx, ry) * sweep / 0.15)
+    pts = []
+    for i in range(n + 1):
+        a = start - sweep * i / n
+        k = 1.0 + rn(a) - 0.04 * (i / n)
+        u, v = math.cos(a) * rx * k, math.sin(a) * ry * k
+        pts.append((c[0] + u * ca - v * sa, c[1] + u * sa + v * ca))
+    doc.add(geom.wobble(pts, rng, 0.04, 8.0), gap=gap, hold_ms=hold_ms)
+
+
+def polygon(doc, w, corners, gap="shape", hold_ms=0.0, overshoot=True):
+    """One closed stroke through corners (mm), each corner jittered, closing back on the first one."""
+    rng = w.rng
+    j = lambda: rng.gauss(0, 0.5)
+    c = [(x + j(), y + j()) for x, y in corners]
+    pts = []
+    for i in range(len(c)):
+        seg = _line(c[i], c[(i + 1) % len(c)], w)
+        pts += seg if not pts else seg[1:]
+    if overshoot:
+        a, b = c[0], c[1]
+        d = geom.dist(a, b) or 1.0
+        k = rng.uniform(0.04, 0.12)
+        pts += _line(a, (a[0] + (b[0] - a[0]) * k, a[1] + (b[1] - a[1]) * k), w)[1:]
+    doc.add(pts, gap=gap, hold_ms=hold_ms)
+
+
+def regular_polygon(doc, w, c, r, n, rot_deg=-90.0, gap="shape", hold_ms=0.0):
+    corners = [(c[0] + r * math.cos(math.radians(rot_deg) + 2 * math.pi * i / n),
+                c[1] + r * math.sin(math.radians(rot_deg) + 2 * math.pi * i / n)) for i in range(n)]
+    polygon(doc, w, corners, gap=gap, hold_ms=hold_ms)
+
+
+def arrow_one_stroke(doc, w, a, b, size=3.6, gap="shape", hold_ms=0.0):
+    """Shaft, then one barb, back to the tip and the other barb, without lifting the pen."""
+    rng = w.rng
+    ang = math.atan2(b[1] - a[1], b[0] - a[0])
+    spread = math.radians(rng.uniform(24, 34))
+    l1, l2 = size * rng.uniform(0.9, 1.1), size * rng.uniform(0.9, 1.1)
+    p1 = (b[0] - math.cos(ang - spread) * l1, b[1] - math.sin(ang - spread) * l1)
+    p2 = (b[0] - math.cos(ang + spread) * l2, b[1] - math.sin(ang + spread) * l2)
+    pts = _line(a, b, w, bow=0.02)
+    pts += _line(b, p1, w, bow=0.0)[1:]
+    pts += _line(p1, b, w, bow=0.0)[1:]
+    pts += _line(b, p2, w, bow=0.0)[1:]
+    doc.add(pts, gap=gap, hold_ms=hold_ms)
 
 
 def axes(doc, w, ox, oy, xl, yl, gap="shape"):

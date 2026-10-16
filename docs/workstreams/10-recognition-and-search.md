@@ -15,4 +15,4 @@
 | [ ] REC-06 | Handwriting reflow and alignment | M4 | XL | REC-05 | Split before starting |
 | [ ] REC-07 | Handwriting spellcheck (underline + suggestion in the user's handwriting) | M4 | XL | REC-05 | — |
 | [ ] REC-08 | Math Assist: write `=` after an expression to get the result | M4 | L | REC-01 | — |
-| [ ] REC-09 | `ShapeRecognizer` implementation for INK-08 | M2 | M | — | Geometric fit, no ML needed |
+| [x] REC-09 | `ShapeRecognizer` implementation for INK-08 | M2 | M | — | Geometric fit, no ML needed |

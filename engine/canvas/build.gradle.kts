@@ -7,6 +7,7 @@ dependencies {
     api(projects.engine.ink)
     api(projects.engine.stylus)
     api(projects.engine.layout)
+    implementation(projects.engine.recognition)
     implementation(libs.androidx.core.ktx)
 
     api(libs.androidx.ink.authoring)
