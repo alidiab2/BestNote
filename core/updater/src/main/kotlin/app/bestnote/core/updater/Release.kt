@@ -61,7 +61,7 @@ object ReleaseParser {
 
     private fun toRelease(r: GhRelease): ReleaseInfo? {
         if (r.draft) return null
-        val apk = r.assets.firstOrNull { it.name.endsWith(".apk", ignoreCase = true) && it.url.startsWith("https://") } ?: return null
+        val apk = r.assets.firstOrNull { it.name.endsWith(".apk", ignoreCase = true) && (it.url.startsWith("https://") || it.url.startsWith("http://10.0.2.2")) } ?: return null
         val code = versionCodeOf(r.tag, r.body) ?: return null
         val name = r.tag.trim().removePrefix("v").ifEmpty { code.toString() }
         return ReleaseInfo(
