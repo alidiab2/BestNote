@@ -36,6 +36,7 @@ import app.bestnote.ai.vision.ModelCatalog
 import app.bestnote.ai.vision.Redactor
 import app.bestnote.ai.vision.VisionDiagnostics
 import app.bestnote.ai.vision.providers.AiProviders
+import app.bestnote.ai.vision.providers.ImageCanary
 import app.bestnote.ai.vision.providers.SmartBoardStyles
 import app.bestnote.ai.vision.providers.WritingMode
 import app.bestnote.core.designsystem.font.HandwritingTypefaces
@@ -85,7 +86,7 @@ sealed interface SmartBoardStage {
     /** [diagnostics]: provider, error, drop reasons and raw answer, for "Copy raw AI response" (debug / verbose only). */
     data class Failed(val reason: Reason, val detail: String? = null, val diagnostics: String? = null) : SmartBoardStage
 
-    enum class Reason { NoBlocks, MissingKey, InvalidKey, RateLimited, QuotaExhausted, Network, ModelUnavailable, ServerBusy, Blocked, Truncated, Other }
+    enum class Reason { NoBlocks, MissingKey, InvalidKey, RateLimited, QuotaExhausted, Network, ModelUnavailable, ServerBusy, Blocked, Truncated, ImageNotSeen, Other }
 }
 
 /** One photo of the board and the outline to read on it ([quad], normalised; [detected] when found automatically). */
@@ -127,13 +128,15 @@ data class SmartBoardUiState(
     val switcher: ModelSwitcher = ModelSwitcher(),
     /** The language the notes are written in ([NotesLanguage.Board] = the board's own), saved per notebook. */
     val language: NotesLanguage = NotesLanguage.Board,
+    /** Set (to the model's name) when the chosen model is remembered as unable to read images; asks before calling. */
+    val textOnlyWarning: String? = null,
 ) {
     /** The look of [noteTemplate]. */
     val style: StyleTemplate get() = noteTemplate.look
 }
 
 /** One choice in the header's quick switcher. [model] is an id, "" (automatic best) or [ModelCatalog.AUTO_FAST]. */
-data class ModelOption(val model: String, val label: String, val selected: Boolean, val favorite: Boolean = false)
+data class ModelOption(val model: String, val label: String, val selected: Boolean, val favorite: Boolean = false, val textOnly: Boolean = false)
 
 /** The header's quick switcher: every provider (configured or not), then the current provider's models. */
 data class ModelSwitcher(
@@ -314,7 +317,7 @@ class SmartBoardViewModel @Inject constructor(
                 add(ModelOption(ModelCatalog.AUTO_FAST, "⚡ " + name(ModelCatalog.resolve(kind, ModelCatalog.AUTO_FAST, models)), stored == ModelCatalog.AUTO_FAST))
             }
             val ids = (favorites + settings.recentModels(kind) + ModelCatalog.sorted(models).take(SWITCHER_LIST).map { it.id }).distinct()
-            ids.forEach { add(ModelOption(it, name(it), stored == it, it in favorites)) }
+            ids.forEach { id -> add(ModelOption(id, name(id), stored == id, id in favorites, textOnly = id in settings.textOnlyModels(kind))) }
         }
         val all = AiProviderKind.entries.map { it to providers.isConfigured(it) }
         state.update {
@@ -467,10 +470,23 @@ class SmartBoardViewModel @Inject constructor(
      * when there is no photo or key. Each further photo is merged into the notes so far (a follow-up
      * merges into the page's own notes), duplicates removed.
      */
-    fun read() {
+    fun read() = read(force = false)
+
+    /** "Try anyway" after the text-only warning. */
+    fun readAnyway() = read(force = true)
+
+    fun dismissTextOnlyWarning() = state.update { it.copy(textOnlyWarning = null) }
+
+    private fun read(force: Boolean) {
         val s = state.value
         val photos = s.photos
         val demo = photos.isEmpty() || !s.hasKey
+        if (!demo && !force && s.modelId in settings.textOnlyModels(s.provider)) {
+            // This model ignored a photo before: say so instead of spending a call on invented notes.
+            state.update { it.copy(textOnlyWarning = s.modelLabel.ifBlank { s.modelId }) }
+            return
+        }
+        state.update { it.copy(textOnlyWarning = null) }
         job?.cancel()
         job = viewModelScope.launch {
             val started = SystemClock.elapsedRealtime()
@@ -486,7 +502,7 @@ class SmartBoardViewModel @Inject constructor(
                 val images = if (demo) {
                     listOf(VisionImage(ByteArray(0), "image/jpeg"))
                 } else {
-                    withContext(Dispatchers.Default) { photos.map { VisionImage(BoardScan.jpeg(BoardScan.flatten(it.bitmap, it.quad, s.enhance)), "image/jpeg") } }
+                    withContext(Dispatchers.Default) { photos.map { ImageCanary.jpeg(BoardScan.flatten(it.bitmap, it.quad, s.enhance)) } }
                 }
                 val provider: VisionProvider = if (demo) DemoVisionProvider() else providers.create(s.provider)
                 try {
@@ -507,6 +523,8 @@ class SmartBoardViewModel @Inject constructor(
                 Log.w(TAG, "Smart Board failed (${s.provider.id}): ${e.javaClass.simpleName}: ${Redactor.redact(e.message.orEmpty())}")
                 last?.parseNotes?.takeIf { it.isNotEmpty() }?.let { Log.w(TAG, "parse repairs: ${it.joinToString("; ")}") }
                 last?.dropReasons?.forEach { Log.w(TAG, "dropped $it") }
+                // The model is now remembered as text-only: refresh the picker's "no images" badge.
+                if (e is VisionError.ImageNotSeen) refreshKey()
                 val reason = reasonOf(e)
                 val diagnostics = if (showDiagnostics) last?.let(VisionDiagnostics::format) ?: e.toString() else null
                 val detail = when {
@@ -529,6 +547,7 @@ class SmartBoardViewModel @Inject constructor(
         is VisionError.ServiceUnavailable -> SmartBoardStage.Reason.ServerBusy
         is VisionError.Blocked -> SmartBoardStage.Reason.Blocked
         is VisionError.Truncated -> SmartBoardStage.Reason.Truncated
+        is VisionError.ImageNotSeen -> SmartBoardStage.Reason.ImageNotSeen
         else -> SmartBoardStage.Reason.Other
     }
 

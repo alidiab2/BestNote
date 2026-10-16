@@ -3,6 +3,7 @@ package app.bestnote.ai.vision.claude
 import app.bestnote.ai.vision.AiDocument
 import app.bestnote.ai.vision.AiDocumentParser
 import app.bestnote.ai.vision.AiModel
+import app.bestnote.ai.vision.Canary
 import app.bestnote.ai.vision.AiSchema
 import app.bestnote.ai.vision.BoardRequest
 import app.bestnote.ai.vision.NoteMerge
@@ -77,7 +78,9 @@ class ClaudeVisionProvider(
     private suspend fun generate(system: String, user: String, image: VisionImage): AiDocument =
         generate(system, user, image, AiSchema.document(AiSchema.Dialect.Closed)) { text, truncated -> AiDocumentParser.answer(text, truncated) }
 
-    private suspend fun <T> generate(system: String, user: String, image: VisionImage, schema: JsonObject, parse: (String, Boolean) -> T): T {
+    private suspend fun <T> generate(system0: String, user: String, image: VisionImage, schema0: JsonObject, parse: (String, Boolean) -> T): T {
+        val system = Canary.system(system0, image)
+        val schema = Canary.withSeen(schema0, image)
         val key = credentials.apiKey()?.trim()?.takeIf { it.isNotEmpty() } ?: throw VisionError.MissingKey()
         val model = credentials.model().trim().ifEmpty { ClaudeConfig.DEFAULT_MODEL }
         val base = credentials.baseUrl()?.takeIf { it.isNotBlank() } ?: config.baseUrl
@@ -93,9 +96,11 @@ class ClaudeVisionProvider(
                 throw VisionError.Network(e)
             }
             VisionDiagnostics.recordResponse("claude", model, response.code, response.body)
+            if (response.code == 200) Canary.noteUsage(response.body, system.length + user.length)
             when {
                 response.code == 200 -> {
                     val answer = ClaudeResponses.answer(response.body)
+                    Canary.verify(answer.text, answer.truncated, image, model)
                     return parse(answer.text, answer.truncated)
                 }
                 fallbacks && ClaudeResponses.rejectsFallbacks(response.code, response.body) -> fallbacks = false

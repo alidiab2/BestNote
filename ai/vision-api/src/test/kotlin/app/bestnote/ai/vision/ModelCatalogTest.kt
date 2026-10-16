@@ -94,4 +94,18 @@ class ModelCatalogTest {
         val sorted = ModelCatalog.sorted(models("deep-research-pro-preview-12-2025", "gemini-3.8-flash"))
         assertEquals("deep-research-pro-preview-12-2025", sorted.last().id)
     }
+
+    @Test
+    fun `models marked text-only are skipped by every automatic choice`() {
+        val list = models("deepseek-v4-pro", "deepseek-flash", "other-large")
+        val marked = ModelCatalog.markTextOnly(list, setOf("deepseek-v4-pro", "custom-text"))
+        assertEquals(false, marked.first { it.id == "deepseek-v4-pro" }.vision)
+        assertEquals(false, marked.first { it.id == "custom-text" }.vision) // unknown ids are added, flagged
+        assertEquals(null, marked.first { it.id == "deepseek-flash" }.vision)
+        assertEquals(listOf("other-large", "deepseek-flash"), ModelCatalog.candidates(marked, Preference.Quality).map { it.id })
+        assertEquals("other-large", ModelCatalog.resolve(AiProviderKind.OpenAiCompatible, "", marked))
+        assertEquals(list, ModelCatalog.markTextOnly(list, emptySet()))
+        // An explicit choice is still honoured (the app warns instead).
+        assertEquals("deepseek-v4-pro", ModelCatalog.resolve(AiProviderKind.OpenAiCompatible, "deepseek-v4-pro", marked))
+    }
 }

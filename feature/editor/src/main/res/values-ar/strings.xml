@@ -158,6 +158,7 @@
     <string name="tidy_error_quota">بلغت حد الطلبات أو نفدت الحصة. حاول بعد دقيقة.</string>
     <string name="tidy_error_network">تعذّر الوصول إلى مزود الذكاء. تحقق من الاتصال.</string>
     <string name="tidy_error_busy">مزود الذكاء مشغول جدًا. حاول بعد قليل.</string>
+    <string name="tidy_error_no_image">لم يستلم هذا النموذج الصورة (لا يستطيع قراءة الصور). اختر نموذجًا يدعم الصور من الإعدادات ← السبورة الذكية.</string>
     <string name="tidy_error_other">تعذّر ترتيب هذا التحديد.</string>
     <string name="convert_lang_he">עברית</string>
     <string name="convert_hebrew_needs_ai">يقرأ مزود الذكاء الخط العبري. أضف مفتاحًا في الإعدادات ← ذكاء السبورة.</string>

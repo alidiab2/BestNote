@@ -136,6 +136,7 @@
     <string name="settings_ai_models_loading">Loading the models your key can use…</string>
     <string name="settings_ai_models_failed">Couldn\'t load the model list: %1$s</string>
     <string name="settings_ai_models_never">Add a key to load the live model list.</string>
+    <string name="settings_ai_no_images">no images</string>
     <string name="settings_ai_models_count">%1$d models available to your key</string>
     <string name="settings_ai_models_refresh">Refresh model list</string>
     <string name="settings_ai_model_auto_best">Best: %1$s</string>

@@ -1,0 +1,21 @@
+{
+ "id": "chatcmpl-x",
+ "object": "chat.completion",
+ "created": 1760000000,
+ "model": "deepseek-flash",
+ "choices": [
+  {
+   "index": 0,
+   "message": {
+    "role": "assistant",
+    "content": "{\"seen\": \"4821\", \"elements\": [{\"e\": \"Title\", \"t\": \"Partial fractions\"}, {\"e\": \"Heading\", \"t\": \"Decomposition\"}, {\"e\": \"Formula\", \"m\": \"\\\\frac{1}{x(x+1)} = \\\\frac{A}{x} + \\\\frac{B}{x+1}\"}]}"
+   },
+   "finish_reason": "stop"
+  }
+ ],
+ "usage": {
+  "prompt_tokens": 1803,
+  "completion_tokens": 260,
+  "total_tokens": 2063
+ }
+}

@@ -47,6 +47,12 @@
     <string name="smartboard_error_quota">Your quota for this model is used up. Pick another model in the header, or check your plan with the provider.</string>
     <string name="smartboard_error_network">Could not reach the AI provider. Check your internet connection and try again.</string>
     <string name="smartboard_error_other">Something went wrong reading this photo.</string>
+    <string name="smartboard_error_no_image">This model didn\'t receive the photo (it can\'t read images). Pick a model that supports images.</string>
+    <string name="smartboard_pick_model">Pick a model</string>
+    <string name="smartboard_no_images_badge">no images</string>
+    <string name="smartboard_text_only_title">This model can\'t read photos</string>
+    <string name="smartboard_text_only_body">%1$s ignored the photo last time and made notes up. Pick a model that supports images, or try it anyway.</string>
+    <string name="smartboard_try_anyway">Try anyway</string>
     <string name="smartboard_error_model">This AI model is not available for your key. Pick another model in Settings → Smart Board AI.</string>
     <string name="smartboard_error_busy">The AI provider is overloaded right now. Try again in a moment.</string>
     <string name="smartboard_error_blocked">The AI provider declined to read this photo.</string>

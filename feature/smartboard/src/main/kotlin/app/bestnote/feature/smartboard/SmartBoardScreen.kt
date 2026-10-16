@@ -140,18 +140,33 @@ private val LocalManageTemplates = androidx.compose.runtime.staticCompositionLoc
 private fun SmartBoardContent(onClose: () -> Unit, onInsert: (SmartBoardResult) -> Unit, viewModel: SmartBoardViewModel) {
     val state by viewModel.ui.collectAsStateWithLifecycle()
     var keyDialog by remember { mutableStateOf(false) }
+    var switcher by remember { mutableStateOf(false) }
     Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         Column(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing)) {
-            TopBar(state, onClose, onKey = { keyDialog = true }, onProvider = viewModel::switchProvider, onModel = viewModel::switchModel)
+            TopBar(state, onClose, switcher, { switcher = it }, onKey = { keyDialog = true }, onProvider = viewModel::switchProvider, onModel = viewModel::switchModel)
             AnimatedContent(state.stage, contentKey = { it::class }, label = "stage", modifier = Modifier.weight(1f).fillMaxWidth()) { stage ->
                 when (stage) {
                     SmartBoardStage.Capture -> CaptureStage(state, viewModel)
                     is SmartBoardStage.Reading -> ReadingStage(stage, demo = state.photos.isEmpty() || !state.hasKey, provider = providerName(state.provider), onCancel = viewModel::cancel)
                     is SmartBoardStage.Review -> ReviewStage(stage, state, viewModel, onInsert)
-                    is SmartBoardStage.Failed -> FailedStage(stage, onRetry = viewModel::read, onBack = viewModel::backToPhotos, onKey = { keyDialog = true })
+                    is SmartBoardStage.Failed -> FailedStage(stage, onRetry = viewModel::read, onBack = viewModel::backToPhotos, onKey = { keyDialog = true }, onPickModel = { switcher = true })
                 }
             }
         }
+    }
+    state.textOnlyWarning?.let { name ->
+        AlertDialog(
+            onDismissRequest = viewModel::dismissTextOnlyWarning,
+            title = { Text(stringResource(R.string.smartboard_text_only_title)) },
+            text = { Text(stringResource(R.string.smartboard_text_only_body, name)) },
+            confirmButton = {
+                TextButton(onClick = {
+                    viewModel.dismissTextOnlyWarning()
+                    switcher = true
+                }) { Text(stringResource(R.string.smartboard_pick_model)) }
+            },
+            dismissButton = { TextButton(onClick = viewModel::readAnyway) { Text(stringResource(R.string.smartboard_try_anyway)) } },
+        )
     }
     if (keyDialog) KeyDialog(state.provider, state.keyHint, onSave = { viewModel.saveKey(it); keyDialog = false }, onDismiss = { keyDialog = false })
 }
@@ -160,18 +175,19 @@ private fun SmartBoardContent(onClose: () -> Unit, onInsert: (SmartBoardResult) 
 private fun TopBar(
     state: SmartBoardUiState,
     onClose: () -> Unit,
+    switcher: Boolean,
+    onSwitcher: (Boolean) -> Unit,
     onKey: () -> Unit,
     onProvider: (AiProviderKind) -> Unit,
     onModel: (String) -> Unit,
 ) {
-    var switcher by remember { mutableStateOf(false) }
     Row(Modifier.fillMaxWidth().height(60.dp).padding(horizontal = Spacing.S), verticalAlignment = Alignment.CenterVertically) {
         IconButton(onClick = onClose) { Icon(Icons.Rounded.Close, stringResource(R.string.smartboard_close)) }
         Icon(Icons.Rounded.AutoAwesome, null, tint = BestNoteTheme.colors.aiAccent, modifier = Modifier.padding(start = Spacing.XS).size(20.dp))
         Text(stringResource(R.string.smartboard_title), style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(start = Spacing.S).weight(1f))
         // Quick switcher: provider + model, right where the key is shown.
         Box {
-            TextButton(onClick = { switcher = true }) {
+            TextButton(onClick = { onSwitcher(true) }) {
                 Text(
                     providerName(state.provider) + (if (state.modelLabel.isNotBlank()) " · " + state.modelLabel else ""),
                     maxLines = 1,
@@ -180,7 +196,7 @@ private fun TopBar(
                 )
                 Icon(Icons.Rounded.ExpandMore, stringResource(R.string.smartboard_switch_model), Modifier.size(18.dp))
             }
-            DropdownMenu(expanded = switcher, onDismissRequest = { switcher = false }) {
+            DropdownMenu(expanded = switcher, onDismissRequest = { onSwitcher(false) }) {
                 Text(
                     stringResource(R.string.smartboard_switch_provider),
                     style = MaterialTheme.typography.labelMedium,
@@ -208,10 +224,16 @@ private fun TopBar(
                 )
                 state.switcher.options.forEach { option ->
                     DropdownMenuItem(
-                        text = { Text(option.label, maxLines = 1) },
+                        text = {
+                            Text(
+                                option.label + if (option.textOnly) " · " + stringResource(R.string.smartboard_no_images_badge) else "",
+                                maxLines = 1,
+                                color = if (option.textOnly) BestNoteTheme.colors.muted else androidx.compose.ui.graphics.Color.Unspecified,
+                            )
+                        },
                         onClick = {
                             onModel(option.model)
-                            switcher = false
+                            onSwitcher(false)
                         },
                         leadingIcon = {
                             when {
@@ -225,7 +247,7 @@ private fun TopBar(
                 DropdownMenuItem(
                     text = { Text(state.keyHint?.let { stringResource(R.string.smartboard_key_set, it) } ?: stringResource(R.string.smartboard_key_none)) },
                     onClick = {
-                        switcher = false
+                        onSwitcher(false)
                         onKey()
                     },
                     leadingIcon = { Icon(Icons.Rounded.Key, null, Modifier.size(18.dp)) },
@@ -796,7 +818,7 @@ private fun ReviewPanel(
 // ---------------------------------------------------------------- failure
 
 @Composable
-private fun FailedStage(failed: SmartBoardStage.Failed, onRetry: () -> Unit, onBack: () -> Unit, onKey: () -> Unit) {
+private fun FailedStage(failed: SmartBoardStage.Failed, onRetry: () -> Unit, onBack: () -> Unit, onKey: () -> Unit, onPickModel: () -> Unit) {
     val message = when (failed.reason) {
         SmartBoardStage.Reason.NoBlocks -> R.string.smartboard_error_empty
         SmartBoardStage.Reason.MissingKey -> R.string.smartboard_error_no_key
@@ -808,6 +830,7 @@ private fun FailedStage(failed: SmartBoardStage.Failed, onRetry: () -> Unit, onB
         SmartBoardStage.Reason.ServerBusy -> R.string.smartboard_error_busy
         SmartBoardStage.Reason.Blocked -> R.string.smartboard_error_blocked
         SmartBoardStage.Reason.Truncated -> R.string.smartboard_error_truncated
+        SmartBoardStage.Reason.ImageNotSeen -> R.string.smartboard_error_no_image
         SmartBoardStage.Reason.Other -> R.string.smartboard_error_other
     }
     val clipboard = LocalClipboardManager.current
@@ -827,6 +850,8 @@ private fun FailedStage(failed: SmartBoardStage.Failed, onRetry: () -> Unit, onB
                 OutlinedButton(onClick = onBack) { Text(stringResource(R.string.smartboard_back_to_photos)) }
                 if (failed.reason == SmartBoardStage.Reason.InvalidKey || failed.reason == SmartBoardStage.Reason.MissingKey) {
                     Button(onClick = onKey) { Text(stringResource(R.string.smartboard_set_key)) }
+                } else if (failed.reason == SmartBoardStage.Reason.ImageNotSeen) {
+                    Button(onClick = onPickModel) { Text(stringResource(R.string.smartboard_pick_model)) }
                 } else {
                     Button(onClick = onRetry) { Text(stringResource(R.string.smartboard_retry)) }
                 }

@@ -2,8 +2,11 @@ package app.bestnote.ai.vision
 
 import app.bestnote.core.model.LayoutTemplate
 
-/** An image handed to a provider. */
-class VisionImage(val bytes: ByteArray, val mimeType: String)
+/**
+ * An image handed to a provider. [canary]: the 4-digit code drawn on the image's bottom strip ([Canary]);
+ * the provider asks the model to read it back and throws [VisionError.ImageNotSeen] when it does not.
+ */
+class VisionImage(val bytes: ByteArray, val mimeType: String, val canary: String? = null)
 
 /** One message of a text-only conversation (TPL-02 "Design with AI"). */
 data class ChatTurn(val fromUser: Boolean, val text: String)
@@ -32,6 +35,13 @@ sealed class VisionError(message: String, cause: Throwable? = null) : Exception(
 
     /** The answer was cut off by the output limit and nothing complete could be salvaged. */
     class Truncated(val raw: String?) : VisionError("The answer was cut off before any note was complete")
+
+    /**
+     * The model answered but never saw the photo: it did not read back the canary code drawn on the image
+     * ([Canary]). Some models silently drop image input and invent notes; those must never be shown.
+     */
+    class ImageNotSeen(val model: String) : VisionError("Model $model did not receive the image")
+
     class Network(cause: Throwable) : VisionError("Network error (${cause.javaClass.simpleName}: ${cause.message.orEmpty().take(120)})", cause)
 }
 

@@ -47,6 +47,12 @@
     <string name="smartboard_error_quota">انتهت الحصة المتاحة لهذا الموديل. اختر موديلًا آخر من الأعلى، أو راجع خطتك عند المزود.</string>
     <string name="smartboard_error_network">تعذّر الوصول إلى مزود الذكاء. تحقق من اتصالك بالإنترنت وحاول مجددًا.</string>
     <string name="smartboard_error_other">حدث خطأ أثناء قراءة هذه الصورة.</string>
+    <string name="smartboard_error_no_image">لم يستلم هذا النموذج الصورة (لا يستطيع قراءة الصور). اختر نموذجًا يدعم الصور.</string>
+    <string name="smartboard_pick_model">اختيار نموذج</string>
+    <string name="smartboard_no_images_badge">بلا صور</string>
+    <string name="smartboard_text_only_title">هذا النموذج لا يقرأ الصور</string>
+    <string name="smartboard_text_only_body">تجاهل %1$s الصورة في المرة السابقة وألّف الملاحظات. اختر نموذجًا يدعم الصور أو جرّبه على أي حال.</string>
+    <string name="smartboard_try_anyway">جرّب على أي حال</string>
     <string name="smartboard_error_model">نموذج الذكاء هذا غير متاح لمفتاحك. اختر نموذجًا آخر من الإعدادات ← السبورة الذكية.</string>
     <string name="smartboard_error_busy">مزود الذكاء مشغول الآن. حاول بعد قليل.</string>
     <string name="smartboard_error_blocked">رفض مزود الذكاء قراءة هذه الصورة.</string>

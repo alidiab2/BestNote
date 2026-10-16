@@ -27,6 +27,7 @@ import app.bestnote.ai.vision.DemoVisionProvider
 import app.bestnote.ai.vision.VisionError
 import app.bestnote.ai.vision.VisionImage
 import app.bestnote.ai.vision.providers.AiProviders
+import app.bestnote.ai.vision.providers.ImageCanary
 import app.bestnote.core.model.PageSize
 import app.bestnote.engine.canvas.document.PagedDocument
 import app.bestnote.engine.canvas.document.PagedDocumentView
@@ -106,6 +107,7 @@ internal class InkTidier(
                         is VisionError.RateLimited -> R.string.tidy_error_quota
                         is VisionError.Network, is java.io.IOException -> R.string.tidy_error_network
                         is VisionError.ServiceUnavailable -> R.string.tidy_error_busy
+                        is VisionError.ImageNotSeen -> R.string.tidy_error_no_image
                         else -> R.string.tidy_error_other
                     },
                 )
@@ -125,7 +127,7 @@ internal class InkTidier(
         val providers = ai
         if (providers != null && runCatching { providers.isConfigured() }.getOrDefault(false)) {
             val png = withContext(Dispatchers.Default) { InkSnapshot.png(selected.strokes) } ?: return null.also { message(R.string.tidy_nothing) }
-            return providers.create().beautify(VisionImage(png, "image/png"), selected.box.width, selected.box.height, language())
+            return providers.create().beautify(withContext(Dispatchers.Default) { ImageCanary.fromEncoded(png, "image/png") }, selected.box.width, selected.box.height, language())
         }
         if (models.state.value.isReady) {
             val samples = withContext(Dispatchers.Default) { selected.strokes.map(InkConversion::samplesOf) }

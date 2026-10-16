@@ -1,9 +1,11 @@
 package app.bestnote.ai.vision.openai.live
 
+import app.bestnote.ai.vision.Canary
 import app.bestnote.ai.vision.NoteWire
 import app.bestnote.ai.vision.NotesRequest
 import app.bestnote.ai.vision.ProviderCredentials
 import app.bestnote.ai.vision.VisionDiagnostics
+import app.bestnote.ai.vision.VisionError
 import app.bestnote.ai.vision.VisionImage
 import app.bestnote.ai.vision.openai.OpenAiVisionProvider
 import app.bestnote.engine.layout.AiInstructions
@@ -12,6 +14,9 @@ import kotlinx.coroutines.runBlocking
 import okhttp3.OkHttpClient
 import org.junit.Assume.assumeTrue
 import org.junit.Test
+import java.awt.Color
+import java.awt.Font
+import java.awt.RenderingHints
 import java.awt.image.BufferedImage
 import java.io.ByteArrayOutputStream
 import java.io.File
@@ -43,19 +48,45 @@ class LiveBoardTest {
         }
         VisionDiagnostics.captureRaw = true
         val started = System.currentTimeMillis()
-        val doc = OpenAiVisionProvider(OkHttpClient(), creds).writeNotes(jpeg(File(args.getValue("image"))), NotesRequest(template, rtl = args["rtl"] == "1"))
+        val model = creds.model()
+        val image = jpeg(File(args.getValue("image")))
         val out = File(args.getValue("out")).apply { mkdirs() }
+        val doc = try {
+            OpenAiVisionProvider(OkHttpClient(), creds).writeNotes(image, NotesRequest(template, rtl = args["rtl"] == "1"))
+        } catch (e: VisionError.ImageNotSeen) {
+            File(out, "raw.txt").writeText(VisionDiagnostics.latest()?.raw.orEmpty())
+            File(out, "summary.txt").writeText("model=$model result=ImageNotSeen expected=${image.canary} prompt_tokens=${promptTokens()}\n")
+            throw e
+        }
         File(out, "notes.json").writeText(NoteWire.encode(doc))
         File(out, "raw.txt").writeText(VisionDiagnostics.latest()?.raw.orEmpty())
-        File(out, "summary.txt").writeText("ms=${System.currentTimeMillis() - started} elements=${doc.flatten().size} kinds=${doc.flatten().groupingBy { it.element }.eachCount()}\n")
+        File(out, "summary.txt").writeText(
+            "model=$model result=ok canary=${image.canary} (model returned it) prompt_tokens=${promptTokens()} " +
+                "ms=${System.currentTimeMillis() - started} elements=${doc.flatten().size} kinds=${doc.flatten().groupingBy { it.element }.eachCount()}\n",
+        )
     }
 
-    /** The app's capture path: longest side 1600 px, JPEG. */
+    private fun promptTokens() = VisionDiagnostics.latest()?.raw?.let(Canary::promptTokens)
+
+    /** The app's capture path: longest side 1600 px, a white strip with a random 4-digit code at the bottom edge (see [Canary]), JPEG. */
     private fun jpeg(file: File): VisionImage {
         val src = ImageIO.read(file)
         val k = minOf(1f, 1600f / maxOf(src.width, src.height))
-        val img = BufferedImage((src.width * k).toInt(), (src.height * k).toInt(), BufferedImage.TYPE_INT_RGB)
-        img.createGraphics().apply { drawImage(src, 0, 0, img.width, img.height, null); dispose() }
-        return VisionImage(ByteArrayOutputStream().also { ImageIO.write(img, "jpg", it) }.toByteArray(), "image/jpeg")
+        val w = (src.width * k).toInt()
+        val h = (src.height * k).toInt()
+        val strip = Canary.stripHeight(w, h)
+        val code = Canary.newCode()
+        val img = BufferedImage(w, h + strip, BufferedImage.TYPE_INT_RGB)
+        img.createGraphics().apply {
+            color = Color.WHITE
+            fillRect(0, 0, w, h + strip)
+            drawImage(src, 0, 0, w, h, null)
+            setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON)
+            font = Font(Font.SANS_SERIF, Font.BOLD, 10).deriveFont(Canary.textSize(w, strip))
+            color = Color.BLACK
+            drawString(code, (w - fontMetrics.stringWidth(code)) / 2, h + (strip + fontMetrics.ascent - fontMetrics.descent) / 2)
+            dispose()
+        }
+        return VisionImage(ByteArrayOutputStream().also { ImageIO.write(img, "jpg", it) }.toByteArray(), "image/jpeg", code)
     }
 }

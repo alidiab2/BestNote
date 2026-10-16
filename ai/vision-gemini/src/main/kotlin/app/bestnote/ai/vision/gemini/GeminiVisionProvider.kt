@@ -2,6 +2,7 @@ package app.bestnote.ai.vision.gemini
 
 import app.bestnote.ai.vision.AiDocument
 import app.bestnote.ai.vision.AiModel
+import app.bestnote.ai.vision.Canary
 import app.bestnote.ai.vision.AiSchema
 import app.bestnote.ai.vision.BoardRequest
 import app.bestnote.ai.vision.NoteMerge
@@ -76,12 +77,14 @@ class GeminiVisionProvider(
         generate(system, user, image, { AiSchema.document(it) }) { text, truncated -> GeminiResponses.document(text, truncated) }
 
     private suspend fun <T> generate(
-        system: String,
+        system0: String,
         user: String,
         image: VisionImage,
-        schema: (AiSchema.Dialect) -> JsonObject,
+        schema0: (AiSchema.Dialect) -> JsonObject,
         parse: (String, Boolean) -> T,
     ): T {
+        val system = Canary.system(system0, image)
+        val schema: (AiSchema.Dialect) -> JsonObject = { Canary.withSeen(schema0(it), image) }
         val key = settings.apiKey()?.trim()?.takeIf { it.isNotEmpty() } ?: throw VisionError.MissingKey()
         val model = settings.model().trim().ifEmpty { GeminiConfig.DEFAULT_MODEL }
         val mime = GeminiRequests.sniffMime(image.bytes, image.mimeType)
@@ -96,9 +99,11 @@ class GeminiVisionProvider(
                 throw VisionError.Network(e)
             }
             VisionDiagnostics.recordResponse("gemini", model, response.code, response.body)
+            if (response.code == 200) Canary.noteUsage(response.body, system.length + user.length)
             when {
                 response.code == 200 -> {
                     val answer = GeminiResponses.answer(response.body)
+                    Canary.verify(answer.text, answer.truncated, image, model)
                     return parse(answer.text, answer.truncated)
                 }
                 thinking != Thinking.None && GeminiResponses.rejectsThinking(response.code, response.body) ->

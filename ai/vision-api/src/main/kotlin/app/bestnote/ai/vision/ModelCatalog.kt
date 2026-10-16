@@ -84,6 +84,17 @@ object ModelCatalog {
         }
     }
 
+    /**
+     * [models] with every id in [textOnly] (models that ignored a photo, see [Canary]) flagged `vision = false`, which
+     * every automatic choice and the pickers' "no images" badge already honour. Ids missing from the list are added.
+     */
+    fun markTextOnly(models: List<AiModel>, textOnly: Set<String>): List<AiModel> {
+        if (textOnly.isEmpty()) return models
+        val known = models.map { it.id }.toSet()
+        return models.map { if (it.id in textOnly) it.copy(vision = false) else it } +
+            textOnly.filter { it !in known }.sorted().map { AiModel(it, vision = false) }
+    }
+
     /** Models built for something other than reading an image into notes. */
     fun isSpecialist(id: String): Boolean = SPECIALIST.containsMatchIn(id.lowercase().substringAfterLast('/'))
 

@@ -15,6 +15,8 @@ internal class FallbackVisionProvider(
     private val candidates: suspend () -> List<String>,
     private val providerFor: (model: String) -> VisionProvider,
     private val skipped: MutableSet<String>,
+    /** Called with a model that answered without having seen the photo; the caller remembers it as text-only. */
+    private val onTextOnly: suspend (model: String) -> Unit = {},
 ) : VisionProvider {
     override suspend fun reconstructBoard(image: VisionImage, request: BoardRequest) = attempt { it.reconstructBoard(image, request) }
 
@@ -35,6 +37,9 @@ internal class FallbackVisionProvider(
             } catch (e: VisionError.RateLimited) {
                 last = e
             } catch (e: VisionError.ModelUnavailable) {
+                last = e
+            } catch (e: VisionError.ImageNotSeen) {
+                onTextOnly(e.model)
                 last = e
             }
             synchronized(skipped) { skipped += model }

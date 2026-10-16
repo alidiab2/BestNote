@@ -46,16 +46,25 @@ class AiProviders(private val http: OkHttpClient, val settings: KeystoreAiSettin
                 },
                 providerFor = { id -> createFor(kind) { id } },
                 skipped = skipped,
+                onTextOnly = { settings.markTextOnly(kind, it) },
             )
         }
 
-        override suspend fun reconstructBoard(image: VisionImage, request: BoardRequest) = target().reconstructBoard(image, request)
+        /** A model that ignores the photo is remembered as text-only (per provider and id) before the error goes up. */
+        private suspend fun <T> remembering(call: suspend () -> T): T = try {
+            call()
+        } catch (e: VisionError.ImageNotSeen) {
+            settings.markTextOnly(kind, e.model)
+            throw e
+        }
 
-        override suspend fun beautify(selection: VisionImage, widthPt: Float, heightPt: Float, language: String?) = target().beautify(selection, widthPt, heightPt, language)
+        override suspend fun reconstructBoard(image: VisionImage, request: BoardRequest) = remembering { target().reconstructBoard(image, request) }
 
-        override suspend fun transcribe(selection: VisionImage, language: String?) = target().transcribe(selection, language)
+        override suspend fun beautify(selection: VisionImage, widthPt: Float, heightPt: Float, language: String?) = remembering { target().beautify(selection, widthPt, heightPt, language) }
 
-        override suspend fun writeNotes(image: VisionImage, request: app.bestnote.ai.vision.NotesRequest) = target().writeNotes(image, request)
+        override suspend fun transcribe(selection: VisionImage, language: String?) = remembering { target().transcribe(selection, language) }
+
+        override suspend fun writeNotes(image: VisionImage, request: app.bestnote.ai.vision.NotesRequest) = remembering { target().writeNotes(image, request) }
 
         override suspend fun completeText(system: String, turns: List<app.bestnote.ai.vision.ChatTurn>, json: Boolean) = target().completeText(system, turns, json)
     }

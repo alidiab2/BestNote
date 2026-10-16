@@ -5,6 +5,7 @@ import app.bestnote.ai.vision.AiDocumentParser
 import app.bestnote.ai.vision.AiModel
 import app.bestnote.ai.vision.AiSchema
 import app.bestnote.ai.vision.BoardRequest
+import app.bestnote.ai.vision.Canary
 import app.bestnote.ai.vision.NoteMerge
 import app.bestnote.ai.vision.NotePrompts
 import app.bestnote.ai.vision.NoteSchema
@@ -97,7 +98,10 @@ class OpenAiVisionProvider(
     private suspend fun generate(system: String, user: String, image: VisionImage): AiDocument =
         generate(system, user, image, AiSchema.document(AiSchema.Dialect.Closed), Prompts.JSON_ONLY_HINT) { text, truncated -> AiDocumentParser.answer(text, truncated) }
 
-    private suspend fun <T> generate(system: String, user: String, image: VisionImage, schema: JsonObject, jsonHint: String, parse: (String, Boolean) -> T): T {
+    private suspend fun <T> generate(system0: String, user: String, image: VisionImage, schema0: JsonObject, jsonHint0: String, parse: (String, Boolean) -> T): T {
+        val system = Canary.system(system0, image)
+        val schema = Canary.withSeen(schema0, image)
+        val jsonHint = Canary.hint(jsonHint0, image)
         val base = credentials.baseUrl()?.trim()?.takeIf { it.isNotEmpty() } ?: config.baseUrl
         val official = isOfficial(base)
         val key = credentials.apiKey()?.trim()?.takeIf { it.isNotEmpty() }
@@ -122,6 +126,7 @@ class OpenAiVisionProvider(
                 throw VisionError.BadResponse("invalid base URL", e)
             }
             VisionDiagnostics.recordResponse(provider, model, response.code, response.body)
+            if (response.code == 200) Canary.noteUsage(response.body, system.length + user.length)
             when {
                 response.code == 200 -> {
                     val answer = try {
@@ -134,6 +139,7 @@ class OpenAiVisionProvider(
                         budget = (budget * 2).coerceAtMost(MAX_BUDGET)
                         continue
                     }
+                    Canary.verify(answer.text, answer.truncated, image, model)
                     return parse(answer.text, answer.truncated)
                 }
                 effort != null && OpenAiResponses.rejectsReasoningEffort(response.code, response.body) -> effort = null
