@@ -12,6 +12,8 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.navigation.toRoute
+import app.bestnote.ai.scan.Quad
+import app.bestnote.ai.vision.AiDocument
 import app.bestnote.ai.vision.BoardRequest
 import app.bestnote.ai.vision.DemoVisionProvider
 import app.bestnote.ai.vision.VisionError
@@ -26,7 +28,6 @@ import app.bestnote.core.model.InkStroke
 import app.bestnote.core.model.LayoutTemplate
 import app.bestnote.core.model.PageSize
 import app.bestnote.core.model.PaperTemplate
-import app.bestnote.core.model.RectPt
 import app.bestnote.engine.layout.RuledPaper
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -40,35 +41,45 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import java.io.ByteArrayOutputStream
 import java.io.File
 import java.util.UUID
 import javax.inject.Inject
 import kotlin.math.max
-import kotlin.math.roundToInt
 
 /** What Smart Board shows: capture → reading → the handwritten page. */
 sealed interface SmartBoardStage {
     /** Choosing a photo, then the region of the board to read. */
     data object Capture : SmartBoardStage
 
-    /** [step] of [SmartBoardViewModel.STEPS] is in progress. */
-    data class Reading(val step: Int) : SmartBoardStage
+    /** [step] of [SmartBoardViewModel.STEPS] is in progress, on photo [photo] (1-based) of [photos]. */
+    data class Reading(val step: Int, val photo: Int = 1, val photos: Int = 1) : SmartBoardStage
 
-    data class Review(val ink: BoardInk, val demo: Boolean, val tookMs: Long) : SmartBoardStage
+    /** [doc] is kept so another paper template re-lays the same notes without a new AI call. */
+    data class Review(val ink: BoardInk, val demo: Boolean, val tookMs: Long, val doc: AiDocument) : SmartBoardStage
 
     /** [diagnostics]: provider, error, drop reasons and raw answer, for "Copy raw AI response" (debug / verbose only). */
     data class Failed(val reason: Reason, val detail: String? = null, val diagnostics: String? = null) : SmartBoardStage
 
-    enum class Reason { NoBlocks, InvalidKey, RateLimited, QuotaExhausted, Network, ModelUnavailable, ServerBusy, Blocked, Truncated, Other }
+    enum class Reason { NoBlocks, MissingKey, InvalidKey, RateLimited, QuotaExhausted, Network, ModelUnavailable, ServerBusy, Blocked, Truncated, Other }
 }
+
+/** One photo of the board and the outline to read on it ([quad], normalised; [detected] when found automatically). */
+data class BoardPhoto(val id: Long, val bitmap: Bitmap, val quad: Quad, val detected: Boolean)
 
 data class SmartBoardUiState(
     val stage: SmartBoardStage = SmartBoardStage.Capture,
-    /** The photo being cropped (downscaled for the screen and the provider). */
-    val photo: Bitmap? = null,
-    /** The region to read, 0..1 of the photo. */
-    val crop: RectPt = RectPt(0.04f, 0.04f, 0.96f, 0.96f),
+    /** The photos of the board, in reading order (downscaled for the screen and the provider). */
+    val photos: List<BoardPhoto> = emptyList(),
+    /** The photo whose corners are being adjusted. */
+    val current: Int = 0,
+    /** Flatten-and-clean preview of the current photo, while "Preview" is on. */
+    val flatPreview: Bitmap? = null,
+    /** Auto-enhance: even lighting, white board, crisp ink. */
+    val enhance: Boolean = true,
+    /** Photos still being decoded and searched for the board's edges. */
+    val loading: Int = 0,
+    /** Paper the notes are written on (the review screen's template picker). */
+    val template: PaperTemplate = PaperTemplate.Ruled,
     val hasKey: Boolean = false,
     val keyHint: String? = null,
     /** The provider Settings selected (Gemini, Claude, OpenAI, compatible). */
@@ -90,8 +101,20 @@ data class ModelSwitcher(
     val loading: Boolean = false,
 )
 
-/** Handwriting to insert into the notebook as new pages, on [template] paper. */
-class SmartBoardResult(val template: PaperTemplate, val pages: List<List<InkStroke>>)
+/**
+ * Handwriting to insert as new pages on [template] paper: after page [afterIndex] of the notebook
+ * Smart Board was opened from, or into a new notebook named [title] when [newNotebook].
+ */
+class SmartBoardResult(
+    val template: PaperTemplate,
+    val pages: List<List<InkStroke>>,
+    val afterIndex: Int = -1,
+    val newNotebook: Boolean = false,
+    val title: String? = null,
+    /** Page size the ink was laid out for (points). */
+    val widthPt: Float = 0f,
+    val heightPt: Float = 0f,
+)
 
 @HiltViewModel
 class SmartBoardViewModel @Inject constructor(
@@ -101,13 +124,18 @@ class SmartBoardViewModel @Inject constructor(
 ) : ViewModel() {
     private val route = savedStateHandle.toRoute<SmartBoardRoute>()
 
-    /** The paper the notes are written on: the notebook page's size, ruled (college) when the page isn't. */
-    val template: PaperTemplate = PaperTemplate.entries.firstOrNull { it.name == route.template }
-        ?.takeIf(RuledPaper::isRuled) ?: PaperTemplate.Ruled
-    val paper: RuledPaper = RuledPaper.of(template, PageSize(route.widthPt, route.heightPt))
+    /** The notebook page's size; paper starts as the page's own template when Smart Board can write on it. */
+    private val pageSize = PageSize(route.widthPt, route.heightPt)
+    private val startTemplate: PaperTemplate = PaperTemplate.entries.firstOrNull { it.name == route.template }
+        ?.takeIf { it in RuledPaper.writable } ?: PaperTemplate.Ruled
+
+    /** 1-based number of the page the notes go after (0 when unknown). */
+    val afterPage: Int = route.pageIndex + 1
+
+    fun paperFor(template: PaperTemplate): RuledPaper = RuledPaper.of(template, pageSize)
 
     private val settings = providers.settings
-    private val state = MutableStateFlow(SmartBoardUiState())
+    private val state = MutableStateFlow(SmartBoardUiState(template = startTemplate))
     val ui: StateFlow<SmartBoardUiState> = state.asStateFlow()
 
     /** Debuggable build, or "Verbose AI logging" on: show "Copy raw AI response" on failures. */
@@ -177,24 +205,103 @@ class SmartBoardViewModel @Inject constructor(
     /** A file the camera app writes into (shared through this module's FileProvider). */
     fun cameraFile(): File = File(context.cacheDir, "smartboard").apply { mkdirs() }.resolve("board.jpg")
 
-    fun onPhoto(uri: Uri) {
+    private var nextPhotoId = 0L
+
+    fun onPhoto(uri: Uri) = onPhotos(listOf(uri))
+
+    /** Adds photos (camera or gallery): decoded, then the board's edges are searched on each. */
+    fun onPhotos(uris: List<Uri>) {
+        val room = MAX_PHOTOS - state.value.photos.size
+        val take = uris.take(room.coerceAtLeast(0))
+        if (take.isEmpty()) return
+        state.update { it.copy(loading = it.loading + take.size, stage = SmartBoardStage.Capture) }
         viewModelScope.launch {
-            val bitmap = withContext(Dispatchers.IO) { runCatching { decode(uri) }.getOrNull() }
-            if (bitmap == null) {
-                state.update { it.copy(stage = SmartBoardStage.Failed(SmartBoardStage.Reason.Other)) }
-                return@launch
+            var failed = 0
+            for (uri in take) {
+                val photo = withContext(Dispatchers.Default) {
+                    val bitmap = runCatching { withContext(Dispatchers.IO) { decode(uri) } }.getOrNull() ?: return@withContext null
+                    val found = BoardScan.detect(bitmap)
+                    BoardPhoto(nextPhotoId++, bitmap, found?.quad ?: Quad.full(), found != null)
+                }
+                if (photo == null) failed++
+                state.update { s ->
+                    val photos = if (photo != null) s.photos + photo else s.photos
+                    s.copy(photos = photos, current = if (photo != null) photos.lastIndex else s.current, loading = s.loading - 1, flatPreview = null)
+                }
             }
-            state.update { it.copy(photo = bitmap, crop = SmartBoardUiState().crop, stage = SmartBoardStage.Capture) }
+            if (failed > 0 && state.value.photos.isEmpty()) state.update { it.copy(stage = SmartBoardStage.Failed(SmartBoardStage.Reason.Other)) }
         }
     }
 
-    fun setCrop(crop: RectPt) = state.update { it.copy(crop = crop) }
+    fun select(index: Int) = state.update { if (index in it.photos.indices) it.copy(current = index, flatPreview = null) else it }
+
+    fun removePhoto(index: Int) = state.update { s ->
+        if (index !in s.photos.indices) return@update s
+        val photos = s.photos.toMutableList().apply { removeAt(index) }
+        s.copy(photos = photos, current = s.current.coerceAtMost(photos.lastIndex).coerceAtLeast(0), flatPreview = null)
+    }
+
+    /** Moves one corner of the current photo's outline. */
+    fun setQuad(quad: Quad) = state.update { s ->
+        val photo = s.photos.getOrNull(s.current) ?: return@update s
+        s.copy(photos = s.photos.toMutableList().apply { set(s.current, photo.copy(quad = quad)) })
+    }
+
+    /** Whole photo, or the detected board again. */
+    fun resetQuad(whole: Boolean) {
+        val s = state.value
+        val photo = s.photos.getOrNull(s.current) ?: return
+        viewModelScope.launch {
+            val quad = if (whole) Quad.full(0f) else withContext(Dispatchers.Default) { BoardScan.detect(photo.bitmap)?.quad } ?: Quad.full()
+            setQuad(quad)
+            state.update { it.copy(flatPreview = null) }
+        }
+    }
+
+    fun setEnhance(on: Boolean) {
+        state.update { it.copy(enhance = on) }
+        if (state.value.flatPreview != null) showPreview(true)
+    }
+
+    private var previewJob: Job? = null
+
+    /** Shows (or hides) the current photo flattened and cleaned, exactly as the AI will see it. */
+    fun showPreview(on: Boolean) {
+        previewJob?.cancel()
+        if (!on) return state.update { it.copy(flatPreview = null) }
+        val s = state.value
+        val photo = s.photos.getOrNull(s.current) ?: return
+        previewJob = viewModelScope.launch {
+            val flat = withContext(Dispatchers.Default) { BoardScan.flatten(photo.bitmap, photo.quad, s.enhance, PREVIEW_SIDE) }
+            state.update { it.copy(flatPreview = flat) }
+        }
+    }
 
     fun setArabic(arabic: Boolean) = state.update { it.copy(arabic = arabic) }
 
+    /** Back to the photos (they are kept, so the corners can be fixed and read again). */
+    fun backToPhotos() {
+        job?.cancel()
+        state.update { it.copy(stage = SmartBoardStage.Capture) }
+    }
+
+    /** Stops the AI call in progress. */
+    fun cancel() = backToPhotos()
+
+    /** Starts over without photos. */
     fun retake() {
         job?.cancel()
-        state.update { it.copy(stage = SmartBoardStage.Capture, photo = null) }
+        state.update { it.copy(stage = SmartBoardStage.Capture, photos = emptyList(), current = 0, flatPreview = null) }
+    }
+
+    /** Re-writes the same notes on another paper (no new AI call). */
+    fun setTemplate(template: PaperTemplate) {
+        state.update { it.copy(template = template) }
+        val review = state.value.stage as? SmartBoardStage.Review ?: return
+        viewModelScope.launch {
+            val ink = withContext(Dispatchers.Default) { runCatching { pipeline.write(review.doc, state.value.arabic, paperFor(template)) }.getOrNull() } ?: return@launch
+            state.update { s -> if (s.stage === review) s.copy(stage = review.copy(ink = ink)) else s }
+        }
     }
 
     fun saveKey(key: String?) {
@@ -204,63 +311,89 @@ class SmartBoardViewModel @Inject constructor(
         }
     }
 
-    /** Reads the cropped photo, or the built-in sample board when there is no photo. */
+    /** Reads every photo (flattened, enhanced), or the built-in sample board when there is no photo or key. */
     fun read() {
         val s = state.value
-        val photo = s.photo
-        val demo = photo == null || !s.hasKey
+        val photos = s.photos
+        val demo = photos.isEmpty() || !s.hasKey
         job?.cancel()
         job = viewModelScope.launch {
             val started = SystemClock.elapsedRealtime()
             val startedAt = System.currentTimeMillis()
-            val ticker = launch {
-                for (i in 0 until STEPS - 1) {
-                    state.update { it.copy(stage = SmartBoardStage.Reading(i)) }
-                    delay(STEP_MS)
-                }
-            }
+            val count = if (demo) 1 else photos.size
             try {
-                val image = withContext(Dispatchers.Default) { photo?.let { crop(it, s.crop) } ?: VisionImage(ByteArray(0), "image/jpeg") }
-                val provider: VisionProvider = if (demo) DemoVisionProvider() else providers.create(s.provider)
-                val request = BoardRequest(LayoutTemplate.LectureSummary, rtl = s.arabic, language = if (s.arabic) "ar" else null)
-                val doc = provider.reconstructBoard(image, request)
-                ticker.join()
-                state.update { it.copy(stage = SmartBoardStage.Reading(STEPS - 1)) }
-                val ink = withContext(Dispatchers.Default) { pipeline.write(doc, s.arabic, paper) }
+                val docs = ArrayList<AiDocument>(count)
+                for (i in 0 until count) {
+                    val ticker = launch {
+                        for (step in 0 until STEPS - 1) {
+                            state.update { it.copy(stage = SmartBoardStage.Reading(step, i + 1, count)) }
+                            delay(STEP_MS)
+                        }
+                    }
+                    val image = if (demo) {
+                        VisionImage(ByteArray(0), "image/jpeg")
+                    } else {
+                        withContext(Dispatchers.Default) { VisionImage(BoardScan.jpeg(BoardScan.flatten(photos[i].bitmap, photos[i].quad, s.enhance)), "image/jpeg") }
+                    }
+                    val provider: VisionProvider = if (demo) DemoVisionProvider() else providers.create(s.provider)
+                    val request = BoardRequest(LayoutTemplate.LectureSummary, rtl = s.arabic, language = if (s.arabic) "ar" else null)
+                    try {
+                        docs += provider.reconstructBoard(image, request)
+                    } finally {
+                        ticker.cancel()
+                    }
+                }
+                state.update { it.copy(stage = SmartBoardStage.Reading(STEPS - 1, count, count)) }
+                val doc = BoardMerge.merge(docs)
+                val ink = withContext(Dispatchers.Default) { pipeline.write(doc, s.arabic, paperFor(state.value.template)) }
                 ink.dropReasons.forEach { Log.i(TAG, "dropped $it") }
-                state.update { it.copy(stage = SmartBoardStage.Review(ink, demo, SystemClock.elapsedRealtime() - started)) }
+                state.update { it.copy(stage = SmartBoardStage.Review(ink, demo, SystemClock.elapsedRealtime() - started, doc)) }
             } catch (e: CancellationException) {
                 throw e
             } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
-                ticker.cancel()
                 if (!demo) VisionDiagnostics.recordOutcome(error = e, since = startedAt)
                 val last = VisionDiagnostics.latest()
                 // Content-free: error class + provider message (redacted) + per-block drop reasons. Never the key.
                 Log.w(TAG, "Smart Board failed (${s.provider.id}): ${e.javaClass.simpleName}: ${Redactor.redact(e.message.orEmpty())}")
                 last?.parseNotes?.takeIf { it.isNotEmpty() }?.let { Log.w(TAG, "parse repairs: ${it.joinToString("; ")}") }
                 last?.dropReasons?.forEach { Log.w(TAG, "dropped $it") }
-                val reason = when (e) {
-                    is VisionError.BadResponse -> SmartBoardStage.Reason.NoBlocks
-                    is VisionError.InvalidKey, is VisionError.MissingKey -> SmartBoardStage.Reason.InvalidKey
-                    is VisionError.RateLimited -> if (e.quotaExhausted) SmartBoardStage.Reason.QuotaExhausted else SmartBoardStage.Reason.RateLimited
-                    is VisionError.Network -> SmartBoardStage.Reason.Network
-                    is VisionError.ModelUnavailable -> SmartBoardStage.Reason.ModelUnavailable
-                    is VisionError.ServiceUnavailable -> SmartBoardStage.Reason.ServerBusy
-                    is VisionError.Blocked -> SmartBoardStage.Reason.Blocked
-                    is VisionError.Truncated -> SmartBoardStage.Reason.Truncated
-                    else -> SmartBoardStage.Reason.Other
-                }
+                val reason = reasonOf(e)
                 val diagnostics = if (showDiagnostics) last?.let(VisionDiagnostics::format) ?: e.toString() else null
-                val detail = if (showDiagnostics) Redactor.redact(e.message.orEmpty()).take(DETAIL_CHARS) else null
+                val detail = when {
+                    e is VisionError.RateLimited && e.retryAfterSeconds != null -> context.getString(R.string.smartboard_error_retry_after, e.retryAfterSeconds)
+                    showDiagnostics -> Redactor.redact(e.message.orEmpty()).take(DETAIL_CHARS)
+                    else -> null
+                }
                 state.update { it.copy(stage = SmartBoardStage.Failed(reason, detail, diagnostics)) }
             }
         }
     }
 
+    private fun reasonOf(e: Exception): SmartBoardStage.Reason = when (e) {
+        is VisionError.BadResponse -> SmartBoardStage.Reason.NoBlocks
+        is VisionError.MissingKey -> SmartBoardStage.Reason.MissingKey
+        is VisionError.InvalidKey -> SmartBoardStage.Reason.InvalidKey
+        is VisionError.RateLimited -> if (e.quotaExhausted) SmartBoardStage.Reason.QuotaExhausted else SmartBoardStage.Reason.RateLimited
+        is VisionError.Network, is java.io.IOException -> SmartBoardStage.Reason.Network
+        is VisionError.ModelUnavailable -> SmartBoardStage.Reason.ModelUnavailable
+        is VisionError.ServiceUnavailable -> SmartBoardStage.Reason.ServerBusy
+        is VisionError.Blocked -> SmartBoardStage.Reason.Blocked
+        is VisionError.Truncated -> SmartBoardStage.Reason.Truncated
+        else -> SmartBoardStage.Reason.Other
+    }
+
     /** The reviewed pages as stored ink. */
-    fun result(): SmartBoardResult? {
+    fun result(newNotebook: Boolean = false): SmartBoardResult? {
         val review = state.value.stage as? SmartBoardStage.Review ?: return null
-        return SmartBoardResult(template, review.ink.pages.pages.map { page -> page.map { it.stroke } })
+        return SmartBoardResult(
+            template = review.ink.paper.template,
+            pages = review.ink.pages.pages.map { page -> page.map { it.stroke } },
+            afterIndex = route.pageIndex,
+            newNotebook = newNotebook,
+            title = review.doc.title?.takeIf { it.isNotBlank() },
+            widthPt = review.ink.paper.width,
+            heightPt = review.ink.paper.height,
+        )
     }
 
     private fun decode(uri: Uri): Bitmap? {
@@ -286,24 +419,14 @@ class SmartBoardViewModel @Inject constructor(
         return Bitmap.createBitmap(raw, 0, 0, raw.width, raw.height, Matrix().apply { postRotate(rotation.toFloat()) }, true)
     }
 
-    private fun crop(bitmap: Bitmap, r: RectPt): VisionImage {
-        val l = (r.left * bitmap.width).roundToInt().coerceIn(0, bitmap.width - 1)
-        val t = (r.top * bitmap.height).roundToInt().coerceIn(0, bitmap.height - 1)
-        val w = ((r.right - r.left) * bitmap.width).roundToInt().coerceIn(1, bitmap.width - l)
-        val h = ((r.bottom - r.top) * bitmap.height).roundToInt().coerceIn(1, bitmap.height - t)
-        val cut = Bitmap.createBitmap(bitmap, l, t, w, h)
-        val out = ByteArrayOutputStream()
-        cut.compress(Bitmap.CompressFormat.JPEG, JPEG_QUALITY, out)
-        return VisionImage(out.toByteArray(), "image/jpeg")
-    }
-
     companion object {
         /** Reading steps shown while the provider works (the last one is the handwriting). */
         const val STEPS = 6
         private const val STEP_MS = 380L
-        /** Board text stays legible; fewer image tiles = fewer tokens and a faster answer. */
+        /** Board text stays legible; fewer image tiles = fewer tokens and a faster answer (also bounds memory with several photos). */
         private const val MAX_SIDE = 1600
-        private const val JPEG_QUALITY = 88
+        private const val PREVIEW_SIDE = 1200
+        const val MAX_PHOTOS = 6
         private const val TAG = "BestNoteSmartBoard"
         private const val DETAIL_CHARS = 400
         private const val SWITCHER_LIST = 8

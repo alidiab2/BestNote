@@ -1,6 +1,24 @@
 package app.bestnote.feature.smartboard
 
-import android.graphics.Bitmap
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.rounded.CropFree
+import androidx.compose.material.icons.rounded.LibraryAdd
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.PathFillType
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import app.bestnote.ai.scan.Pt
+import app.bestnote.ai.scan.Quad
+import app.bestnote.core.model.PaperTemplate
+import app.bestnote.engine.layout.RuledPaper
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
@@ -91,7 +109,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.bestnote.core.designsystem.theme.BestNoteShapes
 import app.bestnote.core.designsystem.theme.BestNoteTheme
 import app.bestnote.core.designsystem.theme.Spacing
-import app.bestnote.core.model.RectPt
 import kotlin.math.min
 import kotlin.math.roundToInt
 
@@ -106,9 +123,9 @@ fun SmartBoardScreen(onClose: () -> Unit, onInsert: (SmartBoardResult) -> Unit, 
             AnimatedContent(state.stage, contentKey = { it::class }, label = "stage", modifier = Modifier.weight(1f).fillMaxWidth()) { stage ->
                 when (stage) {
                     SmartBoardStage.Capture -> CaptureStage(state, viewModel)
-                    is SmartBoardStage.Reading -> ReadingStage(stage.step, demo = state.photo == null || !state.hasKey)
-                    is SmartBoardStage.Review -> ReviewStage(stage, viewModel, onInsert)
-                    is SmartBoardStage.Failed -> FailedStage(stage, onRetry = viewModel::read, onBack = viewModel::retake)
+                    is SmartBoardStage.Reading -> ReadingStage(stage, demo = state.photos.isEmpty() || !state.hasKey, provider = providerName(state.provider), onCancel = viewModel::cancel)
+                    is SmartBoardStage.Review -> ReviewStage(stage, state, viewModel, onInsert)
+                    is SmartBoardStage.Failed -> FailedStage(stage, onRetry = viewModel::read, onBack = viewModel::backToPhotos, onKey = { keyDialog = true })
                 }
             }
         }
@@ -210,10 +227,22 @@ private fun providerName(kind: AiProviderKind) = stringResource(
 @Composable
 private fun CaptureStage(state: SmartBoardUiState, viewModel: SmartBoardViewModel) {
     val context = LocalContext.current
-    val pick = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri -> uri?.let(viewModel::onPhoto) }
+    val room = SmartBoardViewModel.MAX_PHOTOS - state.photos.size
+    val pickMany = rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia(SmartBoardViewModel.MAX_PHOTOS)) { uris -> viewModel.onPhotos(uris) }
+    val pickOne = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri -> uri?.let(viewModel::onPhoto) }
     var cameraUri by remember { mutableStateOf<android.net.Uri?>(null) }
     val camera = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { ok -> if (ok) cameraUri?.let(viewModel::onPhoto) }
-    val photo = state.photo
+    val takePhoto = {
+        val uri = FileProvider.getUriForFile(context, context.packageName + ".smartboard.files", viewModel.cameraFile())
+        cameraUri = uri
+        runCatching { camera.launch(uri) }
+        Unit
+    }
+    val choose = {
+        val request = PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+        if (room > 1) pickMany.launch(request) else pickOne.launch(request)
+    }
+    val photo = state.photos.getOrNull(state.current)
     if (photo == null) {
         Column(
             Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(Spacing.XL),
@@ -227,31 +256,118 @@ private fun CaptureStage(state: SmartBoardUiState, viewModel: SmartBoardViewMode
                 color = BestNoteTheme.colors.muted,
                 modifier = Modifier.widthIn(max = 560.dp),
             )
-            Row(horizontalArrangement = Arrangement.spacedBy(Spacing.M)) {
-                Button(onClick = {
-                    val uri = FileProvider.getUriForFile(context, context.packageName + ".smartboard.files", viewModel.cameraFile())
-                    cameraUri = uri
-                    runCatching { camera.launch(uri) }
-                }) { IconLabel(Icons.Rounded.PhotoCamera, stringResource(R.string.smartboard_take_photo)) }
-                FilledTonalButton(onClick = { pick.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }) {
-                    IconLabel(Icons.Rounded.PhotoLibrary, stringResource(R.string.smartboard_choose_photo))
+            if (state.loading > 0) {
+                CircularProgressIndicator()
+                Text(stringResource(R.string.smartboard_finding_edges), style = MaterialTheme.typography.bodyMedium, color = BestNoteTheme.colors.muted)
+            } else {
+                Row(horizontalArrangement = Arrangement.spacedBy(Spacing.M)) {
+                    Button(onClick = takePhoto) { IconLabel(Icons.Rounded.PhotoCamera, stringResource(R.string.smartboard_take_photo)) }
+                    FilledTonalButton(onClick = choose) { IconLabel(Icons.Rounded.PhotoLibrary, stringResource(R.string.smartboard_choose_photo)) }
                 }
+                OutlinedButton(onClick = viewModel::read) { IconLabel(Icons.Rounded.AutoAwesome, stringResource(R.string.smartboard_try_sample)) }
             }
-            OutlinedButton(onClick = viewModel::read) { IconLabel(Icons.Rounded.AutoAwesome, stringResource(R.string.smartboard_try_sample)) }
             ArabicToggle(state.arabic, viewModel::setArabic)
             PrivacyNote(state.hasKey)
         }
-    } else {
-        Column(Modifier.fillMaxSize().padding(Spacing.L), verticalArrangement = Arrangement.spacedBy(Spacing.M)) {
-            Text(stringResource(R.string.smartboard_crop_hint), style = MaterialTheme.typography.bodyMedium, color = BestNoteTheme.colors.muted)
-            CropView(photo, state.crop, viewModel::setCrop, Modifier.weight(1f).fillMaxWidth())
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.M)) {
-                OutlinedButton(onClick = viewModel::retake) { IconLabel(Icons.Rounded.PhotoCamera, stringResource(R.string.smartboard_retake)) }
-                ArabicToggle(state.arabic, viewModel::setArabic)
-                Spacer(Modifier.weight(1f))
-                if (!state.hasKey) DemoChip()
-                Button(onClick = viewModel::read) { IconLabel(Icons.Rounded.AutoAwesome, stringResource(R.string.smartboard_write_it)) }
+        return
+    }
+    Column(Modifier.fillMaxSize().padding(horizontal = Spacing.L, vertical = Spacing.S), verticalArrangement = Arrangement.spacedBy(Spacing.S)) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.S)) {
+            EdgeChip(photo.detected)
+            Text(
+                stringResource(if (state.flatPreview != null) R.string.smartboard_preview_hint else R.string.smartboard_crop_hint),
+                style = MaterialTheme.typography.bodyMedium,
+                color = BestNoteTheme.colors.muted,
+                modifier = Modifier.weight(1f),
+            )
+            TextButton(onClick = { viewModel.resetQuad(whole = !photo.detected || photo.quad != Quad.full(0f)) }) {
+                Text(stringResource(if (photo.quad == Quad.full(0f)) R.string.smartboard_find_edges else R.string.smartboard_whole_photo))
             }
+        }
+        Box(Modifier.weight(1f).fillMaxWidth()) {
+            val flat = state.flatPreview
+            if (flat != null) {
+                val image = remember(flat) { flat.asImageBitmap() }
+                androidx.compose.foundation.Image(image, stringResource(R.string.smartboard_preview), Modifier.fillMaxSize())
+            } else {
+                QuadCropView(photo, viewModel::setQuad, Modifier.fillMaxSize())
+            }
+        }
+        PhotoStrip(state, onSelect = viewModel::select, onRemove = viewModel::removePhoto, onCamera = takePhoto, onGallery = choose)
+        FlowRow(
+            verticalArrangement = Arrangement.Center,
+            horizontalArrangement = Arrangement.spacedBy(Spacing.M),
+            itemVerticalAlignment = Alignment.CenterVertically,
+        ) {
+            LabeledSwitch(state.enhance, viewModel::setEnhance, stringResource(R.string.smartboard_enhance))
+            LabeledSwitch(state.flatPreview != null, viewModel::showPreview, stringResource(R.string.smartboard_preview))
+            ArabicToggle(state.arabic, viewModel::setArabic)
+        }
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.M)) {
+            OutlinedButton(onClick = viewModel::retake) { IconLabel(Icons.Rounded.Close, stringResource(R.string.smartboard_start_over)) }
+            Spacer(Modifier.weight(1f))
+            if (!state.hasKey) DemoChip()
+            Button(onClick = viewModel::read, enabled = state.loading == 0) {
+                IconLabel(Icons.Rounded.AutoAwesome, if (state.photos.size > 1) stringResource(R.string.smartboard_write_n, state.photos.size) else stringResource(R.string.smartboard_write_it))
+            }
+        }
+    }
+}
+
+@Composable
+private fun EdgeChip(found: Boolean) {
+    Surface(shape = BestNoteShapes.Pill, color = (if (found) BestNoteTheme.colors.success else BestNoteTheme.colors.warning).copy(alpha = 0.16f)) {
+        Row(Modifier.padding(horizontal = Spacing.M, vertical = Spacing.XS), verticalAlignment = Alignment.CenterVertically) {
+            Icon(if (found) Icons.Rounded.CheckCircle else Icons.Rounded.CropFree, null, Modifier.size(16.dp))
+            Spacer(Modifier.width(Spacing.XS))
+            Text(stringResource(if (found) R.string.smartboard_board_found else R.string.smartboard_board_not_found), style = MaterialTheme.typography.labelMedium)
+        }
+    }
+}
+
+@Composable
+private fun LabeledSwitch(on: Boolean, onChange: (Boolean) -> Unit, label: String) {
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.S)) {
+        Switch(checked = on, onCheckedChange = onChange)
+        Text(label, style = MaterialTheme.typography.bodyMedium)
+    }
+}
+
+/** Thumbnails of the board's photos (reading order), the one being adjusted outlined; "+" adds more. */
+@Composable
+private fun PhotoStrip(state: SmartBoardUiState, onSelect: (Int) -> Unit, onRemove: (Int) -> Unit, onCamera: () -> Unit, onGallery: () -> Unit) {
+    val accent = MaterialTheme.colorScheme.primary
+    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(Spacing.S), verticalAlignment = Alignment.CenterVertically) {
+        state.photos.forEachIndexed { i, p ->
+            val thumb = remember(p.bitmap) { p.bitmap.asImageBitmap() }
+            Box {
+                androidx.compose.foundation.Image(
+                    thumb,
+                    stringResource(R.string.smartboard_photo_n, i + 1),
+                    contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                    modifier = Modifier
+                        .size(72.dp, 54.dp)
+                        .clip(BestNoteShapes.Control)
+                        .border(if (i == state.current) 3.dp else 1.dp, if (i == state.current) accent else MaterialTheme.colorScheme.outline, BestNoteShapes.Control)
+                        .clickable { onSelect(i) },
+                )
+                Surface(
+                    shape = CircleShape,
+                    color = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f),
+                    modifier = Modifier.align(Alignment.TopEnd).padding(2.dp).size(22.dp).clickable { onRemove(i) },
+                ) { Icon(Icons.Rounded.Close, stringResource(R.string.smartboard_remove_photo), Modifier.padding(3.dp)) }
+                Text(
+                    "${i + 1}",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = Color.White,
+                    modifier = Modifier.align(Alignment.BottomStart).padding(4.dp).background(Color.Black.copy(alpha = 0.5f), CircleShape).padding(horizontal = 5.dp),
+                )
+            }
+        }
+        if (state.loading > 0) CircularProgressIndicator(Modifier.size(28.dp))
+        if (state.photos.size < SmartBoardViewModel.MAX_PHOTOS) {
+            FilledTonalButton(onClick = onCamera) { IconLabel(Icons.Rounded.PhotoCamera, stringResource(R.string.smartboard_add_photo)) }
+            FilledTonalButton(onClick = onGallery) { IconLabel(Icons.Rounded.PhotoLibrary, stringResource(R.string.smartboard_add_from_gallery)) }
         }
     }
 }
@@ -264,12 +380,7 @@ private fun IconLabel(icon: ImageVector, label: String) {
 }
 
 @Composable
-private fun ArabicToggle(on: Boolean, onChange: (Boolean) -> Unit) {
-    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.S)) {
-        Switch(checked = on, onCheckedChange = onChange)
-        Text(stringResource(R.string.smartboard_arabic_board), style = MaterialTheme.typography.bodyMedium)
-    }
-}
+private fun ArabicToggle(on: Boolean, onChange: (Boolean) -> Unit) = LabeledSwitch(on, onChange, stringResource(R.string.smartboard_arabic_board))
 
 @Composable
 private fun DemoChip() {
@@ -294,46 +405,42 @@ private fun PrivacyNote(hasKey: Boolean) {
     }
 }
 
-/** The photo with a draggable crop frame: drag a corner to resize, drag inside to move. */
+/**
+ * The photo with the board's outline: four corner handles that each drag on their own (so a board
+ * shot at an angle is outlined exactly), the outside dimmed. A loupe-free design: handles are big
+ * and the outline follows the finger.
+ */
 @Composable
-private fun CropView(photo: Bitmap, crop: RectPt, onCrop: (RectPt) -> Unit, modifier: Modifier = Modifier) {
-    val image = remember(photo) { photo.asImageBitmap() }
-    val current by rememberUpdatedState(crop)
-    val handleTouch = with(LocalDensity.current) { 40.dp.toPx() }
+private fun QuadCropView(photo: BoardPhoto, onQuad: (Quad) -> Unit, modifier: Modifier = Modifier) {
+    val image = remember(photo.bitmap) { photo.bitmap.asImageBitmap() }
+    val current by rememberUpdatedState(photo.quad)
+    val handleTouch = with(LocalDensity.current) { 44.dp.toPx() }
     val accent = MaterialTheme.colorScheme.primary
+    val description = stringResource(R.string.smartboard_crop_hint)
     Canvas(
-        modifier.pointerInput(photo) {
-            var handle = -1
-            detectDragGestures(
-                onDragStart = { at ->
-                    val fit = fit(Size(size.width.toFloat(), size.height.toFloat()), image.width, image.height)
-                    val c = current
-                    val corners = listOf(Offset(c.left, c.top), Offset(c.right, c.top), Offset(c.right, c.bottom), Offset(c.left, c.bottom))
-                        .map { Offset(fit.left + it.x * fit.width, fit.top + it.y * fit.height) }
-                    handle = corners.indices.minByOrNull { (corners[it] - at).getDistance() }?.takeIf { (corners[it] - at).getDistance() < handleTouch } ?: 4
-                },
-                onDrag = { change, delta ->
-                    change.consume()
-                    val fit = fit(Size(size.width.toFloat(), size.height.toFloat()), image.width, image.height)
-                    val dx = delta.x / fit.width
-                    val dy = delta.y / fit.height
-                    val c = current
-                    onCrop(
-                        when (handle) {
-                            0 -> RectPt((c.left + dx).coerceIn(0f, c.right - MIN_CROP), (c.top + dy).coerceIn(0f, c.bottom - MIN_CROP), c.right, c.bottom)
-                            1 -> RectPt(c.left, (c.top + dy).coerceIn(0f, c.bottom - MIN_CROP), (c.right + dx).coerceIn(c.left + MIN_CROP, 1f), c.bottom)
-                            2 -> RectPt(c.left, c.top, (c.right + dx).coerceIn(c.left + MIN_CROP, 1f), (c.bottom + dy).coerceIn(c.top + MIN_CROP, 1f))
-                            3 -> RectPt((c.left + dx).coerceIn(0f, c.right - MIN_CROP), c.top, c.right, (c.bottom + dy).coerceIn(c.top + MIN_CROP, 1f))
-                            else -> {
-                                val mx = dx.coerceIn(-c.left, 1f - c.right)
-                                val my = dy.coerceIn(-c.top, 1f - c.bottom)
-                                RectPt(c.left + mx, c.top + my, c.right + mx, c.bottom + my)
-                            }
-                        },
-                    )
-                },
-            )
-        },
+        modifier
+            .semantics { contentDescription = description }
+            .pointerInput(photo.id) {
+                var handle = -1
+                detectDragGestures(
+                    onDragStart = { at ->
+                        val fit = fit(Size(size.width.toFloat(), size.height.toFloat()), image.width, image.height)
+                        val corners = current.corners.map { Offset(fit.left + it.x * fit.width, fit.top + it.y * fit.height) }
+                        handle = corners.indices.minByOrNull { (corners[it] - at).getDistance() }?.takeIf { (corners[it] - at).getDistance() < handleTouch * 1.6f } ?: -1
+                    },
+                    onDragEnd = { handle = -1 },
+                    onDrag = { change, delta ->
+                        if (handle < 0) return@detectDragGestures
+                        change.consume()
+                        val fit = fit(Size(size.width.toFloat(), size.height.toFloat()), image.width, image.height)
+                        val c = current.corners[handle]
+                        val moved = Pt((c.x + delta.x / fit.width).coerceIn(0f, 1f), (c.y + delta.y / fit.height).coerceIn(0f, 1f))
+                        val next = current.with(handle, moved)
+                        // Never let the outline fold over itself.
+                        if (next.isConvex && next.area > MIN_AREA) onQuad(next)
+                    },
+                )
+            },
     ) {
         val fit = fit(size, image.width, image.height)
         drawImage(
@@ -341,21 +448,28 @@ private fun CropView(photo: Bitmap, crop: RectPt, onCrop: (RectPt) -> Unit, modi
             dstOffset = IntOffset(fit.left.roundToInt(), fit.top.roundToInt()),
             dstSize = IntSize(fit.width.roundToInt(), fit.height.roundToInt()),
         )
-        val r = Rect(fit.left + crop.left * fit.width, fit.top + crop.top * fit.height, fit.left + crop.right * fit.width, fit.top + crop.bottom * fit.height)
-        val dim = Color.Black.copy(alpha = 0.45f)
-        drawRect(dim, fit.topLeft, Size(fit.width, r.top - fit.top))
-        drawRect(dim, Offset(fit.left, r.bottom), Size(fit.width, fit.bottom - r.bottom))
-        drawRect(dim, Offset(fit.left, r.top), Size(r.left - fit.left, r.height))
-        drawRect(dim, Offset(r.right, r.top), Size(fit.right - r.right, r.height))
-        drawRect(accent, r.topLeft, r.size, style = Stroke(2.dp.toPx()))
-        for (corner in listOf(r.topLeft, r.topRight, r.bottomRight, r.bottomLeft)) {
-            drawCircle(Color.White, 9.dp.toPx(), corner)
-            drawCircle(accent, 9.dp.toPx(), corner, style = Stroke(3.dp.toPx()))
+        val pts = photo.quad.corners.map { Offset(fit.left + it.x * fit.width, fit.top + it.y * fit.height) }
+        val outline = Path().apply {
+            moveTo(pts[0].x, pts[0].y)
+            pts.drop(1).forEach { lineTo(it.x, it.y) }
+            close()
+        }
+        val outside = Path().apply {
+            addRect(fit)
+            addPath(outline)
+            fillType = PathFillType.EvenOdd
+        }
+        drawPath(outside, Color.Black.copy(alpha = 0.45f))
+        drawPath(outline, accent.copy(alpha = 0.10f))
+        drawPath(outline, accent, style = Stroke(2.5.dp.toPx()))
+        for (corner in pts) {
+            drawCircle(Color.White, 11.dp.toPx(), corner)
+            drawCircle(accent, 11.dp.toPx(), corner, style = Stroke(3.dp.toPx()))
         }
     }
 }
 
-private const val MIN_CROP = 0.08f
+private const val MIN_AREA = 0.02f
 
 /** Where an image of [w]x[h] lands when fitted (centered, aspect kept) into [box]. */
 private fun fit(box: Size, w: Int, h: Int): Rect {
@@ -368,7 +482,8 @@ private fun fit(box: Size, w: Int, h: Int): Rect {
 // ---------------------------------------------------------------- 2 · reading
 
 @Composable
-private fun ReadingStage(step: Int, demo: Boolean) {
+private fun ReadingStage(reading: SmartBoardStage.Reading, demo: Boolean, provider: String, onCancel: () -> Unit) {
+    val step = reading.step
     val steps = listOf(
         R.string.smartboard_step_crop,
         R.string.smartboard_step_read,
@@ -378,13 +493,22 @@ private fun ReadingStage(step: Int, demo: Boolean) {
         R.string.smartboard_step_write,
     )
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Column(Modifier.widthIn(max = 420.dp).padding(Spacing.XL), verticalArrangement = Arrangement.spacedBy(Spacing.M)) {
+        Column(Modifier.widthIn(max = 440.dp).padding(Spacing.XL), verticalArrangement = Arrangement.spacedBy(Spacing.M)) {
             Text(stringResource(R.string.smartboard_reading_title), style = MaterialTheme.typography.headlineSmall)
             Text(
-                stringResource(if (demo) R.string.smartboard_reading_demo else R.string.smartboard_reading_key),
+                if (demo) stringResource(R.string.smartboard_reading_demo) else stringResource(R.string.smartboard_reading_key, provider),
                 style = MaterialTheme.typography.bodyMedium,
                 color = BestNoteTheme.colors.muted,
             )
+            if (reading.photos > 1) {
+                Text(stringResource(R.string.smartboard_reading_photo, reading.photo, reading.photos), style = MaterialTheme.typography.labelLarge)
+                LinearProgressIndicator(
+                    progress = { (reading.photo - 1 + step / (steps.size - 1f)) / reading.photos },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            } else {
+                LinearProgressIndicator(Modifier.fillMaxWidth())
+            }
             steps.forEachIndexed { i, label ->
                 val done = i < step
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.M)) {
@@ -401,6 +525,7 @@ private fun ReadingStage(step: Int, demo: Boolean) {
                     )
                 }
             }
+            OutlinedButton(onClick = onCancel, modifier = Modifier.align(Alignment.End)) { Text(stringResource(R.string.smartboard_cancel)) }
         }
     }
 }
@@ -408,7 +533,7 @@ private fun ReadingStage(step: Int, demo: Boolean) {
 // ---------------------------------------------------------------- 3 · review
 
 @Composable
-private fun ReviewStage(review: SmartBoardStage.Review, viewModel: SmartBoardViewModel, onInsert: (SmartBoardResult) -> Unit) {
+private fun ReviewStage(review: SmartBoardStage.Review, state: SmartBoardUiState, viewModel: SmartBoardViewModel, onInsert: (SmartBoardResult) -> Unit) {
     val ink = review.ink
     var page by remember(ink) { mutableIntStateOf(0) }
     var replay by remember { mutableIntStateOf(0) }
@@ -417,7 +542,8 @@ private fun ReviewStage(review: SmartBoardStage.Review, viewModel: SmartBoardVie
         val preview: @Composable (Modifier) -> Unit = { m ->
             Column(m, horizontalAlignment = Alignment.CenterHorizontally) {
                 Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
-                    WrittenPage(ink.paper, ink.pages.pages[page], ink.pages.durationMs(page), replayKey = page to replay)
+                    val strokes = ink.pages.pages.getOrNull(page) ?: ink.pages.pages.first()
+                    WrittenPage(ink.paper, strokes, ink.pages.durationMs(page.coerceAtMost(ink.pages.pages.lastIndex)), replayKey = Triple(page, replay, ink))
                 }
                 if (ink.pages.pages.size > 1) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -431,7 +557,16 @@ private fun ReviewStage(review: SmartBoardStage.Review, viewModel: SmartBoardVie
             }
         }
         val panel: @Composable (Modifier) -> Unit = { m ->
-            ReviewPanel(review, onReplay = { replay++ }, onRetake = viewModel::retake, onInsert = { viewModel.result()?.let(onInsert) }, modifier = m)
+            ReviewPanel(
+                review,
+                template = state.template,
+                afterPage = viewModel.afterPage,
+                onTemplate = viewModel::setTemplate,
+                onReplay = { replay++ },
+                onRetake = viewModel::backToPhotos,
+                onInsert = { fresh -> viewModel.result(fresh)?.let(onInsert) },
+                modifier = m,
+            )
         }
         if (wide) {
             Row(horizontalArrangement = Arrangement.spacedBy(Spacing.XL)) {
@@ -441,14 +576,37 @@ private fun ReviewStage(review: SmartBoardStage.Review, viewModel: SmartBoardVie
         } else {
             Column(verticalArrangement = Arrangement.spacedBy(Spacing.M)) {
                 preview(Modifier.weight(1f).fillMaxWidth())
-                panel(Modifier.fillMaxWidth())
+                panel(Modifier.fillMaxWidth().heightIn(max = 360.dp))
             }
         }
     }
 }
 
 @Composable
-private fun ReviewPanel(review: SmartBoardStage.Review, onReplay: () -> Unit, onRetake: () -> Unit, onInsert: () -> Unit, modifier: Modifier = Modifier) {
+private fun templateName(t: PaperTemplate) = stringResource(
+    when (t) {
+        PaperTemplate.Ruled -> R.string.smartboard_paper_ruled
+        PaperTemplate.RuledNarrow -> R.string.smartboard_paper_narrow
+        PaperTemplate.RuledWide -> R.string.smartboard_paper_wide
+        PaperTemplate.Grid -> R.string.smartboard_paper_grid
+        PaperTemplate.Dotted -> R.string.smartboard_paper_dotted
+        PaperTemplate.Blank -> R.string.smartboard_paper_blank
+        PaperTemplate.Cornell -> R.string.smartboard_paper_cornell
+        PaperTemplate.MusicStaff -> R.string.smartboard_paper_ruled
+    },
+)
+
+@Composable
+private fun ReviewPanel(
+    review: SmartBoardStage.Review,
+    template: PaperTemplate,
+    afterPage: Int,
+    onTemplate: (PaperTemplate) -> Unit,
+    onReplay: () -> Unit,
+    onRetake: () -> Unit,
+    onInsert: (newNotebook: Boolean) -> Unit,
+    modifier: Modifier = Modifier,
+) {
     val ink = review.ink
     Column(modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(Spacing.M)) {
         Text(stringResource(R.string.smartboard_review_title), style = MaterialTheme.typography.headlineSmall)
@@ -459,10 +617,15 @@ private fun ReviewPanel(review: SmartBoardStage.Review, onReplay: () -> Unit, on
         )
         if (review.demo) DemoChip()
         if (ink.dropped > 0) Text(stringResource(R.string.smartboard_review_dropped, ink.dropped), style = MaterialTheme.typography.bodySmall, color = BestNoteTheme.colors.warning)
+        Text(stringResource(R.string.smartboard_paper), style = MaterialTheme.typography.labelLarge)
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(Spacing.S)) {
+            RuledPaper.writable.forEach { t ->
+                FilterChip(selected = t == template, onClick = { onTemplate(t) }, label = { Text(templateName(t)) })
+            }
+        }
         listOf(
             R.string.smartboard_did_order,
             R.string.smartboard_did_lines,
-            R.string.smartboard_did_ruler,
             R.string.smartboard_did_box,
             R.string.smartboard_did_margin,
         ).forEach { line ->
@@ -471,13 +634,18 @@ private fun ReviewPanel(review: SmartBoardStage.Review, onReplay: () -> Unit, on
                 Text(stringResource(line), style = MaterialTheme.typography.bodyMedium)
             }
         }
-        Spacer(Modifier.height(Spacing.S))
         Row(horizontalArrangement = Arrangement.spacedBy(Spacing.S)) {
             OutlinedButton(onClick = onReplay) { IconLabel(Icons.Rounded.Replay, stringResource(R.string.smartboard_replay)) }
-            OutlinedButton(onClick = onRetake) { IconLabel(Icons.Rounded.PhotoCamera, stringResource(R.string.smartboard_retake)) }
+            OutlinedButton(onClick = onRetake) { IconLabel(Icons.Rounded.PhotoCamera, stringResource(R.string.smartboard_back_to_photos)) }
         }
-        Button(onClick = onInsert, modifier = Modifier.fillMaxWidth()) {
-            IconLabel(Icons.AutoMirrored.Rounded.NoteAdd, stringResource(R.string.smartboard_insert))
+        Button(onClick = { onInsert(false) }, modifier = Modifier.fillMaxWidth()) {
+            IconLabel(
+                Icons.AutoMirrored.Rounded.NoteAdd,
+                if (afterPage > 0) stringResource(R.string.smartboard_insert_after, afterPage) else stringResource(R.string.smartboard_insert),
+            )
+        }
+        OutlinedButton(onClick = { onInsert(true) }, modifier = Modifier.fillMaxWidth()) {
+            IconLabel(Icons.Rounded.LibraryAdd, stringResource(R.string.smartboard_insert_new_notebook))
         }
     }
 }
@@ -485,9 +653,10 @@ private fun ReviewPanel(review: SmartBoardStage.Review, onReplay: () -> Unit, on
 // ---------------------------------------------------------------- failure
 
 @Composable
-private fun FailedStage(failed: SmartBoardStage.Failed, onRetry: () -> Unit, onBack: () -> Unit) {
+private fun FailedStage(failed: SmartBoardStage.Failed, onRetry: () -> Unit, onBack: () -> Unit, onKey: () -> Unit) {
     val message = when (failed.reason) {
         SmartBoardStage.Reason.NoBlocks -> R.string.smartboard_error_empty
+        SmartBoardStage.Reason.MissingKey -> R.string.smartboard_error_no_key
         SmartBoardStage.Reason.InvalidKey -> R.string.smartboard_error_key
         SmartBoardStage.Reason.RateLimited -> R.string.smartboard_error_rate
         SmartBoardStage.Reason.QuotaExhausted -> R.string.smartboard_error_quota
@@ -512,8 +681,12 @@ private fun FailedStage(failed: SmartBoardStage.Failed, onRetry: () -> Unit, onB
                 Text(it, style = MaterialTheme.typography.bodySmall, color = BestNoteTheme.colors.muted, textAlign = TextAlign.Center)
             }
             Row(horizontalArrangement = Arrangement.spacedBy(Spacing.S)) {
-                OutlinedButton(onClick = onBack) { Text(stringResource(R.string.smartboard_retake)) }
-                Button(onClick = onRetry) { Text(stringResource(R.string.smartboard_retry)) }
+                OutlinedButton(onClick = onBack) { Text(stringResource(R.string.smartboard_back_to_photos)) }
+                if (failed.reason == SmartBoardStage.Reason.InvalidKey || failed.reason == SmartBoardStage.Reason.MissingKey) {
+                    Button(onClick = onKey) { Text(stringResource(R.string.smartboard_set_key)) }
+                } else {
+                    Button(onClick = onRetry) { Text(stringResource(R.string.smartboard_retry)) }
+                }
             }
             failed.diagnostics?.let { dump ->
                 TextButton(onClick = {

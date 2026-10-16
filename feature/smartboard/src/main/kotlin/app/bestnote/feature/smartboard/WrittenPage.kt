@@ -23,7 +23,10 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import app.bestnote.core.designsystem.theme.BestNoteTheme
 import app.bestnote.engine.handwriting.WrittenStroke
+import app.bestnote.core.model.PageSize
 import app.bestnote.engine.layout.RuledPaper
+import app.bestnote.engine.layout.paper.LineRole
+import app.bestnote.engine.layout.paper.PaperGeometry
 
 /** Natural writing time is replayed this many times faster: a full page writes itself in about 3 s. */
 private const val SPEEDUP = 22f
@@ -39,6 +42,7 @@ private const val MAX_PLAY_MS = 3600
 internal fun WrittenPage(paper: RuledPaper, strokes: List<WrittenStroke>, durationMs: Long, replayKey: Any, modifier: Modifier = Modifier) {
     val colors = BestNoteTheme.colors.paper
     val paths = remember(strokes) { strokes.map(::fullPath) }
+    val geometry = remember(paper) { PaperGeometry.of(paper.template, PageSize(paper.width, paper.height)) }
     val clock = remember(strokes) { Animatable(0f) }
     val playMs = (durationMs / SPEEDUP).toInt().coerceIn(MIN_PLAY_MS, MAX_PLAY_MS)
     LaunchedEffect(replayKey) {
@@ -53,11 +57,15 @@ internal fun WrittenPage(paper: RuledPaper, strokes: List<WrittenStroke>, durati
     ) {
         val k = size.width / paper.width
         drawRect(colors.page)
-        for (i in 0 until paper.lineCount) {
-            val y = paper.lineY(i) * k
-            drawLine(colors.ruledLine, Offset(0f, y), Offset(size.width, y), strokeWidth = 1f)
+        // The paper exactly as the editor prints it (PAGES-01 geometry).
+        for (line in geometry.lines) {
+            val color = if (line.role == LineRole.Margin || line.role == LineRole.Divider) colors.marginLine else colors.ruledLine
+            drawLine(color, Offset(line.x0 * k, line.y0 * k), Offset(line.x1 * k, line.y1 * k), strokeWidth = if (line.role == LineRole.Margin) 1.5f else 1f)
         }
-        drawLine(colors.marginLine, Offset(paper.marginX * k, 0f), Offset(paper.marginX * k, size.height), strokeWidth = 1.5f)
+        geometry.dots?.let { d ->
+            val r = (0.9f * k).coerceAtLeast(1f)
+            for (j in 0 until d.rows) for (i in 0 until d.cols) drawCircle(colors.ruledLine, r, Offset((d.left + i * d.spacing) * k, (d.top + j * d.spacing) * k))
+        }
         val now = clock.value * durationMs
         withTransform({ scale(k, k, pivot = Offset.Zero) }) {
             for ((i, s) in strokes.withIndex()) {

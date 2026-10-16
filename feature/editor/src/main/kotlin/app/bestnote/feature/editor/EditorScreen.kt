@@ -150,7 +150,17 @@ class SearchTarget(val pageIndex: Int, val rects: List<PageRect>)
 private const val LOAD_POLL_MS = 50L
 
 /** Ink written elsewhere (Smart Board), waiting to be inserted as new pages of the open notebook. */
-class InkInsert(val template: PaperTemplate, val pages: List<List<InkStroke>>)
+/**
+ * Handwriting to insert (Smart Board, AI-07): [pages] on [template] paper, right after page
+ * [afterIndex] (-1: after the page on screen). In a [freshNotebook] the first page goes on the
+ * notebook's empty first page.
+ */
+class InkInsert(
+    val template: PaperTemplate,
+    val pages: List<List<InkStroke>>,
+    val afterIndex: Int = -1,
+    val freshNotebook: Boolean = false,
+)
 
 /**
  * @param onSmartBoard opens Smart Board for the notebook, with the page being read (its size and paper).
@@ -490,7 +500,7 @@ fun EditorScreen(
         }
     }
 
-    // AI-07: Smart Board's handwriting arrives as new pages after the last one, as one undo step.
+    // AI-07: Smart Board's handwriting arrives as new pages after the page it was opened from, as one undo step.
     val insertedFormat = stringResource(R.string.editor_smart_board_inserted)
     LaunchedEffect(Unit) {
         val insert = takeInsert() ?: return@LaunchedEffect
@@ -498,15 +508,21 @@ fun EditorScreen(
         val pages = withContext(Dispatchers.Default) {
             insert.pages.map { page -> page.mapNotNull { model -> runCatching { model to InkConversion.toInk(model) }.getOrNull() } }
         }
-        val base = document.pages.getOrNull(canvas?.currentPage ?: -1)?.page ?: document.pages.lastOrNull()?.page ?: document.blankPage ?: return@LaunchedEffect
+        val current = insert.afterIndex.takeIf { it in document.pages.indices } ?: canvas?.currentPage?.takeIf { it in document.pages.indices } ?: document.pages.lastIndex
+        val base = document.pages.getOrNull(current)?.page ?: document.blankPage ?: return@LaunchedEffect
         val byPage = LinkedHashMap<Int, List<androidx.ink.strokes.Stroke>>()
-        for (page in pages) {
-            val index = document.addPage(base.copy(template = insert.template))
-            if (index < 0) continue
-            viewModel.session.adopt(page)
-            byPage[index] = page.map { it.second }
+        pages.forEach { viewModel.session.adopt(it) }
+        val emptyFirst = insert.freshNotebook && document.pages.size == 1 && document.pages[0].strokes.isEmpty()
+        if (emptyFirst && pages.isNotEmpty()) {
+            if (document.pages[0].page.template != insert.template) document.updatePage(0) { it.copy(template = insert.template) }
+            document.addStrokes(0, pages[0].map { it.second })
+            byPage[0] = pages[0].map { it.second }
         }
-        document.addStrokes(byPage)
+        val rest = if (emptyFirst) pages.drop(1) else pages
+        // After the page being read, not at the end; pages and ink are one undo step.
+        val at = if (emptyFirst) 1 else current + 1
+        document.insertPages(at, rest.map { page -> base.copy(template = insert.template) to page.map { it.second } })
+            .forEachIndexed { i, index -> byPage[index] = rest[i].map { it.second } }
         byPage.keys.firstOrNull()?.let { first -> canvas?.scrollToPage(first) }
         snackbar.currentSnackbarData?.dismiss()
         if (snackbar.showSnackbar(insertedFormat.format(byPage.size), actionLabel = undoText) == SnackbarResult.ActionPerformed) document.undo()
