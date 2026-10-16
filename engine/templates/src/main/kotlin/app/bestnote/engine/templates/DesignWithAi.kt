@@ -63,7 +63,7 @@ object DesignWithAi {
         appendLine("Rules:")
         appendLine("- Always return the FULL template, starting from the CURRENT template the user message gives. Change only what the user asked for; keep everything else exactly.")
         appendLine("- Colours are \"#RRGGBB\" dark enough to read on white paper, or null (= the pen colour). Never white or near-white.")
-        appendLine("- scale 0.7..2.2 (1 = body size; titles ~1.4, headings ~1.2). bodyScale 0.6..1.3. spaceBeforeHeading 0..3. decoration: none, underline, doubleUnderline, highlight, box.")
+        appendLine("- scale 0.7..2.2 (1 = body size; titles ~1.4, headings ~1.2). bodyScale 0.6..1.3. spaceBeforeHeading 0..3. layout: packed (topics in side-by-side columns, dashed dividers — many things on one page) or flow (one column). density: airy, normal, dense. decoration: none, underline, doubleUnderline, highlight, box.")
         appendLine("- Roles: " + NoteRole.entries.joinToString("; ") { "${TemplateJson.roleKeys.getValue(it)} = ${roleHelp[it]}" } + ".")
         appendLine("- Fonts, by script, by id ONLY from these lists: " + ScriptKey.entries.joinToString("; ") { s -> "${s.name.lowercase()}: " + fonts.ids(s).joinToString(", ") { "${it} (${fonts.nameOf(it)})" } } + ". Use \"system\" only if asked for a plain font.")
         appendLine("- paper: null (the notebook's own paper, the default) or one of " + RuledPaper.writable.joinToString(", ") { "\"${it.name}\"" } + ". Leave it null unless the user asks for paper.")
@@ -121,7 +121,7 @@ object DesignWithAi {
     }
 
     private val SHAPE = """
-{"name":"...","look":{"fonts":{"latin":"<id>","arabic":"<id>","hebrew":"<id>"},"bodyScale":0.9,"spaceBeforeHeading":1,"marginArrows":true,"highlight":"#FFE066","paper":null,
+{"name":"...","look":{"fonts":{"latin":"<id>","arabic":"<id>","hebrew":"<id>"},"bodyScale":0.9,"spaceBeforeHeading":1,"marginArrows":true,"layout":"packed","density":"normal","highlight":"#FFE066","paper":null,
 "roles":{"title":{"color":"#1E2A5A","scale":1.45,"decoration":"doubleUnderline"},"heading":{...},"subheading":{...},"definition":{...},"theorem":{...},"formula":{...},"result":{...},"example":{...},"step":{...},"note":{...},"warning":{...},"margin":{...},"body":{"color":null,"scale":1,"decoration":"none"}}},
 "ai":{"notesLanguage":null,"termsLanguage":null,"termsStyle":"inParentheses","detail":"full","stepByStep":true,"glossary":true,"note":""},
 "elements":["Title","Heading","Paragraph"]}

@@ -11,6 +11,8 @@ import app.bestnote.engine.layout.NoteTemplate
 import app.bestnote.engine.layout.RoleStyle
 import app.bestnote.engine.layout.RuledPaper
 import app.bestnote.engine.layout.StyleTemplate
+import app.bestnote.engine.layout.PageLayout
+import app.bestnote.engine.layout.Density
 import app.bestnote.engine.layout.TermsStyle
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
@@ -33,7 +35,7 @@ import kotlinx.serialization.json.putJsonObject
  *
  * ```
  * { "name": "...",
- *   "look": { "fonts": {"latin","arabic","hebrew"}, "bodyScale", "spaceBeforeHeading", "marginArrows",
+ *   "look": { "fonts": {"latin","arabic","hebrew"}, "bodyScale", "spaceBeforeHeading", "marginArrows", "layout" (flow|packed), "density" (airy|normal|dense),
  *             "highlight": "#RRGGBB", "paper": null | "Ruled"|…,
  *             "roles": { "title": {"color": "#RRGGBB"|null, "scale", "decoration"}, "heading": …, "body": … } },
  *   "ai":   { "notesLanguage": null|"ar"|"he"|"en"|…, "termsLanguage", "termsStyle", "detail",
@@ -68,6 +70,8 @@ object TemplateJson {
             put("bodyScale", l.bodyScale.toDouble())
             put("spaceBeforeHeading", l.spaceBeforeHeading)
             put("marginArrows", l.marginArrows)
+            put("layout", l.layout.name.lowercase())
+            put("density", l.density.name.lowercase())
             put("highlight", hex(l.highlight))
             put("paper", l.paper?.name?.let(::JsonPrimitive) ?: JsonNull)
             putJsonObject("roles") {
@@ -124,6 +128,8 @@ object TemplateJson {
             bodyScale = l.num("bodyScale")?.toFloat() ?: base.bodyScale,
             spaceBeforeHeading = l.num("spaceBeforeHeading")?.toInt() ?: base.spaceBeforeHeading,
             marginArrows = l.bool("marginArrows") ?: base.marginArrows,
+            layout = l.str("layout")?.let { v -> PageLayout.entries.firstOrNull { it.name.equals(v.trim(), ignoreCase = true) } } ?: base.layout,
+            density = l.str("density")?.let { v -> Density.entries.firstOrNull { it.name.equals(v.trim(), ignoreCase = true) } } ?: base.density,
             highlight = l.str("highlight")?.let(::parseColor)?.let { 0x66000000L or (it and 0xFFFFFF) } ?: base.highlight,
             roles = if (roles == null) base.roles else NoteRole.entries.associateWith { r ->
                 val prev = base.role(r)

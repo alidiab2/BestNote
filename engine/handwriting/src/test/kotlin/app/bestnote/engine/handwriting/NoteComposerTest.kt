@@ -78,7 +78,8 @@ class NoteComposerTest {
         val english = write(everything, all)
         assertNoOverlap(english)
         // Every element was placed, and every text-bearing one wrote words.
-        assertEquals(everything.elements.size, english.placed.size)
+        // Packed: a Columns element joins the flow (its contents are placed one by one).
+        assertEquals(english.doc.elements.size, english.placed.map { it.second.key }.distinct().size)
         val written = english.pages.pages.flatMap { p -> p.runs.map { it.block } }.toSet()
         val silent = english.placed.map { it.second }.filter { it.key !in written && it.block.element != NoteElement.Diagram }
         assertTrue("no words from ${silent.map { it.block.element }}", silent.isEmpty())
@@ -114,9 +115,9 @@ class NoteComposerTest {
         val doc = NoteDocument(listOf(NoteBlock(NoteElement.Derivation, number = 1, steps = listOf(NoteStep(math = "a = b + c"), NoteStep(math = "a\\Delta t = \\Delta v"), NoteStep(math = "V_t = V_0 + a t")))))
         val runs = write(doc, study, normalize = false).pages.pages[0].runs
         val eq = runs.filter { it.text == "=" }
-        assertEquals(3, eq.size)
-        assertTrue(eq.all { abs(it.left - eq[0].left) < 0.5f })
-        assertTrue(runs.any { it.text == "①" })
+        assertEquals(runs.map { it.text + "@" + it.left }.toString(), 3, eq.size)
+        assertTrue(eq.map { it.left }.toString(), eq.all { abs(it.left - eq[0].left) < 0.5f })
+        assertTrue(runs.map { it.text }.toString(), runs.any { it.text == "①" })
     }
 
     @Test fun `inline atoms never overlap the lines above and below`() {

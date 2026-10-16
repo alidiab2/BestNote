@@ -16,7 +16,7 @@ import javax.imageio.ImageIO
 
 /** Renders a typeset page (real fonts) to build/font-preview/[name].png for eyeballing. */
 internal object FontPreview {
-    fun png(paper: RuledPaper, page: TypesetPage, name: String, scale: Float = 2f) {
+    fun png(paper: RuledPaper, page: TypesetPage, name: String, scale: Float = 2f, dir: String = "build/font-preview") {
         val img = BufferedImage((paper.width * scale).toInt(), (paper.height * scale).toInt(), BufferedImage.TYPE_INT_RGB)
         val g = img.createGraphics()
         g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON)
@@ -38,13 +38,17 @@ internal object FontPreview {
         for (r in page.runs) {
             g.color = Color(r.color, true)
             val font = AwtMeasure.font(r.font).deriveFont(r.sizePt * scale)
-            val attrs = mapOf(TextAttribute.FONT to font, TextAttribute.RUN_DIRECTION to if (r.rtl) TextAttribute.RUN_DIRECTION_RTL else TextAttribute.RUN_DIRECTION_LTR)
-            val layout = TextLayout(r.text, attrs, g.fontRenderContext)
+            // Characters the hand lacks (∫, ∞…) come from a fallback font, as on Android.
+            val fallback = java.awt.Font(java.awt.Font.SANS_SERIF, java.awt.Font.PLAIN, 1).deriveFont(r.sizePt * scale)
+            val text = java.text.AttributedString(r.text)
+            text.addAttribute(TextAttribute.RUN_DIRECTION, if (r.rtl) TextAttribute.RUN_DIRECTION_RTL else TextAttribute.RUN_DIRECTION_LTR)
+            for ((i, c) in r.text.withIndex()) text.addAttribute(TextAttribute.FONT, if (font.canDisplay(c)) font else fallback, i, i + 1)
+            val layout = TextLayout(text.iterator, g.fontRenderContext)
             val x = if (r.rtl) (r.left + r.width) * scale - layout.advance else r.left * scale
             layout.draw(g, x, r.baseline * scale)
         }
         g.dispose()
-        File("build/font-preview").mkdirs()
-        ImageIO.write(img, "png", File("build/font-preview/$name.png"))
+        File(dir).mkdirs()
+        ImageIO.write(img, "png", File(dir, "$name.png"))
     }
 }

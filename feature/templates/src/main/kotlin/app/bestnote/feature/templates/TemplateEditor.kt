@@ -57,6 +57,8 @@ import app.bestnote.core.model.PaperTemplate
 import app.bestnote.engine.layout.Decoration
 import app.bestnote.engine.layout.DetailLevel
 import app.bestnote.engine.layout.HandFont
+import app.bestnote.engine.layout.PageLayout
+import app.bestnote.engine.layout.Density
 import app.bestnote.engine.layout.NoteElement
 import app.bestnote.engine.layout.NoteRole
 import app.bestnote.engine.layout.NoteTemplate
@@ -184,6 +186,20 @@ private fun LookSection(t: NoteTemplate, update: ((NoteTemplate) -> NoteTemplate
     Row(verticalAlignment = Alignment.CenterVertically) {
         Text(stringResource(R.string.tpl_look_margin_arrows), Modifier.weight(1f))
         Switch(t.look.marginArrows, { v -> look { it.copy(marginArrows = v) } })
+    }
+
+    SectionTitle(R.string.tpl_look_layout)
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(Spacing.S)) {
+        FilterChip(t.look.layout == PageLayout.Flow, { look { it.copy(layout = PageLayout.Flow) } }, label = { Text(stringResource(R.string.tpl_layout_flow)) })
+        FilterChip(t.look.layout == PageLayout.Packed, { look { it.copy(layout = PageLayout.Packed) } }, label = { Text(stringResource(R.string.tpl_layout_packed)) })
+    }
+    if (t.look.layout == PageLayout.Packed) {
+        Text(stringResource(R.string.tpl_look_density), style = MaterialTheme.typography.bodySmall, color = BestNoteTheme.colors.muted)
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(Spacing.S)) {
+            listOf(Density.Airy to R.string.tpl_density_airy, Density.Normal to R.string.tpl_density_normal, Density.Dense to R.string.tpl_density_dense).forEach { (d, res) ->
+                FilterChip(t.look.density == d, { look { it.copy(density = d) } }, label = { Text(stringResource(res)) })
+            }
+        }
     }
 
     SectionTitle(R.string.tpl_look_paper)

@@ -151,4 +151,11 @@
     <string name="tpl_chg_generic">%1$s: %2$s</string>
     <string name="tpl_chg_added">Elements added: %1$s</string>
     <string name="tpl_chg_removed">Elements removed: %1$s</string>
+    <string name="tpl_look_layout">Page layout</string>
+    <string name="tpl_layout_flow">One column</string>
+    <string name="tpl_layout_packed">Packed columns</string>
+    <string name="tpl_look_density">Density</string>
+    <string name="tpl_density_airy">Airy</string>
+    <string name="tpl_density_normal">Normal</string>
+    <string name="tpl_density_dense">Dense</string>
 </resources>

@@ -189,12 +189,24 @@ object NoteNormalizer {
      * every term of the page so the notebook glossary can accumulate them.
      */
     fun withGlossary(doc: NoteDocument, glossary: NotebookGlossary, allowElement: Boolean): NoteDocument {
-        val all = doc.allTerms()
+        // A pair whose two sides are the same word (no terms language: the model repeats the notes' own
+        // term) teaches nothing: dropped, and no glossary at all when no pair differs.
+        val all = doc.allTerms().map(::withoutEcho).filter { it.translation.isNotBlank() && same(it.term) != same(it.translation) }
         val pageTerms = NotebookGlossary().merge(all).first.terms
         val rest = doc.elements.filter { it.element != NoteElement.Glossary }
         val fresh = glossary.newTerms(pageTerms)
         val tail = if (allowElement && fresh.isNotEmpty()) listOf(NoteBlock(NoteElement.Glossary, terms = fresh)) else emptyList()
         return NoteDocument(rest + tail, pageTerms)
+    }
+
+    private fun same(s: String) = NotebookGlossary.key(s)
+
+    private val PAREN = Regex("""\s*[(（]([^()（）]*)[)）]\s*""")
+
+    /** "قاعدة لوبيتال (כלל לופיטל)" → "قاعدة لوبيتال" when the bracket only repeats the translation (the notes' terms style). */
+    internal fun withoutEcho(t: GlossaryTerm): GlossaryTerm {
+        val stripped = PAREN.replace(t.term) { m -> if (same(m.groupValues[1]) == same(t.translation)) " " else m.value }.trim()
+        return if (stripped.isEmpty() || stripped == t.term) t else t.copy(term = stripped)
     }
 
     private const val ATOM_CHARS = 12

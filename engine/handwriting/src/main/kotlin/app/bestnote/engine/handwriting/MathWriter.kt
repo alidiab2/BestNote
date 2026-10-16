@@ -17,9 +17,56 @@ internal object MathParser {
     data class Sqrt(val body: List<Node>) : Node
     data class Group(val body: List<Node>) : Node
 
-    /** Top-level rows (split on `\\`). Alignment `&` is ignored. */
-    fun parse(latex: String): List<List<Node>> =
-        latex.split("\\\\").map { Reader(it).group(untilBrace = false) }.filter { it.isNotEmpty() }
+    /** `\left( … \right)` and similar pairs: delimiters as tall as what they hold ("" = none; "|" bars are drawn as lines). */
+    data class Delim(val left: String, val body: List<Node>, val right: String) : Node
+
+    /** `cases`, `array`, `pmatrix`…: rows of cells with the environment's delimiters ("" = none); [alignLeft] cells start level. */
+    data class Matrix(val rows: List<List<List<Node>>>, val left: String, val right: String, val alignLeft: Boolean) : Node
+
+    /** Environments whose rows ARE the formula's lines when they wrap the whole formula. */
+    private val LINE_ENVS = Regex("""^\\begin\{(aligned|align\*?|gather\*?|gathered|eqnarray\*?|split|multline\*?)\}(.*)\\end\{\1\}$""", RegexOption.DOT_MATCHES_ALL)
+
+    /** Top-level rows (split on `\\` outside braces and environments). Alignment `&` is ignored at the top level. */
+    fun parse(latex: String): List<List<Node>> {
+        val whole = LINE_ENVS.find(latex.trim())?.groupValues?.get(2) ?: latex
+        return splitTop(whole, "\\\\").map { Reader(it).group(untilBrace = false) }.filter { it.isNotEmpty() }
+    }
+
+    /** [s] split at [sep] where it is not inside `{…}` or a `\begin … \end` environment. */
+    internal fun splitTop(s: String, sep: String): List<String> {
+        val out = ArrayList<String>()
+        var depth = 0
+        var env = 0
+        var start = 0
+        var i = 0
+        while (i < s.length) {
+            when {
+                s.startsWith("\\begin{", i) -> { env++; i += 7; continue }
+                s.startsWith("\\end{", i) -> { env--; i += 5; continue }
+                depth == 0 && env == 0 && s.startsWith(sep, i) -> {
+                    out += s.substring(start, i)
+                    i += sep.length
+                    start = i
+                    continue
+                }
+                s[i] == '\\' -> { i += 2; continue }
+                s[i] == '{' -> depth++
+                s[i] == '}' -> depth--
+            }
+            i++
+        }
+        out += s.substring(start)
+        return out
+    }
+
+    /** A delimited group or an environment on one line (the stroke hand writes them inline): "(a+b)", "{ a=1 ; b=2". */
+    fun inline(n: Node): List<Node> = when (n) {
+        is Delim -> listOfNotNull(n.left.takeIf { it.isNotEmpty() }?.let(::Text)) + n.body + listOfNotNull(n.right.takeIf { it.isNotEmpty() }?.let(::Text))
+        is Matrix -> listOfNotNull(n.left.takeIf { it.isNotEmpty() }?.let(::Text)) +
+            n.rows.flatMapIndexed { k, r -> (if (k > 0) listOf(Text(";"), Space(1f)) else emptyList()) + r.flatMapIndexed { c, cell -> (if (c > 0) listOf(Space(0.6f)) else emptyList()) + cell } } +
+            listOfNotNull(n.right.takeIf { it.isNotEmpty() }?.let(::Text))
+        else -> listOf(n)
+    }
 
     /** Commands this parser does not know, in the order met; they are written as their bare name. */
     fun unknownCommands(latex: String): Set<String> {
@@ -31,11 +78,21 @@ internal object MathParser {
     private class Reader(val s: String, val unknown: MutableSet<String>? = null) {
         var i = 0
 
-        fun group(untilBrace: Boolean): List<Node> {
+        /** The delimiter after the `\right` that ended the last [group] with untilRight. */
+        var rightDelim = ""
+
+        private fun isRight(at: Int) = s.startsWith("\\right", at) && (at + 6 >= s.length || !s[at + 6].isLetter())
+
+        fun group(untilBrace: Boolean, untilRight: Boolean = false): List<Node> {
             val out = ArrayList<Node>()
             while (i < s.length) {
                 val c = s[i]
                 when {
+                    untilRight && c == '\\' && isRight(i) -> {
+                        i += 6
+                        rightDelim = delimiter()
+                        return out
+                    }
                     c == '}' -> {
                         i++
                         if (untilBrace) return out
@@ -76,6 +133,69 @@ internal object MathParser {
             }
         }
 
+        /** The delimiter after `\left`/`\right`: a character or a command; "" for `.`. */
+        fun delimiter(): String {
+            while (i < s.length && s[i].isWhitespace()) i++
+            if (i >= s.length) return ""
+            val c = s[i++]
+            if (c == '.') return ""
+            if (c != '\\') return c.toString()
+            if (i >= s.length) return ""
+            if (!s[i].isLetter()) return s[i++].toString()
+            val st = i
+            while (i < s.length && s[i].isLetter()) i++
+            return when (val name = s.substring(st, i)) {
+                "lvert", "rvert", "vert", "mid" -> "|"
+                "lVert", "rVert", "Vert" -> "‖"
+                "lbrace", "rbrace" -> if (name == "lbrace") "{" else "}"
+                "langle" -> "⟨"
+                "rangle" -> "⟩"
+                "lfloor" -> "⌊"
+                "rfloor" -> "⌋"
+                "lceil" -> "⌈"
+                "rceil" -> "⌉"
+                else -> ""
+            }
+        }
+
+        /** `\begin{name} … \end{name}` (the `\begin{name}` already read): rows split on `\\\\`, cells on `&`. */
+        fun environment(name: String): Node {
+            if (name == "array" || name == "tabular") { while (i < s.length && s[i].isWhitespace()) i++; if (i < s.length && s[i] == '{') rawArgument() }
+            val bodyStart = i
+            var depth = 1
+            var end = s.length
+            while (i < s.length) {
+                if (s.startsWith("\\begin{", i)) { depth++; i += 7; continue }
+                if (s.startsWith("\\end{", i)) {
+                    depth--
+                    if (depth == 0) {
+                        end = i
+                        i += 4
+                        rawArgument()
+                        break
+                    }
+                    i += 5
+                    continue
+                }
+                i++
+            }
+            val body = s.substring(bodyStart, minOf(end, s.length))
+            val rows = splitTop(body, "\\\\").map { row -> splitTop(row, "&").map { cell -> Reader(cell, unknown).group(untilBrace = false) } }
+                .filter { r -> r.any { it.isNotEmpty() } }
+            val (l, r) = when (name.trimEnd('*')) {
+                "cases", "dcases" -> "{" to ""
+                "rcases" -> "" to "}"
+                "pmatrix" -> "(" to ")"
+                "bmatrix" -> "[" to "]"
+                "Bmatrix" -> "{" to "}"
+                "vmatrix" -> "|" to "|"
+                "Vmatrix" -> "‖" to "‖"
+                else -> "" to ""
+            }
+            val left = name.startsWith("cases") || name.startsWith("dcases") || name.startsWith("align") || name == "split" || name == "array"
+            return Matrix(rows, l, r, alignLeft = left)
+        }
+
         /** Raw text of a `{...}` argument (for \text). */
         fun rawArgument(): String {
             while (i < s.length && s[i].isWhitespace()) i++
@@ -104,6 +224,14 @@ internal object MathParser {
             }
             when (name) {
                 "frac", "dfrac", "tfrac" -> out += Frac(argument(), argument())
+                "overset", "stackrel" -> {
+                    val top = argument()
+                    out += Scripts(Group(argument()), top, null)
+                }
+                "underset" -> {
+                    val bottom = argument()
+                    out += Scripts(Group(argument()), null, bottom)
+                }
                 "sqrt" -> {
                     if (i < s.length && s[i] == '[') { while (i < s.length && s[i] != ']') i++; i++ }
                     out += Sqrt(argument())
@@ -117,9 +245,18 @@ internal object MathParser {
                 }
                 "displaystyle", "textstyle" -> Unit
                 "mathbf", "mathit", "boldsymbol", "mathcal", "mathbb", "vec", "hat", "bar", "overline", "underline" -> out.add(Group(argument()))
-                "left", "right", "big", "Big", "bigg", "Bigg" -> {
+                "left" -> {
+                    val l = delimiter()
+                    rightDelim = ""
+                    val body = group(untilBrace = false, untilRight = true)
+                    out += Delim(l, body, rightDelim)
+                }
+                "right" -> delimiter()
+                "big", "Big", "bigg", "Bigg" -> {
                     if (i < s.length && s[i] == '.') i++
                 }
+                "begin" -> out += environment(rawArgument().trim())
+                "end" -> rawArgument()
                 ",", ":", ";", ">" -> out += Space(0.35f)
                 "!" -> Unit
                 " " -> out += Space(0.5f)
@@ -242,6 +379,7 @@ internal class MathWriter(private val hand: Hand, private val text: TextWriter, 
             val b = measure(n.body, scale)
             Metrics(b.width + 1.1f * xh * scale, b.ascent + 0.35f * xh * scale, max(b.descent, 0.1f * xh * scale))
         }
+        is MathParser.Delim, is MathParser.Matrix -> measure(MathParser.inline(n), scale)
     }
 
     private fun fracScale(scale: Float) = max(0.55f, scale * 0.82f)
@@ -302,6 +440,7 @@ internal class MathWriter(private val hand: Hand, private val text: TextWriter, 
             write(n.body, x + w + 0.05f * xh * scale, baseline, color, scale, Gap.Letter)
             x + w + b.width + 0.1f * xh * scale
         }
+        is MathParser.Delim, is MathParser.Matrix -> write(MathParser.inline(n), x, baseline, color, scale, gap)
     }
 
     private companion object {
@@ -368,6 +507,8 @@ internal object InlineMath {
             is MathParser.Scripts -> (n.base?.let { flat(listOf(it)) } ?: "") +
                 (n.sub?.let { wrapped(it) } ?: "") + (n.sup?.let { wrapped(it) } ?: "")
             is MathParser.Sqrt -> "√" + wrapped(n.body)
+            is MathParser.Delim -> n.left + flat(n.body) + n.right
+            is MathParser.Matrix -> n.left + n.rows.joinToString("; ") { r -> r.joinToString(" ") { flat(it) } } + n.right
         }
     }
 }
