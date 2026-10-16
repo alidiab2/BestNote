@@ -286,14 +286,14 @@ fun EditorScreen(
     var exporting by remember { mutableStateOf(false) }
     val snackbar = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
-    val context = LocalContext.current
+    val messages = mapOf(R.string.image_failed to stringResource(R.string.image_failed), R.string.image_nothing_to_paste to stringResource(R.string.image_nothing_to_paste))
     val elements = rememberElementTools(
         canvas = { canvas },
         document = document,
         session = viewModel.session,
         colors = { toolbox.quickColors(PenKind.Fountain) },
         onSelecting = { viewModel.setLasso(true) },
-        onMessage = { id -> scope.launch { snackbar.currentSnackbarData?.dismiss(); snackbar.showSnackbar(context.getString(id)) } },
+        onMessage = { id -> scope.launch { snackbar.currentSnackbarData?.dismiss(); snackbar.showSnackbar(messages.getValue(id)) } },
     )
     val reduce = reducedMotion()
     val side = traySide(state.dock, state.leftHanded)
