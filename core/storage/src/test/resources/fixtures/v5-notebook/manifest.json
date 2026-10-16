@@ -1,0 +1,18 @@
+{
+  "format": 5,
+  "generator": "BestNote",
+  "notebook": {
+    "id": "fixture-v3",
+    "title": "Old notebook",
+    "createdAtMillis": 1000,
+    "updatedAtMillis": 2000,
+    "template": "Grid",
+    "pageCount": 2
+  },
+  "pages": [
+    "page-0",
+    "page-1"
+  ],
+  "assets": [],
+  "extras": []
+}

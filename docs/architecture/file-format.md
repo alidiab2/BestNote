@@ -28,11 +28,12 @@ notebook.bnote
 On disk inside the app, a notebook lives **unpacked** as a directory with the same layout, which makes partial writes cheap. The `.bnote` zip is produced for export, share and backup.
 
 ## Versioning
-- `manifest.json` and every `pages/<id>.json` carry `"format": N` (current: **5**). Readers refuse versions newer than they know and offer "update the app".
+- `manifest.json` and every `pages/<id>.json` carry `"format": N` (current: **6**). Readers refuse versions newer than they know and offer "update the app".
 - Older versions are upgraded in memory on read by `FormatMigrations` (one step per version, on the JSON tree); the next save writes the current version.
 - v1 → v2: page metadata always states `paper` (v1 drafts could omit it, meaning White).
 - v3 → v4: the manifest may list `recordings` (MEDIA-04): `{id, title?, startedAtMillis, durationMillis}`; each one's audio is `assets/audio/<id>.m4a` (AAC, mono). Absent means none, so the step only stamps the version.
 - v4 → v5: the manifest may list `extras` (TPL-01): names of small notebook-level JSON records stored at `extras/<name>` (`[a-z0-9_-]{1,40}.json`), rewritten on every save. `smartboard.json` holds Smart Board's notebook glossary and, per insert, the template id, page ids and the page's notes in the compact element format (for follow-up photos). Absent means none, so the step only stamps the version.
+- v5 → v6: a page may have an edit journal `pages/<id>.jrnl` next to its chunk (DOC-11, see *Page journal*). The JSON is unchanged, so the step only stamps the version; a v5 app refuses v6 notebooks rather than save over strokes that only live in a journal.
 - Every migration ships as a test fixture (`core/storage/src/test/resources/fixtures/v<N>-notebook/`) with a test in `FormatMigrationTest`.
 
 ## Backup (DOC-08)
@@ -68,3 +69,14 @@ An androidx.ink storage encoding can be added later as a new chunk version behin
 
 ## Open questions
 - Layers as separate `.ink` files or as sections in one chunk?
+
+
+## Page journal (DOC-11)
+Autosave appends small records to `pages/<id>.jrnl` instead of rewriting the whole `.ink` chunk; the chunk is rewritten (compaction) when the journal passes 4 MB or 2,000 edits, after 30 s without edits, and when the notebook is closed. Load is the chunk plus a replay of the journal; every reader (`FileNotebookStore.read`, hence export and backup) sees the replayed page, and `compactJournals` folds leftovers into the chunk before an editor opens a notebook.
+
+```
+header  "BNJL" | u16 version (1) | u16 flags (0) | u32 baseId        baseId = CRC32 stored in the chunk header
+record  u32 payloadLength | u32 CRC32(payload) | payload
+payload u32 baseCount | u32 removedCount, removed x u32 | u32 addedCount, added x u32 | u32 chunkLength | .ink chunk of the added strokes
+```
+A record removes strokes by index (in the list before the edit) and inserts the new ones at their final indices; `baseCount` must equal the current stroke count. Records are checksummed and fsynced when appended. Replay stops at the first record that is short, fails its checksum or does not fit, so a torn last write loses only that edit. A journal whose `baseId` differs from the chunk's is stale (crash between "chunk written" and "journal deleted") and is ignored and deleted.

@@ -16,3 +16,4 @@
 | [x] DOC-08 | Full backup/restore to a user-chosen folder (SAF) | M3 | M | DOC-05 | Restore on a clean install reproduces the library exactly |
 | [ ] DOC-09 | Optional sync through user-owned storage (SAF folder, WebDAV) | M4 | XL | DOC-08 | Needs a design doc first |
 | [x] DOC-10 | Thumbnail generation pipeline (background, cached, invalidated on edit) | M1 | M | DOC-02 | Thumbnails update within 1 s of closing a notebook |
+| [x] DOC-11 | Incremental autosave: per-page append-only edit journal + background compaction (format v6) | M2 | L | DOC-03, DOC-05 | Dense page: writes drop >10×, PSS flat while writing |

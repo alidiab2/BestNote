@@ -192,6 +192,8 @@ internal class DocumentSession(
         document.backgrounds = pdf
         document.reset(savedLayout.map { it.second }, savedLayout.map { it.first }, strokes = { strokes[it] }, elements = { pages[it].elements })
         document.addListener(this)
+        // What each page holds on disk, so autosave appends only the difference (DOC-11).
+        document.pages.forEach { page -> open.autosaver.adoptBaseline(page.id, modelsOf(page)) }
     }
 
     /** The notebook's Smart Board record (glossary, the notes of every page Smart Board wrote). */

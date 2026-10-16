@@ -82,6 +82,16 @@ interface NotebookStore {
      */
     suspend fun writePages(pkg: NotebookPackage, changedPageIds: Set<String>) = write(pkg)
 
+    /**
+     * Appends one edit [record] (see [PageJournal]) to the journal of [pageId], which applies to the chunk
+     * identified by [baseId], and returns the journal's size afterwards. The record is durable on return.
+     * Null means this store has no journals: the caller then rewrites the page with [writePages].
+     */
+    suspend fun appendJournal(id: NotebookId, pageId: String, baseId: Int, record: ByteArray): Long? = null
+
+    /** Folds every page journal of [id] into its chunk and removes the journals (run before editing starts). */
+    suspend fun compactJournals(id: NotebookId) = Unit
+
     /** @return true if a notebook was removed. */
     suspend fun delete(id: NotebookId): Boolean
 

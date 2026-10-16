@@ -49,7 +49,13 @@ internal object FormatMigrations {
     /** v4 → v5: the manifest gains `extras` (notebook-level records such as Smart Board's). Absent means none. */
     private val V4_TO_V5 = Step(from = 4, manifest = { it.withFormat(5) }, page = { it.withFormat(5) })
 
-    val steps: List<Step> = listOf(V1_TO_V2, V2_TO_V3, V3_TO_V4, V4_TO_V5)
+    /**
+     * v5 → v6: a page may have an edit journal `pages/<id>.jrnl` next to its chunk (DOC-11). The JSON is unchanged;
+     * the bump makes a v5 app refuse the notebook rather than save over strokes that only live in a journal.
+     */
+    private val V5_TO_V6 = Step(from = 5, manifest = { it.withFormat(6) }, page = { it.withFormat(6) })
+
+    val steps: List<Step> = listOf(V1_TO_V2, V2_TO_V3, V3_TO_V4, V4_TO_V5, V5_TO_V6)
 
     fun formatOf(json: JsonObject): Int = json["format"]?.jsonPrimitive?.int ?: throw CorruptChunkException("Missing format")
 

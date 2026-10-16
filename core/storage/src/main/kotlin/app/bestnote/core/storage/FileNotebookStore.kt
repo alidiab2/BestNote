@@ -30,6 +30,9 @@ class FileNotebookStore internal constructor(
 
     private val mutex = Mutex()
 
+    /** Journal file -> (chunk it applies to, end of its last good record), so an append does not rescan the file. */
+    private val journalEnds = HashMap<String, Pair<Int, Long>>()
+
     /** Notebooks whose manifest can be read. Damaged or newer-format notebooks are skipped. */
     override suspend fun list(): List<Notebook> = locked {
         root.listFiles { f -> f.isDirectory && !f.name.startsWith(".") }.orEmpty().mapNotNull { dir ->
@@ -77,11 +80,73 @@ class FileNotebookStore internal constructor(
             }
             // Extras are small and change in place, so they are always written.
             if (changedPaths == null || path == BnoteFormat.MANIFEST || path in changedPaths || !file.isFile || path.startsWith(BnoteFormat.EXTRAS_DIR)) {
-                writeAtomically(file, bytes)
+                if (path.endsWith(".ink")) {
+                    // An unchanged chunk (a metadata-only save) is not rewritten, and its journal stays valid.
+                    if (!sameOnDisk(file, bytes)) {
+                        writeAtomically(file, bytes)
+                        dropStaleJournal(File(dir, path.removeSuffix(".ink") + PageJournal.EXT), PageJournal.chunkId(bytes))
+                    }
+                } else {
+                    writeAtomically(file, bytes)
+                }
             }
         }
         syncDirectory(dir)
         removeUnreferenced(dir, entries.keys)
+    }
+
+    override suspend fun appendJournal(id: NotebookId, pageId: String, baseId: Int, record: ByteArray): Long? = locked {
+        require(PageContent.PAGE_ID_PATTERN.matches(pageId)) { "Invalid page id '$pageId'" }
+        val file = File(dirOf(id), journalPath(pageId))
+        val key = file.path
+        try {
+            var end = journalEnds[key]?.takeIf { it.first == baseId }?.second
+            if (end == null) {
+                val scan = if (file.isFile) PageJournal.scan(file.readBytes(), InkChunkCodec) else null
+                end = if (scan != null && scan.baseId == baseId) scan.validEnd else -1L
+            }
+            val data: ByteArray
+            if (end < 0) {
+                data = PageJournal.header(baseId) + record
+                end = 0
+                PageJournal.appendAt(file, 0, data)
+                syncDirectory(file.parentFile)
+            } else {
+                data = record
+                PageJournal.appendAt(file, end, data)
+            }
+            val newEnd = end + data.size
+            journalEnds[key] = baseId to newEnd
+            newEnd
+        } catch (e: IOException) {
+            journalEnds.remove(key)
+            throw e
+        }
+    }
+
+    override suspend fun compactJournals(id: NotebookId) = locked {
+        val dir = dirOf(id)
+        File(dir, BnoteFormat.PAGES_DIR).listFiles { f -> f.name.endsWith(PageJournal.EXT) }.orEmpty().forEach { journal ->
+            val ink = File(journal.parentFile, journal.name.removeSuffix(PageJournal.EXT) + ".ink")
+            val folded = if (ink.isFile) foldJournal(ink.readBytes(), journal) else null
+            if (folded != null) writeAtomically(ink, folded)
+            journalEnds.remove(journal.path)
+            journal.delete()
+        }
+    }
+
+    /** [chunk] with the valid records of [journal] replayed, or null when there is nothing to fold or the chunk is damaged. */
+    private fun foldJournal(chunk: ByteArray, journal: File): ByteArray? {
+        val scan = PageJournal.scan(journal.readBytes(), InkChunkCodec) ?: return null
+        if (scan.edits.isEmpty() || scan.baseId != PageJournal.chunkId(chunk)) return null
+        val strokes = try {
+            InkChunkCodec.decode(chunk)
+        } catch (_: CorruptChunkException) {
+            return null
+        }
+        var current = strokes
+        for (edit in scan.edits) current = PageJournal.apply(current, edit) ?: break
+        return InkChunkCodec.encode(current)
     }
 
     override suspend fun delete(id: NotebookId): Boolean = locked {
@@ -111,12 +176,46 @@ class FileNotebookStore internal constructor(
     private fun readLocked(id: NotebookId): NotebookPackage? {
         val dir = dirOf(id)
         if (!File(dir, BnoteFormat.MANIFEST).isFile) return null
-        return BnoteFormat.fromEntries { path -> File(dir, path).takeIf { it.isFile }?.readBytes() }
+        return BnoteFormat.fromEntries { path ->
+            val bytes = File(dir, path).takeIf { it.isFile }?.readBytes()
+            // A page's chunk plus its journal, so every reader (export, backup, search) sees the latest edit.
+            val journal = if (bytes != null && path.endsWith(".ink")) File(dir, path.removeSuffix(".ink") + PageJournal.EXT) else null
+            if (journal != null && journal.isFile) foldJournal(bytes!!, journal) ?: bytes else bytes
+        }
     }
 
     private suspend fun <T> locked(block: suspend () -> T): T = withContext(io) { mutex.withLock { block() } }
 
     private fun dirOf(id: NotebookId) = File(root, encodeDirName(id.value))
+
+    private fun journalPath(pageId: String) = BnoteFormat.PAGES_DIR + pageId + PageJournal.EXT
+
+    /** True when [file] already holds the ink chunk [bytes] (same size, header and checksum). */
+    private fun sameOnDisk(file: File, bytes: ByteArray): Boolean {
+        if (!file.isFile || file.length() != bytes.size.toLong() || bytes.size < InkChunkCodec.HEADER_SIZE) return false
+        val head = ByteArray(InkChunkCodec.HEADER_SIZE)
+        val onDisk = try {
+            file.inputStream().use { it.read(head) == head.size }
+        } catch (_: IOException) {
+            false
+        }
+        return onDisk && PageJournal.isInkChunk(bytes) && head.contentEquals(bytes.copyOf(head.size))
+    }
+
+    /** Deletes [journal] unless it applies to the chunk [chunkId] that was just written. */
+    private fun dropStaleJournal(journal: File, chunkId: Int) {
+        if (!journal.isFile) return
+        val base = try {
+            val head = ByteArray(PageJournal.HEADER_SIZE)
+            journal.inputStream().use { if (it.read(head) == head.size) PageJournal.scan(head, InkChunkCodec)?.baseId else null }
+        } catch (_: IOException) {
+            null
+        }
+        if (base != chunkId) {
+            journalEnds.remove(journal.path)
+            journal.delete()
+        }
+    }
 
     private fun writeAtomically(target: File, bytes: ByteArray) = AtomicFiles.write(target, bytes, faults)
 
@@ -128,7 +227,10 @@ class FileNotebookStore internal constructor(
             val rel = f.relativeTo(dir).invariantSeparatorsPath
             when {
                 f == dir -> Unit
-                f.isFile && rel !in keep -> f.delete()
+                f.isFile && rel !in keep && !(rel.endsWith(PageJournal.EXT) && rel.removeSuffix(PageJournal.EXT) + ".ink" in keep) -> {
+                    journalEnds.remove(f.path)
+                    f.delete()
+                }
                 f.isDirectory && f.list().isNullOrEmpty() -> f.delete()
             }
         }
