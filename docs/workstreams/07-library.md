@@ -16,3 +16,4 @@
 | [ ] LIB-08 | Home-screen widgets: Favorites, Quicknote (Glance) | M3 | M | LIB-05 | — |
 | [ ] LIB-09 | Drop PDFs/images from other apps into the library | M3 | S | PDF-01 | — |
 | [ ] LIB-10 | Notebook color tags and custom covers from image | M2 | S | — | — |
+| [x] LIB-11 | Lock a notebook or folder: biometric / screen lock (app PIN without one), AES-GCM encryption at rest, optional recovery password, relock timer | M3 | L | DOC-11 | Locked = lock cover, not in search / Continue writing / Recent, FLAG_SECURE; files on disk not plaintext; lock → unlock → remove lock keeps every byte ([design](../architecture/locked-notebooks.md)) |

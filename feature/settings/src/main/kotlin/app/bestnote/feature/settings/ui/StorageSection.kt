@@ -21,6 +21,7 @@ import androidx.compose.material.icons.outlined.CleaningServices
 import androidx.compose.material.icons.outlined.DeleteOutline
 import androidx.compose.material.icons.outlined.FolderOpen
 import androidx.compose.material.icons.outlined.IosShare
+import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -128,6 +129,30 @@ internal fun StorageSection(
         }
     }
 
+    // LIB-11: how long unlocked notebooks stay open while the app is in the background.
+    SettingsGroup(stringResource(R.string.settings_lock_group)) {
+        row {
+            StackedRow(
+                stringResource(R.string.settings_relock),
+                subtitle = stringResource(R.string.settings_relock_sub),
+                icon = Icons.Outlined.Lock,
+            ) {
+                Segmented(
+                    StoragePreferences.RELOCK_CHOICES,
+                    prefs.relockAfterSeconds,
+                    label = {
+                        when (it) {
+                            0 -> stringResource(R.string.settings_relock_now)
+                            StoragePreferences.RELOCK_UNTIL_CLOSED -> stringResource(R.string.settings_relock_until_closed)
+                            else -> pluralStringResource(R.plurals.settings_relock_minutes, it / SECONDS_PER_MINUTE, it / SECONDS_PER_MINUTE)
+                        }
+                    },
+                    onSelect = { v -> update { it.copy(relockAfterSeconds = v) } },
+                )
+            }
+        }
+    }
+
     SettingsGroup(stringResource(R.string.settings_cleanup_group)) {
         row {
             StackedRow(
@@ -173,3 +198,4 @@ private fun Legend(color: Color, label: String, value: String?) {
 }
 
 private val BarHeight = 10.dp
+private const val SECONDS_PER_MINUTE = 60

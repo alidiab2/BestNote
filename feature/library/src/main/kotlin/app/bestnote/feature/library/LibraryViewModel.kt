@@ -74,6 +74,12 @@ sealed interface LibraryEvent {
     /** A page found by search: open [pageId] of [id] and mark what matches [query]. */
     data class OpenPage(val id: NotebookId, val pageId: String, val query: String) : LibraryEvent
 
+    /**
+     * LIB-11: [ids] arrived in a locked folder (named [folder]) and must be locked too; then open [open], if any.
+     * The screen runs the lock dialog, since locking may need the app PIN or a recovery password.
+     */
+    data class Lock(val ids: List<NotebookId>, val folder: String, val open: NotebookId? = null) : LibraryEvent
+
     /** Undo snackbar for [ids] just moved to the Trash; [title] names the first one. */
     data class Trashed(val ids: List<NotebookId>, val title: String) : LibraryEvent
     data class Message(val notice: Notice, val count: Int = 1, val name: String = "") : LibraryEvent
@@ -90,6 +96,7 @@ class LibraryViewModel @Inject constructor(
     private val pdfRequests: PdfOpenRequests,
     private val pageSearch: PageSearch = NoOpPageSearch,
     private val models: HandwritingModels = NoOpHandwritingModels,
+    private val locks: LibraryLocks = LibraryLocks.None,
 ) : ViewModel() {
     private val notebooks = MutableStateFlow<List<Notebook>?>(null)
     private val trash = MutableStateFlow<List<TrashedNotebook>>(emptyList())
@@ -106,13 +113,17 @@ class LibraryViewModel @Inject constructor(
         .mapLatest { q -> if (q.isEmpty()) emptyList() else runCatching { pageSearch.search(q) }.getOrDefault(emptyList()) }
         .onStart { emit(emptyList()) }
 
-    private val base = combine(notebooks, trash, controls, thumbnails, metaVersion) { list, bin, c, thumbs, _ ->
-        buildLibraryState(list, bin, c, metadata, CoverPalette.All.size, clock.now(), thumbnails = thumbs)
+    private val lockSets = combine(locks.sealed, locks.unlocked) { sealed, unlocked -> sealed to unlocked }
+
+    private val base = combine(notebooks, trash, controls, combine(thumbnails, metaVersion) { t, _ -> t }, lockSets) { list, bin, c, thumbs, (sealed, unlocked) ->
+        buildLibraryState(list, bin, c, metadata, CoverPalette.All.size, clock.now(), thumbnails = thumbs, sealed = sealed, unlocked = unlocked)
     }
 
     val state: StateFlow<LibraryUiState> = combine(base, pageHits, models.state) { state, hits, modelState ->
         val titles = notebooks.value.orEmpty().associate { it.id to it.title }
-        val results = if (state.searching) hits.mapNotNull { h -> titles[h.notebookId]?.let { PageResult(h, it) } } else emptyList()
+        // Locked notebooks are never indexed (LIB-11); a stale row of one is dropped here too.
+        val sealed = locks.sealed.value
+        val results = if (state.searching) hits.filter { it.notebookId !in sealed }.mapNotNull { h -> titles[h.notebookId]?.let { PageResult(h, it) } } else emptyList()
         state.copy(pageResults = results, models = modelState)
     }.stateIn(viewModelScope, SharingStarted.Eagerly, LibraryUiState())
 
@@ -195,6 +206,7 @@ class LibraryViewModel @Inject constructor(
         viewModelScope.launch {
             val notebook = repository.create(spec.title, spec.template, spec.format)
             val folderId = (controls.value.destination as? LibraryDestination.InFolder)?.folderId
+            val lockedFolder = lockedAncestor(folderId, metadata.folders())
             metadata.update(notebook.id) {
                 it.copy(
                     coverIndex = spec.cover.colorIndex,
@@ -204,7 +216,7 @@ class LibraryViewModel @Inject constructor(
                 )
             }
             reload()
-            events.send(LibraryEvent.Open(notebook.id))
+            events.send(if (lockedFolder != null) LibraryEvent.Lock(listOf(notebook.id), lockedFolder.name, open = notebook.id) else LibraryEvent.Open(notebook.id))
         }
     }
 
@@ -213,7 +225,8 @@ class LibraryViewModel @Inject constructor(
         viewModelScope.launch {
             val now = clock.now()
             val list = notebooks.value ?: repository.list()
-            val today = list.filter { metadata.meta(it.id).quicknote && sameDay(it.createdAtMillis, now, TimeZone.getDefault()) }
+            val sealed = locks.sealed.value
+            val today = list.filter { metadata.meta(it.id).quicknote && it.id !in sealed && sameDay(it.createdAtMillis, now, TimeZone.getDefault()) }
                 .maxByOrNull { it.createdAtMillis }
             val id = today?.id ?: repository.create(title, PaperTemplates.Quicknote).id.also { id ->
                 metadata.update(id) { it.copy(quicknote = true, coverIndex = QUICKNOTE_COVER, coverStyle = CoverStyle.Plain) }
@@ -263,6 +276,9 @@ class LibraryViewModel @Inject constructor(
             endSelection()
             val name = metadata.folders().firstOrNull { it.id == folderId }?.name.orEmpty()
             events.send(LibraryEvent.Message(Notice.Moved, ids.size, name))
+            val lockedFolder = lockedAncestor(folderId, metadata.folders())
+            val plain = ids.filter { it !in locks.sealed.value }
+            if (lockedFolder != null && plain.isNotEmpty()) events.send(LibraryEvent.Lock(plain, lockedFolder.name))
         }
     }
 
@@ -326,7 +342,8 @@ class LibraryViewModel @Inject constructor(
             val folderId = (controls.value.destination as? LibraryDestination.InFolder)?.folderId
             metadata.update(notebook.id) { it.copy(folderId = folderId) }
             reload()
-            events.send(LibraryEvent.Open(notebook.id))
+            val lockedFolder = lockedAncestor(folderId, metadata.folders())
+            events.send(if (lockedFolder != null) LibraryEvent.Lock(listOf(notebook.id), lockedFolder.name, open = notebook.id) else LibraryEvent.Open(notebook.id))
         }
     }
 
@@ -377,9 +394,48 @@ class LibraryViewModel @Inject constructor(
 
     // endregion
 
+    // region Locks (LIB-11)
+
+    /** Folder [id] and every subfolder's notebooks. */
+    fun notebooksInFolder(id: String): List<NotebookId> {
+        val folders = descendantsOf(id, metadata.folders()) + id
+        return notebooks.value.orEmpty().map { it.id }.filter { metadata.meta(it).folderId in folders }
+    }
+
+    /**
+     * What unlocking [id] opens together: every locked notebook under the outermost locked folder [id] is in (one
+     * prompt for the whole folder), or just [id].
+     */
+    fun unlockGroup(id: NotebookId): List<NotebookId> {
+        val folder = lockedAncestor(metadata.meta(id).folderId, metadata.folders()) ?: return listOf(id)
+        val sealed = locks.sealed.value
+        return (notebooksInFolder(folder.id).filter { it in sealed } + id).distinct()
+    }
+
+    /** Marks folder [id] locked or not (its notebooks are locked / unlocked by the screen). */
+    fun setFolderLocked(id: String, locked: Boolean) {
+        val folder = metadata.folders().firstOrNull { it.id == id } ?: return
+        viewModelScope.launch {
+            metadata.putFolder(folder.copy(locked = locked))
+            metaChanged()
+        }
+    }
+
+    /** After a lock change: re-read which notebooks are sealed (and their covers). */
+    fun locksChanged() {
+        viewModelScope.launch { reload() }
+    }
+
+    // endregion
+
     private fun metaChanged() = metaVersion.update { it + 1 }
 
     private suspend fun reload() {
+        try {
+            locks.refresh()
+        } catch (@Suppress("SwallowedException") e: java.io.IOException) {
+            // Lock state unreadable: covers fall back to plain; the store still refuses to read locked notebooks.
+        }
         val list = repository.list()
         thumbnails.value = repository.thumbnails(list.map { it.id })
         notebooks.value = list

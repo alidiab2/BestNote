@@ -132,10 +132,15 @@ data class AppearancePreferences(
 data class StoragePreferences(
     /** Days a deleted notebook stays in Trash. 0 = never purge automatically. */
     val trashRetentionDays: Int = DEFAULT_TRASH_DAYS,
+    /** LIB-11: seconds in the background before unlocked notebooks lock again. 0 = immediately, -1 = until the app closes. */
+    val relockAfterSeconds: Int = DEFAULT_RELOCK_SECONDS,
 ) {
     companion object {
         const val DEFAULT_TRASH_DAYS = 30
         val RETENTION_CHOICES = listOf(7, 30, 60, 90, 0)
+        const val DEFAULT_RELOCK_SECONDS = 60
+        const val RELOCK_UNTIL_CLOSED = -1
+        val RELOCK_CHOICES = listOf(0, 60, 300, RELOCK_UNTIL_CLOSED)
     }
 }
 

@@ -4,7 +4,10 @@ import app.bestnote.core.model.Notebook
 import app.bestnote.core.model.NotebookId
 import app.bestnote.core.model.Page
 import app.bestnote.core.model.PaperTemplate
+import app.bestnote.core.storage.FileNotebookStore
 import app.bestnote.core.storage.InkChunkCodec
+import app.bestnote.core.storage.NotebookKeyring
+import app.bestnote.core.storage.NotebookLockedException
 import app.bestnote.core.storage.NotebookPackage
 import app.bestnote.core.storage.NotebookStore
 import app.bestnote.core.storage.PageContent
@@ -71,7 +74,16 @@ class StoreLibraryRepository(
     private val index: NotebookIndexMirror = NotebookIndexMirror.None,
     private val clock: () -> Long = System::currentTimeMillis,
     private val thumbnailSource: NotebookThumbnails? = null,
+    /** LIB-11: session keys, so a copy or a Trash entry of an unlocked locked notebook is written encrypted too. */
+    private val keyring: NotebookKeyring? = null,
 ) : LibraryRepository {
+
+    /** [id]'s package, or null when it is missing or locked (the screen unlocks before asking). */
+    private suspend fun NotebookStore.readUnlocked(id: NotebookId): NotebookPackage? = try {
+        read(id)
+    } catch (@Suppress("SwallowedException") e: NotebookLockedException) {
+        null
+    }
 
     override suspend fun thumbnails(ids: List<NotebookId>): Map<NotebookId, String> =
         thumbnailSource?.existing(ids).orEmpty()
@@ -87,9 +99,11 @@ class StoreLibraryRepository(
     }
 
     override suspend fun duplicate(id: NotebookId, title: String): Notebook? {
-        val pkg = store.read(id) ?: return null
+        val pkg = store.readUnlocked(id) ?: return null
         val now = clock()
         val copy = pkg.notebook.copy(id = NotebookId(UUID.randomUUID().toString()), title = title.trim().ifEmpty { pkg.notebook.title }, createdAtMillis = now, updatedAtMillis = now)
+        // The copy of a locked notebook is locked with the same key (written encrypted, never in plain).
+        keyring?.get(id)?.let { keyring.put(copy.id, it.dataKey, it.header) }
         val pages = pkg.pages.map { PageContent(it.page.copy(notebookId = copy.id), it.strokes.copyOf(), it.id, it.elements) }
         store.write(NotebookPackage(copy, pages, pkg.assets.mapValues { it.value.copyOf() }, pkg.recordings, pkg.extras))
         index.upsert(copy)
@@ -99,7 +113,7 @@ class StoreLibraryRepository(
     override suspend fun rename(id: NotebookId, title: String): Notebook? {
         val clean = title.trim()
         if (clean.isEmpty()) return null
-        val pkg = store.read(id) ?: return null
+        val pkg = store.readUnlocked(id) ?: return null
         val renamed = pkg.notebook.copy(title = clean, updatedAtMillis = clock())
         store.write(NotebookPackage(renamed, pkg.pages, pkg.assets, pkg.recordings, pkg.extras))
         index.upsert(renamed)
@@ -107,7 +121,12 @@ class StoreLibraryRepository(
     }
 
     override suspend fun moveToTrash(id: NotebookId): Boolean {
-        val pkg = store.read(id) ?: return false
+        // A locked notebook moves as it is, still encrypted; its visible date then says when it was trashed.
+        if (store is FileNotebookStore && trashStore is FileNotebookStore && store.moveSealedTo(id, trashStore, clock())) {
+            index.remove(id)
+            return true
+        }
+        val pkg = store.readUnlocked(id) ?: return false
         val marker = DELETED_AT_ASSET to clock().toString().toByteArray()
         trashStore.write(NotebookPackage(pkg.notebook, pkg.pages, pkg.assets + marker, pkg.recordings, pkg.extras))
         store.delete(id)
@@ -116,7 +135,11 @@ class StoreLibraryRepository(
     }
 
     override suspend fun restore(id: NotebookId): Boolean {
-        val pkg = trashStore.read(id) ?: return false
+        if (store is FileNotebookStore && trashStore is FileNotebookStore && trashStore.moveSealedTo(id, store)) {
+            store.list().firstOrNull { it.id == id }?.let { index.upsert(it) }
+            return true
+        }
+        val pkg = trashStore.readUnlocked(id) ?: return false
         val restored = NotebookPackage(pkg.notebook, pkg.pages, pkg.assets - DELETED_AT_ASSET, pkg.recordings, pkg.extras)
         store.write(restored)
         trashStore.delete(id)
@@ -125,7 +148,10 @@ class StoreLibraryRepository(
     }
 
     override suspend fun trash(): List<TrashedNotebook> = trashStore.list().mapNotNull { notebook ->
-        val pkg = trashStore.read(notebook.id) ?: return@mapNotNull null
+        if (trashStore.isSealed(notebook.id)) {
+            return@mapNotNull TrashedNotebook(notebook, notebook.updatedAtMillis) // locked: its stub's date is the trash date
+        }
+        val pkg = trashStore.readUnlocked(notebook.id) ?: return@mapNotNull null
         TrashedNotebook(notebook, pkg.deletedAt())
     }.sortedByDescending { it.deletedAtMillis }
 

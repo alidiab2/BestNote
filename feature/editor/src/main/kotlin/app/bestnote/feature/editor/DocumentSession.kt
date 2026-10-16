@@ -319,7 +319,8 @@ internal class DocumentSession(
         val pdf = pdf
         this.pdf = null
         val closedAt = SystemClock.elapsedRealtime()
-        repository.backgroundScope.launch {
+        // Tracked, so locking this notebook right after closing it waits for this last plain save (LIB-11).
+        repository.launchClosing(notebookId) {
             try {
                 saver.close()
             } catch (e: CancellationException) {
@@ -329,6 +330,8 @@ internal class DocumentSession(
             }
             val thumbnailed = refreshThumbnail(saver, first, pdf, elements, pictures)
             pdf?.close()
+            // A locked notebook's PDF backgrounds were copied in plain for the renderer: remove them (LIB-11).
+            if (pdf != null && repository.isSealed(notebookId)) withContext(Dispatchers.IO) { PdfNotebookFiles.forget(notebookId, pdfCacheDir) }
             if (thumbnailed) {
                 Log.i(TAG, "Thumbnail of $notebookId updated ${SystemClock.elapsedRealtime() - closedAt} ms after closing")
             }

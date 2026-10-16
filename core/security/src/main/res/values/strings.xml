@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- LIB-11 locked notebooks -->
+    <string name="lock_prompt_title">Unlock notebook</string>
+    <string name="lock_prompt_subtitle">Confirm it’s you to open your locked notes</string>
+    <string name="lock_gate_title">This notebook is locked</string>
+    <string name="lock_gate_body">Its pages are encrypted on this device. Unlock with your fingerprint, face, screen lock or app PIN.</string>
+    <string name="lock_unlock">Unlock</string>
+    <string name="lock_lock">Lock</string>
+    <string name="lock_back">Back</string>
+    <string name="lock_cancel">Cancel</string>
+    <string name="lock_ok">OK</string>
+    <string name="lock_working">Encrypting…</string>
+    <string name="lock_mismatch">These don’t match</string>
+    <plurals name="lock_setup_title">
+        <item quantity="one">Lock notebook</item>
+        <item quantity="other">Lock %d notebooks</item>
+    </plurals>
+    <string name="lock_setup_title_folder">Lock folder “%s”</string>
+    <string name="lock_setup_body_device">Its pages are encrypted on this device. Opening it will need your fingerprint, face or screen lock.</string>
+    <string name="lock_setup_body_pin">This device has no screen lock, so BestNote uses an app PIN instead. Its pages are encrypted on this device and opening it will need the PIN. The PIN is set once and only a scrambled check of it is kept.</string>
+    <string name="lock_setup_hidden">While locked, it shows a lock instead of its pages and is left out of search, Continue writing and Recent.</string>
+    <string name="lock_setup_warning">Important: if you remove or reset your screen lock (or clear the app PIN by clearing app data), Android may delete the key that opens locked notebooks, and they cannot be opened any more. A recovery password lets you open them anyway. Keep it somewhere safe: BestNote cannot reset it.</string>
+    <string name="lock_recovery_optional_label">Recovery password (optional)</string>
+    <string name="lock_recovery_again_label">Repeat recovery password</string>
+    <plurals name="lock_recovery_short">
+        <item quantity="one">At least %d character</item>
+        <item quantity="other">At least %d characters</item>
+    </plurals>
+    <string name="lock_pin_new_label">New app PIN (4–12 digits)</string>
+    <string name="lock_pin_again_label">Repeat the PIN</string>
+    <string name="lock_pin_label">App PIN</string>
+    <string name="lock_pin_enter_title">Enter app PIN</string>
+    <string name="lock_pin_enter_body">Enter the PIN you set for locked notebooks.</string>
+    <string name="lock_pin_wrong">Wrong PIN</string>
+    <string name="lock_recovery_title">Recovery password</string>
+    <string name="lock_recovery_body">This device’s key can no longer open this notebook, usually because the screen lock was removed or changed. Enter the recovery password you set when you locked it.</string>
+    <string name="lock_recovery_label">Recovery password</string>
+    <string name="lock_recovery_wrong">Wrong recovery password</string>
+    <string name="lock_failed_title">Something went wrong</string>
+    <string name="lock_failed_body">BestNote couldn’t change the lock. Your notebook was not changed; try again.</string>
+    <string name="lock_lost_title">Can’t unlock</string>
+    <string name="lock_lost_body">The key that opened this notebook is gone (the screen lock was removed or reset) and no recovery password was set, so it cannot be decrypted.</string>
+    <plurals name="lock_remove_title">
+        <item quantity="one">Remove lock?</item>
+        <item quantity="other">Remove lock from %d notebooks?</item>
+    </plurals>
+    <string name="lock_remove_body">The notebook will be stored unencrypted again and will show its pages, appear in search and be backed up like any other.</string>
+    <string name="lock_remove_confirm">Remove lock</string>
+    <string name="lock_export_title">Export an unlocked copy?</string>
+    <string name="lock_export_body">This notebook is locked, but the exported file is not encrypted: anyone who gets the file can read it.</string>
+    <string name="lock_export_confirm">Continue</string>
+</resources>

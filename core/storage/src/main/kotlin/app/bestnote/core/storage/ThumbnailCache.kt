@@ -12,7 +12,7 @@ import java.io.File
  * time. A thumbnail is identified by the notebook's `updatedAtMillis` it was rendered from, so it is
  * invalidated by any later edit ([isStale]).
  */
-class ThumbnailCache(private val dir: File, private val io: CoroutineDispatcher = Dispatchers.IO) {
+class ThumbnailCache(val dir: File, private val io: CoroutineDispatcher = Dispatchers.IO) {
     fun fileFor(id: NotebookId): File = File(dir, FileNotebookStore.encodeDirName(id.value) + EXTENSION)
 
     /** Atomically replaces the thumbnail of [id] with [bytes]. @return the cached file. */

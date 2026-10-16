@@ -20,6 +20,8 @@ data class Folder(
     val name: String,
     val colorIndex: Int,
     val parentId: String? = null,
+    /** LIB-11: notebooks in this folder (and its subfolders) are locked, and new ones are locked as they arrive. */
+    val locked: Boolean = false,
 )
 
 /** Cover finish drawn over the cover color (see `CoverChoices.kt`). */
@@ -171,6 +173,10 @@ class FileLibraryMetadata(private val file: File) : InMemoryLibraryMetadata() {
         }
     }
 }
+
+/** The outermost locked folder on [folderId]'s path (itself included), or null when none is locked (LIB-11). */
+internal fun lockedAncestor(folderId: String?, folders: List<Folder>): Folder? =
+    folderPath(folderId, folders.associateBy { it.id }).firstOrNull { it.locked }
 
 /** Ids of every folder below [id]. */
 internal fun descendantsOf(id: String, folders: List<Folder>): Set<String> {

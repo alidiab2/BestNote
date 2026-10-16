@@ -9,8 +9,13 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -28,6 +33,7 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -67,6 +73,8 @@ internal fun NotebookCover(
     shadow: Boolean = true,
     scale: Float = 1f,
     style: CoverStyle = CoverStyle.Plain,
+    /** LIB-11: a lock badge on the cover; a locked notebook never shows a page. */
+    locked: Boolean = false,
 ) {
     val cover = coverColor(coverIndex)
     val paper = BestNoteTheme.colors.paper.page
@@ -114,8 +122,31 @@ internal fun NotebookCover(
                 )
             }
         }
+        if (locked) LockBadge(Modifier.align(Alignment.BottomCenter).padding(bottom = 18.dp * scale), scale)
     }
 }
+
+/** The round lock on a locked notebook's cover (LIB-11). */
+@Composable
+private fun LockBadge(modifier: Modifier, scale: Float) {
+    val size = (LOCK_BADGE_DP * scale).coerceAtLeast(MIN_LOCK_BADGE_DP).dp
+    Box(
+        modifier.size(size).clip(CircleShape).background(BestNoteTheme.colors.paper.page.copy(alpha = LOCK_BADGE_ALPHA)),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            Icons.Filled.Lock,
+            contentDescription = stringResource(R.string.library_locked),
+            tint = InkPalette.Black,
+            modifier = Modifier.size(size * LOCK_ICON_FRACTION),
+        )
+    }
+}
+
+private const val LOCK_BADGE_DP = 40f
+private const val MIN_LOCK_BADGE_DP = 16f
+private const val LOCK_BADGE_ALPHA = 0.92f
+private const val LOCK_ICON_FRACTION = 0.55f
 
 /**
  * A miniature page: paper, ruled lines, a margin line and a few lines of "handwriting". Stands in for

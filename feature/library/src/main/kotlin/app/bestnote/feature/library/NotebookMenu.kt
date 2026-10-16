@@ -33,6 +33,9 @@ import androidx.compose.material.icons.outlined.DeleteOutline
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material.icons.outlined.IosShare
+import androidx.compose.material.icons.outlined.Lock
+import androidx.compose.material.icons.outlined.LockOpen
+import androidx.compose.material.icons.outlined.NoEncryption
 import androidx.compose.material.icons.outlined.Palette
 import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material.icons.outlined.Star
@@ -141,7 +144,7 @@ internal fun NotebookMenu(item: NotebookItem, expanded: Boolean, onDismiss: () -
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(Spacing.M),
         ) {
-            NotebookCover(item.title, item.coverIndex, Modifier.size(30.dp, 41.dp), showLabel = false, shadow = false, scale = 0.35f, style = item.coverStyle)
+            NotebookCover(item.title, item.coverIndex, Modifier.size(30.dp, 41.dp), showLabel = false, shadow = false, scale = 0.35f, style = item.coverStyle, locked = item.sealed)
             Column {
                 Text(item.title, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Text(
@@ -167,20 +170,33 @@ internal fun NotebookMenu(item: NotebookItem, expanded: Boolean, onDismiss: () -
         AtelierMenuItem(Icons.Outlined.IosShare, stringResource(R.string.library_menu_export), { onAction(NotebookMenuAction.Export) })
         AtelierMenuItem(Icons.Outlined.Share, stringResource(R.string.library_menu_share), { onAction(NotebookMenuAction.Share) })
         AtelierMenuItem(Icons.Outlined.CheckCircleOutline, stringResource(R.string.library_menu_select), { onAction(NotebookMenuAction.Select) })
+        // LIB-11: lock, unlock for this session, lock again now, or remove the lock for good.
+        MenuDivider()
+        when {
+            !item.sealed -> AtelierMenuItem(Icons.Outlined.Lock, stringResource(R.string.library_menu_lock), { onAction(NotebookMenuAction.Lock) })
+            item.locked -> AtelierMenuItem(Icons.Outlined.LockOpen, stringResource(R.string.library_menu_unlock), { onAction(NotebookMenuAction.Unlock) })
+            else -> AtelierMenuItem(Icons.Outlined.Lock, stringResource(R.string.library_menu_lock_now), { onAction(NotebookMenuAction.LockNow) })
+        }
+        if (item.sealed) AtelierMenuItem(Icons.Outlined.NoEncryption, stringResource(R.string.library_menu_remove_lock), { onAction(NotebookMenuAction.RemoveLock) })
         MenuDivider()
         AtelierMenuItem(Icons.Outlined.DeleteOutline, stringResource(R.string.library_menu_trash), { onAction(NotebookMenuAction.Trash) }, destructive = true)
     }
 }
 
 /** What a folder's "⋯" menu can do. */
-internal enum class FolderMenuAction { Rename, Recolor, NewSubfolder, Delete }
+internal enum class FolderMenuAction { Rename, Recolor, NewSubfolder, Delete, Lock, RemoveLock }
 
 @Composable
-internal fun FolderMenu(expanded: Boolean, onDismiss: () -> Unit, onAction: (FolderMenuAction) -> Unit) {
+internal fun FolderMenu(expanded: Boolean, onDismiss: () -> Unit, locked: Boolean = false, onAction: (FolderMenuAction) -> Unit) {
     AtelierMenu(expanded, onDismiss) {
         AtelierMenuItem(Icons.Outlined.Edit, stringResource(R.string.library_folder_rename), { onAction(FolderMenuAction.Rename) })
         AtelierMenuItem(Icons.Outlined.Palette, stringResource(R.string.library_folder_recolor), { onAction(FolderMenuAction.Recolor) })
         AtelierMenuItem(Icons.Outlined.CreateNewFolder, stringResource(R.string.library_folder_new_sub), { onAction(FolderMenuAction.NewSubfolder) })
+        if (locked) {
+            AtelierMenuItem(Icons.Outlined.NoEncryption, stringResource(R.string.library_folder_remove_lock), { onAction(FolderMenuAction.RemoveLock) })
+        } else {
+            AtelierMenuItem(Icons.Outlined.Lock, stringResource(R.string.library_folder_lock), { onAction(FolderMenuAction.Lock) })
+        }
         MenuDivider()
         AtelierMenuItem(Icons.Outlined.DeleteOutline, stringResource(R.string.library_folder_delete), { onAction(FolderMenuAction.Delete) }, destructive = true)
     }

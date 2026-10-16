@@ -31,6 +31,8 @@ androidxSqlite = "2.6.2"
 androidxWork = "2.12.0"
 # Merges exported annotations into imported PDFs so their pages stay vector (PDF-05).
 pdfboxAndroid = "2.0.27.0"
+androidxBiometric = "1.1.0"
+androidxFragment = "1.8.9"
 
 # On-device ML
 mlkitDigitalInk = "19.0.0"
@@ -58,6 +60,8 @@ androidx-lifecycle-runtime-compose = { group = "androidx.lifecycle", name = "lif
 androidx-lifecycle-viewmodel-compose = { group = "androidx.lifecycle", name = "lifecycle-viewmodel-compose", version.ref = "androidxLifecycle" }
 androidx-navigation-compose = { group = "androidx.navigation", name = "navigation-compose", version.ref = "androidxNavigation" }
 androidx-hilt-lifecycle-viewmodel-compose = { group = "androidx.hilt", name = "hilt-lifecycle-viewmodel-compose", version.ref = "androidxHilt" }
+androidx-biometric = { group = "androidx.biometric", name = "biometric", version.ref = "androidxBiometric" }
+androidx-fragment = { group = "androidx.fragment", name = "fragment", version.ref = "androidxFragment" }
 
 # Compose (versions from the BOM)
 androidx-compose-bom = { group = "androidx.compose", name = "compose-bom", version.ref = "composeBom" }

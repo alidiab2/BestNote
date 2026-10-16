@@ -65,6 +65,12 @@
     <string name="library_menu_open">فتح</string>
     <string name="library_menu_rename">إعادة تسمية</string>
     <string name="library_menu_trash">نقل إلى المحذوفات</string>
+    <!-- LIB-11 -->
+    <string name="library_menu_lock">قفل</string>
+    <string name="library_menu_unlock">فتح القفل</string>
+    <string name="library_menu_lock_now">اقفل الآن</string>
+    <string name="library_menu_remove_lock">إزالة القفل</string>
+    <string name="library_locked">مقفل</string>
     <string name="library_rename_title">إعادة تسمية الدفتر</string>
     <string name="library_rename_confirm">إعادة تسمية</string>
     <string name="library_cancel">إلغاء</string>
@@ -189,6 +195,8 @@
     <string name="library_folder_rename">إعادة التسمية</string>
     <string name="library_folder_recolor">تغيير اللون</string>
     <string name="library_folder_delete">حذف المجلد</string>
+    <string name="library_folder_lock">قفل المجلد</string>
+    <string name="library_folder_remove_lock">إزالة قفل المجلد</string>
     <string name="library_folder_more">إجراءات أخرى لـ %1$s</string>
     <string name="library_folder_name_hint">اسم المجلد</string>
     <string name="library_folder_color">اللون</string>

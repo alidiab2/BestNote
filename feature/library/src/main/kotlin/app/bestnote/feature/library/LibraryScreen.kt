@@ -109,6 +109,8 @@ import app.bestnote.engine.export.ExportDialog
 import app.bestnote.engine.export.ExportFormat
 import app.bestnote.engine.export.ExportRunner
 import app.bestnote.engine.export.rememberExportRunner
+import app.bestnote.core.security.LockDialogs
+import app.bestnote.core.security.rememberLockController
 import kotlinx.coroutines.launch
 import kotlinx.serialization.Serializable
 import java.util.Date
@@ -142,12 +144,27 @@ fun LibraryScreen(
     val pdfRequested by viewModel.pdfRequested.collectAsStateWithLifecycle()
     LaunchedEffect(pdfRequested) { if (pdfRequested != null) viewModel.takePdfRequest() }
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { viewModel.refresh() }
+    // LIB-11: locking, unlocking and their prompts.
+    val locker = rememberLockController()
+    val lockScope = rememberCoroutineScope()
+    val whenUnlocked: (NotebookId, () -> Unit) -> Unit = { id, then ->
+        lockScope.launch {
+            if (!locker.manager.isLocked(id) || locker.unlock(viewModel.unlockGroup(id))) {
+                viewModel.locksChanged()
+                then()
+            }
+        }
+    }
     LaunchedEffect(quicknoteRequested) { if (quicknoteRequested) viewModel.takeQuicknoteRequest(quicknoteTitle) }
     LaunchedEffect(viewModel) {
         viewModel.eventFlow.collect { event ->
             when (event) {
                 is LibraryEvent.Open -> onOpenNotebook(event.id)
                 is LibraryEvent.OpenPage -> onOpenPage(event.id, event.pageId, event.query)
+                is LibraryEvent.Lock -> launch {
+                    if (locker.lock(event.ids, event.folder, keepUnlocked = event.open != null)) viewModel.locksChanged()
+                    event.open?.let(onOpenNotebook)
+                }
                 is LibraryEvent.Trashed -> launch {
                     snackbar.currentSnackbarData?.dismiss()
                     val message = if (event.ids.size == 1) {
@@ -180,12 +197,12 @@ fun LibraryScreen(
             quicknote = { viewModel.quicknote(quicknoteTitle) },
             importPdf = { pickPdf.launch(arrayOf(PDF_MIME)) },
             create = viewModel::create,
-            open = viewModel::open,
+            open = { id -> whenUnlocked(id) { viewModel.open(id) } },
             openPage = viewModel::openPage,
             downloadModels = viewModel::downloadModels,
-            rename = viewModel::rename,
+            rename = { id, title -> whenUnlocked(id) { viewModel.rename(id, title) } },
             setCover = viewModel::setCover,
-            duplicate = viewModel::duplicate,
+            duplicate = { id, title -> whenUnlocked(id) { viewModel.duplicate(id, title) } },
             move = viewModel::moveToFolder,
             favorite = viewModel::setFavorite,
             trash = { viewModel.moveToTrash(it) },
@@ -200,8 +217,44 @@ fun LibraryScreen(
             editFolder = viewModel::editFolder,
             deleteFolder = viewModel::deleteFolder,
             settings = onOpenSettings,
+            lock = { item, action ->
+                lockScope.launch {
+                    when (action) {
+                        NotebookMenuAction.Lock -> locker.lock(listOf(item.id))
+                        NotebookMenuAction.Unlock -> locker.unlock(viewModel.unlockGroup(item.id))
+                        NotebookMenuAction.LockNow -> locker.manager.relock(viewModel.unlockGroup(item.id))
+                        NotebookMenuAction.RemoveLock -> locker.removeLock(listOf(item.id))
+                        else -> Unit
+                    }
+                    viewModel.locksChanged()
+                }
+            },
+            lockFolder = { folder, lock ->
+                lockScope.launch {
+                    val ids = viewModel.notebooksInFolder(folder.id)
+                    val sealed = locker.manager.sealed.value
+                    val done = if (lock) {
+                        ids.none { it !in sealed } || locker.lock(ids.filter { it !in sealed }, folder = folder.name)
+                    } else {
+                        ids.none { it in sealed } || locker.removeLock(ids.filter { it in sealed })
+                    }
+                    if (done) viewModel.setFolderLocked(folder.id, lock)
+                    viewModel.locksChanged()
+                }
+            },
+            prepareExport = { item, then ->
+                lockScope.launch {
+                    if (!item.sealed) {
+                        then()
+                    } else if ((!locker.manager.isLocked(item.id) || locker.unlock(viewModel.unlockGroup(item.id))) && locker.confirmPlainExport()) {
+                        viewModel.locksChanged()
+                        then()
+                    }
+                }
+            },
         ),
     )
+    LockDialogs(locker)
 }
 
 private const val PDF_MIME = "application/pdf"
@@ -266,6 +319,12 @@ internal data class LibraryCallbacks(
     val editFolder: (id: String, name: String, color: Int) -> Unit = { _, _, _ -> },
     val deleteFolder: (String) -> Unit = {},
     val settings: () -> Unit = {},
+    /** LIB-11: a lock item of a notebook's menu (Lock, Unlock, LockNow, RemoveLock). */
+    val lock: (NotebookItem, NotebookMenuAction) -> Unit = { _, _ -> },
+    /** LIB-11: lock (true) or remove the lock of (false) a folder and the notebooks in it. */
+    val lockFolder: (Folder, Boolean) -> Unit = { _, _ -> },
+    /** Runs the export once a locked notebook is unlocked and the plain copy is confirmed. */
+    val prepareExport: (NotebookItem, () -> Unit) -> Unit = { _, then -> then() },
 )
 
 /** The dialog or sheet currently open over the library. */
@@ -328,10 +387,11 @@ internal fun LibraryContent(
                 NotebookMenuAction.Duplicate -> ui.duplicate(item.id, copyTitle.format(item.title))
                 NotebookMenuAction.Move -> dialog = LibraryDialog.Move(listOf(item.id))
                 NotebookMenuAction.Favorite -> ui.favorite(listOf(item.id), !item.favorite)
-                NotebookMenuAction.Export -> dialog = LibraryDialog.Export(item.id, share = false)
-                NotebookMenuAction.Share -> dialog = LibraryDialog.Export(item.id, share = true)
+                NotebookMenuAction.Export -> ui.prepareExport(item) { dialog = LibraryDialog.Export(item.id, share = false) }
+                NotebookMenuAction.Share -> ui.prepareExport(item) { dialog = LibraryDialog.Export(item.id, share = true) }
                 NotebookMenuAction.Select -> ui.startSelection(item.id)
                 NotebookMenuAction.Trash -> ui.trash(listOf(item.id))
+                NotebookMenuAction.Lock, NotebookMenuAction.Unlock, NotebookMenuAction.LockNow, NotebookMenuAction.RemoveLock -> ui.lock(item, action)
             }
         },
         toggleSelect = { ui.toggleSelected(it.id) },
@@ -358,10 +418,12 @@ internal fun LibraryContent(
                     },
                     onNewFolder = ui.newFolder,
                     onFolderMenu = { folder, action ->
-                        dialog = when (action) {
-                            FolderMenuAction.Rename, FolderMenuAction.Recolor -> LibraryDialog.EditFolder(folder.id)
-                            FolderMenuAction.NewSubfolder -> LibraryDialog.NewFolder(parentId = folder.id)
-                            FolderMenuAction.Delete -> LibraryDialog.DeleteFolder(folder.id)
+                        when (action) {
+                            FolderMenuAction.Rename, FolderMenuAction.Recolor -> dialog = LibraryDialog.EditFolder(folder.id)
+                            FolderMenuAction.NewSubfolder -> dialog = LibraryDialog.NewFolder(parentId = folder.id)
+                            FolderMenuAction.Delete -> dialog = LibraryDialog.DeleteFolder(folder.id)
+                            FolderMenuAction.Lock -> ui.lockFolder(folder, true)
+                            FolderMenuAction.RemoveLock -> ui.lockFolder(folder, false)
                         }
                     },
                     modifier = Modifier

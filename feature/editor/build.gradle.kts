@@ -8,6 +8,8 @@ dependencies {
     implementation(projects.core.fonts)
     implementation(projects.core.database)
     implementation(projects.core.datastore)
+    // LIB-11: lock gate, lock dialogs and FLAG_SECURE for locked notebooks.
+    implementation(projects.core.security)
     implementation(projects.engine.canvas)
     implementation(projects.engine.pdf)
     implementation(projects.engine.recognition)

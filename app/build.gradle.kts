@@ -66,6 +66,7 @@ dependencies {
     implementation(projects.core.database)
     implementation(projects.core.datastore)
     implementation(projects.core.updater)
+    implementation(projects.core.security)
     implementation(projects.ai.visionGemini)
     implementation(projects.ai.visionProviders)
 

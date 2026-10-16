@@ -199,6 +199,15 @@
     <string name="settings_backup_restore">Backup &amp; restore</string>
     <string name="settings_backup_restore_sub">Save your whole library to a folder, and bring it back any time</string>
     <string name="settings_open">Open</string>
+    <string name="settings_lock_group">Locked notebooks</string>
+    <string name="settings_relock">Lock again after leaving the app</string>
+    <string name="settings_relock_sub">Unlocked notebooks lock again once BestNote has been in the background this long. Locked notebooks are only backed up while unlocked, and then unencrypted.</string>
+    <string name="settings_relock_now">Immediately</string>
+    <string name="settings_relock_until_closed">Until app closes</string>
+    <plurals name="settings_relock_minutes">
+        <item quantity="one">%d min</item>
+        <item quantity="other">%d min</item>
+    </plurals>
     <string name="settings_cleanup_group">Clean up</string>
     <string name="settings_trash_retention">Keep deleted notebooks</string>
     <string name="settings_trash_never">Forever</string>

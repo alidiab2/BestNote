@@ -12,6 +12,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.outlined.Lock
+import androidx.compose.material.icons.outlined.NoEncryption
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
@@ -57,6 +59,8 @@ internal data class ChromeActions(
     val onOpenSettings: () -> Unit = {},
     /** Opens the Export dialog (PDF / PNG / .bnote, then the share sheet). */
     val onExport: () -> Unit = {},
+    /** LIB-11: lock items of the More menu; null hides them (previews). */
+    val lock: EditorLock? = null,
 )
 
 /**
@@ -199,6 +203,26 @@ private fun MoreMenu(dock: ToolbarDock, leftHanded: Boolean, actions: ChromeActi
                 leadingIcon = { Icon(AtelierIcons.Export, null, modifier = Modifier.size(20.dp)) },
                 onClick = { actions.onExport(); open = false },
             )
+            actions.lock?.let { lock ->
+                if (lock.sealed) {
+                    DropdownMenuItem(
+                        text = { Text(stringResource(R.string.editor_lock_now)) },
+                        leadingIcon = { Icon(Icons.Outlined.Lock, null, modifier = Modifier.size(20.dp)) },
+                        onClick = { open = false; lock.onLockNow() },
+                    )
+                    DropdownMenuItem(
+                        text = { Text(stringResource(R.string.editor_remove_lock)) },
+                        leadingIcon = { Icon(Icons.Outlined.NoEncryption, null, modifier = Modifier.size(20.dp)) },
+                        onClick = { open = false; lock.onRemoveLock() },
+                    )
+                } else {
+                    DropdownMenuItem(
+                        text = { Text(stringResource(R.string.editor_lock)) },
+                        leadingIcon = { Icon(Icons.Outlined.Lock, null, modifier = Modifier.size(20.dp)) },
+                        onClick = { open = false; lock.onLock() },
+                    )
+                }
+            }
             DropdownMenuItem(
                 text = { Text(stringResource(R.string.editor_settings)) },
                 leadingIcon = { Icon(Icons.Default.Settings, null, modifier = Modifier.size(20.dp)) },

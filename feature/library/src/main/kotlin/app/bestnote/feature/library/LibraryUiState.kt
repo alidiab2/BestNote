@@ -53,6 +53,10 @@ data class NotebookItem(
     val kind: NotebookKind = NotebookKind.Notebook,
     /** Top-level folder down to [folder], for breadcrumbs in search results. */
     val folderPath: List<Folder> = listOfNotNull(folder),
+    /** LIB-11: encrypted on disk (it never has a page thumbnail). */
+    val sealed: Boolean = false,
+    /** LIB-11: sealed and not unlocked this session: drawn with a lock, left out of search, Recent and Continue writing. */
+    val locked: Boolean = false,
 ) {
     /** Share of the notebook read/written so far, in 0..1. */
     val progress: Float get() = (lastPageIndex + 1f) / pageCount
@@ -131,6 +135,8 @@ internal fun buildLibraryState(
     timeZone: TimeZone = TimeZone.getDefault(),
     thumbnails: Map<NotebookId, String> = emptyMap(),
     locale: Locale = Locale.getDefault(),
+    sealed: Set<NotebookId> = emptySet(),
+    unlocked: Set<NotebookId> = emptySet(),
 ): LibraryUiState {
     val folders = metadata.folders()
     val folderById = folders.associateBy { it.id }
@@ -147,11 +153,13 @@ internal fun buildLibraryState(
             favorite = meta.favorite,
             quicknote = meta.quicknote,
             lastPageIndex = (meta.lastPageIndex ?: (nb.pageCount - 1)).coerceIn(0, nb.pageCount - 1),
-            thumbnailPath = thumbnails[nb.id],
+            thumbnailPath = thumbnails[nb.id].takeIf { nb.id !in sealed },
             createdAtMillis = nb.createdAtMillis,
             coverStyle = meta.coverStyle,
             kind = meta.kind,
             folderPath = if (folder == null) emptyList() else folderPath(folder.id, folderById),
+            sealed = nb.id in sealed,
+            locked = nb.id in sealed && nb.id !in unlocked,
         )
     }
     val recentCutoff = now - RECENT_WINDOW_MILLIS
@@ -160,8 +168,8 @@ internal fun buildLibraryState(
     val items: List<NotebookItem>
     val emptyKind: EmptyKind
     if (query.isNotEmpty()) {
-        // Search spans the whole library: title matches, those starting with the query first.
-        val hits = all.mapNotNull { item ->
+        // Search spans the whole library: title matches, those starting with the query first. Locked notebooks stay out.
+        val hits = all.filter { !it.locked }.mapNotNull { item ->
             val title = normalizeForSearch(item.title)
             when {
                 title.startsWith(query) || title.split(' ').any { it.startsWith(query) } -> 0 to item
@@ -174,7 +182,7 @@ internal fun buildLibraryState(
     } else {
         val inDestination = when (destination) {
             LibraryDestination.Library -> all
-            LibraryDestination.Recent -> all.filter { it.updatedAtMillis >= recentCutoff }
+            LibraryDestination.Recent -> all.filter { it.updatedAtMillis >= recentCutoff && !it.locked }
             LibraryDestination.Favorites -> all.filter { it.favorite }
             LibraryDestination.Quicknotes -> all.filter { it.quicknote }
             LibraryDestination.SmartBoard, LibraryDestination.Trash -> emptyList()
@@ -212,7 +220,7 @@ internal fun buildLibraryState(
         trashCount = trash.size,
         folders = tree,
         items = items,
-        continueWith = all.firstOrNull(),
+        continueWith = all.firstOrNull { !it.locked },
         trash = trash.map {
             TrashItem(
                 id = it.notebook.id,

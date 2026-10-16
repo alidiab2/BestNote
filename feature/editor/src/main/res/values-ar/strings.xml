@@ -9,6 +9,10 @@
     <string name="editor_pages">الصفحات</string>
     <string name="editor_layers">الطبقات</string>
     <string name="editor_export">تصدير</string>
+    <!-- LIB-11 -->
+    <string name="editor_lock">قفل الدفتر</string>
+    <string name="editor_lock_now">اقفل الآن</string>
+    <string name="editor_remove_lock">إزالة القفل</string>
     <string name="editor_more">المزيد</string>
     <string name="editor_settings">الإعدادات</string>
     <string name="editor_coming_soon">%1$s قريبًا</string>

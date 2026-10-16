@@ -34,6 +34,7 @@ On disk inside the app, a notebook lives **unpacked** as a directory with the sa
 - v3 → v4: the manifest may list `recordings` (MEDIA-04): `{id, title?, startedAtMillis, durationMillis}`; each one's audio is `assets/audio/<id>.m4a` (AAC, mono). Absent means none, so the step only stamps the version.
 - v4 → v5: the manifest may list `extras` (TPL-01): names of small notebook-level JSON records stored at `extras/<name>` (`[a-z0-9_-]{1,40}.json`), rewritten on every save. `smartboard.json` holds Smart Board's notebook glossary and, per insert, the template id, page ids and the page's notes in the compact element format (for follow-up photos). Absent means none, so the step only stamps the version.
 - v5 → v6: a page may have an edit journal `pages/<id>.jrnl` next to its chunk (DOC-11, see *Page journal*). The JSON is unchanged, so the step only stamps the version; a v5 app refuses v6 notebooks rather than save over strokes that only live in a journal.
+- Format **9** is the stub manifest of a **sealed (locked) notebook** (LIB-11, see [locked-notebooks.md](locked-notebooks.md)). Plain notebooks stay at the current plain version; a sealed one is recognised by its `sealed` key, and its number only has to be newer than what older apps read, so they refuse it.
 - Every migration ships as a test fixture (`core/storage/src/test/resources/fixtures/v<N>-notebook/`) with a test in `FormatMigrationTest`.
 
 ## Backup (DOC-08)
@@ -80,3 +81,15 @@ record  u32 payloadLength | u32 CRC32(payload) | payload
 payload u32 baseCount | u32 removedCount, removed x u32 | u32 addedCount, added x u32 | u32 chunkLength | .ink chunk of the added strokes
 ```
 A record removes strokes by index (in the list before the edit) and inserts the new ones at their final indices; `baseCount` must equal the current stroke count. Records are checksummed and fsynced when appended. Replay stops at the first record that is short, fails its checksum or does not fit, so a torn last write loses only that edit. A journal whose `baseId` differs from the chunk's is stale (crash between "chunk written" and "journal deleted") and is ignored and deleted.
+
+## Sealed (locked) notebooks (LIB-11)
+A locked notebook keeps the unpacked layout, but nothing in it is readable without its key:
+```
+manifest.json      stub, plaintext: {"format": 9, "notebook": {id, title, dates, template, pageCount}, "pages": [], "sealed": header}
+data/<32 hex>.bin  every package entry (real manifest, page JSON, .ink, assets, extras), encrypted
+```
+Entry file names are `HMAC-SHA256(nameKey, entry path)`, so page ids and asset names are hidden. Each file is
+`"BNSE" | u8 version (1) | 12-byte nonce | AES-256-GCM ciphertext + 16-byte tag`, with the notebook id and the entry
+path as associated data (files cannot be swapped between paths or notebooks). Page journals are never written for a
+sealed notebook. The header (`version`, `cipher`, `keyCheck`, `wraps`) is described in
+[locked-notebooks.md](locked-notebooks.md).

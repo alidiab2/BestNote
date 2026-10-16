@@ -189,6 +189,19 @@
     <string name="settings_backup_restore">النسخ الاحتياطي والاستعادة</string>
     <string name="settings_backup_restore_sub">احفظ مكتبتك كاملة في مجلد واستعدها وقتما شئت</string>
     <string name="settings_open">فتح</string>
+    <string name="settings_lock_group">الدفاتر المقفلة</string>
+    <string name="settings_relock">القفل من جديد بعد مغادرة التطبيق</string>
+    <string name="settings_relock_sub">تُقفل الدفاتر المفتوحة من جديد بعد بقاء BestNote في الخلفية هذه المدة. لا تُنسخ الدفاتر المقفلة احتياطيًا إلا وهي مفتوحة، وتُنسخ حينها دون تشفير.</string>
+    <string name="settings_relock_now">فورًا</string>
+    <string name="settings_relock_until_closed">حتى إغلاق التطبيق</string>
+    <plurals name="settings_relock_minutes">
+        <item quantity="zero">%d دقيقة</item>
+        <item quantity="one">دقيقة واحدة</item>
+        <item quantity="two">دقيقتان</item>
+        <item quantity="few">%d دقائق</item>
+        <item quantity="many">%d دقيقة</item>
+        <item quantity="other">%d دقيقة</item>
+    </plurals>
     <string name="settings_cleanup_group">التنظيف</string>
     <string name="settings_trash_retention">الاحتفاظ بالدفاتر المحذوفة</string>
     <string name="settings_trash_never">دائمًا</string>

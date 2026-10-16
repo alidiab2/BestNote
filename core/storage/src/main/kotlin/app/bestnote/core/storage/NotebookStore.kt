@@ -97,4 +97,14 @@ interface NotebookStore {
 
     /** One notebook extra (e.g. Smart Board's `smartboard.json`) without loading the pages; null when absent. */
     suspend fun readExtra(id: NotebookId, name: String): ByteArray? = read(id)?.extras?.get(name)
+
+    /**
+     * Ids of locked (sealed) notebooks (LIB-11). [list] still returns them (title and dates for the locked cover),
+     * but [read] and [write] throw [NotebookLockedException] unless their key is unlocked. Derived plaintext
+     * (search index, thumbnails) must never be made from them. Stores without locking have none.
+     */
+    suspend fun sealedIds(): Set<NotebookId> = emptySet()
+
+    /** True when [id] is sealed (see [sealedIds]). */
+    suspend fun isSealed(id: NotebookId): Boolean = id in sealedIds()
 }
