@@ -16,7 +16,7 @@ internal object DropPlan {
 
     /**
      * [clipMimes] are the clip's declared types. A content item is a picture if its own type, or (when it has none)
-     * the clip's, is `image/*`. Items with only text become text boxes; anything else (PDF, audio, files) is ignored.
+     * the clip's, is an `image/` type. Items with only text become text boxes; anything else (PDF, audio, files) is ignored.
      */
     fun plan(items: List<DropItem>, clipMimes: List<String>): List<DropAction> {
         val clipHasImage = clipMimes.any { it.startsWith("image/") }
