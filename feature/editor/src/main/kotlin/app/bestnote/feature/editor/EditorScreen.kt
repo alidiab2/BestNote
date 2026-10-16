@@ -362,6 +362,15 @@ fun EditorScreen(
         snackbar = snackbar,
         ai = viewModel.aiProviders,
     )
+    val tidier = rememberInkTidier(
+        canvas = { canvas },
+        document = document,
+        models = viewModel.models,
+        recognizer = viewModel.recognizer,
+        ai = viewModel.aiProviders,
+        adopt = viewModel.session::adopt,
+        snackbar = snackbar,
+    )
     val reduce = reducedMotion()
     val side = traySide(state.dock, state.leftHanded)
     LifecycleEventEffect(Lifecycle.Event.ON_STOP) { viewModel.session.onStop() }
@@ -797,12 +806,14 @@ fun EditorScreen(
                     onRotate = elements::rotateSelected,
                     onToggleLock = elements::toggleLock,
                     onConvert = converter::convert,
+                    onTidy = tidier::tidy,
                 ),
             )
         }
 
         elements.Dialogs()
         converter.Dialogs()
+        tidier.Dialogs()
 
         // ---- page manager (PAGES-03/04/05): zooms out of the page being read ----
         managerPage?.let { open ->

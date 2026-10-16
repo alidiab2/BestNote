@@ -148,4 +148,15 @@
     <string name="convert_ai_nothing">The AI couldn\'t read that handwriting.</string>
     <string name="convert_ai_failed">The AI provider didn\'t answer. Check Settings → Smart Board AI and try again.</string>
     <string name="convert_ai_key">The AI key was rejected. Check it in Settings → Smart Board AI.</string>
+    <string name="selection_tidy">Tidy</string>
+    <string name="tidy_title">Tidy handwriting</string>
+    <string name="tidy_working">Reading your notes and rewriting them neatly…</string>
+    <string name="tidy_done">Tidied. Undo brings your original back.</string>
+    <string name="tidy_nothing">Nothing readable in the selection.</string>
+    <string name="tidy_needs_reader">Tidy needs an AI provider (Settings → Smart Board AI) or the on-device handwriting models (Convert to text downloads them).</string>
+    <string name="tidy_error_key">Your AI key was rejected or is missing. Check Settings → Smart Board AI.</string>
+    <string name="tidy_error_quota">Rate limit or quota reached on your AI account. Try again in a minute.</string>
+    <string name="tidy_error_network">Could not reach the AI provider. Check your connection.</string>
+    <string name="tidy_error_busy">The AI provider is overloaded. Try again in a moment.</string>
+    <string name="tidy_error_other">Could not tidy this selection.</string>
 </resources>

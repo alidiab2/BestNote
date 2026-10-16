@@ -148,4 +148,15 @@
     <string name="convert_ai_nothing">لم يتمكن الذكاء الاصطناعي من قراءة هذا الخط.</string>
     <string name="convert_ai_failed">لم يستجب مزود الذكاء. تحقق من الإعدادات ← السبورة الذكية وحاول مجددًا.</string>
     <string name="convert_ai_key">رُفض مفتاح الذكاء. تحقق منه في الإعدادات ← السبورة الذكية.</string>
+    <string name="selection_tidy">ترتيب</string>
+    <string name="tidy_title">ترتيب الخط</string>
+    <string name="tidy_working">جارٍ قراءة ملاحظاتك وإعادة كتابتها بخط مرتب…</string>
+    <string name="tidy_done">رُتّبت. التراجع يعيد الأصل.</string>
+    <string name="tidy_nothing">لا شيء مقروء في التحديد.</string>
+    <string name="tidy_needs_reader">يحتاج الترتيب إلى مزود ذكاء (الإعدادات ← ذكاء السبورة) أو نماذج التعرف على الخط في الجهاز (يُنزّلها «تحويل إلى نص»).</string>
+    <string name="tidy_error_key">رُفض مفتاح الذكاء أو لم يُضبط. راجع الإعدادات ← ذكاء السبورة.</string>
+    <string name="tidy_error_quota">بلغت حد الطلبات أو نفدت الحصة. حاول بعد دقيقة.</string>
+    <string name="tidy_error_network">تعذّر الوصول إلى مزود الذكاء. تحقق من الاتصال.</string>
+    <string name="tidy_error_busy">مزود الذكاء مشغول جدًا. حاول بعد قليل.</string>
+    <string name="tidy_error_other">تعذّر ترتيب هذا التحديد.</string>
 </resources>
