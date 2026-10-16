@@ -227,7 +227,6 @@ internal fun ToolsCapsule(
             val isLasso = tool.label == R.string.tool_lasso
             val isShapes = tool.label == R.string.tool_shapes
             val toggle = isLasso || isShapes
-            val selected = (isLasso && lassoActive) || (isShapes && shapesActive)
             val isAudio = tool.label == R.string.tool_audio
             val selected = (isLasso && lassoActive) || (isShapes && shapesActive) || (isAudio && audioActive)
             val shape = androidx.compose.foundation.shape.RoundedCornerShape(13.dp)
