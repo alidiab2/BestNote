@@ -40,6 +40,10 @@ import androidx.compose.material.icons.rounded.PhotoLibrary
 import androidx.compose.material.icons.rounded.RadioButtonUnchecked
 import androidx.compose.material.icons.rounded.Replay
 import androidx.compose.material3.AlertDialog
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.style.TextAlign
+import app.bestnote.ai.vision.AiProviderKind
 import androidx.compose.material3.Button
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
@@ -98,12 +102,12 @@ fun SmartBoardScreen(onClose: () -> Unit, onInsert: (SmartBoardResult) -> Unit, 
                     SmartBoardStage.Capture -> CaptureStage(state, viewModel)
                     is SmartBoardStage.Reading -> ReadingStage(stage.step, demo = state.photo == null || !state.hasKey)
                     is SmartBoardStage.Review -> ReviewStage(stage, viewModel, onInsert)
-                    is SmartBoardStage.Failed -> FailedStage(stage.reason, onRetry = viewModel::read, onBack = viewModel::retake)
+                    is SmartBoardStage.Failed -> FailedStage(stage, onRetry = viewModel::read, onBack = viewModel::retake)
                 }
             }
         }
     }
-    if (keyDialog) KeyDialog(state.keyHint, onSave = { viewModel.saveKey(it); keyDialog = false }, onDismiss = { keyDialog = false })
+    if (keyDialog) KeyDialog(state.provider, state.keyHint, onSave = { viewModel.saveKey(it); keyDialog = false }, onDismiss = { keyDialog = false })
 }
 
 @Composable
@@ -400,40 +404,68 @@ private fun ReviewPanel(review: SmartBoardStage.Review, onReplay: () -> Unit, on
 // ---------------------------------------------------------------- failure
 
 @Composable
-private fun FailedStage(reason: SmartBoardStage.Reason, onRetry: () -> Unit, onBack: () -> Unit) {
-    val message = when (reason) {
+private fun FailedStage(failed: SmartBoardStage.Failed, onRetry: () -> Unit, onBack: () -> Unit) {
+    val message = when (failed.reason) {
         SmartBoardStage.Reason.NoBlocks -> R.string.smartboard_error_empty
         SmartBoardStage.Reason.InvalidKey -> R.string.smartboard_error_key
         SmartBoardStage.Reason.RateLimited -> R.string.smartboard_error_rate
         SmartBoardStage.Reason.Network -> R.string.smartboard_error_network
+        SmartBoardStage.Reason.ModelUnavailable -> R.string.smartboard_error_model
+        SmartBoardStage.Reason.ServerBusy -> R.string.smartboard_error_busy
+        SmartBoardStage.Reason.Blocked -> R.string.smartboard_error_blocked
+        SmartBoardStage.Reason.Truncated -> R.string.smartboard_error_truncated
         SmartBoardStage.Reason.Other -> R.string.smartboard_error_other
     }
-    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(Spacing.M)) {
-            Text(stringResource(message), style = MaterialTheme.typography.titleMedium)
+    val clipboard = LocalClipboardManager.current
+    var copied by remember { mutableStateOf(false) }
+    Box(Modifier.fillMaxSize().padding(Spacing.L), contentAlignment = Alignment.Center) {
+        Column(
+            Modifier.widthIn(max = 560.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(Spacing.M),
+        ) {
+            Text(stringResource(message), style = MaterialTheme.typography.titleMedium, textAlign = TextAlign.Center)
+            // Debug builds / verbose logging only: what actually went wrong.
+            failed.detail?.takeIf { it.isNotBlank() }?.let {
+                Text(it, style = MaterialTheme.typography.bodySmall, color = BestNoteTheme.colors.muted, textAlign = TextAlign.Center)
+            }
             Row(horizontalArrangement = Arrangement.spacedBy(Spacing.S)) {
                 OutlinedButton(onClick = onBack) { Text(stringResource(R.string.smartboard_retake)) }
                 Button(onClick = onRetry) { Text(stringResource(R.string.smartboard_retry)) }
+            }
+            failed.diagnostics?.let { dump ->
+                TextButton(onClick = {
+                    clipboard.setText(AnnotatedString(dump))
+                    copied = true
+                }) { Text(stringResource(if (copied) R.string.smartboard_copied_raw else R.string.smartboard_copy_raw)) }
             }
         }
     }
 }
 
 @Composable
-private fun KeyDialog(hint: String?, onSave: (String?) -> Unit, onDismiss: () -> Unit) {
+private fun KeyDialog(provider: AiProviderKind, hint: String?, onSave: (String?) -> Unit, onDismiss: () -> Unit) {
+    val name = stringResource(
+        when (provider) {
+            AiProviderKind.Gemini -> R.string.smartboard_provider_gemini
+            AiProviderKind.Claude -> R.string.smartboard_provider_claude
+            AiProviderKind.OpenAi -> R.string.smartboard_provider_openai
+            AiProviderKind.OpenAiCompatible -> R.string.smartboard_provider_compatible
+        },
+    )
     var key by remember { mutableStateOf("") }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(stringResource(R.string.smartboard_key_title)) },
+        title = { Text(stringResource(R.string.smartboard_key_title, name)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(Spacing.S)) {
-                Text(stringResource(R.string.smartboard_key_body), style = MaterialTheme.typography.bodyMedium)
+                Text(stringResource(R.string.smartboard_key_body, name), style = MaterialTheme.typography.bodyMedium)
                 OutlinedTextField(
                     value = key,
                     onValueChange = { key = it },
                     singleLine = true,
                     visualTransformation = PasswordVisualTransformation(),
-                    placeholder = { Text(hint ?: "AIza…") },
+                    placeholder = { Text(hint ?: "…") },
                 )
             }
         },

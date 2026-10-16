@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application>
+        <!-- Settings → Debug → Share debug log: hands the log file to the share sheet. -->
+        <provider
+            android:name="app.bestnote.feature.settings.data.DebugLogFileProvider"
+            android:authorities="${applicationId}.debuglog"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/debug_log_paths" />
+        </provider>
+    </application>
+</manifest>

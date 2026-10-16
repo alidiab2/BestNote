@@ -35,6 +35,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.outlined.AutoAwesome
+import androidx.compose.material.icons.outlined.BugReport
 import androidx.compose.material.icons.outlined.Draw
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.Info
@@ -77,6 +78,7 @@ import app.bestnote.core.designsystem.theme.reducedMotion
 import app.bestnote.feature.settings.data.AppLanguage
 import app.bestnote.feature.settings.ui.AboutSection
 import app.bestnote.feature.settings.ui.AppearanceSection
+import app.bestnote.feature.settings.ui.DebugSection
 import app.bestnote.feature.settings.ui.GesturesSection
 import app.bestnote.feature.settings.ui.SettingsGroup
 import app.bestnote.feature.settings.ui.SettingsRow
@@ -125,6 +127,7 @@ fun SettingsScreen(onBack: () -> Unit, viewModel: SettingsViewModel = hiltViewMo
                 viewModel::setLanguage,
             )
             SettingsCategory.Storage -> StorageSection(storage, prefs.storage, viewModel::updateStorage, viewModel::clearThumbnails)
+            SettingsCategory.Debug -> DebugSection(hiltViewModel())
             SettingsCategory.About -> AboutSection(showLicenses, onShowLicenses = { showLicenses = it })
         }
     }
@@ -298,6 +301,7 @@ private val SettingsCategory.icon: ImageVector
         SettingsCategory.SmartBoard -> Icons.Outlined.AutoAwesome
         SettingsCategory.Appearance -> Icons.Outlined.Palette
         SettingsCategory.Storage -> Icons.Outlined.SdStorage
+        SettingsCategory.Debug -> Icons.Outlined.BugReport
         SettingsCategory.About -> Icons.Outlined.Info
     }
 
@@ -309,6 +313,7 @@ internal val SettingsCategory.titleRes: Int
         SettingsCategory.SmartBoard -> R.string.settings_cat_ai
         SettingsCategory.Appearance -> R.string.settings_cat_appearance
         SettingsCategory.Storage -> R.string.settings_cat_storage
+        SettingsCategory.Debug -> R.string.settings_cat_debug
         SettingsCategory.About -> R.string.settings_cat_about
     }
 
@@ -338,6 +343,7 @@ private fun categorySummaries(prefs: UserPreferences, language: AppLanguage, sto
             AppLanguage.Arabic -> " · " + stringResource(R.string.settings_lang_arabic)
         },
         SettingsCategory.Storage to (storageBytes?.let { stringResource(R.string.settings_sum_storage, formatBytes(context, it)) } ?: "…"),
+        SettingsCategory.Debug to stringResource(R.string.settings_sum_debug),
         SettingsCategory.About to stringResource(R.string.settings_sum_about, version),
     )
 }

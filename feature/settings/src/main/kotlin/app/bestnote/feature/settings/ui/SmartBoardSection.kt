@@ -21,6 +21,7 @@ import androidx.compose.material.icons.outlined.Key
 import androidx.compose.material.icons.outlined.Shield
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -40,7 +41,8 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import app.bestnote.ai.vision.gemini.GeminiConfig
+import app.bestnote.ai.vision.AiProviderKind
+import app.bestnote.ai.vision.providers.AiProviderDefaults
 import app.bestnote.core.designsystem.theme.BestNoteShapes
 import app.bestnote.core.designsystem.theme.BestNoteTheme
 import app.bestnote.core.designsystem.theme.Motion
@@ -48,10 +50,8 @@ import app.bestnote.core.designsystem.theme.Spacing
 import app.bestnote.core.designsystem.theme.reducedMotion
 import app.bestnote.feature.settings.R
 import app.bestnote.feature.settings.SmartBoardViewModel
-import app.bestnote.feature.settings.data.AiProvider
 import app.bestnote.feature.settings.data.KeyTestResult
 
-private const val AI_STUDIO_URL = "https://aistudio.google.com/apikey"
 
 @Composable
 internal fun SmartBoardSection(viewModel: SmartBoardViewModel) {
@@ -60,15 +60,13 @@ internal fun SmartBoardSection(viewModel: SmartBoardViewModel) {
     DetailHeader(stringResource(R.string.settings_cat_ai), stringResource(R.string.settings_ai_desc))
 
     SettingsGroup(stringResource(R.string.settings_ai_provider)) {
-        AiProvider.entries.forEach { provider ->
+        AiProviderKind.entries.forEach { provider ->
             row {
                 RadioRow(
                     title = provider.label(),
                     selected = provider == state.provider,
-                    onSelect = {},
+                    onSelect = { viewModel.selectProvider(provider) },
                     subtitle = provider.subtitle(),
-                    enabled = provider.available,
-                    trailing = { if (!provider.available) ComingSoonChip() },
                 )
             }
         }
@@ -78,7 +76,8 @@ internal fun SmartBoardSection(viewModel: SmartBoardViewModel) {
         row {
             SettingsRow(
                 title = if (state.stored.hasKey) stringResource(R.string.settings_ai_key_saved) else stringResource(R.string.settings_ai_key_none),
-                subtitle = state.stored.hint?.let { stringResource(R.string.settings_ai_key_hint, it) } ?: stringResource(R.string.settings_ai_key_none_sub),
+                subtitle = state.stored.hint?.let { stringResource(R.string.settings_ai_key_hint, it) }
+                    ?: stringResource(if (state.compatible) R.string.settings_ai_key_optional_sub else R.string.settings_ai_key_none_sub, state.provider.label()),
                 icon = Icons.Outlined.Key,
             ) {
                 if (state.stored.hasKey) RowAction(stringResource(R.string.settings_ai_key_remove), viewModel::removeKey)
@@ -86,6 +85,23 @@ internal fun SmartBoardSection(viewModel: SmartBoardViewModel) {
         }
         row {
             Column(Modifier.fillMaxWidth().padding(Spacing.L), verticalArrangement = Arrangement.spacedBy(Spacing.M)) {
+                if (state.compatible) {
+                    OutlinedTextField(
+                        value = state.baseUrlDraft,
+                        onValueChange = viewModel::onBaseUrlChange,
+                        label = { Text(stringResource(R.string.settings_ai_base_url)) },
+                        supportingText = { Text(stringResource(R.string.settings_ai_base_url_sub)) },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri, autoCorrectEnabled = false, imeAction = ImeAction.Next),
+                        shape = BestNoteShapes.Control,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(Spacing.S), verticalArrangement = Arrangement.spacedBy(Spacing.S)) {
+                        AiProviderDefaults.compatiblePresets.forEach { (name, url) ->
+                            FilterChip(selected = state.baseUrlDraft == url, onClick = { viewModel.onBaseUrlChange(url) }, label = { Text(name) })
+                        }
+                    }
+                }
                 OutlinedTextField(
                     value = state.keyDraft,
                     onValueChange = viewModel::onKeyChange,
@@ -100,17 +116,27 @@ internal fun SmartBoardSection(viewModel: SmartBoardViewModel) {
                     value = state.modelDraft,
                     onValueChange = viewModel::onModelChange,
                     label = { Text(stringResource(R.string.settings_ai_model)) },
-                    supportingText = { Text(stringResource(R.string.settings_ai_model_sub, GeminiConfig.DEFAULT_MODEL)) },
+                    supportingText = {
+                        Text(
+                            if (state.defaultModel.isEmpty()) stringResource(R.string.settings_ai_model_required)
+                            else stringResource(R.string.settings_ai_model_sub, state.defaultModel),
+                        )
+                    },
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri, autoCorrectEnabled = false, imeAction = ImeAction.Done),
                     trailingIcon = {
-                        if (state.modelDraft.trim() != GeminiConfig.DEFAULT_MODEL) {
+                        if (state.defaultModel.isNotEmpty() && state.modelDraft.trim() != state.defaultModel) {
                             TextButton(onClick = viewModel::resetModel) { Text(stringResource(R.string.settings_ai_model_reset)) }
                         }
                     },
                     shape = BestNoteShapes.Control,
                     modifier = Modifier.fillMaxWidth(),
                 )
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(Spacing.S), verticalArrangement = Arrangement.spacedBy(Spacing.S)) {
+                    state.suggestions.forEach { id ->
+                        FilterChip(selected = state.modelDraft.trim() == id, onClick = { viewModel.onModelChange(id) }, label = { Text(id) })
+                    }
+                }
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(Spacing.S), verticalArrangement = Arrangement.spacedBy(Spacing.S)) {
                     OutlinedButton(onClick = viewModel::test, enabled = state.canTest) {
                         if (state.testing) {
@@ -125,14 +151,16 @@ internal fun SmartBoardSection(viewModel: SmartBoardViewModel) {
                 TestResult(state.result, state.justSaved)
             }
         }
-        row {
-            SettingsRow(
-                title = stringResource(R.string.settings_ai_get_key),
-                subtitle = stringResource(R.string.settings_ai_get_key_sub),
-                modifier = Modifier.clickable(role = Role.Button) {
-                    context.startActivity(Intent(Intent.ACTION_VIEW, AI_STUDIO_URL.toUri()))
-                },
-            ) { Icon(Icons.AutoMirrored.Outlined.OpenInNew, null, tint = BestNoteTheme.colors.muted) }
+        AiProviderDefaults.keyUrl(state.provider)?.let { url ->
+            row {
+                SettingsRow(
+                    title = stringResource(R.string.settings_ai_get_key),
+                    subtitle = url.removePrefix("https://"),
+                    modifier = Modifier.clickable(role = Role.Button) {
+                        context.startActivity(Intent(Intent.ACTION_VIEW, url.toUri()))
+                    },
+                ) { Icon(Icons.AutoMirrored.Outlined.OpenInNew, null, tint = BestNoteTheme.colors.muted) }
+            }
         }
     }
 
@@ -163,6 +191,7 @@ private fun TestResult(result: KeyTestResult?, justSaved: Boolean) {
             KeyTestResult.ModelUnavailable -> stringResource(R.string.settings_ai_err_model)
             KeyTestResult.RateLimited -> stringResource(R.string.settings_ai_err_rate)
             KeyTestResult.Offline -> stringResource(R.string.settings_ai_err_offline)
+            KeyTestResult.NoBaseUrl -> stringResource(R.string.settings_ai_err_base_url)
             KeyTestResult.Failed -> stringResource(R.string.settings_ai_err_failed)
         }
         Row(
@@ -181,15 +210,17 @@ private fun TestResult(result: KeyTestResult?, justSaved: Boolean) {
 }
 
 @Composable
-private fun AiProvider.label(): String = when (this) {
-    AiProvider.Gemini -> stringResource(R.string.settings_ai_gemini)
-    AiProvider.Claude -> stringResource(R.string.settings_ai_claude)
-    AiProvider.OpenAi -> stringResource(R.string.settings_ai_openai)
+private fun AiProviderKind.label(): String = when (this) {
+    AiProviderKind.Gemini -> stringResource(R.string.settings_ai_gemini)
+    AiProviderKind.Claude -> stringResource(R.string.settings_ai_claude)
+    AiProviderKind.OpenAi -> stringResource(R.string.settings_ai_openai)
+    AiProviderKind.OpenAiCompatible -> stringResource(R.string.settings_ai_compatible)
 }
 
 @Composable
-private fun AiProvider.subtitle(): String = when (this) {
-    AiProvider.Gemini -> stringResource(R.string.settings_ai_gemini_sub)
-    AiProvider.Claude -> stringResource(R.string.settings_ai_claude_sub)
-    AiProvider.OpenAi -> stringResource(R.string.settings_ai_openai_sub)
+private fun AiProviderKind.subtitle(): String = when (this) {
+    AiProviderKind.Gemini -> stringResource(R.string.settings_ai_gemini_sub)
+    AiProviderKind.Claude -> stringResource(R.string.settings_ai_claude_sub)
+    AiProviderKind.OpenAi -> stringResource(R.string.settings_ai_openai_sub)
+    AiProviderKind.OpenAiCompatible -> stringResource(R.string.settings_ai_compatible_sub)
 }

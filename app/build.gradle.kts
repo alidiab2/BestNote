@@ -5,6 +5,12 @@ plugins {
     alias(libs.plugins.kotlin.serialization)
 }
 
+// Short commit hash for the debug log; "unknown" outside a git checkout.
+val gitCommit = providers.exec {
+    commandLine("git", "rev-parse", "--short=10", "HEAD")
+    isIgnoreExitValue = true
+}.standardOutput.asText.map { it.trim().ifEmpty { "unknown" } }.orElse("unknown")
+
 android {
     namespace = "app.bestnote"
 
@@ -12,6 +18,12 @@ android {
         applicationId = "app.bestnote"
         versionCode = 1
         versionName = "0.1.0"
+        // Settings → Debug log: which commit this build came from.
+        buildConfigField("String", "GIT_COMMIT", "\"${gitCommit.get()}\"")
+    }
+
+    buildFeatures {
+        buildConfig = true
     }
 
     androidResources {
@@ -40,6 +52,7 @@ dependencies {
     implementation(projects.core.database)
     implementation(projects.core.datastore)
     implementation(projects.ai.visionGemini)
+    implementation(projects.ai.visionProviders)
 
     implementation(projects.engine.export)
     implementation(projects.engine.recognitionMlkit)

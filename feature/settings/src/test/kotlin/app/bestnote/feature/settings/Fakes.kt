@@ -8,6 +8,8 @@ import app.bestnote.feature.settings.data.SmartBoardKeyState
 import app.bestnote.feature.settings.data.SmartBoardKeyStore
 import app.bestnote.feature.settings.data.StorageInspector
 import app.bestnote.feature.settings.data.StorageUsage
+import app.bestnote.ai.vision.AiProviderKind
+import app.bestnote.ai.vision.providers.AiProviderDefaults
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -38,21 +40,47 @@ class FakeStorage : StorageInspector {
 }
 
 /** Records keys only to assert on them; a real store never exposes the key. */
+/** Gemini fields are the plain [key]/[model]; other providers live in [others]. */
 class FakeKeyStore(var key: String? = null, var model: String = "gemini-2.5-flash") : SmartBoardKeyStore {
     val tested = mutableListOf<Pair<String?, String>>()
+    val testedBaseUrls = mutableListOf<String?>()
     var nextResult: KeyTestResult = KeyTestResult.Ok
     var gate: CompletableDeferred<Unit>? = null
+    var selected = AiProviderKind.Gemini
+    val others = mutableMapOf<AiProviderKind, SmartBoardKeyState>()
+    private val otherKeys = mutableMapOf<AiProviderKind, String?>()
 
-    override suspend fun load() = SmartBoardKeyState(key != null, key?.takeLast(4)?.let { "…$it" }, model)
-    override suspend fun saveKey(key: String?) {
-        this.key = key?.trim()?.takeIf { it.isNotEmpty() }
+    override suspend fun selected() = selected
+    override suspend fun select(kind: AiProviderKind) {
+        selected = kind
     }
-    override suspend fun saveModel(model: String) {
-        this.model = model
+
+    override suspend fun load(kind: AiProviderKind) =
+        if (kind == AiProviderKind.Gemini) SmartBoardKeyState(key != null, key?.takeLast(4)?.let { "…$it" }, model)
+        else others[kind] ?: SmartBoardKeyState(model = AiProviderDefaults.model(kind))
+
+    override suspend fun saveKey(kind: AiProviderKind, key: String?) {
+        val k = key?.trim()?.takeIf { it.isNotEmpty() }
+        if (kind == AiProviderKind.Gemini) this.key = k else {
+            otherKeys[kind] = k
+            others[kind] = load(kind).copy(hasKey = k != null, hint = k?.takeLast(4)?.let { "…$it" })
+        }
     }
-    override suspend fun test(draftKey: String?, model: String): KeyTestResult {
+
+    override suspend fun saveModel(kind: AiProviderKind, model: String) {
+        if (kind == AiProviderKind.Gemini) this.model = model else others[kind] = load(kind).copy(model = model)
+    }
+
+    override suspend fun saveBaseUrl(kind: AiProviderKind, url: String) {
+        others[kind] = load(kind).copy(baseUrl = url)
+    }
+
+    fun keyOf(kind: AiProviderKind) = if (kind == AiProviderKind.Gemini) key else otherKeys[kind]
+
+    override suspend fun test(kind: AiProviderKind, draftKey: String?, model: String, baseUrl: String?): KeyTestResult {
         tested += draftKey to model
+        testedBaseUrls += baseUrl
         gate?.await()
-        return if (draftKey == null && key == null) KeyTestResult.NoKey else nextResult
+        return if (draftKey == null && keyOf(kind) == null && kind != AiProviderKind.OpenAiCompatible) KeyTestResult.NoKey else nextResult
     }
 }

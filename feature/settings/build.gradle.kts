@@ -7,6 +7,6 @@ dependencies {
     implementation(projects.core.datastore)
     implementation(projects.engine.export)
     // Smart Board key settings (Keystore-backed) and the key checker. Feature → ai is allowed.
-    implementation(projects.ai.visionGemini)
+    implementation(projects.ai.visionProviders)
     implementation(libs.androidx.compose.material.icons.extended)
 }

@@ -1,5 +1,6 @@
 package app.bestnote.feature.settings
 
+import app.bestnote.ai.vision.AiProviderKind
 import app.bestnote.ai.vision.VisionError
 import app.bestnote.feature.settings.data.KeyTestResult
 import kotlinx.coroutines.CompletableDeferred
@@ -92,12 +93,44 @@ class SmartBoardViewModelTest {
         assertEquals(null, store.key)
     }
 
+    @Test fun switchingProviderLoadsItsOwnSettings() {
+        store.key = "gemini-fake"
+        val vm = SmartBoardViewModel(store)
+        vm.selectProvider(AiProviderKind.Claude)
+        assertEquals(AiProviderKind.Claude, store.selected)
+        val s = vm.state.value
+        assertEquals(AiProviderKind.Claude, s.provider)
+        assertFalse(s.stored.hasKey)
+        assertEquals("claude-sonnet-5-5", s.modelDraft)
+        vm.onKeyChange("claude-fake-WXYZ")
+        vm.save()
+        assertEquals("claude-fake-WXYZ", store.keyOf(AiProviderKind.Claude))
+        assertEquals("gemini-fake", store.key)
+        assertEquals("…WXYZ", vm.state.value.stored.hint)
+    }
+
+    @Test fun compatibleServerSavesBaseUrlAndTestsWithoutKey() {
+        val vm = SmartBoardViewModel(store)
+        vm.selectProvider(AiProviderKind.OpenAiCompatible)
+        assertEquals("", vm.state.value.modelDraft)
+        assertFalse(vm.state.value.canTest)
+        vm.onBaseUrlChange(" http://10.0.2.2:11434/v1/ ")
+        vm.onModelChange("qwen2.5vl:7b")
+        assertTrue(vm.state.value.canTest)
+        vm.test()
+        assertEquals("http://10.0.2.2:11434/v1/", store.testedBaseUrls.single())
+        vm.save()
+        assertEquals("http://10.0.2.2:11434/v1/", store.others[AiProviderKind.OpenAiCompatible]!!.baseUrl)
+        assertEquals("qwen2.5vl:7b", vm.state.value.stored.model)
+    }
+
     @Test fun errorMapping() {
         assertEquals(KeyTestResult.Invalid, KeyTestResult.from(VisionError.InvalidKey()))
         assertEquals(KeyTestResult.NoKey, KeyTestResult.from(VisionError.MissingKey()))
         assertEquals(KeyTestResult.RateLimited, KeyTestResult.from(VisionError.RateLimited(5)))
         assertEquals(KeyTestResult.Offline, KeyTestResult.from(VisionError.Network(IOException())))
         assertEquals(KeyTestResult.ModelUnavailable, KeyTestResult.from(VisionError.BadResponse("model x is not available: nope")))
+        assertEquals(KeyTestResult.ModelUnavailable, KeyTestResult.from(VisionError.ModelUnavailable("x", "nope")))
         assertEquals(KeyTestResult.Failed, KeyTestResult.from(VisionError.BadResponse("HTTP 500")))
         assertEquals(KeyTestResult.Failed, KeyTestResult.from(IllegalStateException()))
     }

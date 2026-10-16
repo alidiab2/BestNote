@@ -1,6 +1,9 @@
 package app.bestnote.ai.vision
 
+import kotlinx.serialization.Serializable
+
 /** One provider call as diagnostics see it. [raw] is only kept while [VisionDiagnostics.captureRaw] is on. */
+@Serializable
 data class AiExchange(
     val atMillis: Long,
     val provider: String,
