@@ -21,11 +21,13 @@ dependencies {
     // Imported-PDF pages: rendered as the background of exported pages.
     implementation(projects.engine.pdf)
     implementation(projects.engine.layout)
+    implementation(libs.pdfbox.android)
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.activity.compose)
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.androidx.compose.material.icons.extended)
 
+    androidTestImplementation(libs.pdfbox.android)
     androidTestImplementation(libs.androidx.test.runner)
     androidTestImplementation(libs.androidx.test.ext.junit)
     androidTestImplementation(libs.kotlinx.coroutines.core)

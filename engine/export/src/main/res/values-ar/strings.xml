@@ -2,13 +2,19 @@
 <resources>
     <string name="export_title">تصدير</string>
     <string name="export_pdf">ملف PDF</string>
-    <string name="export_pdf_sub">كل الصفحات، والحبر يبقى حادًا عند أي تكبير</string>
+    <string name="export_pdf_sub">الحبر والأشكال والنصوص والصور تبقى حادة، وصفحات PDF المستوردة تحتفظ بنصوصها</string>
     <string name="export_png">صور (PNG)</string>
     <string name="export_png_sub">صورة لكل صفحة</string>
     <string name="export_bnote">ملف BestNote</string>
     <string name="export_bnote_sub">يحفظ كل شيء ويُفتح في BestNote</string>
     <string name="export_this_page">هذه الصفحة</string>
     <string name="export_all_pages">كل الصفحات (%1$d)</string>
+    <string name="export_pages_label">الصفحات</string>
+    <string name="export_range">نطاق</string>
+    <string name="export_range_hint">الصفحات، مثل 1-3، 5 (من %1$d)</string>
+    <string name="export_template">تضمين قالب الصفحة (خطوط، شبكة، نقاط)</string>
+    <string name="export_save_files">حفظ في الملفات</string>
+    <string name="export_saved">تم الحفظ</string>
     <string name="export_share">مشاركة</string>
     <string name="export_cancel">إلغاء</string>
     <string name="export_working">تجهيز الصفحة %1$d من %2$d</string>

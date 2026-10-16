@@ -74,6 +74,12 @@ internal object PageGraphics {
         ink.draw(canvas, strokes, colors)
     }
 
+    /** Only the user's marks (pictures, text boxes, ink) in page points, for laying over an imported PDF page. */
+    fun drawAnnotations(canvas: Canvas, strokes: List<InkStroke>, elements: List<PageElement>, images: ElementImages?) {
+        drawElements(canvas, elements, PDF_ELEMENT_SCALE, images, PaperColors.White)
+        ink.draw(canvas, strokes, PaperColors.White)
+    }
+
     /** Text boxes and pictures (TEXT-01, MEDIA-01) lie on the paper, under the ink. [pxPerPt] picks picture sizes. */
     private fun drawElements(canvas: Canvas, elements: List<PageElement>, pxPerPt: Float, images: ElementImages?, colors: PaperColors) {
         if (elements.isEmpty()) return
