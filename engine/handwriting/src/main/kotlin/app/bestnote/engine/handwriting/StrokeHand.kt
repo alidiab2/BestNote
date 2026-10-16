@@ -29,6 +29,7 @@ object StrokeHand {
         is MathParser.Frac -> n.num.all(::canWriteNode) && n.den.all(::canWriteNode)
         is MathParser.Scripts -> (n.base?.let(::canWriteNode) ?: true) && n.sup.orEmpty().all(::canWriteNode) && n.sub.orEmpty().all(::canWriteNode)
         is MathParser.Sqrt -> n.body.all(::canWriteNode)
+        is MathParser.Delim, is MathParser.Matrix -> MathParser.inline(n).all(::canWriteNode)
     }
 
     /** Prose with inline maths (`\( … \)`, `$ … $`…): the words and every formula. */

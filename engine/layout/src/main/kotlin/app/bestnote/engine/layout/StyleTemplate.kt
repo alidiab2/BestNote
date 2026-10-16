@@ -60,6 +60,16 @@ data class HandFont(val id: String) {
 }
 
 /**
+ * How a template fills the page. [Flow]: one column down the page (blocks on ruled lines, margin
+ * column for remarks). [Packed]: a dense notebook page like the best student's: topics packed into
+ * side-by-side columns with dashed dividers, whatever elements the AI returned ([PackedFlow]).
+ */
+enum class PageLayout { Flow, Packed }
+
+/** How tightly [PageLayout.Packed] writes: text size, line pitch on grid paper, 3 columns on wide pages (Dense). */
+enum class Density { Airy, Normal, Dense }
+
+/**
  * A Smart Board design template: paper, fonts, sizes, one colour per role, decorations and spacing.
  * Data only, so adding a style is adding a preset to [StyleTemplates].
  *
@@ -68,6 +78,8 @@ data class HandFont(val id: String) {
  * @property spaceBeforeHeading blank lines before a heading (skipped at the top of a page).
  * @property marginArrows margin notes get a curved arrow to what they comment on.
  * @property highlight the highlighter colour for [Decoration.Highlight].
+ * @property layout one column ([PageLayout.Flow]) or packed columns ([PageLayout.Packed]).
+ * @property density how much goes on a page in the packed layout.
  */
 data class StyleTemplate(
     val id: String,
@@ -80,6 +92,8 @@ data class StyleTemplate(
     val spaceBeforeHeading: Int = 1,
     val marginArrows: Boolean = true,
     val highlight: Long = 0x66FFE066L,
+    val layout: PageLayout = PageLayout.Flow,
+    val density: Density = Density.Normal,
 ) {
     fun role(r: NoteRole): RoleStyle = roles[r] ?: roles[NoteRole.Body] ?: RoleStyle()
 
@@ -108,6 +122,7 @@ object StyleTemplates {
     val Classic = StyleTemplate(
         id = "classic",
         paper = null,
+        layout = PageLayout.Packed,
         roles = mapOf(
             NoteRole.Title to RoleStyle(NAVY, 1.45f, Decoration.DoubleUnderline),
             NoteRole.Heading to RoleStyle(BLUE, 1.2f, Decoration.Underline),
@@ -128,6 +143,7 @@ object StyleTemplates {
     val Minimal = StyleTemplate(
         id = "minimal",
         paper = null,
+        layout = PageLayout.Packed,
         spaceBeforeHeading = 1,
         roles = mapOf(
             NoteRole.Title to RoleStyle(BLACK, 1.4f, Decoration.Underline),
@@ -149,6 +165,7 @@ object StyleTemplates {
     val Colorful = StyleTemplate(
         id = "colorful",
         paper = null,
+        layout = PageLayout.Packed,
         highlight = 0x66FFD54FL,
         roles = mapOf(
             NoteRole.Title to RoleStyle(PURPLE, 1.5f, Decoration.Highlight),
@@ -167,7 +184,8 @@ object StyleTemplates {
         ),
     )
 
-    val Cornell = Classic.copy(id = "cornell", paper = PaperTemplate.Cornell)
+    /** Cornell paper has its own cue column: one flowing column on the notes side. */
+    val Cornell = Classic.copy(id = "cornell", paper = PaperTemplate.Cornell, layout = PageLayout.Flow)
 
     val CheatSheet = Classic.copy(
         id = "cheatsheet",
@@ -175,6 +193,7 @@ object StyleTemplates {
         bodyScale = 0.85f,
         spaceBeforeHeading = 0,
         marginArrows = false,
+        density = Density.Dense,
         roles = Classic.roles + mapOf(
             NoteRole.Title to RoleStyle(NAVY, 1.25f, Decoration.Underline),
             NoteRole.Heading to RoleStyle(BLUE, 1.05f, Decoration.Box),
@@ -186,6 +205,7 @@ object StyleTemplates {
     val StudyColumns = Classic.copy(
         id = "study-columns",
         spaceBeforeHeading = 0,
+        density = Density.Dense,
         roles = Classic.roles + mapOf(
             NoteRole.Title to RoleStyle(NAVY, 1.35f, Decoration.Underline),
             NoteRole.Heading to RoleStyle(BLUE, 1.15f, Decoration.Underline),

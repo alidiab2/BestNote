@@ -6,10 +6,13 @@ import app.bestnote.core.model.PageBlock
 import app.bestnote.core.model.RectPt
 import app.bestnote.engine.layout.BlockMeasurer
 import app.bestnote.engine.layout.Decoration
+import app.bestnote.engine.layout.Density
+import app.bestnote.engine.layout.PackedFlow
 import app.bestnote.engine.layout.FlowItem
 import app.bestnote.engine.layout.NoteBlock
 import app.bestnote.engine.layout.NoteElement
 import app.bestnote.engine.layout.NoteNormalizer
+import app.bestnote.engine.layout.NotebookGlossary
 import app.bestnote.engine.layout.NoteRole
 import app.bestnote.engine.layout.RuledPaper
 import app.bestnote.engine.layout.StyleTemplate
@@ -39,8 +42,32 @@ class NoteComposer(
 
     private fun row(lines: Int, d: FontComposer.Sheet.(Float, Float, Float) -> Unit) = FontComposer.Row(lines) { l, r, b -> d(l, r, b) }
 
-    /** A laid-out element: its flow [key], what it is and where it goes. [targetKey] is a margin remark's anchor. */
-    data class Placed(val key: String, val block: NoteBlock, val frame: RectPt, val targetKey: String? = null)
+    /**
+     * A laid-out element: its flow [key], what it is and where it goes. [targetKey] is a margin remark's
+     * anchor. [rows]: only these rows of the element (the packed layout splits a long element between
+     * columns); null = all of it.
+     */
+    data class Placed(val key: String, val block: NoteBlock, val frame: RectPt, val targetKey: String? = null, val rows: IntRange? = null)
+
+    /** Rows of [block] at [width] as the packed layout measures them. */
+    fun rowShape(block: NoteBlock, width: Float): List<PackedFlow.Row> = rows(block, width).map { PackedFlow.Row(it.lines, it.blank, it.glue) }
+
+    /**
+     * Compact writing for the packed layout: smaller display maths and steps, maths closer to the
+     * column's start; on [fine] lines (every grid line) inline formulas may take two lines.
+     */
+    fun compact(density: Density, fine: Boolean = false) {
+        fc.displayScale = when (density) {
+            Density.Airy -> FontComposer.DISPLAY_SCALE
+            Density.Normal -> 1.0f
+            Density.Dense -> 0.94f
+        }
+        fc.mathIndent = 0.5f * gap
+        if (fine) fc.inlineLines = 2
+        stepScale = if (density == Density.Dense) 0.9f else 0.95f
+    }
+
+    private var stepScale = 1f
 
     fun linesFor(block: NoteBlock, width: Float): Int = rows(block, width).sumOf { it.lines }.coerceAtLeast(1)
 
@@ -49,8 +76,8 @@ class NoteComposer(
         linesFor(block, width) * gap
     }
 
-    fun compose(placed: List<Pair<Int, Placed>>): TypesetPages {
-        val pageCount = (placed.maxOfOrNull { it.first } ?: -1) + 1
+    fun compose(placed: List<Pair<Int, Placed>>, rules: List<PackedFlow.Rule> = emptyList()): TypesetPages {
+        val pageCount = maxOf((placed.maxOfOrNull { it.first } ?: -1) + 1, (rules.maxOfOrNull { it.page } ?: -1) + 1)
         return TypesetPages(
             (0 until pageCount).map { page ->
                 val sheet = fc.Sheet(page + 1)
@@ -60,7 +87,8 @@ class NoteComposer(
                     sheet.block = p.key
                     sheet.ink.block = p.key
                     var baseline = p.frame.top
-                    for (r in rows(p.block, p.frame.width)) {
+                    val all = rows(p.block, p.frame.width)
+                    for (r in p.rows?.let { range -> all.subList(range.first.coerceIn(0, all.size), (range.last + 1).coerceIn(0, all.size)) } ?: all) {
                         baseline += r.lines * gap
                         r.draw(sheet, p.frame.left, p.frame.right, baseline)
                     }
@@ -70,6 +98,9 @@ class NoteComposer(
                         fc.marginArrow(sheet, note, PageBlock.Paragraph(BlockId(target), p.frame, ""))
                     }
                 }
+                sheet.block = RULES
+                sheet.ink.block = RULES
+                for (r in rules.filter { it.page == page }) sheet.shapes.dashed(P(r.x0, r.y0), P(r.x1, r.y1), RULE_COLOR)
                 TypesetPage(sheet.runs, sheet.marks + sheet.ink.build().map { it.stroke })
             },
         )
@@ -93,7 +124,7 @@ class NoteComposer(
         val rtl = fc.rtl
         val script = fc.script
         return rows.map { r ->
-            FontComposer.Row(r.lines, r.blank) { l, rt, b ->
+            FontComposer.Row(r.lines, r.blank, r.glue) { l, rt, b ->
                 val (pr, ps) = fc.rtl to fc.script
                 fc.rtl = rtl
                 fc.script = script
@@ -202,11 +233,11 @@ class NoteComposer(
             val whySize = body * 0.85f
             val whyW = why?.let { fc.widthOf(InlineMath.flatten(it), fc.fontFor(it), whySize) } ?: 0f
             val prose = s.text?.takeIf { it.isNotBlank() }?.let { fc.bulletRows(it, marker, width, ink) }.orEmpty()
-            val math = s.math?.takeIf { it.isNotBlank() }?.let { fc.mathRows(it, width, ink, boxed = false, indent = markerW) }.orEmpty()
+            val math = s.math?.takeIf { it.isNotBlank() }?.let { fc.mathRows(it, width, ink, boxed = false, indent = markerW, scale = stepScale) }.orEmpty()
             val mathRows = if (prose.isEmpty() && math.isNotEmpty()) {
                 // The number goes on the formula's own line.
                 math.mapIndexed { k, r ->
-                    if (k != 0) r else FontComposer.Row(r.lines) { l, rt, base ->
+                    if (k != 0) r else FontComposer.Row(r.lines, r.blank, r.glue) { l, rt, base ->
                         r.draw(this, l, rt, base)
                         val mw = fc.widthOf(marker, fc.style.latinFont, body)
                         val x = if (fc.rtl) rt - 0.15f * body - mw else l + 0.15f * body
@@ -221,7 +252,7 @@ class NoteComposer(
             val fits = why != null && last >= 0 && !InlineMath.hasToken(InlineMath.encode(why, fc.inlineTex)) && lineWidth(s, width, markerW) + whyW + 1.5f * body <= fc.usable(width)
             if (fits) {
                 out += lines.mapIndexed { k, r ->
-                    if (k != last) r else FontComposer.Row(r.lines) { l, rt, base ->
+                    if (k != last) r else FontComposer.Row(r.lines, r.blank, r.glue) { l, rt, base ->
                         r.draw(this, l, rt, base)
                         fc.writeLine(this, InlineMath.encode(why!!, fc.inlineTex), l, rt, fc.usable(rt - l) - whyW, base, whySize, whyColor)
                     }
@@ -257,7 +288,7 @@ class NoteComposer(
     private fun boxed(content: List<FontComposer.Row>, pad: Float, color: Int): List<FontComposer.Row> {
         if (content.isEmpty()) return content
         val total = content.sumOf { it.lines }
-        return content.dropLast(1).map { r -> FontComposer.Row(r.lines, r.blank) { l, rt, base -> r.draw(this, l + pad, rt - pad, base) } } +
+        return content.dropLast(1).map { r -> FontComposer.Row(r.lines, r.blank, glue = true) { l, rt, base -> r.draw(this, l + pad, rt - pad, base) } } +
             FontComposer.Row(content.last().lines) { l, rt, base ->
                 content.last().draw(this, l + pad, rt - pad, base)
                 shapes.box(l + 0.15f * gap, base - total * gap + 0.25f * gap, rt - 0.15f * gap, base + 0.32f * gap, color)
@@ -284,18 +315,27 @@ class NoteComposer(
         for ((ri, cells) in rows.withIndex()) {
             val header = ri == 0
             val size = body * if (header) 1f else CELL_SCALE
-            val wrapped = (0 until cols).map { c -> fc.wrap(InlineMath.encode(cells.getOrElse(c) { "" }, fc.inlineTex), cellW - 2 * pad, size) }
-            val lines = max(1, wrapped.maxOf { it.size })
+            val wrapped = (0 until cols).map { c -> fc.wrap(InlineMath.encode(cellText(cells.getOrElse(c) { "" }), fc.inlineTex), cellW - 2 * pad, size) }
+            // Lines each wrapped line needs (a fraction in a cell takes two; a tall script needs its own
+            // height), then the row's height. The first lines of all cells share one baseline.
+            fun up(line: String) = max(fc.inlineExtent(line, size).first, fc.linesForSize(size, fc.fontFor(InlineMath.stripTokens(line))))
+            fun down(line: String) = if (fc.inlineExtent(line, size).second) 1 else 0
+            val firstUp = wrapped.maxOf { cell -> cell.firstOrNull()?.let(::up) ?: 1 }
+            val heights = wrapped.map { cell -> cell.withIndex().sumOf { (k, line) -> (if (k == 0) firstUp else up(line)) + down(line) } }
+            val lines = max(1, heights.max())
             out += row(lines) { l, r, base ->
                 val top = base - lines * gap + 0.3f * gap
                 val bottom = base + 0.3f * gap
                 for (c in 0 until cols) {
                     val x0 = if (rtl) l + usable - (c + 1) * cellW else l + c * cellW
+                    var y = base - lines * gap
                     for ((k, line) in wrapped[c].withIndex()) {
+                        y += (if (k == 0) firstUp else up(line)) * gap
                         val prev = fc.rtl
                         fc.rtl = WritingScript.mostlyRtl(InlineMath.stripTokens(line))
-                        fc.writeLine(this, line, x0 + pad, x0 + cellW - pad, 0f, base - (lines - 1 - k) * gap, size, if (header) headColor else fc.penColor)
+                        fc.writeLine(this, line, x0 + pad, x0 + cellW - pad, 0f, y, size, if (header) headColor else fc.penColor)
                         fc.rtl = prev
+                        y += down(line) * gap
                     }
                 }
                 val left = l
@@ -313,6 +353,18 @@ class NoteComposer(
         return out + fc.blankRow()
     }
 
+    /**
+     * A table cell as prose: a cell that is bare LaTeX (models write `\frac{a}{x^2}` in cells without
+     * `\( … \)`) is maths, so it is laid out as maths instead of showing its source.
+     */
+    internal fun cellText(cell: String): String {
+        val t = cell.trim()
+        if (t.isEmpty() || t.contains("\\(") || t.contains('$')) return cell
+        // In a Hebrew/Arabic cell, each bare LaTeX word is maths on its own.
+        if (WritingScript.hasRtl(t)) return t.split(' ').joinToString(" ") { w -> if (!WritingScript.hasRtl(w) && BARE_TEX.containsMatchIn(w)) "\\($w\\)" else w }
+        return if (BARE_TEX.containsMatchIn(t)) "\\($t\\)" else cell
+    }
+
     /** The page's terms, "term — translation", each language in its own direction, in two aligned columns. */
     private fun glossary(b: NoteBlock, width: Float): List<FontComposer.Row> {
         if (b.terms.isEmpty()) return emptyList()
@@ -326,8 +378,13 @@ class NoteComposer(
         val half = usable / 2
         val size = body * CELL_SCALE
         val rtl = fc.rtl
+        // No second language (both sides the same word): one column of terms.
+        if (b.terms.none { it.translation.isNotBlank() && NotebookGlossary.key(it.translation) != NotebookGlossary.key(it.term) }) {
+            return heading(title, width, NoteRole.Heading) + b.terms.flatMap { t -> fc.bulletRows(t.term, "•", width, color) } + fc.blankRow()
+        }
+        val termLines = fc.linesForSize(size, style.arabicFont).takeIf { b.terms.any { WritingScript.hasRtl(it.term + it.translation) } } ?: fc.linesForSize(size)
         return heading(title, width, NoteRole.Heading) + b.terms.map { t ->
-            row(1) { l, _, base ->
+            row(termLines) { l, _, base ->
                 val first = if (rtl) l + half else l
                 val second = if (rtl) l else l + half
                 for ((x0, word, c) in listOf(Triple(first, t.term, color), Triple(second, t.translation, fc.penColor))) {
@@ -356,7 +413,7 @@ class NoteComposer(
             val wrapped = fc.wrap(encoded, fc.usable(width) - symW - gap, size)
             val box = symbols[i]
             wrapped.mapIndexed { k, line ->
-                row(1) { l, r, base ->
+                row(max(fc.linesForSize(size, fc.fontFor(InlineMath.stripTokens(line))), if (k == 0) linesOf(box) else 1)) { l, r, base ->
                     if (k == 0) {
                         val x = if (fc.rtl) r - 0.6f * gap - box.width else l + 0.6f * gap
                         box.draw(this, x, base, color)
@@ -471,7 +528,7 @@ class NoteComposer(
             out += fc.bulletRows(p.question ?: "", marker, width, fc.penColor).ifEmpty {
                 listOf(row(1) { l, r, base -> text(marker, if (fc.rtl) r - fc.widthOf(marker, fc.style.latinFont, body) else l, base, fc.widthOf(marker, fc.style.latinFont, body), body, ex, fc.style.latinFont, false) })
             }
-            for (s in p.steps) out += fc.mathRows(s, width, ink, boxed = false, indent = indent * 1.5f)
+            for (s in p.steps) out += fc.mathRows(s, width, ink, boxed = false, indent = indent * 1.5f, scale = stepScale)
             p.result?.let { out += fc.mathRows(it, width, result, boxed = true, indent = indent * 1.5f) }
         }
         return out
@@ -543,8 +600,13 @@ class NoteComposer(
 
     private companion object {
         val EMPTY = RectPt(0f, 0f, 0f, 0f)
+
+        /** Block key of the packed layout's dashed dividers. */
+        const val RULES = "rules"
+        const val RULE_COLOR = 0xFF7D8696.toInt()
         const val HANG = 0.3f
         const val CELL_SCALE = 0.9f
         const val MAX_COLUMNS = 6
+        val BARE_TEX = Regex("""\\[a-zA-Z]+|[\^_]\{?\w""")
     }
 }

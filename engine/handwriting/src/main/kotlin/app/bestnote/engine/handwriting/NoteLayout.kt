@@ -9,6 +9,10 @@ import app.bestnote.engine.layout.NoteElement
 import app.bestnote.engine.layout.NoteNormalizer
 import app.bestnote.engine.layout.NoteSamples
 import app.bestnote.engine.layout.NoteTemplate
+import app.bestnote.engine.layout.NoteBlock
+import app.bestnote.engine.layout.PackedFlow
+import app.bestnote.engine.layout.PackedNotes
+import app.bestnote.engine.layout.PageLayout
 import app.bestnote.engine.layout.RegionRole
 import app.bestnote.engine.layout.RuledFlow
 import app.bestnote.engine.layout.RuledPaper
@@ -45,6 +49,7 @@ object NoteLayout {
         reserved: (page: Int, line: Int) -> Boolean = { _, _ -> false },
     ): NotePages {
         val rtl = rtlHint || isRtl(doc)
+        if (template.look.layout == PageLayout.Packed && paper.template != PaperTemplate.Cornell) return packed(doc, template, paper, measure, rtl, penColor, reserved)
         val composer = NoteComposer(paper, template.look, measure, rtl, penColor)
         val keyed = doc.elements.mapIndexed { i, b -> "e$i" to b }
         val byKey = keyed.toMap()
@@ -75,6 +80,66 @@ object NoteLayout {
         }
         return NotePages(paper, template, composer.compose(placed), placed, rtl, doc)
     }
+
+    /**
+     * The packed notebook page ([PageLayout.Packed], [PackedFlow]): topics in side-by-side columns
+     * with dashed dividers, compact maths, short equations sharing a line; margin remarks become ★
+     * notes in place. On grid and dot paper (Normal/Dense) every grid line is a writing line.
+     */
+    private fun packed(
+        doc: NoteDocument,
+        template: NoteTemplate,
+        sheet: RuledPaper,
+        measure: TextMeasure,
+        rtl: Boolean,
+        penColor: Int,
+        reserved: (page: Int, line: Int) -> Boolean,
+    ): NotePages {
+        val look = template.look
+        val paper = PackedFlow.paperFor(sheet, look.density)
+        val style = look.copy(bodyScale = look.bodyScale * PackedFlow.bodyFactor(sheet, paper, look.density))
+        val composer = NoteComposer(paper, style, measure, rtl, penColor)
+        composer.compact(look.density, fine = paper.lineGap < sheet.lineGap)
+        val tidy = PackedNotes.tidy(doc).let { d ->
+            d.copy(elements = d.elements.map { if (it.element == NoteElement.MarginRemark) it.copy(element = NoteElement.StarNote, target = null) else it })
+        }
+        val keyed = tidy.elements.mapIndexed { i, b -> "e$i" to b }
+        val blocks = keyed.map { (key, b) ->
+            PackedFlow.PackBlock(
+                key = key,
+                rows = { w -> composer.rowShape(b, w) },
+                topic = b.element == NoteElement.Heading,
+                keepWithNext = b.element == NoteElement.Title || b.element == NoteElement.Heading,
+                span = spans(b),
+                keepWhole = b.element in KEEP_WHOLE,
+            )
+        }
+        // The user's own lines, in this paper's line numbers (a grid line pitch may be half the sheet's).
+        val k = sheet.lineGap / paper.lineGap
+        val onSheet: (Int, Int) -> Boolean = if (k == 1f) reserved else { page, line ->
+            val y = paper.lineY(line)
+            reserved(page, kotlin.math.ceil((y - sheet.firstLine) / sheet.lineGap - 0.01f).toInt())
+        }
+        val flow = PackedFlow(paper, rtl, look.density, onSheet)
+        val result = flow.place(blocks)
+        val byKey = keyed.toMap()
+        val placed = result.slots.map { s ->
+            s.page to NoteComposer.Placed(s.key, byKey.getValue(s.key), s.frame, rows = s.rowFrom until s.rowTo)
+        }
+        return NotePages(paper, template, composer.compose(placed, result.rules), placed, rtl, tidy)
+    }
+
+    /** Runs across all columns: the title, an element that has its own columns, a table of 3+ columns. */
+    private fun spans(b: NoteBlock): Boolean = when (b.element) {
+        NoteElement.Title, NoteElement.Columns -> true
+        NoteElement.Table, NoteElement.Comparison -> (b.rows.maxOfOrNull { it.size } ?: 0) >= 3
+        else -> false
+    }
+
+    private val KEEP_WHOLE = setOf(
+        NoteElement.Formula, NoteElement.KeyResult, NoteElement.NumberedFormula, NoteElement.Definition, NoteElement.Theorem,
+        NoteElement.Summary, NoteElement.Note, NoteElement.Warning, NoteElement.StarNote, NoteElement.Diagram, NoteElement.Derivation,
+    )
 
     /**
      * The first page of [sampleDoc] written with [template] on its own paper (or [fallbackPaper] at
