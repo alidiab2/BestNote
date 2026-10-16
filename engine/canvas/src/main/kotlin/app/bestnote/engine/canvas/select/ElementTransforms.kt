@@ -64,8 +64,8 @@ object ElementTransforms {
     }
 
     /**
-     * Does a lasso select [e]? The frame's outline is probed like a stroke's centerline: more than half of it
-     * must be enclosed (CANVAS-08), or the frame must be entirely inside.
+     * Does a lasso select [e]? The frame's outline is probed like a stroke's centerline (see
+     * [LassoPolygon.selects]), or the lasso must enclose the frame's center.
      */
     fun selectedBy(poly: LassoPolygon, e: PageElement): Boolean {
         val p = corners(e)
