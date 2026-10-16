@@ -17,7 +17,7 @@
 | [x] INK-08 | Shape snap: circle, ellipse, rectangle, triangle, arrow, line | M2 | L | REC interface | Hold-to-snap shapes; recognition runs off the main thread in < 30 ms |
 | [ ] INK-09 | Laser pointer (fading trail, presentation mode) | M3 | S | — | Trail fades over 1 s; never saved to the page |
 | [ ] INK-10 | Tip shape options (round / chisel) and tip sharpness | M3 | M | INK-01 | Chisel produces calligraphic variation by orientation |
-| [ ] INK-11 | Fill for closed shapes | M3 | S | INK-08 | Fill color/opacity editable after drawing |
+| [x] INK-11 | Fill for closed shapes | M3 | S | INK-08 | Fill color/opacity editable after drawing |
 
 ## Notes
 - Brush tuning constants live in one file so designers can tweak them without reading render code.
