@@ -20,6 +20,8 @@ import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.outlined.Key
+import androidx.compose.material.icons.outlined.Palette
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.StarOutline
 import androidx.compose.material.icons.outlined.Shield
@@ -61,10 +63,21 @@ import app.bestnote.feature.settings.data.KeyTestResult
 
 
 @Composable
-internal fun SmartBoardSection(viewModel: SmartBoardViewModel) {
+internal fun SmartBoardSection(viewModel: SmartBoardViewModel, onOpenTemplates: () -> Unit = {}) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
     DetailHeader(stringResource(R.string.settings_cat_ai), stringResource(R.string.settings_ai_desc))
+
+    SettingsGroup(stringResource(R.string.settings_templates_group)) {
+        row {
+            SettingsRow(
+                title = stringResource(R.string.settings_templates),
+                subtitle = stringResource(R.string.settings_templates_sub),
+                icon = androidx.compose.material.icons.Icons.Outlined.Palette,
+                modifier = Modifier.clickable(role = androidx.compose.ui.semantics.Role.Button, onClick = onOpenTemplates),
+            ) { androidx.compose.material3.Icon(androidx.compose.material.icons.Icons.AutoMirrored.Filled.KeyboardArrowRight, null) }
+        }
+    }
 
     SettingsGroup(stringResource(R.string.settings_ai_provider)) {
         AiProviderKind.entries.forEach { provider ->

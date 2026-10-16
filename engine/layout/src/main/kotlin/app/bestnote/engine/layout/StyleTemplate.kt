@@ -44,10 +44,20 @@ enum class Decoration { None, Underline, DoubleUnderline, Highlight, Box }
 data class RoleStyle(val color: Long? = null, val scale: Float = 1f, val decoration: Decoration = Decoration.None)
 
 /**
- * The handwriting fonts a template writes with: Caveat (Latin, Cyrillic; SIL OFL), Aref Ruqaa
- * (Arabic; SIL OFL), Gveret Levin (Hebrew; SIL OFL). [System] uses the device font (any script without a bundled hand).
+ * A handwriting font a template writes with, by registry id. The bundled ones ([Caveat] Latin and Cyrillic,
+ * [ArefRuqaa] Arabic, [GveretLevin] Hebrew; all SIL OFL) have fixed ids; fonts downloaded from the
+ * trusted Google Fonts catalogue ("gf:<family>") and the user's own ("my:<id>") are registered at run
+ * time by `:core:fonts`. [System] is the device font. Whatever the font lacks falls back per glyph
+ * (bundled hands, then the system), so no glyph is ever missing.
  */
-enum class HandFont { Caveat, ArefRuqaa, GveretLevin, System }
+data class HandFont(val id: String) {
+    companion object {
+        val Caveat = HandFont("caveat")
+        val ArefRuqaa = HandFont("aref-ruqaa")
+        val GveretLevin = HandFont("gveret-levin")
+        val System = HandFont("system")
+    }
+}
 
 /**
  * A Smart Board design template: paper, fonts, sizes, one colour per role, decorations and spacing.

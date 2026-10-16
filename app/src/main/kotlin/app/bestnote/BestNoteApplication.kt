@@ -52,6 +52,8 @@ class BestNoteApplication : Application() {
         // Smart Board writes with the bundled handwriting fonts; the page renderer resolves them by id.
         runCatching { HandwritingTypefaces.init(this) }.onFailure { Log.w("BestNote", "Handwriting fonts unavailable", it) }
         ElementPainter.Fonts.resolve = HandwritingTypefaces::of
+        // Downloaded and own fonts (TPL-02): registered with the typefaces so pages and previews resolve them by id.
+        runCatching { app.bestnote.core.fonts.FontRegistry.get(this).start() }.onFailure { Log.w("BestNote", "Font registry unavailable", it) }
         // The Room index is a cache of the notebook packages: refresh it in the background (ADR-0004).
         notebooks.backgroundScope.launch {
             runCatching { notebooks.reconcileIndex() }.onFailure { Log.w("BestNote", "Index reconcile failed", it) }

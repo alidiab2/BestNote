@@ -4,6 +4,7 @@ plugins {
 
 dependencies {
     implementation(projects.core.designsystem)
+    implementation(projects.core.fonts)
     implementation(projects.core.database)
     implementation(projects.core.datastore)
     implementation(projects.engine.canvas)

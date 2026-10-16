@@ -165,4 +165,6 @@
     <string name="editor_smart_board_choice_body">Add a new photo of the board to this page (merged, repeats removed), or write new pages?</string>
     <string name="editor_smart_board_continue">Continue / add photo</string>
     <string name="editor_smart_board_new_pages">New pages</string>
+    <string name="text_font">Font: %1$s</string>
+    <string name="text_font_default">Default</string>
 </resources>

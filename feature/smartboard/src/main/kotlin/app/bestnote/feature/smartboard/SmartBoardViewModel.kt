@@ -171,6 +171,7 @@ class SmartBoardViewModel @Inject constructor(
     private val providers: AiProviders,
     private val styles: SmartBoardStyles,
     private val store: NotebookStore,
+    private val templateStore: app.bestnote.engine.templates.TemplateStore,
 ) : ViewModel() {
     private val route = savedStateHandle.toRoute<SmartBoardRoute>()
 
@@ -185,7 +186,7 @@ class SmartBoardViewModel @Inject constructor(
     fun paperFor(template: PaperTemplate): RuledPaper = RuledPaper.of(template, pageSize)
 
     private val settings = providers.settings
-    private val startNoteTemplate = NoteTemplates.byId(styles.styleFor(route.notebookId).id)
+    private val startNoteTemplate = templateStore.byId(styles.templateIdFor(route.notebookId))
     private val state = MutableStateFlow(
         SmartBoardUiState(
             template = startNoteTemplate.look.paper ?: startTemplate,
@@ -193,8 +194,19 @@ class SmartBoardViewModel @Inject constructor(
             mode = styles.writingMode,
             language = styles.languageFor(route.notebookId),
             followUp = route.continuePageId != null,
+            templates = templateStore.all(),
         ),
     )
+
+    /** Re-reads the user's templates (after "Manage…" in the template editor). A deleted selection falls back to a built-in. */
+    fun refreshTemplates() {
+        val all = templateStore.all()
+        state.update { s ->
+            val current = all.firstOrNull { it.id == s.noteTemplate.id }
+            if (current == null) s.copy(templates = all, noteTemplate = all.first(), template = all.first().look.paper ?: startTemplate)
+            else s.copy(templates = all, noteTemplate = if (s.stage is SmartBoardStage.Review) s.noteTemplate else current, template = if (s.stage is SmartBoardStage.Review) s.template else current.look.paper ?: startTemplate)
+        }
+    }
 
     /** The notebook's Smart Board record (glossary, earlier pages), loaded once. */
     private var record = SmartBoardRecord()
@@ -248,7 +260,7 @@ class SmartBoardViewModel @Inject constructor(
     fun setTemplate(template: NoteTemplate) {
         val before = state.value
         if (template.id == before.noteTemplate.id) return
-        styles.setStyleFor(route.notebookId, template.look)
+        styles.setTemplateIdFor(route.notebookId, template.id)
         state.update { it.copy(noteTemplate = template, template = template.look.paper ?: startTemplate) }
         if (before.stage !is SmartBoardStage.Review) return
         val change = TemplateChange.between(effective(before), effective())
@@ -277,7 +289,7 @@ class SmartBoardViewModel @Inject constructor(
         viewModelScope.launch {
             record = runCatching { SmartBoardRecord.decode(store.readExtra(NotebookId(route.notebookId), SmartBoardRecord.EXTRA)) }.getOrDefault(SmartBoardRecord())
             group = route.continuePageId?.let(record::groupFor)
-            group?.let { g -> state.update { it.copy(noteTemplate = NoteTemplates.byId(g.templateId), template = NoteTemplates.byId(g.templateId).look.paper ?: startTemplate) } }
+            group?.let { g -> state.update { it.copy(noteTemplate = templateStore.byId(g.templateId), template = templateStore.byId(g.templateId).look.paper ?: startTemplate) } }
             state.update { it.copy(glossarySize = record.glossary.terms.size) }
         }
         viewModelScope.launch {

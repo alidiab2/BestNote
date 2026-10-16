@@ -87,6 +87,21 @@ object ClaudeRequests {
         if (fallbacks) put("fallbacks", "default")
     }
 
+    /** A text-only conversation (TPL-02): the system prompt and the turns; JSON comes from the prompt. */
+    fun chat(model: String, system: String, turns: List<app.bestnote.ai.vision.ChatTurn>, maxTokens: Int): JsonObject = buildJsonObject {
+        put("model", model)
+        put("max_tokens", maxTokens)
+        put("system", system.trim())
+        putJsonArray("messages") {
+            turns.forEach { t ->
+                addJsonObject {
+                    put("role", if (t.fromUser) "user" else "assistant")
+                    put("content", t.text)
+                }
+            }
+        }
+    }
+
     /** Request headers; the key only ever travels in [ClaudeConfig.KEY_HEADER]. */
     fun headers(key: String, fallbacks: Boolean): Map<String, String> = buildMap {
         put(ClaudeConfig.KEY_HEADER, key)

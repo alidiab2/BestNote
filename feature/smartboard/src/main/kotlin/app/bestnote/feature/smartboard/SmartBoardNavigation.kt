@@ -27,6 +27,6 @@ fun NavController.navigateToSmartBoard(notebook: NotebookId, page: Page, continu
     navigate(SmartBoardRoute(notebook.value, page.widthPt, page.heightPt, page.template.name, page.index, continuePageId, reserved))
 
 /** [onInsert] receives the handwritten pages; the caller hands them to the editor and goes back. */
-fun NavGraphBuilder.smartBoardScreen(onClose: () -> Unit, onInsert: (SmartBoardResult) -> Unit) {
-    composable<SmartBoardRoute> { SmartBoardScreen(onClose, onInsert) }
+fun NavGraphBuilder.smartBoardScreen(onClose: () -> Unit, onInsert: (SmartBoardResult) -> Unit, onManageTemplates: () -> Unit = {}) {
+    composable<SmartBoardRoute> { SmartBoardScreen(onClose, onInsert, onManageTemplates) }
 }

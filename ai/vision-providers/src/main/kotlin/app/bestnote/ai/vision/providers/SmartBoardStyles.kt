@@ -31,6 +31,15 @@ class SmartBoardStyles(private val storage: StyleStorage) {
 
     fun setStyleFor(notebookId: String, style: StyleTemplate) = storage.put(KEY_NOTEBOOK + notebookId, style.id)
 
+    /** The template id (built-in or the user's) last used in a notebook; falls back to its style id, then the app default. */
+    fun templateIdFor(notebookId: String): String = storage.get(KEY_TEMPLATE + notebookId) ?: styleFor(notebookId).id
+
+    fun setTemplateIdFor(notebookId: String, templateId: String) {
+        storage.put(KEY_TEMPLATE + notebookId, templateId)
+        // Keep the older style key in step for built-ins.
+        StyleTemplates.all.firstOrNull { it.id == templateId }?.let { setStyleFor(notebookId, it) }
+    }
+
     /** Notes language for new notebooks: "same as the board" unless set in Settings. */
     var defaultLanguage: NotesLanguage
         get() = NotesLanguage.of(storage.get(KEY_LANGUAGE))
@@ -56,6 +65,7 @@ class SmartBoardStyles(private val storage: StyleStorage) {
         const val KEY_DEFAULT = "default_style"
         const val KEY_MODE = "writing_mode"
         const val KEY_NOTEBOOK = "notebook:"
+        const val KEY_TEMPLATE = "notebook_template:"
         const val KEY_LANGUAGE = "default_language"
         const val KEY_NOTEBOOK_LANGUAGE = "notebook_language:"
         const val BOARD = "board"

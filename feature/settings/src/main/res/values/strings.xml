@@ -269,4 +269,8 @@
     <string name="settings_ai_style_cheatsheet">Cheat sheet</string>
     <string name="settings_ai_style_study">Study notes (columns)</string>
     <string name="settings_ai_language_board">Same as the board</string>
+    <string name="settings_templates_group">Templates</string>
+    <string name="settings_templates">Templates</string>
+    <string name="settings_templates_sub">How Smart Board pages look, what the AI is told, which elements it uses. Design them by hand or with the AI.</string>
+    <string name="settings_licenses_downloaded_fonts">Downloaded fonts</string>
 </resources>

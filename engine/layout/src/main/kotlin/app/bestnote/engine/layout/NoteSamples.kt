@@ -7,9 +7,50 @@ package app.bestnote.engine.layout
 object NoteSamples {
     /** The sample a preview of [template] should show, limited to the elements it allows. */
     fun forTemplate(template: NoteTemplate): NoteDocument {
-        val base = if (NoteElement.Columns in template.elements) hebrewPhysics() else arabicCalculus()
+        val base = when (template.ai.notesLanguage?.lowercase()) {
+            "en" -> englishCalculus()
+            "he" -> hebrewPhysics()
+            "ar" -> arabicCalculus()
+            else -> if (NoteElement.Columns in template.elements) hebrewPhysics() else arabicCalculus()
+        }
         return NoteNormalizer.allowedOnly(base, template.elements)
     }
+
+    /** The same lesson as [arabicCalculus] in English, with Hebrew terms (the TPL-02 preview for English notes). */
+    fun englishCalculus() = NoteDocument(
+        elements = listOf(
+            NoteBlock(NoteElement.Title, text = "The derivative"),
+            NoteBlock(
+                NoteElement.Definition,
+                head = "Derivative",
+                text = "The slope of the tangent to \\(f\\) at \\(x_0\\): the limit \\(\\lim_{h\\to 0}\\frac{f(x_0+h)-f(x_0)}{h}\\) when it exists.",
+            ),
+            NoteBlock(NoteElement.KeyResult, head = "Power rule", math = "(x^n)' = n x^{n-1}"),
+            NoteBlock(NoteElement.MarginRemark, text = "holds for every real n", target = 2),
+            NoteBlock(
+                NoteElement.StepSolution,
+                head = "Example: differentiate \\(e^x\\)",
+                steps = listOf(
+                    NoteStep(math = "f(x) = e^{x}", why = "the exponential function"),
+                    NoteStep(text = "substitute into \\(\\frac{e^{x+h}-e^{x}}{h}\\)", why = "definition of the derivative"),
+                    NoteStep(math = "f'(x) = e^{x}", why = "because \\(\\lim_{h\\to0}\\frac{e^h-1}{h}=1\\)"),
+                ),
+            ),
+            NoteBlock(NoteElement.Warning, text = "There is no derivative at a sharp corner, e.g. \\(|x|\\) at zero."),
+            NoteBlock(
+                NoteElement.Comparison,
+                rows = listOf(listOf("Continuous", "Differentiable"), listOf("no jumps", "no corners"), listOf("not enough", "implies continuity")),
+            ),
+            NoteBlock(NoteElement.Diagram, head = "Tangent", diagram = DiagramKinds.axes("x", "f(x)", listOf(0f to 0f, 1f to 0.3f, 2f to 1.2f, 3f to 2.8f))),
+            NoteBlock(NoteElement.Summary, items = listOf("derivative = slope of the tangent", "\\((e^x)' = e^x\\)", "differentiable implies continuous")),
+        ),
+        terms = listOf(
+            GlossaryTerm("derivative", "נגזרת"),
+            GlossaryTerm("limit", "גבול"),
+            GlossaryTerm("tangent", "משיק"),
+            GlossaryTerm("continuous", "רציפה"),
+        ),
+    )
 
     /**
      * Arabic notes with Hebrew terms and maths, the way an Arabic-speaking student at a Hebrew

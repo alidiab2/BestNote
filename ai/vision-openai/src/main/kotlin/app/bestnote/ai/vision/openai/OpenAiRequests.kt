@@ -117,6 +117,40 @@ object OpenAiRequests {
         }
     }
 
+    /** A text-only conversation (TPL-02): [format] JsonObject asks for a JSON object; low reasoning effort keeps it quick. */
+    fun text(
+        model: String,
+        system: String,
+        turns: List<app.bestnote.ai.vision.ChatTurn>,
+        format: ResponseFormat,
+        official: Boolean,
+        config: OpenAiConfig = OpenAiConfig(),
+        reasoningEffort: String? = null,
+        maxTokens: Int = config.maxTokens,
+    ): JsonObject = buildJsonObject {
+        put("model", model)
+        reasoningEffort?.let { put("reasoning_effort", it) }
+        putJsonArray("messages") {
+            addJsonObject {
+                put("role", "system")
+                put("content", system.trim() + if (format == ResponseFormat.JsonObject || format == ResponseFormat.None) "\n\nAnswer with one JSON object only, no prose and no code fences." else "")
+            }
+            turns.forEach { t ->
+                addJsonObject {
+                    put("role", if (t.fromUser) "user" else "assistant")
+                    put("content", t.text)
+                }
+            }
+        }
+        if (format == ResponseFormat.JsonObject) putJsonObject("response_format") { put("type", "json_object") }
+        if (official) {
+            put("max_completion_tokens", maxTokens)
+        } else {
+            put("max_tokens", maxTokens)
+            put("temperature", config.temperature)
+        }
+    }
+
     /** A one-word completion used by "Test connection" on compatible endpoints (checks key + model). */
     fun ping(model: String, official: Boolean): JsonObject = buildJsonObject {
         put("model", model)

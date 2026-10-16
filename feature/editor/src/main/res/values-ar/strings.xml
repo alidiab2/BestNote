@@ -165,4 +165,6 @@
     <string name="editor_smart_board_choice_body">إضافة صورة جديدة للسبورة إلى هذه الصفحة (مع الدمج وحذف المكرر)، أم كتابة صفحات جديدة؟</string>
     <string name="editor_smart_board_continue">متابعة / إضافة صورة</string>
     <string name="editor_smart_board_new_pages">صفحات جديدة</string>
+    <string name="text_font">الخط: %1$s</string>
+    <string name="text_font_default">الافتراضي</string>
 </resources>

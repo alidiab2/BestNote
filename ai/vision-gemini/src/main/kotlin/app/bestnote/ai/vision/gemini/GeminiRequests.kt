@@ -75,6 +75,38 @@ object GeminiRequests {
         }
     }
 
+    /** A text-only conversation (no image, no schema): JSON mode when [json]. */
+    fun chat(
+        system: String,
+        turns: List<app.bestnote.ai.vision.ChatTurn>,
+        temperature: Double,
+        maxOutputTokens: Int,
+        thinking: Thinking,
+        json: Boolean,
+    ): JsonObject = buildJsonObject {
+        putJsonObject("systemInstruction") {
+            putJsonArray("parts") { addJsonObject { put("text", system.trim()) } }
+        }
+        putJsonArray("contents") {
+            turns.forEach { t ->
+                addJsonObject {
+                    put("role", if (t.fromUser) "user" else "model")
+                    putJsonArray("parts") { addJsonObject { put("text", t.text) } }
+                }
+            }
+        }
+        putJsonObject("generationConfig") {
+            if (json) put("responseMimeType", "application/json")
+            put("temperature", temperature)
+            put("maxOutputTokens", maxOutputTokens)
+            when (thinking) {
+                Thinking.Level -> putJsonObject("thinkingConfig") { put("thinkingLevel", "low") }
+                Thinking.Budget -> putJsonObject("thinkingConfig") { put("thinkingBudget", LOW_THINKING_BUDGET) }
+                Thinking.None -> Unit
+            }
+        }
+    }
+
     /** Tokens of thinking for 2.5-style models: enough to lay out a board, not to over-think it. */
     const val LOW_THINKING_BUDGET = 1_024
 

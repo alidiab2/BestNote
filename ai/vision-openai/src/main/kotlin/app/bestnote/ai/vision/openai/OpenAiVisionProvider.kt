@@ -49,6 +49,48 @@ class OpenAiVisionProvider(
     override suspend fun transcribe(selection: VisionImage, language: String?): AiDocument =
         generate(Prompts.transcribe(language), Prompts.TRANSCRIBE_USER, selection)
 
+    override suspend fun completeText(system: String, turns: List<app.bestnote.ai.vision.ChatTurn>, json: Boolean): String {
+        val base = credentials.baseUrl()?.trim()?.takeIf { it.isNotEmpty() } ?: config.baseUrl
+        val official = isOfficial(base)
+        val key = credentials.apiKey()?.trim()?.takeIf { it.isNotEmpty() }
+        if (key == null && official) throw VisionError.MissingKey()
+        val model = credentials.model().trim().ifEmpty { if (official) OpenAiConfig.DEFAULT_MODEL else throw VisionError.ModelUnavailable("", "no model name set") }
+        var format = if (json) ResponseFormat.JsonObject else ResponseFormat.None
+        var effort: String? = config.reasoningEffort
+        var budget = config.maxTokens
+        var retriedServer = false
+        var retriedBudget = false
+        while (true) {
+            val body = OpenAiRequests.text(model, system, turns, format, official, config, effort, budget).toString()
+            val response = try {
+                transport.post(OpenAiHttp.url(base, "chat/completions"), OpenAiRequests.headers(key, base), body)
+            } catch (e: IOException) {
+                throw VisionError.Network(e)
+            } catch (e: IllegalArgumentException) {
+                throw VisionError.BadResponse("invalid base URL", e)
+            }
+            when {
+                response.code == 200 -> {
+                    try {
+                        return OpenAiResponses.answer(response.body).text
+                    } catch (e: VisionError.Truncated) {
+                        if (retriedBudget) throw e
+                        retriedBudget = true
+                        if (effort != null) effort = MIN_EFFORT
+                        budget = (budget * 2).coerceAtMost(MAX_BUDGET)
+                    }
+                }
+                effort != null && OpenAiResponses.rejectsReasoningEffort(response.code, response.body) -> effort = null
+                format == ResponseFormat.JsonObject && OpenAiResponses.rejectsResponseFormat(response.code, response.body) -> format = ResponseFormat.None
+                response.code in 500..599 && !retriedServer -> {
+                    retriedServer = true
+                    delay(config.retryDelayMs)
+                }
+                else -> throw OpenAiResponses.errorFor(response.code, response.body, response.retryAfter, model)
+            }
+        }
+    }
+
     private suspend fun generate(system: String, user: String, image: VisionImage): AiDocument =
         generate(system, user, image, AiSchema.document(AiSchema.Dialect.Closed), Prompts.JSON_ONLY_HINT) { text, truncated -> AiDocumentParser.answer(text, truncated) }
 

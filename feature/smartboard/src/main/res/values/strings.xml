@@ -119,4 +119,5 @@
     <string name="smartboard_update_page">Update the page</string>
     <string name="smartboard_continue_title">Add to this page</string>
     <string name="smartboard_continue_body">Photograph the board again (or the next part). The notes are merged into the page: new content added, repeats removed, everything in teaching order. Your own writing stays where it is.</string>
+    <string name="smartboard_manage_templates">Manage…</string>
 </resources>
