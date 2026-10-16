@@ -20,6 +20,7 @@ import org.junit.Test
 class NotebookRenderTest {
     private val docs: List<Pair<String, NoteDocument>> = listOf(
         "demo" to NoteSamples.arabicCalculus(),
+        "demo-he" to NoteSamples.hebrewPhysics(),
         "partial" to Fixtures.partialFractionsArabic(),
         "partial-he" to Fixtures.partialFractionsWithHebrewTerms(),
         "lhopital" to Fixtures.lHopitalArabic(),

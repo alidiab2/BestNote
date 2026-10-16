@@ -78,7 +78,8 @@ class NoteComposerTest {
         val english = write(everything, all)
         assertNoOverlap(english)
         // Every element was placed, and every text-bearing one wrote words.
-        assertEquals(everything.elements.size, english.placed.map { it.second.key }.distinct().size)
+        // Packed: a Columns element joins the flow (its contents are placed one by one).
+        assertEquals(english.doc.elements.size, english.placed.map { it.second.key }.distinct().size)
         val written = english.pages.pages.flatMap { p -> p.runs.map { it.block } }.toSet()
         val silent = english.placed.map { it.second }.filter { it.key !in written && it.block.element != NoteElement.Diagram }
         assertTrue("no words from ${silent.map { it.block.element }}", silent.isEmpty())

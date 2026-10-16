@@ -100,17 +100,23 @@ object NoteLayout {
         val style = look.copy(bodyScale = look.bodyScale * PackedFlow.bodyFactor(sheet, paper, look.density))
         val composer = NoteComposer(paper, style, measure, rtl, penColor)
         composer.compact(look.density, fine = paper.lineGap < sheet.lineGap)
+        // The app packs the columns itself: a Columns element's contents join the flow (first column,
+        // then the second), margin remarks become ★ notes in place.
         val tidy = PackedNotes.tidy(doc).let { d ->
-            d.copy(elements = d.elements.map { if (it.element == NoteElement.MarginRemark) it.copy(element = NoteElement.StarNote, target = null) else it })
+            d.copy(
+                elements = d.elements.flatMap { if (it.element == NoteElement.Columns) it.columns.flatten() else listOf(it) }
+                    .map { if (it.element == NoteElement.MarginRemark) it.copy(element = NoteElement.StarNote, target = null) else it },
+            )
         }
         val keyed = tidy.elements.mapIndexed { i, b -> "e$i" to b }
-        val blocks = keyed.map { (key, b) ->
+        val blocks = keyed.mapIndexed { i, (key, b) ->
             PackedFlow.PackBlock(
                 key = key,
                 rows = { w -> composer.rowShape(b, w) },
                 topic = b.element == NoteElement.Heading,
                 keepWithNext = b.element == NoteElement.Title || b.element == NoteElement.Heading,
-                span = spans(b),
+                // A heading right before a full-width element goes across with it.
+                span = spans(b) || (b.element == NoteElement.Heading && keyed.getOrNull(i + 1)?.second?.let(::spans) == true),
                 keepWhole = b.element in KEEP_WHOLE,
             )
         }
@@ -129,9 +135,9 @@ object NoteLayout {
         return NotePages(paper, template, composer.compose(placed, result.rules), placed, rtl, tidy)
     }
 
-    /** Runs across all columns: the title, an element that has its own columns, a table of 3+ columns. */
+    /** Runs across all columns: the title, a table of 3+ columns. */
     private fun spans(b: NoteBlock): Boolean = when (b.element) {
-        NoteElement.Title, NoteElement.Columns -> true
+        NoteElement.Title -> true
         NoteElement.Table, NoteElement.Comparison -> (b.rows.maxOfOrNull { it.size } ?: 0) >= 3
         else -> false
     }
