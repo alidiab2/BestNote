@@ -69,7 +69,7 @@ class ModelCatalogTest {
         assertEquals("claude-sonnet-5-5", ModelCatalog.resolve(AiProviderKind.Claude, "claude-sonnet-5-5", list))
         assertEquals("claude-opus-5-5", ModelCatalog.resolve(AiProviderKind.Claude, "", list))
         assertEquals("claude-haiku-5-5", ModelCatalog.resolve(AiProviderKind.Claude, ModelCatalog.AUTO_FAST, list))
-        assertEquals("gemini-4-argon", ModelCatalog.resolve(AiProviderKind.Gemini, null, emptyList()))
+        assertEquals("gemini-3.8-flash", ModelCatalog.resolve(AiProviderKind.Gemini, null, emptyList()))
         assertEquals("gemini-3.8-flash", ModelCatalog.resolve(AiProviderKind.Gemini, ModelCatalog.AUTO_FAST, emptyList()))
     }
 

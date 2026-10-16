@@ -50,9 +50,9 @@ object ModelCatalog {
 
     /** Newest known ids, used only when the list call fails or has not run yet (checked 2026-10). */
     fun fallback(kind: AiProviderKind, preference: Preference): String = when (kind) {
-        AiProviderKind.Gemini -> if (preference == Preference.Fast) "gemini-3.8-flash" else "gemini-4-argon"
+        AiProviderKind.Gemini -> "gemini-3.8-flash"
         AiProviderKind.Claude -> if (preference == Preference.Fast) "claude-haiku-5-5" else "claude-opus-5-5"
-        AiProviderKind.OpenAi -> if (preference == Preference.Fast) "gpt-6-luna" else "gpt-6-astra"
+        AiProviderKind.OpenAi -> "gpt-5.6-terra"
         // Depends entirely on the server; the user names the model.
         AiProviderKind.OpenAiCompatible -> ""
     }

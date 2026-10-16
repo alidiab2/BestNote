@@ -37,7 +37,7 @@ class SmartBoardViewModelTest {
         assertEquals("", s.stored.model)
         // No key: no list call, newest-known fallback.
         assertTrue(store.listCalls.isEmpty())
-        assertEquals("gemini-4-argon", s.autoBest)
+        assertEquals("gemini-3.8-flash", s.autoBest)
     }
 
     @Test fun opensWithTheLiveListAndResolvesAutomaticModels() {
@@ -72,7 +72,7 @@ class SmartBoardViewModelTest {
         store.listResult = KeyTestResult.Invalid
         val vm = SmartBoardViewModel(store)
         assertEquals(KeyTestResult.Invalid, vm.state.value.modelsError)
-        assertEquals("gemini-4-argon", vm.state.value.stored.resolvedModel)
+        assertEquals("gemini-3.8-flash", vm.state.value.stored.resolvedModel)
     }
 
     @Test fun saveStoresKeyClearsDraftAndRefreshesTheList() {
@@ -107,7 +107,7 @@ class SmartBoardViewModelTest {
         store.gate!!.complete(Unit)
         assertFalse(vm.state.value.testing)
         assertEquals(KeyTestResult.Invalid, vm.state.value.result)
-        assertEquals("fake-key" to "gemini-4-argon", store.tested.single())
+        assertEquals("fake-key" to "gemini-3.8-flash", store.tested.single())
     }
 
     @Test fun removeKey() {

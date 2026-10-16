@@ -16,7 +16,7 @@ data class GeminiConfig(
          * Last-resort id when no live model list is available. The app normally resolves the model
          * from the key's own `GET v1beta/models` list ([GeminiModels], `ModelCatalog`).
          */
-        const val DEFAULT_MODEL = "gemini-4-argon"
+        const val DEFAULT_MODEL = "gemini-3.8-flash"
 
         /** The old hard-wired default; a stored value equal to it is treated as "automatic". */
         const val LEGACY_DEFAULT_MODEL = "gemini-2.5-flash"

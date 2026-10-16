@@ -24,7 +24,7 @@ data class OpenAiConfig(
         const val OPENAI_BASE_URL = "https://api.openai.com/v1/"
 
         /** Last-resort id when the key's live model list is unavailable (newest flagship, 2026-10). */
-        const val DEFAULT_MODEL = "gpt-6-astra"
+        const val DEFAULT_MODEL = "gpt-5.6-terra"
 
         /** Base URLs offered for "OpenAI-compatible" (the user can type any other). */
         val COMPATIBLE_PRESETS = linkedMapOf(
