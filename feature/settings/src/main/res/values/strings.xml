@@ -40,12 +40,8 @@
     <string name="settings_palm_group">Palm rejection</string>
     <string name="settings_palm_pen">Strict while a pen is in use</string>
     <string name="settings_palm_pen_sub">Touches near the pen, or while it hovers, never leave marks</string>
-    <string name="settings_finger_draws">Finger draws</string>
-    <string name="settings_finger_never">Never</string>
-    <string name="settings_finger_nopen">No pen detected</string>
-    <string name="settings_finger_always">Always</string>
-    <string name="settings_finger_never_sub">Only the pen writes. Fingers scroll and zoom.</string>
-    <string name="settings_finger_nopen_sub">Fingers draw until BestNote sees a pen, then only the pen writes.</string>
+    <string name="settings_finger_draws">Draw with finger</string>
+    <string name="settings_finger_nopen_sub">Off: once BestNote sees your pen, only the pen writes. Fingers scroll, zoom and tap.</string>
     <string name="settings_finger_always_sub">Fingers draw whenever no pen is touching or hovering.</string>
     <string name="settings_feel_group">Feel</string>
     <string name="settings_hover_cursor">Hover cursor</string>

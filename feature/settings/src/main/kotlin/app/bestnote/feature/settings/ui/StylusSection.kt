@@ -147,28 +147,15 @@ internal fun StylusSection(
             )
         }
         row {
-            StackedRow(
+            // SPEN-02: off (default) = auto stylus-only once a pen is seen; on = fingers always draw.
+            val drawWithFinger = stylus.fingerDrawing == FingerDrawing.Always
+            SwitchRow(
                 stringResource(R.string.settings_finger_draws),
-                subtitle = when (stylus.fingerDrawing) {
-                    FingerDrawing.Never -> stringResource(R.string.settings_finger_never_sub)
-                    FingerDrawing.WhenNoPen -> stringResource(R.string.settings_finger_nopen_sub)
-                    FingerDrawing.Always -> stringResource(R.string.settings_finger_always_sub)
-                },
+                drawWithFinger,
+                { v -> update { it.copy(fingerDrawing = if (v) FingerDrawing.Always else FingerDrawing.WhenNoPen) } },
+                subtitle = stringResource(if (drawWithFinger) R.string.settings_finger_always_sub else R.string.settings_finger_nopen_sub),
                 icon = Icons.Outlined.PanTool,
-            ) {
-                Segmented(
-                    FingerDrawing.entries,
-                    stylus.fingerDrawing,
-                    label = {
-                        when (it) {
-                            FingerDrawing.Never -> stringResource(R.string.settings_finger_never)
-                            FingerDrawing.WhenNoPen -> stringResource(R.string.settings_finger_nopen)
-                            FingerDrawing.Always -> stringResource(R.string.settings_finger_always)
-                        }
-                    },
-                    onSelect = { v -> update { it.copy(fingerDrawing = v) } },
-                )
-            }
+            )
         }
     }
 

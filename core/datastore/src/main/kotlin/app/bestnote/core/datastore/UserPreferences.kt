@@ -49,7 +49,7 @@ enum class FingerDrawing {
     /** Stylus-only: fingers scroll and zoom. */
     Never,
 
-    /** Fingers draw until a pen is seen on this device (SPEN-02 auto mode). */
+    /** Fingers draw until a pen is seen on this device, then only scroll and zoom (SPEN-02 auto mode, the default). */
     WhenNoPen,
 
     /** Fingers always draw (while no pen is touching or hovering). */
@@ -90,6 +90,8 @@ data class StylusPreferences(
     val hoverCursor: Boolean = true,
     val pressureCurve: PressureCurve = PressureCurve.Normal,
     val tiltShading: Boolean = true,
+    /** A pen (S Pen, USI…) has touched or hovered over the editor on this device (SPEN-02). */
+    val penSeen: Boolean = false,
 )
 
 @Serializable
@@ -165,6 +167,9 @@ data class UserPreferences(
      * [StylusPreferences.fingerDrawing], which replaced the stored `stylusOnly` flag.
      */
     val stylusOnly: Boolean get() = stylus.fingerDrawing == FingerDrawing.Never
+
+    /** Settings "Draw with finger": an opt-in override of the auto stylus-only mode. */
+    val drawWithFinger: Boolean get() = stylus.fingerDrawing == FingerDrawing.Always
 }
 
 object UserPreferencesSerializer : Serializer<UserPreferences> {
@@ -244,6 +249,14 @@ class UserPreferencesRepository @Inject constructor(private val store: DataStore
     suspend fun setStylusOnly(enabled: Boolean) = updateStylus {
         it.copy(fingerDrawing = if (enabled) FingerDrawing.Never else FingerDrawing.WhenNoPen)
     }
+
+    /** "Draw with finger" on = fingers always ink; off = auto stylus-only once a pen is seen. */
+    suspend fun setDrawWithFinger(enabled: Boolean) = updateStylus {
+        it.copy(fingerDrawing = if (enabled) FingerDrawing.Always else FingerDrawing.WhenNoPen)
+    }
+
+    /** Remembers that a pen was used here: fingers stop inking from now on (auto mode). */
+    suspend fun markPenSeen() = updateStylus { if (it.penSeen) it else it.copy(penSeen = true) }
 
     private fun <T> section(pick: (UserPreferences) -> T): Flow<T> = store.data.map(pick).distinctUntilChanged()
 }

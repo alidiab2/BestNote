@@ -10,6 +10,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -32,6 +33,23 @@ import app.bestnote.engine.canvas.document.PagedDocumentView
 import app.bestnote.core.designsystem.R as DesignR
 
 /**
+ * How fingers behave on the page (SPEN-02, CANVAS-04), from settings. [penSeen] is persisted the
+ * first time a pen touches or hovers, which turns [autoStylusOnly] into stylus-only for good.
+ */
+data class FingerInput(
+    val stylusOnly: Boolean = false,
+    val autoStylusOnly: Boolean = true,
+    val penSeen: Boolean = false,
+    val twoFingerTapUndo: Boolean = true,
+    val threeFingerTapRedo: Boolean = true,
+) {
+    companion object {
+        /** Before settings are known: stylus-first, a finger never inks. */
+        val BeforeSettings = FingerInput(stylusOnly = true)
+    }
+}
+
+/**
  * The notebook surface (CANVAS-07): real pages on the Atelier desk, scrolling vertically, with a
  * "3 / 12" page chip. [onView] hands the view to the screen for toolbar actions.
  */
@@ -43,14 +61,18 @@ internal fun PagedDocumentHost(
     colorArgb: Int,
     brushSize: Float,
     eraserMode: EraserMode,
-    stylusOnly: Boolean,
+    input: FingerInput,
     quickPalette: Boolean,
     doubleClickUndo: Boolean,
     onView: (PagedDocumentView) -> Unit,
     onIndicator: (page: Int, count: Int) -> Unit = { _, _ -> },
     onIndicatorClick: (() -> Unit)? = null,
+    onPenSeen: () -> Unit = {},
+    topInsetPx: Int = 0,
+    bottomInsetPx: Int = 0,
     modifier: Modifier = Modifier,
 ) {
+    val penSeenCallback by rememberUpdatedState(onPenSeen)
     var current by remember { mutableIntStateOf(-1) }
     var count by remember { mutableIntStateOf(0) }
     val muted = BestNoteTheme.colors.muted.toArgb()
@@ -68,6 +90,7 @@ internal fun PagedDocumentHost(
                         onIndicator(page, total)
                     }
                     view.document = document
+                    view.penSeenListener = { penSeenCallback() }
                     onView(view)
                 }
             },
@@ -79,7 +102,12 @@ internal fun PagedDocumentHost(
                 view.eraserMode = eraserMode
                 view.quickPaletteEnabled = quickPalette
                 view.hoverDoubleClickUndo = doubleClickUndo
-                view.stylusOnly = stylusOnly
+                view.stylusOnly = input.stylusOnly
+                view.autoStylusOnly = input.autoStylusOnly
+                view.penSeen = input.penSeen
+                view.twoFingerTapUndo = input.twoFingerTapUndo
+                view.threeFingerTapRedo = input.threeFingerTapRedo
+                view.setContentInsets(topInsetPx, bottomInsetPx)
                 view.addCardColor = muted
                 view.selectionColor = accent
                 view.document = document

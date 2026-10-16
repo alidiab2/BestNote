@@ -67,9 +67,17 @@ class ReplayInstaller : ContentProvider() {
         override fun onActivityResumed(activity: Activity) {
             val r = object : BroadcastReceiver() {
                 override fun onReceive(context: Context, intent: Intent) =
-                    if (intent.action == PINCH) pinch(activity, intent) else replay(activity, intent)
+                    when (intent.action) {
+                        PINCH -> pinch(activity, intent)
+                        STATE -> state(activity)
+                        else -> replay(activity, intent)
+                    }
             }
-            ContextCompat.registerReceiver(activity, r, IntentFilter(ACTION).apply { addAction(PINCH) }, ContextCompat.RECEIVER_EXPORTED)
+            val filter = IntentFilter(ACTION).apply {
+                addAction(PINCH)
+                addAction(STATE)
+            }
+            ContextCompat.registerReceiver(activity, r, filter, ContextCompat.RECEIVER_EXPORTED)
             receiver = r
         }
 
@@ -103,6 +111,19 @@ class ReplayInstaller : ContentProvider() {
                 Log.i(TAG, "PINCH zoom=$zoom")
                 status.writeText("done pinch zoom=$zoom\n")
             }.start()
+        }
+
+        /**
+         * Logs and writes the notebook view's state, so scripts can check what a gesture did:
+         *   adb shell am broadcast -a app.bestnote.debug.STATE -p <pkg>; run-as <pkg> cat files/replay/status
+         */
+        private fun state(activity: Activity) {
+            val status = File(File(activity.filesDir, "replay").apply { mkdirs() }, "status")
+            val canvas = findCanvas(activity.window.decorView) as? PagedDocumentView ?: return status.writeText("error no notebook canvas on screen\n")
+            val strokes = canvas.document?.pages?.sumOf { it.strokes.size } ?: -1
+            val line = "done state zoom=${canvas.zoom} page=${canvas.currentPage} scrollX=${canvas.scrollOffsetX} scrollY=${canvas.scrollOffsetY} strokes=$strokes"
+            Log.i(TAG, line)
+            status.writeText(line + "\n")
         }
 
         private fun replay(activity: Activity, intent: Intent) {
@@ -193,6 +214,7 @@ class ReplayInstaller : ContentProvider() {
         const val TAG = "BestNoteReplay"
         const val ACTION = "app.bestnote.debug.REPLAY"
         const val PINCH = "app.bestnote.debug.PINCH"
+        const val STATE = "app.bestnote.debug.STATE"
         const val DEFAULT_INSET_DP = 16f
         const val PAGED_INSET_DP = 112f
         val PENS = mapOf(

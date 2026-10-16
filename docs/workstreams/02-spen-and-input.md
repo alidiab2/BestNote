@@ -7,7 +7,7 @@
 | ID | Task | M | Size | Depends on | Done when |
 |---|---|---|---|---|---|
 | [x] SPEN-01 | Event pipeline: `MotionEvent` → `StylusEvent` incl. historical samples, `requestUnbufferedDispatch` | M1 | M | — | Logged sample rate matches the digitizer (≈240 Hz on Tab S) |
-| [ ] SPEN-02 | Palm rejection: auto stylus-only mode on first pen touch; finger pans and zooms; cancel palm strokes | M1 | L | SPEN-01 | Resting a palm while writing for 10 min leaves zero stray marks |
+| [x] SPEN-02 | Palm rejection: auto stylus-only mode on first pen touch; finger pans and zooms; cancel palm strokes | M1 | L | SPEN-01 | Resting a palm while writing for 10 min leaves zero stray marks |
 | [x] SPEN-03 | Hover: brush-size cursor / eraser circle preview; hide the system hover dot | M1 | M | SPEN-01 | Cursor tracks the tip with no lag; disappears on exit |
 | [x] SPEN-04 | Side button: hold for temporary tool (default eraser; configurable: lasso, highlighter, none) | M1 | M | SPEN-01 | Press, erase, release returns to the previous pen. Works on every device in the matrix |
 | [ ] SPEN-05 | Tilt + orientation available to brushes | M1 | S | SPEN-01 | Values verified against the device matrix; devices without tilt degrade gracefully |
