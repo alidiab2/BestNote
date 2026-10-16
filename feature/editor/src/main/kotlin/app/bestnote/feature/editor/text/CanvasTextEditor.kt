@@ -2,6 +2,8 @@ package app.bestnote.feature.editor.text
 
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.text.BasicTextField
@@ -55,8 +57,8 @@ import kotlin.math.roundToInt
  * keyboard); mixed Arabic / English lines follow each paragraph's first strong letter, like the page.
  *
  * Coordinates are the canvas view's px: this must be drawn in a box that covers the canvas exactly.
- * [viewport] changes whenever the pages scroll or zoom; [visibleTop] / [visibleBottom] bound the part of the canvas
- * the keyboard, format bar and chrome leave, and the pages scroll so the caret stays inside it.
+ * [viewport] changes whenever the pages scroll or zoom. Below [visibleTop] (the chrome) and above the keyboard plus
+ * [reservedBottom] (the format bar) is where the caret must stay; the pages scroll to keep it there.
  */
 @Composable
 internal fun CanvasTextEditor(
@@ -64,10 +66,13 @@ internal fun CanvasTextEditor(
     view: PagedDocumentView,
     viewport: Int,
     visibleTop: Float,
-    visibleBottom: Float,
+    screenHeight: Float,
+    reservedBottom: Float,
     frameColor: Color,
 ) {
     val e = typing.editing ?: return
+    // Read here, not by the caller: only this editor follows the keyboard as it slides (safe drawing includes the IME).
+    val visibleBottom = screenHeight - WindowInsets.safeDrawing.getBottom(LocalDensity.current) - reservedBottom
     val index = typing.pageIndex(e)
     // typing.version is read so every session change redraws the editor.
     val t = remember(viewport, index, view.width, view.height, typing.version) { view.pageTransform(index) } ?: return

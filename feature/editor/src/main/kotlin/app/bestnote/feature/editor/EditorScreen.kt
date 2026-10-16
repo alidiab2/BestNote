@@ -33,6 +33,9 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.union
+import androidx.compose.foundation.layout.displayCutout
+import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.absolutePadding
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
@@ -788,11 +791,15 @@ fun EditorScreen(
         // Page 1 starts fully visible below the chrome: the title row, plus the tray when it floats on top.
         val topInsetPx = with(density) {
             val chrome = if (side == TraySide.Top && trayHeight > 0) TrayTop.roundToPx() + trayHeight + ChromeGap.roundToPx() else TopRowHeight.roundToPx()
-            WindowInsets.safeDrawing.getTop(this) + chrome
+            WindowInsets.systemBars.union(WindowInsets.displayCutout).getTop(this) + chrome
         }
         var bottomChromePx by remember { mutableIntStateOf(0) }
         val bottomChromeShown = compact && trayShown
-        val bottomInsetPx = with(density) { WindowInsets.safeDrawing.getBottom(this) + if (bottomChromeShown) bottomChromePx else 0 }
+        // System bars only, never the keyboard: the soft keyboard sliding in must not re-lay the pages out every
+        // frame (TEXT-04 keeps the caret visible by scrolling instead).
+        val bottomInsetPx = with(density) {
+            WindowInsets.systemBars.union(WindowInsets.displayCutout).getBottom(this) + if (bottomChromeShown) bottomChromePx else 0
+        }
         val edge = if (compact) CompactChromeEdge else ChromeEdge
 
         // ---- the pages: real sheets on the desk, full screen. They never mirror (forced LTR) ----
@@ -834,15 +841,14 @@ fun EditorScreen(
             // TEXT-04: the box being typed into, right on the page (same px as the canvas view).
             val view = canvas
             if (view != null && typing.editing != null) {
-                val keyboardTop = screen.y - with(density) { WindowInsets.safeDrawing.getBottom(this) } - formatBarPx -
-                    with(density) { FormatBarGap.toPx() }
                 Box(Modifier.fillMaxSize()) {
                     CanvasTextEditor(
                         typing = typing,
                         view = view,
                         viewport = viewportTick,
                         visibleTop = topInsetPx.toFloat(),
-                        visibleBottom = keyboardTop,
+                        screenHeight = screen.y,
+                        reservedBottom = formatBarPx + with(density) { FormatBarGap.toPx() },
                         frameColor = MaterialTheme.colorScheme.primary,
                     )
                 }
