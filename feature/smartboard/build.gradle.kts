@@ -7,6 +7,9 @@ dependencies {
     implementation(projects.core.designsystem)
     implementation(projects.ai.visionApi)
     implementation(projects.ai.visionProviders)
+    implementation(projects.ai.boardScan)
+    // Font output: TextElements drawn by the page renderer (preview uses the same painter).
+    implementation(projects.engine.canvas)
     implementation(projects.engine.layout)
     implementation(projects.engine.handwriting)
     implementation(libs.androidx.compose.material.icons.extended)

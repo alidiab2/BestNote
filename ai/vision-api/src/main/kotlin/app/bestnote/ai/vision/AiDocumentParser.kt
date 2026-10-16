@@ -65,8 +65,11 @@ object AiDocumentParser {
     }
 
     private fun parseRoot(text: String, notes: MutableList<String>): JsonElement? {
-        val candidate = extractJson(text)
-        if (candidate != text.trim()) notes += "stripped text around the JSON"
+        val extracted = extractJson(text)
+        if (extracted != text.trim()) notes += "stripped text around the JSON"
+        // "\frac" written with one backslash is valid JSON (form feed + "rac"): protect LaTeX first.
+        val candidate = protectLatex(extracted)
+        if (candidate != extracted) notes += "kept LaTeX backslashes"
         runCatching { return json.parseToJsonElement(candidate) }
         // LaTeX written with single backslashes ("\," "\s") is not valid JSON.
         val escaped = fixEscapes(candidate)
@@ -78,6 +81,68 @@ object AiDocumentParser {
         notes += "closed truncated JSON"
         return runCatching { json.parseToJsonElement(repaired) }.getOrNull()
     }
+
+    /**
+     * Inside JSON strings, turns a single backslash that starts a LaTeX command into a literal one
+     * BEFORE parsing, so `"\frac{a}{b}"` (one backslash, as models often write it) keeps its `\f`:
+     * - `\f` or `\b` followed by a letter: always LaTeX (`\frac`, `\beta`, `\bar`…); a form feed or
+     *   backspace is never meant in notes;
+     * - `\n`, `\t`, `\r` followed by letters: LaTeX only when the whole word is a known command
+     *   (`\nabla`, `\theta`, `\times`, `\rho`…), so a real newline before "Then" stays a newline;
+     * - `\u` not followed by four hex digits (`\underline`, `\uparrow`): LaTeX.
+     */
+    internal fun protectLatex(text: String): String {
+        if (text.indexOf('\\') < 0) return text
+        val out = StringBuilder(text.length + 16)
+        var inString = false
+        var i = 0
+        while (i < text.length) {
+            val c = text[i]
+            if (!inString) {
+                if (c == '"') inString = true
+                out.append(c)
+                i++
+                continue
+            }
+            if (c == '"') {
+                inString = false
+                out.append(c)
+                i++
+                continue
+            }
+            if (c != '\\') {
+                out.append(c)
+                i++
+                continue
+            }
+            val next = text.getOrNull(i + 1)
+            if (next == '\\' || next == '"' || next == '/') {
+                out.append(c).append(next)
+                i += 2
+                continue
+            }
+            var j = i + 1
+            while (j < text.length && text[j].isLetter() && text[j].code < 128) j++
+            val word = text.substring(i + 1, j)
+            val latex = when (next) {
+                'f', 'b' -> word.length >= 2
+                'n', 't', 'r' -> word in LATEX_NTR
+                'u' -> text.substring(i + 2, minOf(i + 6, text.length)).let { hex -> hex.length < 4 || !hex.all { h -> h.isDigit() || h.lowercaseChar() in 'a'..'f' } }
+                else -> false
+            }
+            if (latex) out.append("\\\\") else out.append(c)
+            i++
+        }
+        return out.toString()
+    }
+
+    /** LaTeX commands that start with n, t or r (the JSON escapes \n \t \r). */
+    private val LATEX_NTR = setOf(
+        "nabla", "neq", "ne", "neg", "nu", "not", "notin", "ni", "nleq", "ngeq", "nmid", "nparallel", "newline", "nolimits", "nsubseteq",
+        "theta", "Theta", "tau", "times", "tan", "tanh", "text", "textbf", "textit", "textrm", "tfrac", "tilde", "to", "top", "triangle",
+        "triangleq", "therefore", "tag", "thinspace", "textstyle", "tt",
+        "rho", "right", "rightarrow", "Rightarrow", "rangle", "rceil", "rfloor", "rbrace", "rvert", "Re", "rm", "rightleftharpoons", "real",
+    )
 
     /** Doubles every backslash that does not start a valid JSON escape. */
     internal fun fixEscapes(text: String): String {
@@ -114,6 +179,20 @@ object AiDocumentParser {
     internal fun restoreLatex(s: String?): String? = s
         ?.replace("\u000C", "\\f")?.replace("\b", "\\b")?.replace("\t", "\\t")?.replace("\r", "\\r")
         ?.replace(NEWLINE_COMMAND) { "\\n" + it.groupValues[1] }
+        ?.let(::arrowScripts)
+
+    /** Text fields: control characters left by single-backslash LaTeX (`\(\frac…\)` in prose) are restored the same way. */
+    internal fun restoreText(s: String?): String? = s
+        ?.replace("\u000C", "\\f")?.replace("\b", "\\b")
+        ?.replace(TAB_COMMAND) { "\\t" + it.groupValues[1] }
+        ?.replace(NEWLINE_COMMAND) { "\\n" + it.groupValues[1] }
+        ?.let(AsciiMath::inline)
+
+    /** "x↑30" or "e↑(x+1)" (a superscript written as an arrow) → "x^{30}", "e^{(x+1)}". */
+    internal fun arrowScripts(s: String): String = if ('↑' !in s) s else ARROW_SCRIPT.replace(s) { "^{" + it.groupValues[1] + "}" }
+
+    private val ARROW_SCRIPT = Regex("↑\\s*(\\([^)]*\\)|\\{[^}]*\\}|[A-Za-z0-9.]+)")
+    private val TAB_COMMAND = Regex("\t(heta|imes|au|ext|extbf|frac|ilde|o|op|riangle|herefore|an)(?![a-z])")
 
     private val NEWLINE_COMMAND = Regex("\n(abla|eq|u|ot|otin|e|ewline|leq|geq|ewcommand|i|exists|subset|mid|parallel|cong|sim|rightarrow|leftarrow|Rightarrow|Leftarrow)(?![a-z])")
     private const val VALID_ESCAPES = "\"\\/bfnrtu"
@@ -178,9 +257,9 @@ object AiDocumentParser {
             order = int(o["order"] ?: o["index"]),
             role = s("role"),
             level = int(o["level"]),
-            title = s("title", "term", "heading"),
-            text = s("text", "content", "body", "value", "caption"),
-            items = strings(o["items"] ?: o["bullets"] ?: o["points_list"]),
+            title = restoreText(s("title", "term", "heading")),
+            text = restoreText(s("text", "content", "body", "value", "caption")),
+            items = strings(o["items"] ?: o["bullets"] ?: o["points_list"])?.map { restoreText(it)!! },
             tone = s("tone"),
             latex = restoreLatex(s("latex", "equation", "formula", "math")),
             boxed = bool(o["boxed"]),
@@ -190,6 +269,7 @@ object AiDocumentParser {
             inkColor = s("ink_color", "inkColor", "color", "colour"),
             diagram = (o["diagram"] as? JsonObject)?.let(::diagram),
             sourceBox = floats(o["source_box"] ?: o["sourceBox"] ?: o["bbox"] ?: o["box"]),
+            lang = s("lang", "language", "locale"),
         )
     }
 
@@ -197,8 +277,8 @@ object AiDocumentParser {
         is JsonPrimitive -> el.takeIf { it.isString }?.content?.let { AiProofStep(text = it) }
         is JsonObject -> AiProofStep(
             latex = restoreLatex(string(el["latex"] ?: el["equation"] ?: el["math"])),
-            text = string(el["text"] ?: el["content"]),
-            because = string(el["because"] ?: el["reason"] ?: el["justification"]),
+            text = restoreText(string(el["text"] ?: el["content"])),
+            because = restoreText(string(el["because"] ?: el["reason"] ?: el["justification"])),
         )
         else -> null
     }
@@ -227,10 +307,14 @@ object AiDocumentParser {
         return AiDiagram(size = size, shapes = shapes)
     }
 
+    /**
+     * A string field. A boolean is never content: `"math": true` (a flag some models add) must not
+     * become the formula "true", and `"text": false` is no text.
+     */
     private fun string(el: JsonElement?): String? = when (el) {
         null, JsonNull -> null
-        is JsonPrimitive -> el.content
-        is JsonArray -> el.mapNotNull { (it as? JsonPrimitive)?.content }.takeIf { it.isNotEmpty() }?.joinToString("\n")
+        is JsonPrimitive -> if (!el.isString && el.booleanOrNull != null) null else el.content
+        is JsonArray -> el.mapNotNull { (it as? JsonPrimitive)?.takeUnless { p -> !p.isString && p.booleanOrNull != null }?.content }.takeIf { it.isNotEmpty() }?.joinToString("\n")
         is JsonObject -> null
     }
 

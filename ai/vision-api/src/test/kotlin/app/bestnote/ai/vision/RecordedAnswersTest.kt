@@ -174,6 +174,44 @@ class RecordedAnswersTest {
         assertFalse(openApi.contains("additionalProperties"))
         assertTrue(openApi.contains("\"propertyOrdering\":[\"type\",\"order\",\"text\""))
     }
+    @Test
+    fun `single-backslash latex keeps its commands and flags never become text`() {
+        // The owner's DeepSeek result: "\frac" written with one backslash showed as "rac{x^{30}}…",
+        // and boolean flags ("math": true) showed as the word "true" in boxes and proofs.
+        val (doc, mapped) = map("deepseek_single_backslash.json")
+        assertEquals(mapped.dropReasons.toString(), 0, mapped.dropped)
+        val built = mapped.built().filterNot { it is PageBlock.Heading }
+        val lim = built[0] as PageBlock.Math
+        assertTrue(lim.latex, lim.latex.contains("\\frac{x^{30}}") && lim.latex.contains("\\lim") && lim.latex.contains("\\to"))
+        assertTrue(lim.boxed)
+        val proof = built[1] as PageBlock.Proof
+        assertTrue(proof.steps[0].latex!!.startsWith("\\frac"))
+        assertEquals(null, proof.steps[1].latex)
+        assertTrue(proof.steps[2].latex!!, proof.steps[2].latex!!.contains("\\theta") && proof.steps[2].latex!!.contains("\\beta") && proof.steps[2].latex!!.contains("\\nabla"))
+        assertEquals("exp beats \\( x^{30} \\)", (built[2] as PageBlock.MarginNote).text)
+        val para = (built[3] as PageBlock.Paragraph).text
+        assertTrue(para, para.contains("\\frac{1}{e^x}") && para.contains("\n"))
+        assertTrue((built[4] as PageBlock.Math).latex.startsWith("\\rho"))
+        for (b in built) assertTrue("$b", !b.toString().contains("=true") || b is PageBlock.Math)
+        val words = built.joinToString(" ") { blk ->
+            when (blk) {
+                is PageBlock.Math -> blk.latex
+                is PageBlock.Paragraph -> blk.text
+                is PageBlock.MarginNote -> blk.text
+                is PageBlock.Proof -> blk.steps.joinToString(" ") { "${it.latex} ${it.text} ${it.justification}" }
+                else -> ""
+            }
+        }
+        assertTrue(words, !Regex("\\btrue\\b").containsMatchIn(words))
+        assertTrue(doc.blocks.none { it.text == "true" || it.latex == "true" })
+    }
+
+    @Test
+    fun `newline escapes before ordinary words stay newlines`() {
+        val doc = AiDocumentParser.parse("""{"blocks":[{"type":"paragraph","text":"first\nThen\tnext \\theta"}]}""").document
+        assertEquals("first\nThen\tnext \\theta", doc.blocks[0].text)
+        assertEquals("{\"a\":\"\\\\frac\"}", AiDocumentParser.protectLatex("{\"a\":\"\\frac\"}"))
+    }
 }
 
 class TranscriptLinesTest {
@@ -188,4 +226,5 @@ class TranscriptLinesTest {
         ).document
         assertEquals(listOf("تعريف: الدالة المتصلة", "والمشتقة هي ميل المماس", "f'(x) = 2x", "see p. 12", "for proof"), doc.transcriptLines())
     }
+
 }

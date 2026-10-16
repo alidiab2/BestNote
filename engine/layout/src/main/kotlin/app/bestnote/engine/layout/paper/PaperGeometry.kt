@@ -94,6 +94,9 @@ object PaperGeometry {
         }
     }
 
+    /** First grid line (or dot row) of a [pitch] lattice on a side of [length], as the editor prints it. */
+    fun latticeStart(length: Float, pitch: Float): Float = centered(length, pitch)
+
     /** Offset that centers a [pitch] lattice on a side of [length], so both edges get the same remainder. */
     private fun centered(length: Float, pitch: Float): Float {
         val rem = length - floor(length / pitch) * pitch

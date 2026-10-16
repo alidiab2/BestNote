@@ -7,6 +7,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import app.bestnote.feature.settings.SmartBoardNotesViewModel
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -146,6 +147,8 @@ internal fun SmartBoardSection(viewModel: SmartBoardViewModel) {
     }
 
     ModelPicker(state, viewModel)
+
+    NotesDefaults()
 
     SettingsGroup(stringResource(R.string.settings_ai_privacy_group)) {
         row {
@@ -334,3 +337,53 @@ private fun resultText(result: KeyTestResult?): String = when (result) {
 
 private const val FILTER_FROM = 12
 private const val MAX_ROWS = 60
+
+/** Defaults for new notebooks: the design style and the language the notes are written in. */
+@Composable
+private fun NotesDefaults(viewModel: SmartBoardNotesViewModel = androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel()) {
+    val notes by viewModel.ui.collectAsStateWithLifecycle()
+    SettingsGroup(stringResource(R.string.settings_ai_notes_group)) {
+        row {
+            Column(Modifier.fillMaxWidth().padding(Spacing.L), verticalArrangement = Arrangement.spacedBy(Spacing.S)) {
+                Text(stringResource(R.string.settings_ai_notes_style), style = MaterialTheme.typography.bodyLarge)
+                Text(stringResource(R.string.settings_ai_notes_style_sub), style = MaterialTheme.typography.bodySmall, color = BestNoteTheme.colors.muted)
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(Spacing.S)) {
+                    app.bestnote.engine.layout.StyleTemplates.all.forEach { style ->
+                        FilterChip(selected = style.id == notes.style.id, onClick = { viewModel.setStyle(style) }, label = { Text(styleLabel(style.id)) })
+                    }
+                }
+                Text(stringResource(R.string.settings_ai_notes_language), style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(top = Spacing.S))
+                Text(stringResource(R.string.settings_ai_notes_language_sub), style = MaterialTheme.typography.bodySmall, color = BestNoteTheme.colors.muted)
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(Spacing.S)) {
+                    app.bestnote.ai.vision.NotesLanguage.entries.forEach { l ->
+                        FilterChip(selected = l == notes.language, onClick = { viewModel.setLanguage(l) }, label = { Text(languageLabel(l)) })
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun styleLabel(id: String) = stringResource(
+    when (id) {
+        "minimal" -> R.string.settings_ai_style_minimal
+        "colorful" -> R.string.settings_ai_style_colorful
+        "cornell" -> R.string.settings_ai_style_cornell
+        "cheatsheet" -> R.string.settings_ai_style_cheatsheet
+        else -> R.string.settings_ai_style_classic
+    },
+)
+
+@Composable
+private fun languageLabel(l: app.bestnote.ai.vision.NotesLanguage): String = when (l) {
+    app.bestnote.ai.vision.NotesLanguage.Board -> stringResource(R.string.settings_ai_language_board)
+    app.bestnote.ai.vision.NotesLanguage.English -> "English"
+    app.bestnote.ai.vision.NotesLanguage.Hebrew -> "עברית"
+    app.bestnote.ai.vision.NotesLanguage.Arabic -> "العربية"
+    app.bestnote.ai.vision.NotesLanguage.French -> "Français"
+    app.bestnote.ai.vision.NotesLanguage.Spanish -> "Español"
+    app.bestnote.ai.vision.NotesLanguage.German -> "Deutsch"
+    app.bestnote.ai.vision.NotesLanguage.Russian -> "Русский"
+    app.bestnote.ai.vision.NotesLanguage.Turkish -> "Türkçe"
+}

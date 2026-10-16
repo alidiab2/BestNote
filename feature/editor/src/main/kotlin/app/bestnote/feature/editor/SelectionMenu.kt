@@ -52,6 +52,7 @@ internal class SelectionActions(
     val onRotate: () -> Unit = {},
     val onToggleLock: () -> Unit = {},
     val onConvert: () -> Unit = {},
+    val onTidy: () -> Unit = {},
 )
 
 /** Thicker/thinner step for a selection's ink. */
@@ -106,6 +107,7 @@ internal fun SelectionMenu(
                     MenuDivider()
                 }
                 if (menu.strokes > 0) {
+                    MenuText(stringResource(R.string.selection_tidy), onClick = actions.onTidy)
                     MenuText(stringResource(R.string.selection_convert), onClick = actions.onConvert)
                     MenuDivider()
                 }

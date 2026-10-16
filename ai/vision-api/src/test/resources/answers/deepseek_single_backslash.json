@@ -1,0 +1,11 @@
+{"title":"Limits at infinity","blocks":[
+{"type":"heading","order":0,"level":2,"text":"Growth rates","boxed":false},
+{"type":"math","id":"lim","order":1,"text":"lim x^30/(e^x+x^2+10)","latex":"\lim_{x \to \infty} \frac{x^{30}}{e^x+x^2+10} = 0","boxed":true,"math":true,"semantic":"essential"},
+{"type":"proof","order":2,"title":"Proof","steps":[
+ {"latex":"\frac{x^{30}}{e^x} \le \frac{x^{30}}{e^x+x^2+10}","math":true,"because":"\text{denominator grows}"},
+ {"text":"apply L'Hôpital 30 times","math":false},
+ {"latex":"\theta = \beta \times \nabla f","because":"notation"}]},
+{"type":"margin_note","order":3,"annotates":"lim","text":"exp beats x↑30","math":true},
+{"type":"paragraph","order":4,"text":"Since \(\frac{1}{e^x}\to 0\), the limit is 0.\nThen we are done."},
+{"type":"math","order":5,"latex":true,"text":"\rho = \frac{m}{V}"}
+]}

@@ -1,0 +1,14 @@
+{"title":"Integration by parts","blocks":[
+{"type":"heading","order":0,"level":2,"text":"Product rule, backwards","semantic":"emphasis","ink_color":"yellow"},
+{"type":"definition","id":"rule","order":1,"title":"Integration by parts","text":"For differentiable \\( u \\) and \\( v \\) on \\( [a,b] \\):"},
+{"type":"math","id":"ibp","order":2,"text":"int u dv = uv - int v du","latex":"\\int_a^b u\\,dv = \\left[uv\\right]_a^b - \\int_a^b v\\,du","boxed":true,"semantic":"essential","ink_color":"red"},
+{"type":"margin_note","order":3,"annotates":"ibp","text":"LIATE: pick u by this order","semantic":"annotation","ink_color":"green"},
+{"type":"callout","order":4,"tone":"example","title":"Example","text":"\\( \\int x e^x dx \\) with \\( u = x \\), \\( dv = e^x dx \\)"},
+{"type":"proof","order":5,"text":"Worked","steps":[
+ {"latex":"\\int x e^x\\,dx = x e^x - \\int e^x\\,dx","because":"parts"},
+ {"latex":"= x e^x - e^x + C","because":"integrate"},
+ {"latex":"= e^x (x - 1) + C"}]},
+{"type":"math","order":6,"text":"","latex":"\\sum_{k=1}^{n} k^2 = \\frac{n(n+1)(2n+1)}{6}","semantic":"regular"},
+{"type":"bullets","order":7,"text":"","items":["works when \\( v \\) is easy to integrate","repeat for \\( x^2 e^x \\)","watch the sign of the second term"]},
+{"type":"callout","order":8,"tone":"warning","title":"Careful","text":"Don't forget the boundary term \\( [uv]_a^b \\)."}
+]}

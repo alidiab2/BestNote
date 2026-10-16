@@ -45,6 +45,8 @@ data class AiBlock(
     val diagram: AiDiagram? = null,
     /** Normalised 0..1 source bbox [x0,y0,x1,y1] in the photo, used when [order] is missing. */
     @SerialName("source_box") val sourceBox: List<Float>? = null,
+    /** Language of the block's words (BCP 47, e.g. "he", "ar", "en"); direction comes from the letters themselves. */
+    val lang: String? = null,
 )
 
 @Serializable

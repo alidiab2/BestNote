@@ -1,0 +1,40 @@
+package app.bestnote.core.designsystem.font
+
+import android.content.Context
+import android.graphics.Typeface
+import android.graphics.fonts.Font
+import android.graphics.fonts.FontFamily
+import app.bestnote.core.designsystem.R
+
+/**
+ * The bundled handwriting fonts (SIL OFL): Caveat for Latin, Aref Ruqaa for Arabic (Ruqaa is the
+ * everyday Arabic hand). Each typeface falls back to the other for letters it lacks, then to the
+ * system font for maths symbols, so a mixed line renders in one pass.
+ */
+object HandwritingTypefaces {
+    const val LATIN_FIRST = "hand"
+    const val ARABIC_FIRST = "hand-ar"
+
+    /** The device font: Hebrew and scripts without a bundled hand (no OFL Hebrew handwriting font is bundled yet). */
+    const val SYSTEM = "system"
+
+    @Volatile private var latin: Typeface? = null
+    @Volatile private var arabic: Typeface? = null
+
+    fun init(context: Context) {
+        if (latin != null) return
+        val res = context.applicationContext.resources
+        val caveat = FontFamily.Builder(Font.Builder(res, R.font.caveat).build()).build()
+        val ruqaa = FontFamily.Builder(Font.Builder(res, R.font.aref_ruqaa).build()).build()
+        latin = Typeface.CustomFallbackBuilder(caveat).addCustomFallback(ruqaa).setSystemFallback("sans-serif").build()
+        arabic = Typeface.CustomFallbackBuilder(ruqaa).addCustomFallback(caveat).setSystemFallback("sans-serif").build()
+    }
+
+    /** The typeface for a [app.bestnote.core.model.TextElement.font] id, or null for unknown ids. */
+    fun of(id: String?): Typeface? = when (id) {
+        LATIN_FIRST -> latin
+        ARABIC_FIRST -> arabic
+        SYSTEM -> Typeface.SANS_SERIF
+        else -> null
+    }
+}

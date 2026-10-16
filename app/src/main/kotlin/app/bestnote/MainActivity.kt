@@ -13,6 +13,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
+import app.bestnote.feature.library.LibraryRepository
+import app.bestnote.feature.library.PaperFormat
+import app.bestnote.feature.library.PaperSize
 import androidx.core.content.pm.ShortcutInfoCompat
 import androidx.core.content.pm.ShortcutManagerCompat
 import androidx.core.graphics.drawable.IconCompat
@@ -50,6 +55,8 @@ class MainActivity : ComponentActivity() {
 
     @Inject lateinit var pdfRequests: PdfOpenRequests
 
+    @Inject lateinit var library: LibraryRepository
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
@@ -69,7 +76,7 @@ class MainActivity : ComponentActivity() {
                 reducedMotion = prefs.appearance.reduceMotion || systemReducedMotion(),
                 chromeWarmth = prefs.appearance.chromeWarmth.amount,
             ) {
-                BestNoteNavHost(quicknotes, pdfRequests)
+                BestNoteNavHost(quicknotes, pdfRequests, library)
                 UpdateHost(updates)
             }
         }
@@ -114,7 +121,7 @@ private fun publishShortcuts(context: Context) {
 }
 
 @Composable
-private fun BestNoteNavHost(quicknotes: QuicknoteRequests, pdfRequests: PdfOpenRequests) {
+private fun BestNoteNavHost(quicknotes: QuicknoteRequests, pdfRequests: PdfOpenRequests, library: LibraryRepository) {
     val nav = rememberNavController()
     val quicknoteRequested by quicknotes.requested.collectAsStateWithLifecycle()
     // A Quicknote request while the editor is open: go back to the library, which opens the note.
@@ -128,6 +135,7 @@ private fun BestNoteNavHost(quicknotes: QuicknoteRequests, pdfRequests: PdfOpenR
     }
     // Smart Board → editor hand-off: the handwritten pages wait here until the editor takes them.
     val inbox = remember { InkInbox() }
+    val scope = rememberCoroutineScope()
     NavHost(nav, startDestination = LibraryRoute) {
         libraryScreen(
             onOpenNotebook = { nav.navigateToEditor(it) },
@@ -143,8 +151,23 @@ private fun BestNoteNavHost(quicknotes: QuicknoteRequests, pdfRequests: PdfOpenR
         smartBoardScreen(
             onClose = nav::popBackStack,
             onInsert = { result ->
-                inbox.pending = InkInsert(result.template, result.pages)
-                nav.popBackStack()
+                if (!result.newNotebook) {
+                    inbox.pending = InkInsert(result.template, result.pages, afterIndex = result.afterIndex, elements = result.elements)
+                    nav.popBackStack()
+                } else {
+                    // "New notebook": created on the Smart Board paper, then opened with the pages in it.
+                    scope.launch {
+                        val format = PaperSize.entries.firstNotNullOfOrNull { size ->
+                            listOf(false, true).map { PaperFormat(size, it) }.firstOrNull { f ->
+                                kotlin.math.abs(f.widthPt - result.widthPt) < 1f && kotlin.math.abs(f.heightPt - result.heightPt) < 1f
+                            }
+                        } ?: PaperFormat()
+                        val notebook = library.create(result.title ?: "Smart Board", result.template, format)
+                        inbox.pending = InkInsert(result.template, result.pages, freshNotebook = true, elements = result.elements)
+                        nav.popBackStack()
+                        nav.navigateToEditor(notebook.id)
+                    }
+                }
             },
         )
         settingsScreen(onBack = nav::popBackStack)

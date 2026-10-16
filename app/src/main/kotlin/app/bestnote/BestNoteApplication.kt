@@ -5,6 +5,8 @@
 package app.bestnote
 
 import android.app.Application
+import app.bestnote.core.designsystem.font.HandwritingTypefaces
+import app.bestnote.engine.canvas.document.ElementPainter
 import android.os.Build
 import app.bestnote.ai.vision.AiExchange
 import app.bestnote.ai.vision.VisionDiagnostics
@@ -47,6 +49,9 @@ class BestNoteApplication : Application() {
         }
         super.onCreate()
         setUpAiDiagnostics()
+        // Smart Board writes with the bundled handwriting fonts; the page renderer resolves them by id.
+        runCatching { HandwritingTypefaces.init(this) }.onFailure { Log.w("BestNote", "Handwriting fonts unavailable", it) }
+        ElementPainter.Fonts.resolve = HandwritingTypefaces::of
         // The Room index is a cache of the notebook packages: refresh it in the background (ADR-0004).
         notebooks.backgroundScope.launch {
             runCatching { notebooks.reconcileIndex() }.onFailure { Log.w("BestNote", "Index reconcile failed", it) }

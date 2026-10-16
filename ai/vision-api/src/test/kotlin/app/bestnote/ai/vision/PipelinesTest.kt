@@ -45,7 +45,7 @@ class PipelinesTest {
     private val fake = object : VisionProvider {
         val doc = Json { ignoreUnknownKeys = true }.decodeFromString(AiDocument.serializer(), response)
         override suspend fun reconstructBoard(image: VisionImage, request: BoardRequest) = doc
-        override suspend fun beautify(selection: VisionImage, widthPt: Float, heightPt: Float) = doc
+        override suspend fun beautify(selection: VisionImage, widthPt: Float, heightPt: Float, language: String?) = doc
     }
 
     private var n = 0

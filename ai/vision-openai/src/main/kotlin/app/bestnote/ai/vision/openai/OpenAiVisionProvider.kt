@@ -30,8 +30,8 @@ class OpenAiVisionProvider(
     override suspend fun reconstructBoard(image: VisionImage, request: BoardRequest): AiDocument =
         generate(Prompts.board(request), Prompts.BOARD_USER, image)
 
-    override suspend fun beautify(selection: VisionImage, widthPt: Float, heightPt: Float): AiDocument =
-        generate(Prompts.beautify(), Prompts.beautifyUser(widthPt, heightPt), selection)
+    override suspend fun beautify(selection: VisionImage, widthPt: Float, heightPt: Float, language: String?): AiDocument =
+        generate(Prompts.beautify(language), Prompts.beautifyUser(widthPt, heightPt), selection)
 
     override suspend fun transcribe(selection: VisionImage, language: String?): AiDocument =
         generate(Prompts.transcribe(language), Prompts.TRANSCRIBE_USER, selection)

@@ -93,6 +93,7 @@ object AiSchema {
             "boxed" to bool(),
             "steps" to arr(step),
             "annotates" to str(),
+            "lang" to str(),
             "semantic" to enumStr(listOf("regular", "essential", "annotation", "emphasis")),
             "ink_color" to str(),
             "diagram" to diagram,

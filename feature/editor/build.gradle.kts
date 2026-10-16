@@ -12,6 +12,8 @@ dependencies {
     implementation(projects.engine.export)
     // REC-05 "Convert with AI": the Smart Board provider the user picked reads the selection.
     implementation(projects.ai.visionProviders)
+    // AI-08 Tidy: the neat handwriting is written by the Smart Board hand.
+    implementation(projects.engine.handwriting)
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.compose.material.icons.extended)
     implementation(libs.androidx.activity.compose)

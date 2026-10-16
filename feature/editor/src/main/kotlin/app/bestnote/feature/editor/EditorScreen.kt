@@ -113,6 +113,7 @@ import app.bestnote.core.model.PageRect
 import app.bestnote.engine.recognition.HandwritingModels
 import app.bestnote.engine.recognition.HandwritingRecognizer
 import app.bestnote.engine.recognition.PageSearch
+import app.bestnote.core.model.PageElement
 import app.bestnote.core.model.PaperTemplate
 import app.bestnote.core.model.Tool
 import app.bestnote.engine.canvas.document.PagedDocument
@@ -150,7 +151,19 @@ class SearchTarget(val pageIndex: Int, val rects: List<PageRect>)
 private const val LOAD_POLL_MS = 50L
 
 /** Ink written elsewhere (Smart Board), waiting to be inserted as new pages of the open notebook. */
-class InkInsert(val template: PaperTemplate, val pages: List<List<InkStroke>>)
+/**
+ * Handwriting to insert (Smart Board, AI-07): [pages] on [template] paper, right after page
+ * [afterIndex] (-1: after the page on screen). In a [freshNotebook] the first page goes on the
+ * notebook's empty first page.
+ */
+class InkInsert(
+    val template: PaperTemplate,
+    val pages: List<List<InkStroke>>,
+    val afterIndex: Int = -1,
+    val freshNotebook: Boolean = false,
+    /** Text boxes per page (Smart Board's handwriting-font output), parallel to [pages]. */
+    val elements: List<List<PageElement>> = emptyList(),
+)
 
 /**
  * @param onSmartBoard opens Smart Board for the notebook, with the page being read (its size and paper).
@@ -189,9 +202,14 @@ class EditorViewModel @Inject constructor(
     val recognizer: HandwritingRecognizer,
     /** Smart Board AI providers, for "Convert with AI" (REC-05). */
     val aiProviders: AiProviders,
+    /** Smart Board per-notebook settings (notes language for Tidy). */
+    private val smartBoardStyles: app.bestnote.ai.vision.providers.SmartBoardStyles,
 ) : ViewModel() {
     private val route = savedStateHandle.toRoute<EditorRoute>()
     val notebookId = NotebookId(route.notebookId)
+
+    /** The language Tidy writes in: the notebook's Smart Board notes language, or the handwriting's own. */
+    fun tidyLanguage(): String? = smartBoardStyles.languageFor(notebookId.value).promptName
 
     /**
      * Where a search result asked to land: the page's index and the boxes to mark (REC-03). Waits for the notebook to
@@ -352,6 +370,16 @@ fun EditorScreen(
         snackbar = snackbar,
         ai = viewModel.aiProviders,
     )
+    val tidier = rememberInkTidier(
+        canvas = { canvas },
+        document = document,
+        models = viewModel.models,
+        recognizer = viewModel.recognizer,
+        ai = viewModel.aiProviders,
+        adopt = viewModel.session::adopt,
+        snackbar = snackbar,
+        language = viewModel::tidyLanguage,
+    )
     val reduce = reducedMotion()
     val side = traySide(state.dock, state.leftHanded)
     LifecycleEventEffect(Lifecycle.Event.ON_STOP) { viewModel.session.onStop() }
@@ -490,7 +518,7 @@ fun EditorScreen(
         }
     }
 
-    // AI-07: Smart Board's handwriting arrives as new pages after the last one, as one undo step.
+    // AI-07: Smart Board's handwriting arrives as new pages after the page it was opened from, as one undo step.
     val insertedFormat = stringResource(R.string.editor_smart_board_inserted)
     LaunchedEffect(Unit) {
         val insert = takeInsert() ?: return@LaunchedEffect
@@ -498,15 +526,22 @@ fun EditorScreen(
         val pages = withContext(Dispatchers.Default) {
             insert.pages.map { page -> page.mapNotNull { model -> runCatching { model to InkConversion.toInk(model) }.getOrNull() } }
         }
-        val base = document.pages.getOrNull(canvas?.currentPage ?: -1)?.page ?: document.pages.lastOrNull()?.page ?: document.blankPage ?: return@LaunchedEffect
+        val current = insert.afterIndex.takeIf { it in document.pages.indices } ?: canvas?.currentPage?.takeIf { it in document.pages.indices } ?: document.pages.lastIndex
+        val base = document.pages.getOrNull(current)?.page ?: document.blankPage ?: return@LaunchedEffect
         val byPage = LinkedHashMap<Int, List<androidx.ink.strokes.Stroke>>()
-        for (page in pages) {
-            val index = document.addPage(base.copy(template = insert.template))
-            if (index < 0) continue
-            viewModel.session.adopt(page)
-            byPage[index] = page.map { it.second }
+        pages.forEach { viewModel.session.adopt(it) }
+        val emptyFirst = insert.freshNotebook && document.pages.size == 1 && document.pages[0].strokes.isEmpty()
+        if (emptyFirst && pages.isNotEmpty()) {
+            if (document.pages[0].page.template != insert.template) document.updatePage(0) { it.copy(template = insert.template) }
+            document.editContent(0, addedStrokes = pages[0].map { it.second }, elements = document.pages[0].elements + insert.elements.getOrNull(0).orEmpty())
+            byPage[0] = pages[0].map { it.second }
         }
-        document.addStrokes(byPage)
+        val rest = if (emptyFirst) pages.drop(1) else pages
+        val restElements = if (emptyFirst) insert.elements.drop(1) else insert.elements
+        // After the page being read, not at the end; pages, ink and text are one undo step.
+        val at = if (emptyFirst) 1 else current + 1
+        document.insertPages(at, rest.map { page -> base.copy(template = insert.template) to page.map { it.second } }, restElements)
+            .forEachIndexed { i, index -> byPage[index] = rest[i].map { it.second } }
         byPage.keys.firstOrNull()?.let { first -> canvas?.scrollToPage(first) }
         snackbar.currentSnackbarData?.dismiss()
         if (snackbar.showSnackbar(insertedFormat.format(byPage.size), actionLabel = undoText) == SnackbarResult.ActionPerformed) document.undo()
@@ -781,12 +816,14 @@ fun EditorScreen(
                     onRotate = elements::rotateSelected,
                     onToggleLock = elements::toggleLock,
                     onConvert = converter::convert,
+                    onTidy = tidier::tidy,
                 ),
             )
         }
 
         elements.Dialogs()
         converter.Dialogs()
+        tidier.Dialogs()
 
         // ---- page manager (PAGES-03/04/05): zooms out of the page being read ----
         managerPage?.let { open ->

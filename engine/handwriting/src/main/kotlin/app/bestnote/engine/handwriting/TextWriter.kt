@@ -44,6 +44,9 @@ internal class Baseline(private val hand: Hand, x: Float, private var base0: Flo
 internal class TextWriter(private val hand: Hand, private val ink: InkBuilder) {
     private val mm get() = hand.unitsPerMm
 
+    /** Writes the inline maths tokens ([InlineMath.encode]) inside words; null writes them as plain text. */
+    var inline: InlineRenderer? = null
+
     // ------------------------------------------------------------------ measuring
 
     /** Width of [text] (words and spaces) at [scale], without jitter. */
@@ -56,6 +59,16 @@ internal class TextWriter(private val hand: Hand, private val ink: InkBuilder) {
     fun spaceWidth(scale: Float = 1f) = 1.05f * hand.xh * scale
 
     fun measureWord(word: String, scale: Float = 1f, script: Script = Script.Cursive): Float {
+        if (InlineMath.hasToken(word)) {
+            return InlineMath.segments(word).sumOf { (token, part) ->
+                (if (token != null) inline?.measure(token, scale) ?: measurePlain(part, scale, script) else measurePlain(part, scale, script)).toDouble()
+            }.toFloat()
+        }
+        return measurePlain(word, scale, script)
+    }
+
+    private fun measurePlain(word: String, scale: Float, script: Script): Float {
+        if (word.isEmpty()) return 0f
         if (Arabic.isArabic(word)) return Arabic.measure(word, arabicEm(scale))
         var total = 0f
         for (ch in word) total += advanceOf(ch, scale, script)
@@ -73,7 +86,8 @@ internal class TextWriter(private val hand: Hand, private val ink: InkBuilder) {
         val first = if (script == Script.Cursive) GlyphData.cursive else GlyphData.print
         first.glyphs[ch]?.let { return first to it }
         val print = GlyphData.print
-        return print to (print.glyphs[ch] ?: print.glyphs.getValue('?'))
+        // Never a "?" for a missing letter: an empty slot (callers switch to the font writer first, see StrokeHand).
+        return print to (print.glyphs[ch] ?: print.glyphs[' '] ?: print.glyphs.getValue('?'))
     }
 
     /** Arabic em size for a Latin x-height scale: Ruqaa letters sit about 3.4 x-heights per em. */
@@ -108,7 +122,14 @@ internal class TextWriter(private val hand: Hand, private val ink: InkBuilder) {
 
     /**
      * Writes one line of [text] on the ruled line at [baseline]. LTR text starts at [x]; with [rtl]
-     * the line starts at [x] and runs leftwards (words in reading order, right to left).
+     * the line starts at [x] and runs leftwards.
+     *
+     * Mixed directions follow the Unicode bidi idea at word level: Arabic words form right-to-left
+     * runs, Latin words, numbers and inline maths form left-to-right runs, and neutral words
+     * (dashes, ellipses, lone operators) take the direction of their neighbours when both agree,
+     * else the line's. Runs are laid in reading order from the line's start; inside a run, words
+     * keep their own direction, so "if d > 0" stays readable inside an Arabic line and an Arabic
+     * phrase reads right to left inside an English one.
      * @return the x where the pen stopped (right end for LTR, left end for RTL).
      */
     fun writeLine(
@@ -123,29 +144,77 @@ internal class TextWriter(private val hand: Hand, private val ink: InkBuilder) {
         steady: Boolean = false,
     ): Float {
         val line = Baseline(hand, x, baseline, steady)
-        var gap = firstGap
         val words = text.split(' ').filter { it.isNotEmpty() }
-        for ((i, word) in words.withIndex()) {
-            if (i > 0) {
-                val s = spaceWidth(scale) * hand.rnd.uniform(0.85f, 1.2f)
-                line.x += if (rtl) -s else s
-            }
-            val w = measureWord(word, scale, script)
-            if (Arabic.isArabic(word)) {
-                val right = if (rtl) line.x else line.x + w
-                writeArabicWord(word, right, line.at(right), color, scale, gap)
-                line.x = if (rtl) right - w else right
-            } else if (rtl) {
-                // A Latin word inside a right-to-left line: written left to right in its own slot.
-                val sub = Baseline(hand, line.x - w, line.at(line.x - w), steady = true)
-                writeWord(sub, word, color, scale, script, gap)
-                line.x -= w
+        if (words.isEmpty()) return x
+        val space = spaceWidth(scale)
+        var gap = firstGap
+        var first = true
+        for (run in Bidi.runs(words, rtl)) {
+            val widths = run.words.map { measureWord(it, scale, script) }
+            val total = widths.sum() + space * (run.words.size - 1)
+            if (!first) line.x += if (rtl) -space else space
+            first = false
+            val left = if (rtl) line.x - total else line.x
+            if (run.rtl) {
+                // Right to left from the run's right end.
+                var right = left + total
+                for ((i, word) in run.words.withIndex()) {
+                    writeToken(word, right - widths[i], line.at(right - widths[i]), widths[i], color, scale, script, gap, rtlWord = true)
+                    gap = Gap.Word
+                    right -= widths[i] + space
+                }
+            } else if (!rtl && run.words.size == words.size) {
+                // A plain LTR line: one continuous baseline with the hand's drift.
+                for ((i, word) in run.words.withIndex()) {
+                    if (i > 0) line.x += space * hand.rnd.uniform(0.9f, 1.15f)
+                    writeTokenOn(line, word, color, scale, script, gap)
+                    gap = Gap.Word
+                }
+                return line.x
             } else {
-                writeWord(line, word, color, scale, script, gap)
+                var cx = left
+                for ((i, word) in run.words.withIndex()) {
+                    writeToken(word, cx, line.at(cx), widths[i], color, scale, script, gap, rtlWord = false)
+                    gap = Gap.Word
+                    cx += widths[i] + space
+                }
             }
-            gap = Gap.Word
+            line.x = if (rtl) left else left + total
         }
         return line.x
+    }
+
+    /** Writes one word whose box starts at [left] and is [width] wide. */
+    private fun writeToken(word: String, left: Float, base: Float, width: Float, color: Int, scale: Float, script: Script, gap: Gap, rtlWord: Boolean) {
+        if (rtlWord && Arabic.isArabic(word) && !InlineMath.hasToken(word)) {
+            writeArabicWord(word, left + width, base, color, scale, gap)
+            return
+        }
+        writeTokenOn(Baseline(hand, left, base, steady = true), word, color, scale, script, gap)
+    }
+
+    /** Writes a word left to right at the line's x, inline maths and Arabic pieces included, and advances it. */
+    private fun writeTokenOn(line: Baseline, word: String, color: Int, scale: Float, script: Script, firstGap: Gap) {
+        val renderer = inline
+        if (!InlineMath.hasToken(word) || renderer == null) {
+            if (Arabic.isArabic(word)) {
+                val w = measurePlain(word, scale, script)
+                writeArabicWord(word, line.x + w, line.at(line.x), color, scale, firstGap)
+                line.x += w
+            } else {
+                writeWord(line, InlineMath.stripTokens(word), color, scale, script, firstGap)
+            }
+            return
+        }
+        var gap = firstGap
+        for ((token, part) in InlineMath.segments(word)) {
+            if (token != null) {
+                line.x = renderer.write(token, line.x, line.at(line.x), color, scale, gap)
+            } else if (part.isNotEmpty()) {
+                writeTokenOn(line, part, color, scale, script, gap)
+            }
+            gap = Gap.Letter
+        }
     }
 
     /** Writes [word] at the line's x and advances it. Port of `write_word`. */
@@ -332,6 +401,30 @@ internal object Arabic {
         }
     }
 
+    /**
+     * Forms in the order they are laid from the right. Numbers read left to right even inside
+     * Arabic ("١٢" is twelve), so each run of digits is reversed before laying right to left.
+     */
+    private fun visualOrder(word: String): List<ArabicForm?> {
+        val u = units(word)
+        val f = forms(word)
+        val out = ArrayList<ArabicForm?>(f.size)
+        var i = 0
+        while (i < f.size) {
+            if (isDigit(u[i])) {
+                var j = i
+                while (j < f.size && isDigit(u[j])) j++
+                for (k in j - 1 downTo i) out += f[k]
+                i = j
+            } else {
+                out += f[i++]
+            }
+        }
+        return out
+    }
+
+    private fun isDigit(unit: String) = unit.length == 1 && (unit[0] in '٠'..'٩' || unit[0] in '۰'..'۹' || unit[0] in '0'..'9')
+
     /** Characters the Arabic set lacks (digits, punctuation) are skipped rather than failing the word. */
     private fun latinFallback(@Suppress("UNUSED_PARAMETER") unit: String): ArabicForm? = null
 
@@ -342,7 +435,7 @@ internal object Arabic {
         val bodies = ArrayList<Poly>()
         val marks = ArrayList<Poly>()
         var x = 0f
-        for (f in forms(word)) {
+        for (f in visualOrder(word)) {
             if (f == null) {
                 x -= 0.3f
                 continue

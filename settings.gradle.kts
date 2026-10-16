@@ -52,6 +52,7 @@ include(":ai:vision-gemini")
 include(":ai:vision-claude")
 include(":ai:vision-openai")
 include(":ai:vision-providers")
+include(":ai:board-scan")
 
 include(":feature:library")
 include(":feature:editor")

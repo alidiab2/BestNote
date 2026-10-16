@@ -1,0 +1,9 @@
+{"blocks":[
+ {"type":"heading","title":"المشتقات","order":0},
+ {"type":"definition","title":"المشتقة","content":"ميل المماس للمنحنى عند نقطة","ink_color":"blue"},
+ {"type":"math","text":"f'(x) = \\lim_{h \\to 0} \\frac{f(x+h)-f(x)}{h}","semantic":"essential"},
+ {"type":"bullets","text":"- (x^n)' = n x^{n-1}\n- (\\sin x)' = \\cos x\n- (e^x)' = e^x"},
+ {"type":"equation","latex":"(fg)' = f'g + fg'","boxed":true},
+ {"type":"margin_note","title":"h ≠ 0 !!","annotates":"m1"},
+ {"type":"diagram","diagram":{"shapes":[{"kind":"arrow","points":[0,100,200,100]},{"kind":"arrow","points":[0,100,0,0]},{"kind":"polyline","points":[10,90,60,60,120,30,190,10]},{"kind":"label","points":[195,95],"text":"x","latex":true}]}}
+]}

@@ -87,6 +87,7 @@ internal data class ElementJson(
     val bold: Boolean = false,
     val italic: Boolean = false,
     val align: String = "Start",
+    val font: String? = null,
 )
 
 /**
@@ -208,7 +209,7 @@ object BnoteFormat {
         )
         is TextElement -> ElementJson(
             "text", e.id, e.cx, e.cy, e.width, e.height, e.rotation, e.locked,
-            text = e.text, size = e.sizePt, color = e.colorArgb, bold = e.bold, italic = e.italic, align = e.align.name,
+            text = e.text, size = e.sizePt, color = e.colorArgb, bold = e.bold, italic = e.italic, align = e.align.name, font = e.font,
         )
     }
 
@@ -223,7 +224,7 @@ object BnoteFormat {
             }
             "text" -> TextElement(
                 j.id, j.cx, j.cy, j.w, j.h, j.text.orEmpty(), j.size, j.color, j.bold, j.italic,
-                TextAlignment.entries.firstOrNull { it.name == j.align } ?: TextAlignment.Start, j.rot, j.locked,
+                TextAlignment.entries.firstOrNull { it.name == j.align } ?: TextAlignment.Start, j.rot, j.locked, j.font,
             )
             else -> null
         }

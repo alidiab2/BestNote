@@ -176,7 +176,10 @@ class DocumentMapper(
     private companion object {
         val SVG_PATH = Regex("""^[MmLlHhVvCcSsQqTtAaZz0-9eE.,\s+-]+$""")
 
-        fun String?.clean() = this?.trim()?.takeIf { it.isNotEmpty() }
+        /** Words to write, or null. A bare "true"/"false"/"null" is a flag that landed in a text field, never content. */
+        fun String?.clean() = this?.trim()?.takeIf { it.isNotEmpty() && it.lowercase() !in NOT_CONTENT }
+
+        private val NOT_CONTENT = setOf("true", "false", "null", "undefined", "none")
 
         /** The model's type, normalised: case, spaces and common synonyms. */
         fun typeOf(raw: String): String = when (val t = raw.trim().lowercase().replace(' ', '_').replace('-', '_')) {
@@ -193,7 +196,7 @@ class DocumentMapper(
 
         /** Sanitised LaTeX; a formula that only lacks closing braces (a cut-off slip) gets them. */
         fun latex(raw: String?): String? {
-            val s = raw?.trim()?.takeIf { it.isNotEmpty() } ?: return null
+            val s = raw.clean() ?: return null
             (LatexSanitizer.sanitize(s) as? LatexResult.Ok)?.let { return it.latex }
             val missing = s.count { it == '{' } - s.count { it == '}' } + s.windowed(2).count { it == "\\}" } - s.windowed(2).count { it == "\\{" }
             if (missing !in 1..3) return null
