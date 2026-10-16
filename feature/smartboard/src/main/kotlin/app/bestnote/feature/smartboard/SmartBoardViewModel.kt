@@ -24,6 +24,12 @@ import app.bestnote.ai.vision.ModelCatalog
 import app.bestnote.ai.vision.Redactor
 import app.bestnote.ai.vision.VisionDiagnostics
 import app.bestnote.ai.vision.providers.AiProviders
+import app.bestnote.ai.vision.providers.SmartBoardStyles
+import app.bestnote.ai.vision.providers.WritingMode
+import app.bestnote.core.designsystem.font.HandwritingTypefaces
+import app.bestnote.core.model.PageElement
+import app.bestnote.engine.layout.StyleTemplate
+import app.bestnote.engine.layout.StyleTemplates
 import app.bestnote.core.model.InkStroke
 import app.bestnote.core.model.LayoutTemplate
 import app.bestnote.core.model.PageSize
@@ -54,8 +60,16 @@ sealed interface SmartBoardStage {
     /** [step] of [SmartBoardViewModel.STEPS] is in progress, on photo [photo] (1-based) of [photos]. */
     data class Reading(val step: Int, val photo: Int = 1, val photos: Int = 1) : SmartBoardStage
 
-    /** [doc] is kept so another paper template re-lays the same notes without a new AI call. */
-    data class Review(val ink: BoardInk, val demo: Boolean, val tookMs: Long, val doc: AiDocument) : SmartBoardStage
+    /**
+     * The written page: [text] (handwriting fonts, the default) or [ink] (synthetic strokes). [doc] is
+     * kept so another paper, style or writing mode re-lays the same notes without a new AI call.
+     */
+    data class Review(val ink: BoardInk?, val text: BoardText?, val demo: Boolean, val tookMs: Long, val doc: AiDocument) : SmartBoardStage {
+        val paper: RuledPaper get() = text?.paper ?: ink!!.paper
+        val pageCount: Int get() = text?.pages?.pages?.size ?: ink!!.pages.pages.size
+        val dropped: Int get() = text?.dropped ?: ink!!.dropped
+        val dropReasons: List<String> get() = text?.dropReasons ?: ink!!.dropReasons
+    }
 
     /** [diagnostics]: provider, error, drop reasons and raw answer, for "Copy raw AI response" (debug / verbose only). */
     data class Failed(val reason: Reason, val detail: String? = null, val diagnostics: String? = null) : SmartBoardStage
@@ -80,6 +94,9 @@ data class SmartBoardUiState(
     val loading: Int = 0,
     /** Paper the notes are written on (the review screen's template picker). */
     val template: PaperTemplate = PaperTemplate.Ruled,
+    /** Design template: one colour, size and decoration per role (saved per notebook). */
+    val style: StyleTemplate = StyleTemplates.Classic,
+    val mode: WritingMode = WritingMode.Font,
     val hasKey: Boolean = false,
     val keyHint: String? = null,
     /** The provider Settings selected (Gemini, Claude, OpenAI, compatible). */
@@ -108,6 +125,8 @@ data class ModelSwitcher(
 class SmartBoardResult(
     val template: PaperTemplate,
     val pages: List<List<InkStroke>>,
+    /** Text boxes per page (font output), parallel to [pages]. */
+    val elements: List<List<PageElement>> = emptyList(),
     val afterIndex: Int = -1,
     val newNotebook: Boolean = false,
     val title: String? = null,
@@ -121,6 +140,7 @@ class SmartBoardViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     @ApplicationContext private val context: Context,
     private val providers: AiProviders,
+    private val styles: SmartBoardStyles,
 ) : ViewModel() {
     private val route = savedStateHandle.toRoute<SmartBoardRoute>()
 
@@ -135,7 +155,45 @@ class SmartBoardViewModel @Inject constructor(
     fun paperFor(template: PaperTemplate): RuledPaper = RuledPaper.of(template, pageSize)
 
     private val settings = providers.settings
-    private val state = MutableStateFlow(SmartBoardUiState(template = startTemplate))
+    private val startStyle = styles.styleFor(route.notebookId)
+    private val state = MutableStateFlow(SmartBoardUiState(template = startStyle.paper ?: startTemplate, style = startStyle, mode = styles.writingMode))
+    private val measure by lazy {
+        HandwritingTypefaces.init(context)
+        PaintMeasure()
+    }
+
+    /** Writes [doc] in the current mode, style and paper (off the main thread). */
+    private suspend fun render(doc: AiDocument, arabic: Boolean): Pair<BoardInk?, BoardText?> = withContext(Dispatchers.Default) {
+        val s = state.value
+        val paper = paperFor(s.template)
+        if (s.mode == WritingMode.Strokes) pipeline.write(doc, arabic, paper) to null else null to pipeline.typeset(doc, arabic, paper, s.style, measure)
+    }
+
+    private fun rerender() {
+        val review = state.value.stage as? SmartBoardStage.Review ?: return
+        viewModelScope.launch {
+            val (ink, text) = runCatching { render(review.doc, state.value.arabic) }.getOrNull() ?: return@launch
+            state.update { s -> if (s.stage === review) s.copy(stage = review.copy(ink = ink, text = text)) else s }
+        }
+    }
+
+    private val newId = { UUID.randomUUID().toString() }
+
+    /** The text boxes of a typed page, for the review preview (same elements that get inserted). */
+    fun previewElements(page: app.bestnote.engine.handwriting.TypesetPage): List<PageElement> = TypesetElements.elements(page, measure, newId)
+
+    /** Picks a design template; it is remembered for this notebook so its pages stay consistent. */
+    fun setStyle(style: StyleTemplate) {
+        styles.setStyleFor(route.notebookId, style)
+        state.update { it.copy(style = style, template = style.paper ?: it.template) }
+        rerender()
+    }
+
+    fun setMode(mode: WritingMode) {
+        styles.writingMode = mode
+        state.update { it.copy(mode = mode) }
+        rerender()
+    }
     val ui: StateFlow<SmartBoardUiState> = state.asStateFlow()
 
     /** Debuggable build, or "Verbose AI logging" on: show "Copy raw AI response" on failures. */
@@ -297,11 +355,7 @@ class SmartBoardViewModel @Inject constructor(
     /** Re-writes the same notes on another paper (no new AI call). */
     fun setTemplate(template: PaperTemplate) {
         state.update { it.copy(template = template) }
-        val review = state.value.stage as? SmartBoardStage.Review ?: return
-        viewModelScope.launch {
-            val ink = withContext(Dispatchers.Default) { runCatching { pipeline.write(review.doc, state.value.arabic, paperFor(template)) }.getOrNull() } ?: return@launch
-            state.update { s -> if (s.stage === review) s.copy(stage = review.copy(ink = ink)) else s }
-        }
+        rerender()
     }
 
     fun saveKey(key: String?) {
@@ -345,9 +399,9 @@ class SmartBoardViewModel @Inject constructor(
                 }
                 state.update { it.copy(stage = SmartBoardStage.Reading(STEPS - 1, count, count)) }
                 val doc = BoardMerge.merge(docs)
-                val ink = withContext(Dispatchers.Default) { pipeline.write(doc, s.arabic, paperFor(state.value.template)) }
-                ink.dropReasons.forEach { Log.i(TAG, "dropped $it") }
-                state.update { it.copy(stage = SmartBoardStage.Review(ink, demo, SystemClock.elapsedRealtime() - started, doc)) }
+                val (ink, text) = render(doc, s.arabic)
+                (text?.dropReasons ?: ink?.dropReasons).orEmpty().forEach { Log.i(TAG, "dropped $it") }
+                state.update { it.copy(stage = SmartBoardStage.Review(ink, text, demo, SystemClock.elapsedRealtime() - started, doc)) }
             } catch (e: CancellationException) {
                 throw e
             } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
@@ -385,14 +439,17 @@ class SmartBoardViewModel @Inject constructor(
     /** The reviewed pages as stored ink. */
     fun result(newNotebook: Boolean = false): SmartBoardResult? {
         val review = state.value.stage as? SmartBoardStage.Review ?: return null
+        val text = review.text
+        val newId = { UUID.randomUUID().toString() }
         return SmartBoardResult(
-            template = review.ink.paper.template,
-            pages = review.ink.pages.pages.map { page -> page.map { it.stroke } },
+            template = review.paper.template,
+            pages = text?.pages?.pages?.map { it.ink } ?: review.ink!!.pages.pages.map { page -> page.map { it.stroke } },
+            elements = text?.pages?.pages?.map { TypesetElements.elements(it, measure, newId) }.orEmpty(),
             afterIndex = route.pageIndex,
             newNotebook = newNotebook,
             title = review.doc.title?.takeIf { it.isNotBlank() },
-            widthPt = review.ink.paper.width,
-            heightPt = review.ink.paper.height,
+            widthPt = review.paper.width,
+            heightPt = review.paper.height,
         )
     }
 

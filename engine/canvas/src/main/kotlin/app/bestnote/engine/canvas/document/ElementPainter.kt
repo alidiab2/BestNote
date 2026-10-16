@@ -23,6 +23,11 @@ import app.bestnote.core.model.TextElement
  * right to left and aligns [TextAlignment.Start] on the right, while English stays left.
  */
 class ElementPainter {
+    /** Typefaces for [TextElement.font] ids (the app registers the bundled handwriting fonts at start). */
+    object Fonts {
+        @Volatile var resolve: (String) -> Typeface? = { null }
+    }
+
     private val imagePaint = Paint(Paint.FILTER_BITMAP_FLAG or Paint.ANTI_ALIAS_FLAG)
     private val src = Rect()
     private val dst = RectF()
@@ -82,16 +87,16 @@ class ElementPainter {
 
     private data class LayoutKey(
         val text: String, val sizePt: Float, val color: Int, val bold: Boolean, val italic: Boolean,
-        val align: TextAlignment, val widthUnits: Int,
+        val align: TextAlignment, val widthUnits: Int, val font: String?,
     )
 
     private fun layoutOf(e: TextElement, color: Int): StaticLayout {
-        val key = LayoutKey(e.text, e.sizePt, color, e.bold, e.italic, e.align, (e.width * SCALE).toInt().coerceAtLeast(1))
+        val key = LayoutKey(e.text, e.sizePt, color, e.bold, e.italic, e.align, (e.width * SCALE).toInt().coerceAtLeast(1), e.font)
         layouts.get(key)?.let { return it }
         val paint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
             this.color = color
             textSize = e.sizePt * SCALE
-            typeface = Typeface.create(Typeface.DEFAULT, style(e))
+            typeface = Typeface.create(e.font?.let(Fonts.resolve) ?: Typeface.DEFAULT, style(e))
         }
         val built = build(e.text, paint, key.widthUnits, e.align)
         layouts.put(key, built)

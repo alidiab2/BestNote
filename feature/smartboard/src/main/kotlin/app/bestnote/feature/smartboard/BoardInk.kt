@@ -8,7 +8,11 @@ import app.bestnote.ai.vision.VisionImage
 import app.bestnote.ai.vision.VisionProvider
 import app.bestnote.core.model.PageBlock
 import app.bestnote.core.model.RectPt
+import app.bestnote.engine.handwriting.FontComposer
 import app.bestnote.engine.handwriting.HandwritingStyle
+import app.bestnote.engine.handwriting.TextMeasure
+import app.bestnote.engine.handwriting.TypesetPages
+import app.bestnote.engine.layout.StyleTemplate
 import app.bestnote.engine.handwriting.HandwrittenPages
 import app.bestnote.engine.handwriting.PageComposer
 import app.bestnote.engine.layout.LectureFlow
@@ -23,6 +27,16 @@ class BoardInk(
     val dropped: Int,
     val rtl: Boolean,
     /** One content-free line per dropped block, for diagnostics. */
+    val dropReasons: List<String> = emptyList(),
+)
+
+/** A board typed with the handwriting fonts in a [style]: pages of text runs + pen strokes. */
+class BoardText(
+    val paper: RuledPaper,
+    val style: StyleTemplate,
+    val pages: TypesetPages,
+    val dropped: Int,
+    val rtl: Boolean,
     val dropReasons: List<String> = emptyList(),
 )
 
@@ -54,6 +68,27 @@ class BoardToInk(private val newId: () -> String) {
         }
         val placed = mapper.realise(ordered, flow.place(ordered.map { it.item }).map { it.placement })
         return BoardInk(paper, composer.compose(placed), placed, mapped.dropped, rtl, mapped.dropReasons)
+    }
+
+    /** The default output: the same notes typed with the handwriting fonts, in [style]'s colours, sizes and decorations. */
+    fun typeset(doc: AiDocument, rtlHint: Boolean, paper: RuledPaper, style: StyleTemplate, measure: TextMeasure, penColor: Int = FontComposer.INK): BoardText {
+        val mapper = DocumentMapper(newId)
+        val mapped = mapper.map(doc)
+        mapped.requireBlocks()
+        val rtl = rtlHint || mostlyArabic(doc)
+        val byKey = mapped.blocks.associateBy { it.item.key }
+        val ordered = LectureFlow.order(mapped.blocks.map { it.item }, rtl).map { byKey.getValue(it.key) }
+        val drafts = ordered.associate { it.item.key to it.build(EMPTY) }
+        val composer = FontComposer(paper, style, measure, rtl, penColor)
+        val flow = RuledFlow(paper, composer.measurer { drafts[it] }, rtl) { item ->
+            when (drafts[item.key]) {
+                is PageBlock.Heading -> style.spaceBeforeHeading
+                is PageBlock.Diagram -> 1
+                else -> 0
+            }
+        }
+        val placed = mapper.realise(ordered, flow.place(ordered.map { it.item }).map { it.placement })
+        return BoardText(paper, style, composer.compose(placed), mapped.dropped, rtl, mapped.dropReasons)
     }
 
     private fun mostlyArabic(doc: AiDocument): Boolean {

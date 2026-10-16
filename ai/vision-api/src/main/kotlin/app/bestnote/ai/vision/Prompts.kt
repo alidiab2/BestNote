@@ -73,6 +73,18 @@ an exam, so they must be complete, correct and beautifully organised.
 - Keep the lecture's language. Arabic boards produce Arabic notes; mathematical notation stays
   standard LaTeX.
 
+## 5. Give every block its role
+The notes are coloured BY ROLE (one fixed colour per role in the student's notebook), so every block
+must say what it is through `type` (and `tone` for callouts) — never leave it to guesswork:
+- title → `title`; section → `heading` (level 2), sub-section → `heading` (level 3);
+- definition → `definition`; theorem / law / rule → `callout` tone `theorem`;
+- formula → `math`; key result the lecturer stressed → `math` with `boxed: true` (or `callout` tone `key_result`);
+- worked example → `callout` tone `example`; solution / derivation steps → `proof` (one step each);
+- note → `callout` tone `info`; warning / common mistake → `callout` tone `warning`;
+- side remark → `margin_note` with `annotates`.
+Flags such as `boxed` are booleans; never put `true`/`false` into `text` or `latex`.
+In JSON strings every LaTeX backslash is doubled: write `"\\frac{a}{b}"`, never `"\frac{a}{b}"`.
+
 ## Output
 Return ONLY JSON matching the response schema. No commentary.
 """

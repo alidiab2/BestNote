@@ -89,4 +89,24 @@
     <string name="smartboard_back_to_photos">العودة إلى الصور</string>
     <string name="smartboard_insert_after">إدراج بعد الصفحة %1$d</string>
     <string name="smartboard_insert_new_notebook">دفتر جديد</string>
+    <string name="smartboard_style">النمط</string>
+    <string name="smartboard_style_classic">كلاسيكي</string>
+    <string name="smartboard_style_minimal">بسيط</string>
+    <string name="smartboard_style_colorful">ملوّن</string>
+    <string name="smartboard_style_cornell">كورنيل</string>
+    <string name="smartboard_style_cheatsheet">ملخص مكثف</string>
+    <string name="smartboard_writing">الكتابة</string>
+    <string name="smartboard_mode_font">خط يدوي</string>
+    <string name="smartboard_mode_strokes">ضربات قلم</string>
+    <string name="smartboard_role_title">العنوان</string>
+    <string name="smartboard_role_heading">العناوين</string>
+    <string name="smartboard_role_definition">التعاريف</string>
+    <string name="smartboard_role_theorem">القواعد</string>
+    <string name="smartboard_role_result">النتائج</string>
+    <string name="smartboard_role_example">الأمثلة</string>
+    <string name="smartboard_role_step">الخطوات</string>
+    <string name="smartboard_role_warning">ملاحظات</string>
+    <string name="smartboard_role_margin">الهامش</string>
+    <string name="smartboard_role_body">النص</string>
+    <string name="smartboard_review_stats_pages">%1$d صفحة · نص وحبر قابلان للتعديل · %2$.1f ث</string>
 </resources>

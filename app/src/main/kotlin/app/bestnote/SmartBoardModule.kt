@@ -6,6 +6,7 @@ import app.bestnote.ai.vision.gemini.GeminiSettings
 import app.bestnote.ai.vision.gemini.KeystoreGeminiSettings
 import app.bestnote.ai.vision.providers.AiProviders
 import app.bestnote.ai.vision.providers.KeystoreAiSettings
+import app.bestnote.ai.vision.providers.SmartBoardStyles
 import app.bestnote.feature.settings.data.DebugInfo
 import dagger.Module
 import dagger.Provides
@@ -45,6 +46,10 @@ object SmartBoardModule {
     @Provides
     @Singleton
     fun aiProviders(http: OkHttpClient, settings: KeystoreAiSettings): AiProviders = AiProviders(http, settings)
+
+    @Provides
+    @Singleton
+    fun smartBoardStyles(@ApplicationContext context: Context): SmartBoardStyles = SmartBoardStyles(context)
 
     @Provides
     @Singleton

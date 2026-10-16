@@ -89,4 +89,24 @@
     <string name="smartboard_back_to_photos">Back to photos</string>
     <string name="smartboard_insert_after">Insert after page %1$d</string>
     <string name="smartboard_insert_new_notebook">New notebook</string>
+    <string name="smartboard_style">Style</string>
+    <string name="smartboard_style_classic">Classic</string>
+    <string name="smartboard_style_minimal">Minimal</string>
+    <string name="smartboard_style_colorful">Colorful</string>
+    <string name="smartboard_style_cornell">Cornell</string>
+    <string name="smartboard_style_cheatsheet">Cheat sheet</string>
+    <string name="smartboard_writing">Writing</string>
+    <string name="smartboard_mode_font">Handwriting font</string>
+    <string name="smartboard_mode_strokes">Pen strokes</string>
+    <string name="smartboard_role_title">Title</string>
+    <string name="smartboard_role_heading">Headings</string>
+    <string name="smartboard_role_definition">Definitions</string>
+    <string name="smartboard_role_theorem">Rules</string>
+    <string name="smartboard_role_result">Key results</string>
+    <string name="smartboard_role_example">Examples</string>
+    <string name="smartboard_role_step">Steps</string>
+    <string name="smartboard_role_warning">Notes</string>
+    <string name="smartboard_role_margin">Margin</string>
+    <string name="smartboard_role_body">Text</string>
+    <string name="smartboard_review_stats_pages">%1$d page(s) · editable text and ink · %2$.1f s</string>
 </resources>

@@ -113,6 +113,7 @@ import app.bestnote.core.model.PageRect
 import app.bestnote.engine.recognition.HandwritingModels
 import app.bestnote.engine.recognition.HandwritingRecognizer
 import app.bestnote.engine.recognition.PageSearch
+import app.bestnote.core.model.PageElement
 import app.bestnote.core.model.PaperTemplate
 import app.bestnote.core.model.Tool
 import app.bestnote.engine.canvas.document.PagedDocument
@@ -160,6 +161,8 @@ class InkInsert(
     val pages: List<List<InkStroke>>,
     val afterIndex: Int = -1,
     val freshNotebook: Boolean = false,
+    /** Text boxes per page (Smart Board's handwriting-font output), parallel to [pages]. */
+    val elements: List<List<PageElement>> = emptyList(),
 )
 
 /**
@@ -524,13 +527,14 @@ fun EditorScreen(
         val emptyFirst = insert.freshNotebook && document.pages.size == 1 && document.pages[0].strokes.isEmpty()
         if (emptyFirst && pages.isNotEmpty()) {
             if (document.pages[0].page.template != insert.template) document.updatePage(0) { it.copy(template = insert.template) }
-            document.addStrokes(0, pages[0].map { it.second })
+            document.editContent(0, addedStrokes = pages[0].map { it.second }, elements = document.pages[0].elements + insert.elements.getOrNull(0).orEmpty())
             byPage[0] = pages[0].map { it.second }
         }
         val rest = if (emptyFirst) pages.drop(1) else pages
-        // After the page being read, not at the end; pages and ink are one undo step.
+        val restElements = if (emptyFirst) insert.elements.drop(1) else insert.elements
+        // After the page being read, not at the end; pages, ink and text are one undo step.
         val at = if (emptyFirst) 1 else current + 1
-        document.insertPages(at, rest.map { page -> base.copy(template = insert.template) to page.map { it.second } })
+        document.insertPages(at, rest.map { page -> base.copy(template = insert.template) to page.map { it.second } }, restElements)
             .forEachIndexed { i, index -> byPage[index] = rest[i].map { it.second } }
         byPage.keys.firstOrNull()?.let { first -> canvas?.scrollToPage(first) }
         snackbar.currentSnackbarData?.dismiss()

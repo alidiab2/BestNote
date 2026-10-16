@@ -123,7 +123,8 @@ internal object MathParser {
                     // "mg sin θ": a hand leaves a little air around function names.
                     if (out.isNotEmpty()) out += Space(0.3f)
                     out += Text(name)
-                    out += Space(0.25f)
+                    // "\lim_{x→0}": the limits attach to the name, not to the air after it.
+                    if (i >= s.length || (s[i] != '_' && s[i] != '^')) out += Space(0.25f)
                 }
                 else -> out += Text(SYMBOLS[name] ?: name)
             }

@@ -157,10 +157,15 @@ class PagedDocument {
      * Inserts [pages] (paper and ink) at [at] (0..size) as ONE undo step: undo removes the pages and
      * their ink together (a Smart Board insert). @return the new pages' indices.
      */
-    fun insertPages(at: Int, pages: List<Pair<Page, Collection<Stroke>>>): List<Int> {
+    fun insertPages(at: Int, pages: List<Pair<Page, Collection<Stroke>>>, elements: List<List<PageElement>> = emptyList()): List<Int> {
         if (pages.isEmpty()) return emptyList()
         val index = at.coerceIn(0, _pages.size)
-        val added = pages.map { (paper, strokes) -> DocumentPage(paper.copy(pdf = null)).apply { mutableStrokes += strokes } }
+        val added = pages.mapIndexed { i, (paper, strokes) ->
+            DocumentPage(paper.copy(pdf = null)).apply {
+                mutableStrokes += strokes
+                elements.getOrNull(i)?.takeIf { it.isNotEmpty() }?.let { this.elements = it }
+            }
+        }
         restructure { _pages.addAll(index, added) }
         return added.indices.map { index + it }
     }

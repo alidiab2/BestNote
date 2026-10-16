@@ -152,7 +152,7 @@ private fun BestNoteNavHost(quicknotes: QuicknoteRequests, pdfRequests: PdfOpenR
             onClose = nav::popBackStack,
             onInsert = { result ->
                 if (!result.newNotebook) {
-                    inbox.pending = InkInsert(result.template, result.pages, afterIndex = result.afterIndex)
+                    inbox.pending = InkInsert(result.template, result.pages, afterIndex = result.afterIndex, elements = result.elements)
                     nav.popBackStack()
                 } else {
                     // "New notebook": created on the Smart Board paper, then opened with the pages in it.
@@ -163,7 +163,7 @@ private fun BestNoteNavHost(quicknotes: QuicknoteRequests, pdfRequests: PdfOpenR
                             }
                         } ?: PaperFormat()
                         val notebook = library.create(result.title ?: "Smart Board", result.template, format)
-                        inbox.pending = InkInsert(result.template, result.pages, freshNotebook = true)
+                        inbox.pending = InkInsert(result.template, result.pages, freshNotebook = true, elements = result.elements)
                         nav.popBackStack()
                         nav.navigateToEditor(notebook.id)
                     }

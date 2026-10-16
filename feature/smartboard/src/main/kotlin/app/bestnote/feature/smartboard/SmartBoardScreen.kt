@@ -19,6 +19,12 @@ import app.bestnote.ai.scan.Pt
 import app.bestnote.ai.scan.Quad
 import app.bestnote.core.model.PaperTemplate
 import app.bestnote.engine.layout.RuledPaper
+import app.bestnote.engine.layout.Decoration
+import app.bestnote.engine.layout.NoteRole
+import app.bestnote.engine.layout.StyleTemplate
+import app.bestnote.engine.layout.StyleTemplates
+import app.bestnote.ai.vision.providers.WritingMode
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
@@ -534,22 +540,30 @@ private fun ReadingStage(reading: SmartBoardStage.Reading, demo: Boolean, provid
 
 @Composable
 private fun ReviewStage(review: SmartBoardStage.Review, state: SmartBoardUiState, viewModel: SmartBoardViewModel, onInsert: (SmartBoardResult) -> Unit) {
-    val ink = review.ink
-    var page by remember(ink) { mutableIntStateOf(0) }
+    val pages = review.pageCount
+    var page by remember(review.text, review.ink) { mutableIntStateOf(0) }
     var replay by remember { mutableIntStateOf(0) }
     BoxWithConstraints(Modifier.fillMaxSize().padding(Spacing.L)) {
         val wide = maxWidth >= 760.dp
         val preview: @Composable (Modifier) -> Unit = { m ->
             Column(m, horizontalAlignment = Alignment.CenterHorizontally) {
                 Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
-                    val strokes = ink.pages.pages.getOrNull(page) ?: ink.pages.pages.first()
-                    WrittenPage(ink.paper, strokes, ink.pages.durationMs(page.coerceAtMost(ink.pages.pages.lastIndex)), replayKey = Triple(page, replay, ink))
+                    val p = page.coerceIn(0, pages - 1)
+                    val text = review.text
+                    if (text != null) {
+                        val typed = text.pages.pages[p]
+                        val elements = remember(typed) { viewModel.previewElements(typed) }
+                        TypedPage(text.paper, typed, elements, replayKey = Triple(p, replay, typed))
+                    } else {
+                        val ink = review.ink!!
+                        WrittenPage(ink.paper, ink.pages.pages[p], ink.pages.durationMs(p), replayKey = Triple(p, replay, ink))
+                    }
                 }
-                if (ink.pages.pages.size > 1) {
+                if (pages > 1) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         IconButton(onClick = { page = (page - 1).coerceAtLeast(0) }, enabled = page > 0) { Icon(Icons.Rounded.ChevronLeft, null) }
-                        Text("${page + 1} / ${ink.pages.pages.size}", style = MaterialTheme.typography.labelLarge)
-                        IconButton(onClick = { page = (page + 1).coerceAtMost(ink.pages.pages.lastIndex) }, enabled = page < ink.pages.pages.lastIndex) {
+                        Text("${page + 1} / $pages", style = MaterialTheme.typography.labelLarge)
+                        IconButton(onClick = { page = (page + 1).coerceAtMost(pages - 1) }, enabled = page < pages - 1) {
                             Icon(Icons.Rounded.ChevronRight, null)
                         }
                     }
@@ -559,8 +573,10 @@ private fun ReviewStage(review: SmartBoardStage.Review, state: SmartBoardUiState
         val panel: @Composable (Modifier) -> Unit = { m ->
             ReviewPanel(
                 review,
-                template = state.template,
+                state = state,
                 afterPage = viewModel.afterPage,
+                onStyle = viewModel::setStyle,
+                onMode = viewModel::setMode,
                 onTemplate = viewModel::setTemplate,
                 onReplay = { replay++ },
                 onRetake = viewModel::backToPhotos,
@@ -570,13 +586,107 @@ private fun ReviewStage(review: SmartBoardStage.Review, state: SmartBoardUiState
         }
         if (wide) {
             Row(horizontalArrangement = Arrangement.spacedBy(Spacing.XL)) {
-                preview(Modifier.weight(1.5f).fillMaxHeight())
+                preview(Modifier.weight(1.3f).fillMaxHeight())
                 panel(Modifier.weight(1f).fillMaxHeight())
             }
         } else {
             Column(verticalArrangement = Arrangement.spacedBy(Spacing.M)) {
                 preview(Modifier.weight(1f).fillMaxWidth())
-                panel(Modifier.fillMaxWidth().heightIn(max = 360.dp))
+                panel(Modifier.fillMaxWidth().heightIn(max = 420.dp))
+            }
+        }
+    }
+}
+
+@Composable
+private fun styleName(style: StyleTemplate) = stringResource(
+    when (style.id) {
+        StyleTemplates.Minimal.id -> R.string.smartboard_style_minimal
+        StyleTemplates.Colorful.id -> R.string.smartboard_style_colorful
+        StyleTemplates.Cornell.id -> R.string.smartboard_style_cornell
+        StyleTemplates.CheatSheet.id -> R.string.smartboard_style_cheatsheet
+        else -> R.string.smartboard_style_classic
+    },
+)
+
+@Composable
+private fun roleName(role: NoteRole) = stringResource(
+    when (role) {
+        NoteRole.Title -> R.string.smartboard_role_title
+        NoteRole.Heading, NoteRole.Subheading -> R.string.smartboard_role_heading
+        NoteRole.Definition -> R.string.smartboard_role_definition
+        NoteRole.Theorem -> R.string.smartboard_role_theorem
+        NoteRole.Formula, NoteRole.Result -> R.string.smartboard_role_result
+        NoteRole.Example -> R.string.smartboard_role_example
+        NoteRole.Step -> R.string.smartboard_role_step
+        NoteRole.Note, NoteRole.Warning -> R.string.smartboard_role_warning
+        NoteRole.Margin -> R.string.smartboard_role_margin
+        NoteRole.Body -> R.string.smartboard_role_body
+    },
+)
+
+/** A small sketch of a page in [style]: title, heading with its decoration, body lines, a boxed result, a margin note. */
+@Composable
+private fun StyleSketch(style: StyleTemplate, modifier: Modifier = Modifier) {
+    val paper = BestNoteTheme.colors.paper
+    val pen = MaterialTheme.colorScheme.onSurface
+    Canvas(modifier) {
+        drawRect(paper.page)
+        val gap = size.height / 9f
+        for (i in 1..8) drawLine(paper.ruledLine, Offset(0f, i * gap), Offset(size.width, i * gap), 1f)
+        fun c(r: NoteRole) = style.role(r).color?.let { Color(it) } ?: pen
+        fun bar(row: Int, x0: Float, x1: Float, color: Color, thick: Float, deco: Decoration) {
+            val y = row * gap - gap * 0.3f
+            if (deco == Decoration.Highlight) drawLine(Color(style.highlight), Offset(x0, y), Offset(x1, y), gap * 0.7f)
+            drawLine(color, Offset(x0, y), Offset(x1, y), thick, StrokeCap.Round)
+            if (deco == Decoration.Underline || deco == Decoration.DoubleUnderline) drawLine(color, Offset(x0, y + gap * 0.3f), Offset(x1, y + gap * 0.3f), 1.2f)
+            if (deco == Decoration.DoubleUnderline) drawLine(color, Offset(x0, y + gap * 0.45f), Offset(x1, y + gap * 0.45f), 1.2f)
+            if (deco == Decoration.Box) drawRect(color, Offset(x0 - 3f, y - gap * 0.45f), Size(x1 - x0 + 6f, gap * 0.8f), style = Stroke(1.2f))
+        }
+        val w = size.width
+        bar(1, w * 0.08f, w * 0.55f, c(NoteRole.Title), gap * 0.32f, style.role(NoteRole.Title).decoration)
+        bar(2, w * 0.08f, w * 0.4f, c(NoteRole.Heading), gap * 0.24f, style.role(NoteRole.Heading).decoration)
+        bar(3, w * 0.08f, w * 0.7f, c(NoteRole.Definition), gap * 0.14f, Decoration.None)
+        bar(4, w * 0.08f, w * 0.62f, c(NoteRole.Body), gap * 0.14f, Decoration.None)
+        bar(5, w * 0.16f, w * 0.48f, c(NoteRole.Result), gap * 0.16f, style.role(NoteRole.Result).decoration)
+        bar(5, w * 0.66f, w * 0.92f, c(NoteRole.Margin), gap * 0.12f, Decoration.None)
+        bar(6, w * 0.08f, w * 0.58f, c(NoteRole.Example), gap * 0.14f, Decoration.None)
+        bar(7, w * 0.12f, w * 0.5f, c(NoteRole.Step), gap * 0.14f, Decoration.None)
+    }
+}
+
+@Composable
+private fun StylePicker(selected: StyleTemplate, onStyle: (StyleTemplate) -> Unit) {
+    val accent = MaterialTheme.colorScheme.primary
+    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(Spacing.S)) {
+        StyleTemplates.all.forEach { style ->
+            val on = style.id == selected.id
+            Column(
+                Modifier
+                    .width(104.dp)
+                    .clip(BestNoteShapes.Control)
+                    .border(if (on) 2.dp else 1.dp, if (on) accent else MaterialTheme.colorScheme.outlineVariant, BestNoteShapes.Control)
+                    .clickable { onStyle(style) }
+                    .padding(Spacing.XS),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                StyleSketch(style, Modifier.fillMaxWidth().height(72.dp).clip(BestNoteShapes.Control))
+                Text(styleName(style), style = MaterialTheme.typography.labelMedium, maxLines = 1, modifier = Modifier.padding(top = Spacing.XXS))
+            }
+        }
+    }
+}
+
+/** Which colour means what in the chosen style. */
+@Composable
+private fun ColorLegend(style: StyleTemplate) {
+    val pen = MaterialTheme.colorScheme.onSurface
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(Spacing.M), verticalArrangement = Arrangement.spacedBy(Spacing.XXS)) {
+        style.legend.forEach { (role, color) ->
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.size(10.dp).background(color?.let { Color(it) } ?: pen, CircleShape))
+                Spacer(Modifier.width(Spacing.XS))
+                Text(roleName(role), style = MaterialTheme.typography.labelSmall)
             }
         }
     }
@@ -599,40 +709,38 @@ private fun templateName(t: PaperTemplate) = stringResource(
 @Composable
 private fun ReviewPanel(
     review: SmartBoardStage.Review,
-    template: PaperTemplate,
+    state: SmartBoardUiState,
     afterPage: Int,
+    onStyle: (StyleTemplate) -> Unit,
+    onMode: (WritingMode) -> Unit,
     onTemplate: (PaperTemplate) -> Unit,
     onReplay: () -> Unit,
     onRetake: () -> Unit,
     onInsert: (newNotebook: Boolean) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val ink = review.ink
-    Column(modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(Spacing.M)) {
+    Column(modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(Spacing.S)) {
         Text(stringResource(R.string.smartboard_review_title), style = MaterialTheme.typography.headlineSmall)
         Text(
-            stringResource(R.string.smartboard_review_stats, ink.pages.pages.size, ink.pages.strokeCount, review.tookMs / 1000f),
+            stringResource(R.string.smartboard_review_stats_pages, review.pageCount, review.tookMs / 1000f),
             style = MaterialTheme.typography.bodyMedium,
             color = BestNoteTheme.colors.muted,
         )
         if (review.demo) DemoChip()
-        if (ink.dropped > 0) Text(stringResource(R.string.smartboard_review_dropped, ink.dropped), style = MaterialTheme.typography.bodySmall, color = BestNoteTheme.colors.warning)
+        if (review.dropped > 0) Text(stringResource(R.string.smartboard_review_dropped, review.dropped), style = MaterialTheme.typography.bodySmall, color = BestNoteTheme.colors.warning)
+        Text(stringResource(R.string.smartboard_style), style = MaterialTheme.typography.labelLarge)
+        StylePicker(state.style, onStyle)
+        ColorLegend(state.style)
         Text(stringResource(R.string.smartboard_paper), style = MaterialTheme.typography.labelLarge)
         FlowRow(horizontalArrangement = Arrangement.spacedBy(Spacing.S)) {
             RuledPaper.writable.forEach { t ->
-                FilterChip(selected = t == template, onClick = { onTemplate(t) }, label = { Text(templateName(t)) })
+                FilterChip(selected = t == state.template, onClick = { onTemplate(t) }, label = { Text(templateName(t)) })
             }
         }
-        listOf(
-            R.string.smartboard_did_order,
-            R.string.smartboard_did_lines,
-            R.string.smartboard_did_box,
-            R.string.smartboard_did_margin,
-        ).forEach { line ->
-            Row(horizontalArrangement = Arrangement.spacedBy(Spacing.S)) {
-                Icon(Icons.Rounded.CheckCircle, null, tint = BestNoteTheme.colors.success, modifier = Modifier.size(18.dp))
-                Text(stringResource(line), style = MaterialTheme.typography.bodyMedium)
-            }
+        Text(stringResource(R.string.smartboard_writing), style = MaterialTheme.typography.labelLarge)
+        Row(horizontalArrangement = Arrangement.spacedBy(Spacing.S)) {
+            FilterChip(selected = state.mode == WritingMode.Font, onClick = { onMode(WritingMode.Font) }, label = { Text(stringResource(R.string.smartboard_mode_font)) })
+            FilterChip(selected = state.mode == WritingMode.Strokes, onClick = { onMode(WritingMode.Strokes) }, label = { Text(stringResource(R.string.smartboard_mode_strokes)) })
         }
         Row(horizontalArrangement = Arrangement.spacedBy(Spacing.S)) {
             OutlinedButton(onClick = onReplay) { IconLabel(Icons.Rounded.Replay, stringResource(R.string.smartboard_replay)) }

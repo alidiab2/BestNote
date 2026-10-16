@@ -23,7 +23,12 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import app.bestnote.core.designsystem.theme.BestNoteTheme
 import app.bestnote.engine.handwriting.WrittenStroke
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
+import androidx.compose.ui.graphics.nativeCanvas
+import app.bestnote.core.model.PageElement
 import app.bestnote.core.model.PageSize
+import app.bestnote.engine.canvas.document.ElementPainter
+import app.bestnote.engine.handwriting.TypesetPage
 import app.bestnote.engine.layout.RuledPaper
 import app.bestnote.engine.layout.paper.LineRole
 import app.bestnote.engine.layout.paper.PaperGeometry
@@ -96,5 +101,58 @@ private fun partialPath(s: WrittenStroke, untilMs: Long): Path {
         if (samples[i].timeMillis > untilMs) break
         p.lineTo(samples[i].x, samples[i].y)
     }
+    return p
+}
+
+/**
+ * A page typed with the handwriting fonts, drawn by the editor's own element painter (so the preview
+ * is exactly what gets inserted), revealed piece by piece in about two seconds. [replayKey] restarts it.
+ */
+@Composable
+internal fun TypedPage(paper: RuledPaper, page: TypesetPage, elements: List<PageElement>, replayKey: Any, modifier: Modifier = Modifier) {
+    val colors = BestNoteTheme.colors.paper
+    val geometry = remember(paper) { PaperGeometry.of(paper.template, PageSize(paper.width, paper.height)) }
+    val inkPaths = remember(page) { page.ink.map { s -> s to inkPath(s) } }
+    val painter = remember { ElementPainter() }
+    val clock = remember(page) { Animatable(0f) }
+    LaunchedEffect(replayKey) {
+        clock.snapTo(0f)
+        clock.animateTo(1f, tween(TYPED_PLAY_MS, easing = LinearEasing))
+    }
+    Canvas(
+        modifier
+            .aspectRatio(paper.width / paper.height)
+            .shadow(6.dp)
+            .semantics { contentDescription = "Written page" },
+    ) {
+        val k = size.width / paper.width
+        drawRect(colors.page)
+        for (line in geometry.lines) {
+            val color = if (line.role == LineRole.Margin || line.role == LineRole.Divider) colors.marginLine else colors.ruledLine
+            drawLine(color, Offset(line.x0 * k, line.y0 * k), Offset(line.x1 * k, line.y1 * k), strokeWidth = if (line.role == LineRole.Margin) 1.5f else 1f)
+        }
+        geometry.dots?.let { d ->
+            val r = (0.9f * k).coerceAtLeast(1f)
+            for (j in 0 until d.rows) for (i in 0 until d.cols) drawCircle(colors.ruledLine, r, Offset((d.left + i * d.spacing) * k, (d.top + j * d.spacing) * k))
+        }
+        val shownInk = (clock.value * inkPaths.size).toInt().coerceAtMost(inkPaths.size)
+        val shownText = (clock.value * 1.15f * elements.size).toInt().coerceAtMost(elements.size)
+        withTransform({ scale(k, k, pivot = Offset.Zero) }) {
+            for ((s, path) in inkPaths.take(shownInk)) {
+                drawPath(path, Color(s.brush.colorArgb), style = Stroke(width = s.brush.size * 0.9f, cap = StrokeCap.Round, join = StrokeJoin.Round))
+            }
+            drawIntoCanvas { c -> painter.draw(c.nativeCanvas, elements.take(shownText), k, null, Runnable { }) }
+        }
+    }
+}
+
+private const val TYPED_PLAY_MS = 2200
+
+private fun inkPath(s: app.bestnote.core.model.InkStroke): Path {
+    val p = Path()
+    val pts = s.samples
+    p.moveTo(pts[0].x, pts[0].y)
+    if (pts.size == 1) p.lineTo(pts[0].x + 0.3f, pts[0].y)
+    for (i in 1 until pts.size) p.lineTo(pts[i].x, pts[i].y)
     return p
 }

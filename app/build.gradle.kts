@@ -81,7 +81,8 @@ dependencies {
     implementation(libs.androidx.navigation.compose)
     implementation(libs.kotlinx.serialization.json)
 
-    // Debug-only handwriting replay harness (app/src/debug, QA-INK): drives PageCanvasView directly.
-    debugImplementation(projects.engine.canvas)
+    // Smart Board handwriting fonts are registered with the page renderer; the debug replay harness
+    // (app/src/debug, QA-INK) drives PageCanvasView directly.
+    implementation(projects.engine.canvas)
     testImplementation(libs.junit4)
 }

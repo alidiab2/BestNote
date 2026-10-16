@@ -126,6 +126,8 @@ data class TextElement(
     val align: TextAlignment = TextAlignment.Start,
     override val rotation: Float = 0f,
     override val locked: Boolean = false,
+    /** Typeface family: null = the default sans; [FONT_HANDWRITING] = the bundled handwriting fonts (Smart Board). */
+    val font: String? = null,
 ) : PageElement {
     init {
         require(width > 0f && height > 0f) { "Text frame must be positive" }
@@ -143,6 +145,12 @@ data class TextElement(
         const val MIN_SIZE_PT = 6f
         const val MAX_SIZE_PT = 200f
         const val DEFAULT_COLOR = 0xFF1F1F1F.toInt()
+
+        /** Handwriting font, Latin first (Caveat, then Aref Ruqaa for Arabic letters). */
+        const val FONT_HANDWRITING = "hand"
+
+        /** Handwriting font, Arabic first (Aref Ruqaa, then Caveat for Latin letters). */
+        const val FONT_HANDWRITING_ARABIC = "hand-ar"
     }
 }
 
