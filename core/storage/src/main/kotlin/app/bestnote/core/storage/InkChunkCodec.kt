@@ -28,7 +28,9 @@ interface StrokeChunkCodec {
 }
 
 /**
- * `.ink` chunk, v4 (v1..v3 are still read). v4 adds the shape fill after the audio stamp:
+ * `.ink` chunk, v5 (v1..v4 are still read). v5 adds the group id after the fill (CANVAS-14): `u8 idLength (0 = none) | idLength x UTF-8`;
+ * a chunk with no grouped stroke is still written as v4, so older apps keep reading ungrouped notebooks.
+ * v4 adds the shape fill after the audio stamp:
  * `u8 hasFill (0 or 1) | i32 fillArgb (only when hasFill = 1)`. v3 adds the audio sync stamp after the family key:
  * `u8 idLength (0 = none) | idLength x UTF-8 recording id | i64 offsetMillis (only when idLength > 0)`.
  * v2 adds the brush-family key after the size:
@@ -43,7 +45,8 @@ interface StrokeChunkCodec {
  * ```
  */
 object InkChunkCodec : StrokeChunkCodec {
-    const val VERSION = 4
+    const val VERSION = 5
+    private const val VERSION_NO_GROUPS = 4
     private const val MAX_FAMILY_BYTES = 255
     const val HEADER_SIZE = 16
     private val MAGIC = byteArrayOf('B'.code.toByte(), 'N'.code.toByte(), 'I'.code.toByte(), 'K'.code.toByte())
@@ -68,8 +71,15 @@ object InkChunkCodec : StrokeChunkCodec {
             require(id.size <= MAX_FAMILY_BYTES) { "Recording id too long" }
             id
         }
+        val groups = strokes.map { s ->
+            val id = s.brush.group?.encodeToByteArray() ?: EMPTY
+            require(id.size <= MAX_FAMILY_BYTES) { "Group id too long" }
+            id
+        }
+        val version = if (groups.any { it.isNotEmpty() }) VERSION else VERSION_NO_GROUPS
+        val withGroups = version >= VERSION
         val payloadSize = 4 + strokes.indices.sumOf { i ->
-            STROKE_HEADER.toLong() + 1 + families[i].size + 1 + audioIds[i].size + 1 + (if (strokes[i].brush.fillArgb == null) 0 else 4) + (if (audioIds[i].isEmpty()) 0 else 8) +
+            STROKE_HEADER.toLong() + 1 + families[i].size + 1 + audioIds[i].size + 1 + (if (strokes[i].brush.fillArgb == null) 0 else 4) + (if (withGroups) 1 + groups[i].size else 0) + (if (audioIds[i].isEmpty()) 0 else 8) +
                 strokes[i].samples.size.toLong() * SAMPLE_SIZE
         }
         require(payloadSize <= Int.MAX_VALUE - HEADER_SIZE) { "Page too large for one chunk" }
@@ -91,6 +101,10 @@ object InkChunkCodec : StrokeChunkCodec {
             val fill = s.brush.fillArgb
             buf.put((if (fill == null) 0 else 1).toByte())
             if (fill != null) buf.putInt(fill)
+            if (withGroups) {
+                buf.put(groups[i].size.toByte())
+                buf.put(groups[i])
+            }
             buf.putInt(s.samples.size)
             for (p in s.samples) {
                 buf.putFloat(p.x); buf.putFloat(p.y); buf.putFloat(p.pressure)
@@ -100,7 +114,7 @@ object InkChunkCodec : StrokeChunkCodec {
         val array = buf.array()
         val crc = CRC32().apply { update(array, HEADER_SIZE, array.size - HEADER_SIZE) }.value
         buf.position(0)
-        buf.put(MAGIC).putShort(VERSION.toShort()).putShort(0).putInt(array.size - HEADER_SIZE).putInt(crc.toInt())
+        buf.put(MAGIC).putShort(version.toShort()).putShort(0).putInt(array.size - HEADER_SIZE).putInt(crc.toInt())
         return array
     }
 
@@ -151,13 +165,19 @@ object InkChunkCodec : StrokeChunkCodec {
                 null
             }
             val fill = if (version >= 4 && buf.get().toInt() != 0) buf.int else null
+            val group = if (version >= VERSION) {
+                val bytes = ByteArray(buf.get().toInt() and 0xFF).also { buf.get(it) }
+                if (bytes.isEmpty()) null else bytes.decodeToString()
+            } else {
+                null
+            }
             val n = buf.int
             if (n < 0 || n.toLong() * SAMPLE_SIZE > buf.remaining()) throw CorruptChunkException("Bad sample count $n")
             val samples = ArrayList<StylusSample>(n)
             repeat(n) {
                 samples += StylusSample(buf.float, buf.float, buf.float, buf.float, buf.float, buf.long)
             }
-            strokes += InkStroke(InkBrush(tool, style, color, size, family, audio, fill), samples)
+            strokes += InkStroke(InkBrush(tool, style, color, size, family, audio, fill, group), samples)
         }
         if (buf.hasRemaining()) throw CorruptChunkException("${buf.remaining()} trailing bytes")
         return strokes

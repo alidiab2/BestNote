@@ -81,6 +81,11 @@
     <string name="selection_edit">Edit</string>
     <string name="selection_lock">Lock</string>
     <string name="selection_unlock">Unlock</string>
+    <string name="selection_arrange">Arrange</string>
+    <string name="selection_to_front">Bring to front</string>
+    <string name="selection_to_back">Send to back</string>
+    <string name="selection_group">Group</string>
+    <string name="selection_ungroup">Ungroup</string>
 
     <string name="dialog_done">Done</string>
     <string name="dialog_cancel">Cancel</string>

@@ -343,6 +343,24 @@ class PagedDocument {
         commitStrokeEdit(index, before)
     }
 
+    /**
+     * Restacks page [index]'s strokes as one undoable step (CANVAS-14): each key of [replacements] is swapped
+     * for its value (a fresh copy, possibly regrouped), and those copies end up drawn last ([toFront]) or first.
+     */
+    fun restackStrokes(index: Int, replacements: Map<Stroke, Stroke>, toFront: Boolean) {
+        val page = _pages.getOrNull(index) ?: return
+        if (replacements.isEmpty()) return
+        val before = strokesSnapshot(index)
+        val moved = replacements.values.toList()
+        val others = before.filter { it !in replacements }
+        page.mutableStrokes.apply {
+            clear()
+            addAll(if (toFront) others + moved else moved + others)
+        }
+        contentChanged(index)
+        commitStrokeEdit(index, before)
+    }
+
     /** Removes [strokes] from page [index] as one undoable step (CANVAS-11: cut, delete). */
     fun deleteStrokes(index: Int, strokes: Collection<Stroke>) {
         if (index !in _pages.indices || strokes.isEmpty()) return

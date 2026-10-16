@@ -81,6 +81,11 @@
     <string name="selection_edit">تعديل</string>
     <string name="selection_lock">قفل</string>
     <string name="selection_unlock">إلغاء القفل</string>
+    <string name="selection_arrange">ترتيب</string>
+    <string name="selection_to_front">إحضار إلى الأمام</string>
+    <string name="selection_to_back">إرسال إلى الخلف</string>
+    <string name="selection_group">تجميع</string>
+    <string name="selection_ungroup">فك التجميع</string>
 
     <string name="dialog_done">تم</string>
     <string name="dialog_cancel">إلغاء</string>

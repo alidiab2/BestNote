@@ -40,6 +40,14 @@ class ElementTransformsTest {
         assertSame(locked, ElementTransforms.transformed(locked, Affine.translate(30f, 30f)))
     }
 
+    @Test fun lockedElementsIgnoreTheLassoUntilUnlocked() {
+        val around = LassoPolygon(floatArrayOf(0f, 200f, 200f, 0f), floatArrayOf(0f, 0f, 200f, 200f))
+        assertTrue(ElementTransforms.lassoPicks(around, image))
+        assertFalse(ElementTransforms.lassoPicks(around, image.copy(locked = true)))
+        assertFalse(ElementTransforms.lassoPicks(around, text.copy(locked = true)))
+        assertTrue(ElementTransforms.lassoPicks(around, image.copy(locked = true).withLocked(false)))
+    }
+
     @Test fun hitTestFollowsRotation() {
         val turned = image.copy(rotation = (Math.PI / 2).toFloat()) // 40x20 frame now stands 20 wide, 40 tall
         assertTrue(ElementTransforms.contains(turned, 50f, 78f))

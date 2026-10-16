@@ -18,7 +18,7 @@
 | [x] CANVAS-10 | Restyle selection: color, thickness, pen type | M2 | S | CANVAS-08 | One-tap recolor of a lasso selection; "Pen" restyles to another pen type, one undo step |
 | [x] CANVAS-11 | Cut/copy/paste/duplicate, across pages, notebooks and app instances | M2 | M | CANVAS-08 | Paste lands where the pen last touched (app instances via the system clipboard: follow-up) |
 | [ ] CANVAS-12 | Layers (add, hide, reorder, per-layer lock) | M3 | XL | DOC-05 | Split into sub-tasks before starting |
-| [ ] CANVAS-13 | Lock objects (images, shapes, PDF backgrounds) | M3 | S | CANVAS-08 | Locked items ignore lasso and eraser |
-| [ ] CANVAS-14 | Group/ungroup, bring to front / send to back | M3 | M | CANVAS-08 | — |
+| [x] CANVAS-13 | Lock objects (images, shapes, PDF backgrounds) | M3 | S | CANVAS-08 | Locked items ignore lasso and eraser |
+| [x] CANVAS-14 | Group/ungroup, bring to front / send to back | M3 | M | CANVAS-08 | — |
 | [ ] CANVAS-15 | Gesture tools: scribble-to-erase, circle-to-lasso | M3 | M | REC-01 | False-positive rate < 1% in the test corpus |
 | [ ] CANVAS-16 | Zoom window (magnified writing strip with auto-advance) | M3 | L | CANVAS-05 | — |
