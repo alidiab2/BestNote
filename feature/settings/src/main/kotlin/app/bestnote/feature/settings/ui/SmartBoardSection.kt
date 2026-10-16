@@ -298,7 +298,7 @@ private fun ModelPicker(state: SmartBoardUiState, viewModel: SmartBoardViewModel
             row {
                 RadioRow(
                     title = model.displayName,
-                    subtitle = model.id,
+                    subtitle = if (model.vision == false) model.id + " · " + stringResource(R.string.settings_ai_no_images) else model.id,
                     selected = stored.model == model.id,
                     onSelect = { viewModel.selectModel(model.id) },
                     trailing = {

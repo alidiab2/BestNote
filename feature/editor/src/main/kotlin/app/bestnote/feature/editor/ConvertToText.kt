@@ -18,8 +18,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.stringResource
 import app.bestnote.ai.vision.VisionError
-import app.bestnote.ai.vision.VisionImage
 import app.bestnote.ai.vision.providers.AiProviders
+import app.bestnote.ai.vision.providers.ImageCanary
 import app.bestnote.ai.vision.transcriptLines
 import app.bestnote.core.model.PageElement
 import app.bestnote.core.model.TextElement
@@ -101,7 +101,7 @@ internal class InkConverter(
                     step = before
                     return@launch
                 }
-                val doc = providers.create().transcribe(VisionImage(png, "image/png"), languageName(language))
+                val doc = providers.create().transcribe(withContext(Dispatchers.Default) { ImageCanary.fromEncoded(png, "image/png") }, languageName(language))
                 val lines = doc.transcriptLines()
                 if (lines.isEmpty()) {
                     message(R.string.convert_ai_nothing)
@@ -115,7 +115,13 @@ internal class InkConverter(
                 throw e
             } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
                 android.util.Log.w("BestNoteConvert", "Convert with AI failed: ${e.javaClass.simpleName}")
-                message(if (e is VisionError.InvalidKey || e is VisionError.MissingKey) R.string.convert_ai_key else R.string.convert_ai_failed)
+                message(
+                    when (e) {
+                        is VisionError.InvalidKey, is VisionError.MissingKey -> R.string.convert_ai_key
+                        is VisionError.ImageNotSeen -> R.string.tidy_error_no_image
+                        else -> R.string.convert_ai_failed
+                    },
+                )
                 step = before
             }
         }

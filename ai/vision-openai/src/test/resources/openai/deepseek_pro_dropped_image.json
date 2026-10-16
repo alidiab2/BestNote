@@ -1,0 +1,21 @@
+{
+ "id": "chatcmpl-x",
+ "object": "chat.completion",
+ "created": 1760000000,
+ "model": "deepseek-v4-pro",
+ "choices": [
+  {
+   "index": 0,
+   "message": {
+    "role": "assistant",
+    "content": "{\"elements\": [{\"e\": \"Title\", \"t\": \"Newton's laws of motion\"}, {\"e\": \"Heading\", \"t\": \"First law\"}, {\"e\": \"Paragraph\", \"t\": \"A body stays at rest or in uniform motion unless a net force acts on it.\"}, {\"e\": \"Formula\", \"m\": \"F = ma\"}]}"
+   },
+   "finish_reason": "stop"
+  }
+ ],
+ "usage": {
+  "prompt_tokens": 744,
+  "completion_tokens": 260,
+  "total_tokens": 1004
+ }
+}

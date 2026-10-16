@@ -1,6 +1,9 @@
 package app.bestnote.ai.vision.openai
 
 import app.bestnote.ai.vision.BoardRequest
+import app.bestnote.ai.vision.NotesRequest
+import app.bestnote.ai.vision.VisionDiagnostics
+import app.bestnote.engine.layout.NoteTemplates
 import app.bestnote.ai.vision.ProviderCredentials
 import app.bestnote.ai.vision.VisionError
 import app.bestnote.ai.vision.VisionImage
@@ -144,6 +147,43 @@ class OpenAiVisionProviderTest {
         assertEquals("json_schema", takeJson().getValue("response_format").jsonObject.getValue("type").jsonPrimitive.content)
         assertEquals("json_object", takeJson().getValue("response_format").jsonObject.getValue("type").jsonPrimitive.content)
         assertNull(takeJson()["response_format"])
+    }
+
+    private val canaryImage = VisionImage(byteArrayOf(0xFF.toByte(), 0xD8.toByte(), 0xFF.toByte(), 9), "image/jpeg", canary = "4821")
+    private val notesRequest = NotesRequest(NoteTemplates.builtIns().first())
+
+    @Test
+    fun modelThatDropsThePhotoIsImageNotSeenAndTheNotesAreNeverReturned() = runTest {
+        // Recorded: DeepSeek-V4-Pro answered a maths board with a confident lesson on Newton's laws (744 prompt tokens, no image).
+        model = "deepseek-v4-pro"
+        server.enqueue(respond(200, fixture("deepseek_pro_dropped_image.json")))
+        VisionDiagnostics.clear()
+        try {
+            provider.writeNotes(canaryImage, notesRequest)
+            fail("invented notes must not come back")
+        } catch (e: VisionError.ImageNotSeen) {
+            assertEquals("deepseek-v4-pro", e.model)
+        }
+        // The request asked for the code, in the prompt and in the schema.
+        val body = takeJson()
+        assertTrue(body.getValue("messages").jsonArray[0].jsonObject.getValue("content").jsonPrimitive.content.contains("\"seen\""))
+        assertTrue(body.toString().contains("\"required\":[\"seen\""))
+        assertTrue(VisionDiagnostics.latest()!!.parseNotes.any { it.contains("expected 4821") })
+    }
+
+    @Test
+    fun modelThatSeesThePhotoReturnsTheCodeAndTheNotes() = runTest {
+        model = "deepseek-flash"
+        server.enqueue(respond(200, fixture("deepseek_flash_seen.json")))
+        val doc = provider.writeNotes(canaryImage, notesRequest)
+        assertEquals("Partial fractions", doc.elements.first().text)
+    }
+
+    @Test
+    fun imagesWithoutACanaryAreNotChecked() = runTest {
+        server.enqueue(respond(200, fixture("deepseek_pro_dropped_image.json")))
+        provider.writeNotes(jpeg, notesRequest)
+        assertFalse(takeJson().toString().contains("\"seen\""))
     }
 
     @Test

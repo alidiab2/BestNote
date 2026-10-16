@@ -16,6 +16,8 @@ class FallbackVisionProviderTest {
     private val request = BoardRequest(LayoutTemplate.LectureSummary)
     private val calls = mutableListOf<String>()
 
+    private val textOnly = mutableListOf<String>()
+
     private fun provider(failing: Map<String, VisionError>, skipped: MutableSet<String> = mutableSetOf()) = FallbackVisionProvider(
         candidates = { listOf("gemini-3.1-pro-preview", "gemini-3.8-flash", "gemini-3.5-flash-lite") },
         providerFor = { model ->
@@ -30,6 +32,7 @@ class FallbackVisionProviderTest {
             }
         },
         skipped = skipped,
+        onTextOnly = { textOnly += it },
     )
 
     @Test fun quotaExhaustedModelFallsBackToTheNext() = runTest {
@@ -49,5 +52,13 @@ class FallbackVisionProviderTest {
         val result = runCatching { provider(mapOf("gemini-3.1-pro-preview" to VisionError.InvalidKey())).reconstructBoard(image, request) }
         assertTrue(result.exceptionOrNull() is VisionError.InvalidKey)
         assertEquals(listOf("gemini-3.1-pro-preview"), calls)
+    }
+
+    @Test fun modelThatIgnoredThePhotoIsRememberedAndSkipped() = runTest {
+        val skipped = mutableSetOf<String>()
+        val doc = provider(mapOf("gemini-3.1-pro-preview" to VisionError.ImageNotSeen("gemini-3.1-pro-preview")), skipped).reconstructBoard(image, request)
+        assertEquals("gemini-3.8-flash", doc.title)
+        assertEquals(listOf("gemini-3.1-pro-preview"), textOnly)
+        assertTrue("gemini-3.1-pro-preview" in skipped)
     }
 }

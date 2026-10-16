@@ -76,7 +76,22 @@ class KeystoreAiSettings(
 
     /** The provider's model list as last fetched (empty before the first fetch). */
     suspend fun cachedModels(kind: AiProviderKind): List<AiModel> = withContext(Dispatchers.IO) {
-        prefs.getString(k(kind, MODELS), null)?.let { runCatching { json.decodeFromString(modelList, it) }.getOrNull() }.orEmpty()
+        val models = prefs.getString(k(kind, MODELS), null)?.let { runCatching { json.decodeFromString(modelList, it) }.getOrNull() }.orEmpty()
+        ModelCatalog.markTextOnly(models, textOnlyModels(kind))
+    }
+
+    /** Models of [kind] that did not receive a photo (answered without the canary code), remembered per provider and id. */
+    fun textOnlyModels(kind: AiProviderKind): Set<String> = list(k(kind, TEXT_ONLY)).toSet()
+
+    suspend fun markTextOnly(kind: AiProviderKind, id: String) {
+        val now = textOnlyModels(kind)
+        if (id.isNotBlank() && id !in now) edit { putString(k(kind, TEXT_ONLY), (now + id).joinToString("\n")) }
+    }
+
+    /** The user says the model does read images after all (or the provider fixed it). */
+    suspend fun clearTextOnly(kind: AiProviderKind, id: String) {
+        val now = textOnlyModels(kind)
+        if (id in now) edit { putString(k(kind, TEXT_ONLY), (now - id).joinToString("\n")) }
     }
 
     /** When [cachedModels] was fetched, epoch millis; 0 = never. */
@@ -146,6 +161,7 @@ class KeystoreAiSettings(
         const val MODELS_AT = "models_fetched_at"
         const val RECENT = "recent_models"
         const val FAVORITES = "favorite_models"
+        const val TEXT_ONLY = "text_only_models"
         const val RECENT_MAX = 5
         val json = Json { ignoreUnknownKeys = true }
         val modelList = ListSerializer(AiModel.serializer())
