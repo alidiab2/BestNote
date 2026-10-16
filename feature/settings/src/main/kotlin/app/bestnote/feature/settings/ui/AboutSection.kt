@@ -20,6 +20,7 @@ import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.outlined.LibraryBooks
 import androidx.compose.material.icons.automirrored.outlined.OpenInNew
 import androidx.compose.material.icons.outlined.Code
+import androidx.compose.material.icons.outlined.WavingHand
 import androidx.compose.material.icons.outlined.ExpandLess
 import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.material.icons.outlined.FontDownload
@@ -76,7 +77,7 @@ private val ApacheLibraries = listOf(
 )
 
 @Composable
-internal fun AboutSection(showLicenses: Boolean, onShowLicenses: (Boolean) -> Unit) {
+internal fun AboutSection(showLicenses: Boolean, onShowLicenses: (Boolean) -> Unit, onShowWelcome: () -> Unit = {}) {
     if (showLicenses) {
         LicensesPage(onBack = { onShowLicenses(false) })
         return
@@ -120,6 +121,14 @@ internal fun AboutSection(showLicenses: Boolean, onShowLicenses: (Boolean) -> Un
                 icon = Icons.Outlined.Code,
                 modifier = Modifier.clickable(role = Role.Button) { context.startActivity(Intent(Intent.ACTION_VIEW, GITHUB_URL.toUri())) },
             ) { Icon(Icons.AutoMirrored.Outlined.OpenInNew, null, tint = BestNoteTheme.colors.muted) }
+        }
+        row {
+            SettingsRow(
+                title = stringResource(R.string.settings_show_welcome),
+                subtitle = stringResource(R.string.settings_show_welcome_sub),
+                icon = Icons.Outlined.WavingHand,
+                modifier = Modifier.clickable(role = Role.Button) { onShowWelcome() },
+            ) { Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = BestNoteTheme.colors.muted) }
         }
         row {
             SettingsRow(

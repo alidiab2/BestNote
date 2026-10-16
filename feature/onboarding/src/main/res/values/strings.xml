@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="onb_skip">Skip</string>
+    <string name="onb_back">Back</string>
+    <string name="onb_next">Next</string>
+    <string name="onb_welcome_title">Welcome to BestNote</string>
+    <string name="onb_welcome_body">Handwritten notes that feel like paper, made for your pen.</string>
+    <string name="onb_fact_free_title">Free, for good</string>
+    <string name="onb_fact_free_body">No subscription, no ads, no paywalled pens.</string>
+    <string name="onb_fact_open_title">Open source</string>
+    <string name="onb_fact_open_body">Anyone can read, check and improve the code.</string>
+    <string name="onb_fact_private_title">Private by default</string>
+    <string name="onb_fact_private_body">Your notebooks stay on your device. No account needed.</string>
+    <string name="onb_fact_offline_title">Works offline</string>
+    <string name="onb_fact_offline_body">Write anywhere, with no connection.</string>
+    <string name="onb_pen_title">Touch the screen with your pen</string>
+    <string name="onb_pen_body">BestNote tells your pen from your finger, so you can rest your hand while you write.</string>
+    <string name="onb_pad_waiting">Waiting for a touch…</string>
+    <string name="onb_pad_pen">Pen detected</string>
+    <string name="onb_pad_finger">That was a finger. Now try your pen.</string>
+    <string name="onb_pad_finger_after_pen">Finger. Your pen is already known.</string>
+    <string name="onb_rule_pen_title">Pen writes</string>
+    <string name="onb_rule_pen_body">Only the pen leaves ink on the page.</string>
+    <string name="onb_rule_finger_title">Finger scrolls and zooms</string>
+    <string name="onb_rule_finger_body">Drag to move around, pinch to zoom.</string>
+    <string name="onb_no_pen">I don\'t have a pen</string>
+    <string name="onb_no_pen_done">Got it. Your finger will draw. You can change this any time in Settings → S Pen &amp; input.</string>
+    <string name="onb_palm_title">Rest your palm and write</string>
+    <string name="onb_palm_body">Lay your hand on the screen like on paper, then write with the pen. Only the pen makes ink.</string>
+    <string name="onb_palm_title_finger">Try writing with your finger</string>
+    <string name="onb_palm_body_finger">Draw anything on the page below.</string>
+    <string name="onb_palm_clear">Clear</string>
+    <string name="onb_start_title">You\'re ready</string>
+    <string name="onb_start_body">Start with a fresh notebook, or head to your library. You can replay this welcome from Settings → About.</string>
+    <string name="onb_start_create">Create my first notebook</string>
+    <string name="onb_start_library">Go to library</string>
+</resources>

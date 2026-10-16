@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="onb_skip">تخطّي</string>
+    <string name="onb_back">رجوع</string>
+    <string name="onb_next">التالي</string>
+    <string name="onb_welcome_title">أهلًا بك في BestNote</string>
+    <string name="onb_welcome_body">ملاحظات بخط اليد تشبه الورق، صُمّمت لقلمك.</string>
+    <string name="onb_fact_free_title">مجاني للأبد</string>
+    <string name="onb_fact_free_body">بلا اشتراك ولا إعلانات ولا أقلام مدفوعة.</string>
+    <string name="onb_fact_open_title">مفتوح المصدر</string>
+    <string name="onb_fact_open_body">يمكن لأي شخص قراءة الشيفرة ومراجعتها وتحسينها.</string>
+    <string name="onb_fact_private_title">خاص افتراضيًا</string>
+    <string name="onb_fact_private_body">تبقى دفاترك على جهازك. لا حاجة إلى حساب.</string>
+    <string name="onb_fact_offline_title">يعمل بلا إنترنت</string>
+    <string name="onb_fact_offline_body">اكتب في أي مكان دون اتصال.</string>
+    <string name="onb_pen_title">المس الشاشة بقلمك</string>
+    <string name="onb_pen_body">يميّز BestNote بين القلم والإصبع، فتستطيع إراحة يدك على الشاشة أثناء الكتابة.</string>
+    <string name="onb_pad_waiting">في انتظار لمسة…</string>
+    <string name="onb_pad_pen">تم اكتشاف القلم</string>
+    <string name="onb_pad_finger">كانت هذه إصبعًا. جرّب قلمك الآن.</string>
+    <string name="onb_pad_finger_after_pen">إصبع. قلمك معروف لدينا بالفعل.</string>
+    <string name="onb_rule_pen_title">القلم يكتب</string>
+    <string name="onb_rule_pen_body">القلم وحده يترك حبرًا على الصفحة.</string>
+    <string name="onb_rule_finger_title">الإصبع للتمرير والتكبير</string>
+    <string name="onb_rule_finger_body">اسحب للتنقّل وقرّب أصابعك للتكبير.</string>
+    <string name="onb_no_pen">ليس لدي قلم</string>
+    <string name="onb_no_pen_done">تمام. سيرسم إصبعك. يمكنك تغيير ذلك في أي وقت من الإعدادات ← القلم والإدخال.</string>
+    <string name="onb_palm_title">أرح كفّك واكتب</string>
+    <string name="onb_palm_body">ضع يدك على الشاشة كما تفعل على الورق ثم اكتب بالقلم. القلم وحده يصنع الحبر.</string>
+    <string name="onb_palm_title_finger">جرّب الكتابة بإصبعك</string>
+    <string name="onb_palm_body_finger">ارسم أي شيء على الصفحة أدناه.</string>
+    <string name="onb_palm_clear">مسح</string>
+    <string name="onb_start_title">أنت جاهز</string>
+    <string name="onb_start_body">ابدأ بدفتر جديد أو انتقل إلى مكتبتك. يمكنك إعادة هذا الترحيب من الإعدادات ← حول التطبيق.</string>
+    <string name="onb_start_create">أنشئ دفتري الأول</string>
+    <string name="onb_start_library">الانتقال إلى المكتبة</string>
+</resources>

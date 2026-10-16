@@ -10,6 +10,9 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -22,6 +25,9 @@ import app.bestnote.feature.library.PaperSize
 import androidx.core.content.pm.ShortcutInfoCompat
 import androidx.core.content.pm.ShortcutManagerCompat
 import androidx.core.graphics.drawable.IconCompat
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.rememberNavController
@@ -47,6 +53,7 @@ import app.bestnote.feature.library.LibraryRoute
 import app.bestnote.feature.library.PdfOpenRequests
 import app.bestnote.feature.library.QuicknoteRequests
 import app.bestnote.feature.library.libraryScreen
+import app.bestnote.feature.onboarding.OnboardingFlow
 import app.bestnote.feature.settings.SettingsRoute
 import app.bestnote.feature.settings.settingsScreen
 import app.bestnote.feature.smartboard.navigateToSmartBoard
@@ -78,7 +85,8 @@ class MainActivity : ComponentActivity() {
         if (savedInstanceState == null) handleIntent(intent)
         publishShortcuts(this)
         setContent {
-            val prefs by preferences.preferences.collectAsStateWithLifecycle(UserPreferences())
+            val loaded by preferences.preferences.collectAsStateWithLifecycle(null)
+            val prefs = loaded ?: UserPreferences()
             val dark = when (prefs.themeMode) {
                 ThemeMode.System -> isSystemInDarkTheme()
                 ThemeMode.Light -> false
@@ -91,7 +99,8 @@ class MainActivity : ComponentActivity() {
                 chromeWarmth = prefs.appearance.chromeWarmth.amount,
             ) {
                 CompositionLocalProvider(LocalShortcutHost provides shortcuts) {
-                    BestNoteNavHost(quicknotes, pdfRequests, library)
+                    // ONB-01: first run (and Settings → About → Show welcome again). Not before the settings have loaded.
+                    BestNoteNavHost(quicknotes, pdfRequests, library, showOnboarding = loaded?.onboardingDone == false)
                     UpdateHost(updates)
                     ShortcutOverlay(shortcuts)
                 }
@@ -152,7 +161,12 @@ private fun publishShortcuts(context: Context) {
 }
 
 @Composable
-private fun BestNoteNavHost(quicknotes: QuicknoteRequests, pdfRequests: PdfOpenRequests, library: LibraryRepository) {
+private fun BestNoteNavHost(
+    quicknotes: QuicknoteRequests,
+    pdfRequests: PdfOpenRequests,
+    library: LibraryRepository,
+    showOnboarding: Boolean,
+) {
     val nav = rememberNavController()
     val quicknoteRequested by quicknotes.requested.collectAsStateWithLifecycle()
     // A Quicknote request while the editor is open: go back to the library, which opens the note.
@@ -207,6 +221,18 @@ private fun BestNoteNavHost(quicknotes: QuicknoteRequests, pdfRequests: PdfOpenR
         )
         settingsScreen(onBack = nav::popBackStack, onOpenTemplates = { nav.navigateToTemplates() })
         templatesScreen(onBack = nav::popBackStack)
+    }
+    if (showOnboarding) {
+        val firstTitle = stringResource(R.string.onboarding_first_notebook)
+        Box(Modifier.fillMaxSize().pointerInput(Unit) { detectTapGestures { } }) {
+            OnboardingFlow(
+                onFinished = { createNotebook ->
+                    if (createNotebook) {
+                        scope.launch { nav.navigateToEditor(library.create(firstTitle).id) }
+                    }
+                },
+            )
+        }
     }
 }
 

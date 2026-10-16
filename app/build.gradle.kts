@@ -72,6 +72,7 @@ dependencies {
     implementation(projects.engine.export)
     implementation(projects.engine.recognitionMlkit)
     implementation(projects.feature.library)
+    implementation(projects.feature.onboarding)
     implementation(projects.feature.editor)
     implementation(projects.feature.settings)
     implementation(projects.feature.smartboard)

@@ -1,4 +1,5 @@
 <resources>
     <string name="shortcut_quicknote_short">ملاحظة سريعة</string>
     <string name="shortcut_quicknote_long">ملاحظة سريعة جديدة</string>
+    <string name="onboarding_first_notebook">دفتري الأول</string>
 </resources>
