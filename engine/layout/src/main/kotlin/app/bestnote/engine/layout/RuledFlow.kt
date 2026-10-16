@@ -8,13 +8,18 @@ import kotlin.math.ceil
 import kotlin.math.floor
 
 /**
- * Ruled notebook paper, in page units (the unit the strokes are written in).
+ * Notebook paper Smart Board writes on, in page units (the unit the strokes are written in). Every
+ * template is reduced to writing lines: printed rules, grid lines (every other one), dot rows, or
+ * invisible college ruling on blank paper.
  *
- * @property firstLine y of the first ruled writing line (a baseline).
- * @property lineGap distance between ruled lines.
- * @property marginX x of the vertical margin line on the left. The paper never mirrors: Arabic
- *   notes keep the same paper and start at the right edge instead.
+ * @property firstLine y of the first writing line (a baseline).
+ * @property lineGap distance between writing lines.
+ * @property marginX x of the vertical margin line on the left (the cue line on Cornell paper). The
+ *   paper never mirrors: Arabic notes keep the same paper and start at the right edge instead.
  * @property edge empty border kept at the page's other edges.
+ * @property template the paper this was made for (what previews draw).
+ * @property bottom writing stops above this y (the summary box on Cornell paper).
+ * @property showLines false on blank paper: the lines only guide the writing.
  */
 data class RuledPaper(
     val width: Float,
@@ -23,13 +28,16 @@ data class RuledPaper(
     val lineGap: Float,
     val marginX: Float,
     val edge: Float = lineGap * 0.75f,
+    val template: PaperTemplate = PaperTemplate.Ruled,
+    val bottom: Float = height,
+    val showLines: Boolean = true,
 ) {
     init {
-        require(width > marginX + 4 * lineGap && height > firstLine + lineGap) { "Paper too small: $this" }
+        require(width > marginX + 4 * lineGap && minOf(height, bottom) > firstLine + lineGap) { "Paper too small: $this" }
     }
 
-    /** Ruled lines that fit on the page with room for descenders below the last one. */
-    val lineCount: Int get() = floor((height - edge - firstLine) / lineGap).toInt() + 1
+    /** Writing lines that fit on the page with room for descenders below the last one. */
+    val lineCount: Int get() = floor((minOf(height - edge, bottom) - firstLine) / lineGap + EPS).toInt() + 1
 
     /** Baseline y of ruled line [i] (0-based). */
     fun lineY(i: Int): Float = firstLine + i * lineGap
@@ -39,27 +47,82 @@ data class RuledPaper(
     val textRight: Float get() = width - edge
 
     companion object {
-        /** True for the templates Smart Board can write on line by line. */
+        private const val EPS = 0.01f
+
+        /** Templates Smart Board can write on, in the order the review screen offers them. */
+        val writable: List<PaperTemplate> = listOf(
+            PaperTemplate.Ruled,
+            PaperTemplate.RuledNarrow,
+            PaperTemplate.RuledWide,
+            PaperTemplate.Grid,
+            PaperTemplate.Dotted,
+            PaperTemplate.Blank,
+            PaperTemplate.Cornell,
+        )
+
+        /** True for the templates with printed writing lines. */
         fun isRuled(template: PaperTemplate) =
             template == PaperTemplate.Ruled || template == PaperTemplate.RuledNarrow || template == PaperTemplate.RuledWide
 
         /**
-         * The ruled paper the editor prints for [template] at [size] (PAGES-01 geometry, points).
-         * Templates without writing lines fall back to college ruling.
+         * The writing lines of [template] at [size], matching what the editor prints (PAGES-01
+         * geometry, points). Music paper (not writable) falls back to college ruling.
          */
-        fun of(template: PaperTemplate, size: PageSize): RuledPaper {
-            val gap = when (template) {
-                PaperTemplate.RuledNarrow -> PaperGeometry.NARROW
-                PaperTemplate.RuledWide -> PaperGeometry.WIDE
-                else -> PaperGeometry.COLLEGE
-            }
+        fun of(template: PaperTemplate, size: PageSize): RuledPaper = when (template) {
+            PaperTemplate.Grid, PaperTemplate.Dotted -> lattice(template, size)
+            PaperTemplate.Cornell -> cornell(size)
+            PaperTemplate.Blank -> ruled(PaperTemplate.Blank, size, PaperGeometry.COLLEGE).copy(showLines = false)
+            PaperTemplate.RuledNarrow -> ruled(template, size, PaperGeometry.NARROW)
+            PaperTemplate.RuledWide -> ruled(template, size, PaperGeometry.WIDE)
+            PaperTemplate.Ruled -> ruled(template, size, PaperGeometry.COLLEGE)
+            PaperTemplate.MusicStaff -> ruled(PaperTemplate.Ruled, size, PaperGeometry.COLLEGE)
+        }
+
+        private fun ruled(template: PaperTemplate, size: PageSize, gap: Float) = RuledPaper(
+            width = size.widthPt,
+            height = size.heightPt,
+            firstLine = PaperGeometry.headerHeight(size, gap),
+            lineGap = gap,
+            marginX = PaperGeometry.marginX(size),
+            edge = gap,
+            template = template,
+        )
+
+        /**
+         * Grid and dot paper: baselines on every other grid line (two squares per line of writing,
+         * the way students write on 5 mm squares), text starting on a vertical grid line.
+         */
+        private fun lattice(template: PaperTemplate, size: PageSize): RuledPaper {
+            val pitch = PaperGeometry.GRID
+            val gap = 2 * pitch
+            val x0 = PaperGeometry.latticeStart(size.widthPt, pitch)
+            val y0 = PaperGeometry.latticeStart(size.heightPt, pitch)
+            fun snap(origin: Float, v: Float) = origin + ceil((v - origin) / pitch - EPS) * pitch
             return RuledPaper(
                 width = size.widthPt,
                 height = size.heightPt,
-                firstLine = PaperGeometry.headerHeight(size, gap),
+                firstLine = snap(y0, PaperGeometry.headerHeight(size, gap)),
                 lineGap = gap,
-                marginX = PaperGeometry.marginX(size),
+                // textLeft adds 0.35 gap: put the text start on a grid line.
+                marginX = snap(x0, PaperGeometry.marginX(size) * 0.6f) - gap * 0.35f,
+                edge = pitch,
+                template = template,
+            )
+        }
+
+        /** Cornell: notes on the rules right of the cue line, stopping above the summary box. */
+        private fun cornell(size: PageSize): RuledPaper {
+            val gap = PaperGeometry.COLLEGE
+            val top = PaperGeometry.headerHeight(size, gap)
+            return RuledPaper(
+                width = size.widthPt,
+                height = size.heightPt,
+                firstLine = top + gap,
+                lineGap = gap,
+                marginX = PaperGeometry.cornellCueX(size),
                 edge = gap,
+                template = PaperTemplate.Cornell,
+                bottom = PaperGeometry.cornellSummaryTop(size) - gap * 0.5f,
             )
         }
     }

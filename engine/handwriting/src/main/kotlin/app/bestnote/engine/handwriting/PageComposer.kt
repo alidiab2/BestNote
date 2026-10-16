@@ -55,6 +55,9 @@ class PageComposer(
     /** Body text scale: joined script has tall capitals and loops, so it is written a little smaller. */
     private val body = if (style.script == Script.Cursive) 0.9f else 1f
 
+    /** Inline formulas met so far; text carries tokens pointing here ([InlineMath.encode]). */
+    private val inlineTex = ArrayList<String>()
+
     private val metricsHand = hand(0)
     private val metrics = Pen(metricsHand, InkBuilder(metricsHand, style.pen))
 
@@ -67,14 +70,41 @@ class PageComposer(
     )
 
     /** The writers for one page, sharing one hand and one ink stream. */
-    private class Pen(val hand: Hand, val ink: InkBuilder) {
+    private inner class Pen(val hand: Hand, val ink: InkBuilder) {
         val text = TextWriter(hand, ink)
         val shapes = ShapeWriter(hand, ink)
         val math = MathWriter(hand, text, shapes)
+
+        init {
+            text.inline = object : InlineRenderer {
+                override fun measure(token: Int, scale: Float): Float {
+                    val nodes = nodes(token)
+                    return math.measure(nodes, inlineScale(nodes, scale)).width
+                }
+
+                override fun write(token: Int, x: Float, baseline: Float, color: Int, scale: Float, gap: Gap): Float {
+                    val nodes = nodes(token)
+                    return math.write(nodes, x, baseline, color, inlineScale(nodes, scale), gap)
+                }
+            }
+        }
+
+        private fun nodes(token: Int) = MathParser.parse(inlineTex.getOrElse(token) { "" }).flatten()
+
+        /** Inline maths is written at the text's size, smaller only when a fraction would hit the next line. */
+        private fun inlineScale(nodes: List<MathParser.Node>, scale: Float): Float {
+            val size = scale * INLINE_SIZE
+            val m = math.measure(nodes, size)
+            val fit = minOf(1f, INLINE_ASCENT * gap / m.ascent.coerceAtLeast(0.01f), INLINE_DESCENT * gap / m.descent.coerceAtLeast(0.01f))
+            return size * fit.coerceAtLeast(0.6f)
+        }
     }
 
     /** One ruled-line row of a block (or several, for tall content); [draw] writes it on its last baseline. */
-    private class Row(val lines: Int, val draw: Pen.(left: Float, right: Float, baseline: Float) -> Unit)
+    private class Row(val lines: Int, val blank: Boolean = false, val draw: Pen.(left: Float, right: Float, baseline: Float) -> Unit)
+
+    /** An empty ruled line (air above a box, room under a hanging fraction). */
+    private fun blankRow() = Row(1, blank = true) { _, _, _ -> }
 
     /** Ruled lines [block] needs in a column [width] wide. */
     fun linesFor(block: PageBlock, width: Float): Int = rows(block, width).sumOf { it.lines }.coerceAtLeast(1)
@@ -112,20 +142,27 @@ class PageComposer(
 
     private fun colorOf(s: InkSemantic): Int = if (s == InkSemantic.Regular) style.pen.colorArgb else NotebookPalette.ink(s).toInt()
 
+    /**
+     * One pen per role, whatever colour the board used: titles and headings in the emphasis pen,
+     * margin notes in the annotation (green) pen, boxed formulas in the essential (red) pen, body
+     * text in the user's pen. A role's own semantic wins only when it is stronger than regular.
+     */
+    private fun roleColor(b: PageBlock, role: InkSemantic): Int = colorOf(if (b.semantic == InkSemantic.Regular) role else b.semantic)
+
     /** Usable width: a little narrower than the column, since a hand never spaces letters exactly. */
     private fun usable(width: Float) = width * 0.95f
 
     private fun rows(b: PageBlock, width: Float): List<Row> = when (b) {
         is PageBlock.Heading -> {
             val scale = when (b.level) { 1 -> 1.3f; 2 -> 1.12f; else -> 1f }
-            textRows(b.text, width, scale, colorOf(b.semantic), Script.Print, underline = b.level <= 2)
+            textRows(b.text, width, scale, roleColor(b, InkSemantic.Emphasis), Script.Print, underline = b.level <= 2)
         }
         is PageBlock.Paragraph -> textRows(b.text, width, body, colorOf(b.semantic), style.script)
         is PageBlock.Bullets -> b.items.withIndex().flatMap { (i, item) -> bulletRows(item, if (b.ordered) "${i + 1}." else "•", width, colorOf(b.semantic)) }
         is PageBlock.Callout -> calloutRows(b, width)
-        is PageBlock.Math -> mathRows(b.latex, width, colorOf(b.semantic), boxed = b.boxed)
+        is PageBlock.Math -> mathRows(b.latex, width, if (b.boxed) roleColor(b, InkSemantic.Essential) else colorOf(b.semantic), boxed = b.boxed)
         is PageBlock.Proof -> proofRows(b, width)
-        is PageBlock.MarginNote -> textRows(b.text, width, 0.85f * body, colorOf(b.semantic), style.script)
+        is PageBlock.MarginNote -> textRows(b.text, width, 0.85f * body, roleColor(b, InkSemantic.Annotation), style.script)
         is PageBlock.Diagram -> diagramRows(b, width)
     }
 
@@ -141,7 +178,7 @@ class PageComposer(
         indent: Float = 0f,
         firstIndent: Float = 0f,
     ): List<Row> {
-        val lines = metrics.text.wrap(InlineMath.flatten(content), usable(width) - indent, scale, script, firstIndent)
+        val lines = metrics.text.wrap(InlineMath.encode(content, inlineTex), usable(width) - indent, scale, script, firstIndent)
         return lines.mapIndexed { i, line ->
             Row(1) { left, right, baseline ->
                 val x0 = startX(left, right, indent + if (i == 0) firstIndent else 0f)
@@ -216,15 +253,17 @@ class PageComposer(
                 math.write(nodes, x, baseline, color, scale)
             }
         }
-        if (!boxed || rows.isEmpty()) return rows
+        // A fraction or subscript that hangs below the line would touch the next line's capitals: skip a line.
+        if (!boxed) return if (rows.isNotEmpty() && sized.last().third.descent > HANG * gap) rows + blankRow() else rows
+        if (rows.isEmpty()) return rows
         val widest = sized.maxOf { it.third.width }
         val firstAscent = sized.first().third.ascent
         val lastDescent = sized.last().third.descent
         val total = rows.sumOf { it.lines }
         // One extra line above gives the box room (and one below when subscripts hang low);
         // the box is drawn after the formula, like a student does.
-        val below = if (max(lastDescent, 0.1f * gap) + 0.22f * gap > 0.3f * gap) listOf(Row(1) { _, _, _ -> }) else emptyList()
-        return listOf(Row(1) { _, _, _ -> }) + rows.dropLast(1) + Row(rows.last().lines) { left, right, baseline ->
+        val below = if (max(lastDescent, 0.1f * gap) + 0.22f * gap > 0.3f * gap) listOf(blankRow()) else emptyList()
+        return listOf(blankRow()) + rows.dropLast(1) + Row(rows.last().lines) { left, right, baseline ->
             rows.last().draw(this, left, right, baseline)
             val pad = 0.5f * gap
             val x0 = if (rtl) right - indent - widest - 2 * pad else left + indent
@@ -241,9 +280,31 @@ class PageComposer(
         val ink = colorOf(b.semantic)
         val note = colorOf(InkSemantic.Annotation)
         for (s in b.steps) {
-            s.latex?.let { out += mathRows(it, width, ink, boxed = false, indent = 1.6f * xh) }
-            s.text?.let { out += textRows(it, width, body, ink, style.script, indent = 1.6f * xh) }
-            s.justification?.let { out += textRows("($it)", width, 0.85f * body, note, style.script, indent = 4f * xh) }
+            val why = s.justification?.let { "($it)" }
+            val whyScale = 0.85f * body
+            val whyWidth = why?.let { metrics.text.measure(InlineMath.encode(it, inlineTex), whyScale, style.script) } ?: 0f
+            val math = s.latex?.let { mathRows(it, width, ink, boxed = false, indent = 1.6f * xh) }.orEmpty()
+            val prose = s.text?.let { textRows(it, width, body, ink, style.script, indent = 1.6f * xh) }.orEmpty()
+            val steps = math + prose
+            // The reason goes at the end of its line, like "(parts)" written to the right of a step,
+            // when the step is a single formula row with room for it; else on its own line.
+            val lastFormula = math.lastOrNull { !it.blank }
+            val inline = why != null && prose.isEmpty() && math.count { !it.blank } == 1 && s.latex?.let { tex ->
+                val widest = MathParser.parse(tex).maxOfOrNull { metrics.math.measure(it, MATH_SCALE).width } ?: 0f
+                1.6f * xh + widest + 2.5f * xh + whyWidth <= usable(width)
+            } == true
+            if (inline && lastFormula != null) {
+                out += math.map { row ->
+                    if (row !== lastFormula) row else Row(row.lines) { left, right, baseline ->
+                        row.draw(this, left, right, baseline)
+                        val x = if (rtl) left + whyWidth else right - whyWidth
+                        text.writeLine(InlineMath.encode(why!!, inlineTex), x, baseline, note, whyScale, style.script, rtl, Gap.Word)
+                    }
+                }
+            } else {
+                out += steps
+                why?.let { out += textRows(it, width, whyScale, note, style.script, indent = 4f * xh) }
+            }
         }
         return out
     }
@@ -307,7 +368,7 @@ class PageComposer(
         val inkBounds = pen.ink.boundsOf(anchor.id.value) ?: return
         val noteBounds = pen.ink.boundsOf(note.id.value) ?: return
         val y = (inkBounds[1] + inkBounds[3]) / 2
-        val color = colorOf(note.semantic)
+        val color = roleColor(note, InkSemantic.Annotation)
         if (!rtl) {
             val from = P(noteBounds[0] - 0.25f * gap, note.frame.top + 0.55f * gap)
             val to = P(min(inkBounds[2] + 0.3f * gap, from.x - gap), y)
@@ -326,5 +387,15 @@ class PageComposer(
         const val MAX_DIAGRAM_LINES = 9f
         const val LABEL_SCALE = 0.85f
         const val MATH_SCALE = 1.3f
+
+        /** Inline maths may rise this many line gaps above the baseline and drop this many below it. */
+        const val INLINE_ASCENT = 0.8f
+
+        /** Print maths beside joined script looks small at the same x-height; written a bit larger, like display maths. */
+        const val INLINE_SIZE = 1.2f
+        const val INLINE_DESCENT = 0.42f
+
+        /** Display maths hanging further below the baseline (in line gaps) gets a blank line after it. */
+        const val HANG = 0.3f
     }
 }

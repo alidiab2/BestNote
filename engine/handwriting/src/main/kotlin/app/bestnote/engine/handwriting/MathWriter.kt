@@ -275,6 +275,41 @@ internal class MathWriter(private val hand: Hand, private val text: TextWriter, 
 /** Inline maths inside prose (`\( … \)` or `$ … $`) flattened to what a hand writes on one line. */
 internal object InlineMath {
     private val INLINE = Regex("""\\\((.+?)\\\)|\$(.+?)\$""")
+    private const val OPEN = '\uE000'
+    private const val CLOSE = '\uE001'
+    private val TOKEN = Regex("$OPEN(\\d+)$CLOSE")
+
+    /**
+     * Replaces each inline formula in [text] with a space-free token naming its index in [table],
+     * so word wrap keeps a formula in one piece and the writer can draw it with real maths layout.
+     */
+    fun encode(text: String, table: MutableList<String>): String =
+        if (!text.contains('\\') && !text.contains('$')) text else INLINE.replace(text) { m ->
+            val tex = m.groupValues[1].ifEmpty { m.groupValues[2] }.trim()
+            var i = table.indexOf(tex)
+            if (i < 0) {
+                table += tex
+                i = table.lastIndex
+            }
+            "$OPEN$i$CLOSE"
+        }
+
+    fun hasToken(word: String) = word.indexOf(OPEN) >= 0
+
+    /** (token index or null, text) pieces of a word, in order. */
+    fun segments(word: String): List<Pair<Int?, String>> {
+        val out = ArrayList<Pair<Int?, String>>()
+        var at = 0
+        for (m in TOKEN.findAll(word)) {
+            if (m.range.first > at) out += null to word.substring(at, m.range.first)
+            out += m.groupValues[1].toInt() to ""
+            at = m.range.last + 1
+        }
+        if (at < word.length) out += null to word.substring(at)
+        return out
+    }
+
+    fun stripTokens(word: String) = TOKEN.replace(word, "")
 
     fun flatten(text: String): String = if (!text.contains('\\') && !text.contains('$')) text else INLINE.replace(text) { m ->
         val tex = m.groupValues[1].ifEmpty { m.groupValues[2] }
@@ -293,7 +328,7 @@ internal object InlineMath {
             is MathParser.Group -> flat(n.body)
             is MathParser.Frac -> wrapped(n.num) + "/" + wrapped(n.den)
             is MathParser.Scripts -> (n.base?.let { flat(listOf(it)) } ?: "") +
-                (n.sub?.let { "_" + wrapped(it) } ?: "") + (n.sup?.let { "^" + wrapped(it) } ?: "")
+                (n.sub?.let { wrapped(it) } ?: "") + (n.sup?.let { wrapped(it) } ?: "")
             is MathParser.Sqrt -> "√" + wrapped(n.body)
         }
     }
