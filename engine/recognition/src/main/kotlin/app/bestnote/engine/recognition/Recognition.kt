@@ -9,11 +9,16 @@
 package app.bestnote.engine.recognition
 
 import app.bestnote.core.model.NotebookId
+import app.bestnote.core.model.PageRect
+import app.bestnote.core.model.PageSearchHit
 import app.bestnote.core.model.StylusSample
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 
 /** One stroke as recognizers see it. */
 typealias InkStrokeSamples = List<StylusSample>
 
+/** One reading of some ink. [score] is a cost: lower is more confident, and scores are comparable across languages. */
 data class TextCandidate(val text: String, val score: Float)
 
 interface HandwritingRecognizer {
@@ -85,12 +90,34 @@ interface ShapeRecognizer {
     suspend fun recognizeArrow(shaft: InkStrokeSamples, head: InkStrokeSamples): ShapeMatch? = null
 }
 
-data class SearchHit(val notebookId: NotebookId, val pageIndex: Int, val snippet: String)
+/**
+ * Full-text search over everything written or typed in the library (REC-03). Results are pages, with the
+ * boxes of what matched so the editor can highlight it.
+ */
+interface PageSearch {
+    /** Pages matching every word of [query], best first. Blank queries match nothing. */
+    suspend fun search(query: String, limit: Int = 40): List<PageSearchHit>
 
-interface SearchIndex {
-    suspend fun index(notebookId: NotebookId, pageIndex: Int, text: String)
-    suspend fun remove(notebookId: NotebookId)
-    suspend fun search(query: String, limit: Int = 50): List<SearchHit>
+    /** The boxes on one page ([pageId] of [notebookId]) that match [query], for highlighting after opening it. */
+    suspend fun highlights(notebookId: NotebookId, pageId: String, query: String): List<PageRect>
+}
+
+/** Download state of the on-device handwriting models (REC-01). */
+enum class ModelStatus { NotDownloaded, Downloading, Ready, Failed }
+
+/** [ready] are the BCP-47 tags of the models on the device; [status] describes the download of the missing ones. */
+data class ModelsState(val status: ModelStatus = ModelStatus.NotDownloaded, val ready: Set<String> = emptySet()) {
+    val isReady: Boolean get() = status == ModelStatus.Ready
+}
+
+/** The on-device recognition models, which are downloaded once and then work offline. */
+interface HandwritingModels {
+    /** The languages the app reads, e.g. "ar" and "en-US". */
+    val languages: List<String>
+    val state: StateFlow<ModelsState>
+
+    /** Starts downloading the missing models (no-op while running or when all are present). */
+    fun download()
 }
 
 /** Recognizes nothing; the default until a real provider is installed. */
@@ -103,8 +130,13 @@ object NoOpShapeRecognizer : ShapeRecognizer {
     override suspend fun recognize(stroke: InkStrokeSamples): ShapeMatch? = null
 }
 
-object NoOpSearchIndex : SearchIndex {
-    override suspend fun index(notebookId: NotebookId, pageIndex: Int, text: String) = Unit
-    override suspend fun remove(notebookId: NotebookId) = Unit
-    override suspend fun search(query: String, limit: Int) = emptyList<SearchHit>()
+object NoOpPageSearch : PageSearch {
+    override suspend fun search(query: String, limit: Int) = emptyList<PageSearchHit>()
+    override suspend fun highlights(notebookId: NotebookId, pageId: String, query: String) = emptyList<PageRect>()
+}
+
+object NoOpHandwritingModels : HandwritingModels {
+    override val languages: List<String> = emptyList()
+    override val state: StateFlow<ModelsState> = MutableStateFlow(ModelsState())
+    override fun download() = Unit
 }

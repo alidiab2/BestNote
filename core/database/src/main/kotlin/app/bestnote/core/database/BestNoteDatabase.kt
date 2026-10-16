@@ -149,14 +149,18 @@ interface NotebookDao {
 }
 
 @Database(
-    entities = [NotebookEntity::class, FolderEntity::class],
-    version = 2,
+    entities = [
+        NotebookEntity::class, FolderEntity::class,
+        SearchSegmentEntity::class, SearchPageEntity::class, SearchNotebookEntity::class,
+    ],
+    version = 3,
     exportSchema = true,
-    autoMigrations = [AutoMigration(from = 1, to = 2)],
+    autoMigrations = [AutoMigration(from = 1, to = 2), AutoMigration(from = 2, to = 3)],
 )
 abstract class BestNoteDatabase : RoomDatabase() {
     abstract fun notebookDao(): NotebookDao
     abstract fun folderDao(): FolderDao
+    abstract fun searchDao(): SearchDao
 
     companion object {
         const val NAME = "bestnote.db"
@@ -166,6 +170,7 @@ abstract class BestNoteDatabase : RoomDatabase() {
             .setDriver(BundledSQLiteDriver())
             .setQueryCoroutineContext(Dispatchers.IO)
             .addCallback(NotebookSearch.Callback)
+            .addCallback(PageSearchSchema)
             .build()
     }
 }
@@ -183,6 +188,9 @@ object DatabaseModule {
 
     @Provides
     fun folderDao(db: BestNoteDatabase): FolderDao = db.folderDao()
+
+    @Provides
+    fun searchDao(db: BestNoteDatabase): SearchDao = db.searchDao()
 
     @Provides
     fun notebookSearch(db: BestNoteDatabase): NotebookSearch = NotebookSearch(db)
