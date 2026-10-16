@@ -224,6 +224,14 @@ internal object MathParser {
             }
             when (name) {
                 "frac", "dfrac", "tfrac" -> out += Frac(argument(), argument())
+                "overset", "stackrel" -> {
+                    val top = argument()
+                    out += Scripts(Group(argument()), top, null)
+                }
+                "underset" -> {
+                    val bottom = argument()
+                    out += Scripts(Group(argument()), null, bottom)
+                }
                 "sqrt" -> {
                     if (i < s.length && s[i] == '[') { while (i < s.length && s[i] != ']') i++; i++ }
                     out += Sqrt(argument())

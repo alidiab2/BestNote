@@ -216,8 +216,13 @@ class FontComposer(
     internal fun widthOf(text: String, font: HandFont, size: Float) = measure.width(text, font, size * scaleOf(font))
 
     /** Lines a row of text at [size] needs: its ascent must fit under the line above. */
-    internal fun linesForSize(size: Float, font: HandFont = style.latinFont) =
-        max(1, ceil((min(measure.ascent(font), MAX_INK_ASCENT) * size * 0.82f) / gap - 0.02f).toInt())
+    internal fun linesForSize(size: Float, font: HandFont = style.latinFont): Int {
+        val ascent = measure.ascent(font)
+        var extent = min(ascent, MAX_INK_ASCENT) * size * 0.82f
+        // A hand with tall marks and deep tails (Aref Ruqaa) needs its whole height between lines.
+        if (ascent > TALL_HAND) extent = max(extent, TALL_EXTENT * size - 0.05f * gap)
+        return max(1, ceil(extent / gap - 0.02f).toInt())
+    }
 
     // ------------------------------------------------------------------ text lines
 
@@ -891,6 +896,10 @@ class FontComposer(
          * counting it put every Arabic line on two lines of the paper.
          */
         internal const val MAX_INK_ASCENT = 1.05f
+
+        /** Fonts whose ascent is above this are "tall hands"; their lines need [TALL_EXTENT] × size. */
+        internal const val TALL_HAND = 1.1f
+        internal const val TALL_EXTENT = 1.12f
 
         /** Operators whose limits go under them. */
         internal val UNDER_LIMITS = setOf("lim", "max", "min", "sup", "inf", "Σ", "Π", "limsup", "liminf")

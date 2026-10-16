@@ -384,18 +384,24 @@ class NoteComposer(
             return heading(title, width, NoteRole.Heading) + b.terms.flatMap { t -> fc.bulletRows(t.term, "•", width, color) } + fc.blankRow()
         }
         val termLines = fc.linesForSize(size, style.arabicFont).takeIf { b.terms.any { WritingScript.hasRtl(it.term + it.translation) } } ?: fc.linesForSize(size)
-        return heading(title, width, NoteRole.Heading) + b.terms.map { t ->
-            row(termLines) { l, _, base ->
-                val first = if (rtl) l + half else l
-                val second = if (rtl) l else l + half
-                for ((x0, word, c) in listOf(Triple(first, t.term, color), Triple(second, t.translation, fc.penColor))) {
-                    val prev = fc.rtl
-                    fc.rtl = WritingScript.mostlyRtl(word)
-                    fc.writeLine(this, InlineMath.encode(word, fc.inlineTex), x0, x0 + half - 0.3f * gap, 0f, base, size, c)
-                    fc.rtl = prev
+        return heading(title, width, NoteRole.Heading) + b.terms.flatMap { t ->
+            // Each side wraps inside its half; the pair takes the lines of its longer side.
+            val term = fc.wrap(InlineMath.encode(t.term, fc.inlineTex), half - 0.4f * gap, size)
+            val translation = fc.wrap(InlineMath.encode(t.translation, fc.inlineTex), half - 0.4f * gap, size)
+            (0 until max(term.size, translation.size)).map { k ->
+                row(termLines) { l, _, base ->
+                    val first = if (rtl) l + half else l
+                    val second = if (rtl) l else l + half
+                    for ((x0, line, c) in listOf(Triple(first, term.getOrNull(k), color), Triple(second, translation.getOrNull(k), fc.penColor))) {
+                        if (line == null) continue
+                        val prev = fc.rtl
+                        fc.rtl = WritingScript.mostlyRtl(InlineMath.stripTokens(line))
+                        fc.writeLine(this, line, x0, x0 + half - 0.3f * gap, 0f, base, size, c)
+                        fc.rtl = prev
+                    }
+                    val mid = l + half
+                    shapes.dashed(P(mid - 0.15f * gap, base - 0.6f * gap), P(mid - 0.15f * gap, base + 0.2f * gap), color)
                 }
-                val mid = l + half
-                shapes.dashed(P(mid - 0.15f * gap, base - 0.6f * gap), P(mid - 0.15f * gap, base + 0.2f * gap), color)
             }
         } + fc.blankRow()
     }
@@ -455,7 +461,9 @@ class NoteComposer(
             val lines = max(1, ceil((max(l.ascent, r?.ascent ?: 0f) + (if (last) 0.4f else 0.12f) * gap) / gap - 0.02f).toInt())
             if (last) out += fc.blankRow().takeIf { lines == 1 && i > 0 }?.let { listOf(it) }.orEmpty()
             out += row(lines) { left, right, base ->
-                val x0 = if (fc.rtl) right - indent - total else left + indent
+                // Right to left: the circled number goes right of the box, so the box moves left to leave it room.
+                val tagRoom = b.number?.takeIf { fc.rtl }?.let { n -> NoteNormalizer.circled(n) }?.let { tag -> fc.widthOf(tag, fc.fontFor(tag), body) + 0.9f * gap } ?: 0f
+                val x0 = if (fc.rtl) right - indent - total - tagRoom else left + indent
                 val color = if (last) result else step
                 l.draw(this, x0 + lhsW - l.width, base, color)
                 if (r != null) {
@@ -471,7 +479,7 @@ class NoteComposer(
                     b.number?.let { n ->
                         val tag = NoteNormalizer.circled(n)
                         val tw = fc.widthOf(tag, fc.fontFor(tag), body)
-                        val tx = if (fc.rtl) bx0 - 0.4f * gap - tw else x0 + w + 0.7f * gap
+                        val tx = x0 + w + 0.7f * gap
                         text(tag, tx, base, tw, body, result, fc.fontFor(tag), false)
                     }
                 }

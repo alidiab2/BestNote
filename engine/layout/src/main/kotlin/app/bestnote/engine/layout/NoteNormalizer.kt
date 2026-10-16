@@ -191,7 +191,7 @@ object NoteNormalizer {
     fun withGlossary(doc: NoteDocument, glossary: NotebookGlossary, allowElement: Boolean): NoteDocument {
         // A pair whose two sides are the same word (no terms language: the model repeats the notes' own
         // term) teaches nothing: dropped, and no glossary at all when no pair differs.
-        val all = doc.allTerms().filter { it.translation.isNotBlank() && same(it.term) != same(it.translation) }
+        val all = doc.allTerms().map(::withoutEcho).filter { it.translation.isNotBlank() && same(it.term) != same(it.translation) }
         val pageTerms = NotebookGlossary().merge(all).first.terms
         val rest = doc.elements.filter { it.element != NoteElement.Glossary }
         val fresh = glossary.newTerms(pageTerms)
@@ -200,6 +200,14 @@ object NoteNormalizer {
     }
 
     private fun same(s: String) = NotebookGlossary.key(s)
+
+    private val PAREN = Regex("""\s*[(（]([^()（）]*)[)）]\s*""")
+
+    /** "قاعدة لوبيتال (כלל לופיטל)" → "قاعدة لوبيتال" when the bracket only repeats the translation (the notes' terms style). */
+    internal fun withoutEcho(t: GlossaryTerm): GlossaryTerm {
+        val stripped = PAREN.replace(t.term) { m -> if (same(m.groupValues[1]) == same(t.translation)) " " else m.value }.trim()
+        return if (stripped.isEmpty() || stripped == t.term) t else t.copy(term = stripped)
+    }
 
     private const val ATOM_CHARS = 12
 }

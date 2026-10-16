@@ -136,5 +136,8 @@ class PackedFlowTest {
         assertTrue("no glossary when no pair differs", out.elements.none { it.element == NoteElement.Glossary })
         val mixed = same.copy(terms = same.terms + GlossaryTerm("البسط", "מונה"))
         assertEquals(listOf("البسط"), NoteNormalizer.normalize(mixed, NoteTemplates.byId("classic")).elements.last().terms.map { it.term })
+        // A term that already carries its translation in brackets is written once.
+        val echo = same.copy(terms = listOf(GlossaryTerm("قاعدة لوبيتال (כלל לופיטל)", "כלל לופיטל")))
+        assertEquals("قاعدة لوبيتال", NoteNormalizer.normalize(echo, NoteTemplates.byId("classic")).elements.last().terms.single().term)
     }
 }
