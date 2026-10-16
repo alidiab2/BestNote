@@ -151,4 +151,11 @@
     <string name="tpl_chg_generic">%1$s: %2$s</string>
     <string name="tpl_chg_added">عناصر أُضيفت: %1$s</string>
     <string name="tpl_chg_removed">عناصر أُزيلت: %1$s</string>
+    <string name="tpl_look_layout">تخطيط الصفحة</string>
+    <string name="tpl_layout_flow">عمود واحد</string>
+    <string name="tpl_layout_packed">أعمدة متراصة</string>
+    <string name="tpl_look_density">الكثافة</string>
+    <string name="tpl_density_airy">متباعد</string>
+    <string name="tpl_density_normal">عادي</string>
+    <string name="tpl_density_dense">كثيف</string>
 </resources>

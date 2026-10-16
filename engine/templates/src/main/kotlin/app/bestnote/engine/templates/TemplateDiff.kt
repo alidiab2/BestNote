@@ -20,6 +20,8 @@ object TemplateDiff {
         add("bodyScale", "%.2f".format(a.look.bodyScale), "%.2f".format(b.look.bodyScale))
         add("spaceBeforeHeading", a.look.spaceBeforeHeading, b.look.spaceBeforeHeading)
         add("marginArrows", a.look.marginArrows, b.look.marginArrows)
+        add("layout", a.look.layout, b.look.layout)
+        add("density", a.look.density, b.look.density)
         add("paper", a.look.paper?.name, b.look.paper?.name)
         add("highlight", TemplateJson.hex(a.look.highlight), TemplateJson.hex(b.look.highlight))
         NoteRole.entries.forEach { r ->

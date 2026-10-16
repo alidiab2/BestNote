@@ -79,6 +79,11 @@ object NotePrompts {
         append(if (both) ": one computation is one Derivation OR one StepSolution, never both" else "")
         append("; do not restate a result as a Note.\n")
         append("Never return an empty element: a Summary has 2–4 items, a Glossary has terms, otherwise leave it out.\n")
+        // TPL-03: the app packs topics into columns; it needs compact content grouped by topic.
+        append("Compact, like the best student's notebook: short phrases, no filler or connecting sentences. Group by topic: each topic starts with a Heading.\n")
+        val solved = listOf(NoteElement.WorkedExample, NoteElement.StepSolution).filter { it in t.elements }
+        if (solved.isNotEmpty()) append("A computation is ONE ${solved.joinToString(" or ")} (not loose Paragraph + Formula lines).\n")
+        if (NoteElement.Table in t.elements) append("Table only for real tabular data, never to lay out steps.\n")
         append(instructions(t.ai, request.rtl))
         if (t.ai.note.isNotBlank()) {
             append("\n## The user's instruction (highest priority, follow it exactly)\n")
@@ -110,7 +115,14 @@ object NotePrompts {
             },
         )
         if (ai.stepByStep) append("- Solutions step by step, each step with a short reason.\n")
-        if (ai.glossary) append("- REQUIRED, never empty: terms = [[term as in the notes, term in ${terms ?: "the board's language"}]] for every technical term on the page (usually 4–10).\n")
+        if (ai.glossary) {
+            if (terms != null) {
+                append("- REQUIRED, never empty: terms = [[term as in the notes, term in $terms]] for every technical term on the page (usually 4–10).\n")
+            } else {
+                // Without a terms language the model repeated the notes' own word on both sides.
+                append("- terms = [[term as in the notes, the board's original term]] only where the board wrote it in another language; otherwise no terms.\n")
+            }
+        }
     }
 
     /** User turn sent with a board photo. */

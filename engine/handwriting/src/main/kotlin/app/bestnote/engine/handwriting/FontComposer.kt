@@ -507,8 +507,7 @@ class FontComposer(
             }
         }
         if (rows.isEmpty()) return rows
-        val hang = boxes.last().descent > HANG * gap
-        if (!boxed) return if (hang) rows + blankRow() else rows
+        if (!boxed) return rows + hangRows(boxes.last().descent)
         val widest = boxes.maxOf { it.width }
         val firstAscent = boxes.first().ascent
         val lastDescent = boxes.last().descent
@@ -522,6 +521,12 @@ class FontComposer(
             val bottom = baseline + max(lastDescent, 0.1f * gap) + 0.2f * gap
             shapes.box(x0, top, x0 + widest + 2 * pad, bottom, color)
         } + below
+    }
+
+    /** Blank lines under a formula whose writing hangs below its line (a fraction, limits under lim). */
+    internal fun hangRows(descent: Float): List<Row> {
+        val n = if (descent > HANG * gap) ceil((descent - HANG * gap) / gap).toInt().coerceAtLeast(1) else 0
+        return List(n) { blankRow() }
     }
 
     // ------------------------------------------------------------------ maths layout (font)

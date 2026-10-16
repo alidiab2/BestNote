@@ -189,7 +189,7 @@ class NoteComposer(
         val boxes = mathBoxes(latex, width)
         return boxes.map { box ->
             row(linesOf(box)) { l, r, b -> box.draw(this, l + (r - l - box.width) / 2, b, color) }
-        } + if (boxes.lastOrNull()?.let { it.descent > HANG * gap } == true) listOf(fc.blankRow()) else emptyList()
+        } + (boxes.lastOrNull()?.let { fc.hangRows(it.descent) } ?: emptyList())
     }
 
     private fun mathBoxes(latex: String, width: Float, scale: Float = 1f): List<FontComposer.MBox> {
@@ -254,7 +254,8 @@ class NoteComposer(
                 out += lines.mapIndexed { k, r ->
                     if (k != last) r else FontComposer.Row(r.lines, r.blank, r.glue) { l, rt, base ->
                         r.draw(this, l, rt, base)
-                        fc.writeLine(this, InlineMath.encode(why!!, fc.inlineTex), l, rt, fc.usable(rt - l) - whyW, base, whySize, whyColor)
+                        // The reason follows the step's own writing, a little apart (not at the column's far end).
+                        fc.writeLine(this, InlineMath.encode(why!!, fc.inlineTex), l, rt, min(fc.usable(rt - l) - whyW, lineWidth(s, width, markerW) + 1.2f * body), base, whySize, whyColor)
                     }
                 }
             } else {

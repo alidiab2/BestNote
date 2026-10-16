@@ -128,6 +128,8 @@ private fun describe(c: TemplateChangeItem): String {
         c.key == "name" -> stringResource(R.string.tpl_chg_name, c.to)
         c.key == "bodyScale" -> stringResource(R.string.tpl_chg_generic, stringResource(R.string.tpl_look_body_size), arrow)
         c.key == "spaceBeforeHeading" -> stringResource(R.string.tpl_chg_generic, stringResource(R.string.tpl_look_space_before), arrow)
+        c.key == "layout" -> stringResource(R.string.tpl_chg_generic, stringResource(R.string.tpl_look_layout), arrow)
+        c.key == "density" -> stringResource(R.string.tpl_chg_generic, stringResource(R.string.tpl_look_density), arrow)
         c.key == "marginArrows" -> stringResource(R.string.tpl_chg_generic, stringResource(R.string.tpl_look_margin_arrows), arrow)
         c.key == "paper" -> stringResource(R.string.tpl_chg_generic, stringResource(R.string.tpl_look_paper), arrow)
         c.key == "highlight" -> stringResource(R.string.tpl_chg_generic, stringResource(R.string.tpl_deco_highlight), arrow)
