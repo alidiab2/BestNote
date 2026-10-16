@@ -198,6 +198,10 @@
         <item quantity="one">%1$d page with a match</item>
         <item quantity="other">%1$d pages with a match</item>
     </plurals>
+    <plurals name="library_page_results_in_notebook">
+        <item quantity="one">%1$d page</item>
+        <item quantity="other">%1$d pages</item>
+    </plurals>
     <string name="library_page_number">Page %1$d</string>
     <string name="library_models_title">Search your handwriting</string>
     <string name="library_models_body">Download the Arabic and English handwriting models once (about 50 MB). After that, reading your notes happens on this device, even offline.</string>

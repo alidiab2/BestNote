@@ -285,7 +285,13 @@ class PagedDocumentView(context: Context) : FrameLayout(context), InProgressStro
             highlights.color = value
         }
 
-    /** Marks [rects] (page points) on page [pageIndex] as search matches, until [clearHighlights] or the next stroke. */
+    /** Search marks stay fully visible for [holdMillis], then fade over [fadeMillis] (0 = vanish; a negative hold keeps them until the next stroke). */
+    fun setHighlightTiming(holdMillis: Long, fadeMillis: Long) {
+        highlights.holdMillis = holdMillis
+        highlights.fadeMillis = fadeMillis
+    }
+
+    /** Marks [rects] (page points) on page [pageIndex] as search matches, briefly (see [setHighlightTiming]), or until [clearHighlights] or the next stroke. */
     fun showHighlights(pageIndex: Int, rects: List<PageRect>) = highlights.show(pageIndex, rects)
 
     fun clearHighlights() = highlights.clear()

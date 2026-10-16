@@ -245,6 +245,14 @@
         <item quantity="many">%1$d صفحة مطابقة</item>
         <item quantity="other">%1$d صفحة مطابقة</item>
     </plurals>
+    <plurals name="library_page_results_in_notebook">
+        <item quantity="zero">لا صفحات</item>
+        <item quantity="one">صفحة</item>
+        <item quantity="two">صفحتان</item>
+        <item quantity="few">%1$d صفحات</item>
+        <item quantity="many">%1$d صفحة</item>
+        <item quantity="other">%1$d صفحة</item>
+    </plurals>
     <string name="library_page_number">صفحة %1$d</string>
     <string name="library_models_title">ابحث في خط يدك</string>
     <string name="library_models_body">نزّل نموذجَي الخط العربي والإنجليزي مرة واحدة (نحو 50 ميغابايت). بعد ذلك تتم قراءة ملاحظاتك على هذا الجهاز، حتى دون اتصال.</string>

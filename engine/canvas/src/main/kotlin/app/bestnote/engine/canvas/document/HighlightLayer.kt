@@ -33,13 +33,29 @@ internal class HighlightLayer(context: Context, private val pages: PagesLayer) :
 
     val isShowing: Boolean get() = rects.isNotEmpty()
 
+    /** How long the marks stay fully visible, then how long they take to fade out (0: vanish at once). */
+    var holdMillis: Long = DEFAULT_HOLD_MS
+    var fadeMillis: Long = DEFAULT_FADE_MS
+
+    private val startFade = Runnable {
+        if (fadeMillis <= 0L) clear() else animate().alpha(0f).setDuration(fadeMillis).withEndAction { clear() }.start()
+    }
+
+    /** Marks [matches] on page [pageIndex], then fades them out. Any new stroke clears them first, so nothing animates under the pen. */
     fun show(pageIndex: Int, matches: List<PageRect>) {
+        removeCallbacks(startFade)
+        animate().cancel()
+        alpha = 1f
         page = pageIndex
         rects = matches
         invalidate()
+        if (matches.isNotEmpty() && holdMillis >= 0L) postDelayed(startFade, holdMillis)
     }
 
     fun clear() {
+        removeCallbacks(startFade)
+        animate().cancel()
+        alpha = 1f
         if (rects.isEmpty()) return
         rects = emptyList()
         page = -1
@@ -68,6 +84,8 @@ internal class HighlightLayer(context: Context, private val pages: PagesLayer) :
     }
 
     private companion object {
+        const val DEFAULT_HOLD_MS = 3_000L
+        const val DEFAULT_FADE_MS = 600L
         const val DEFAULT_COLOR = 0xFFE8A200.toInt()
         const val FILL_ALPHA = 0x66
         const val PAD_DP = 3f
