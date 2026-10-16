@@ -17,6 +17,7 @@ data class PaperColors(
     val dot: Int,
     val divider: Int,
     val staff: Int,
+    val gridMajor: Int = divider,
 ) {
     fun line(role: LineRole): Int = when (role) {
         LineRole.Rule -> rule
@@ -24,6 +25,7 @@ data class PaperColors(
         LineRole.Grid -> grid
         LineRole.Divider -> divider
         LineRole.Staff -> staff
+        LineRole.GridMajor -> gridMajor
     }
 
     /** True for dark paper: ink colors switch to their light counterparts ([PaperInk]). */
@@ -38,6 +40,7 @@ data class PaperColors(
             dot = 0xFFB7C3D3.toInt(),
             divider = 0xFFAFBDD0.toInt(),
             staff = 0xFFB9C3CF.toInt(),
+            gridMajor = 0xFFC6D2E2.toInt(),
         )
         val Cream = PaperColors(
             page = 0xFFFBF5E6.toInt(),
@@ -47,6 +50,7 @@ data class PaperColors(
             dot = 0xFFC4B9A0.toInt(),
             divider = 0xFFC2B59A.toInt(),
             staff = 0xFFC6BBA5.toInt(),
+            gridMajor = 0xFFD2C7AE.toInt(),
         )
         val Dark = PaperColors(
             page = 0xFF24272D.toInt(),
@@ -56,6 +60,7 @@ data class PaperColors(
             dot = 0xFF59606C.toInt(),
             divider = 0xFF5B6371.toInt(),
             staff = 0xFF545B67.toInt(),
+            gridMajor = 0xFF4A515D.toInt(),
         )
 
         fun of(color: PaperColor): PaperColors = when (color) {

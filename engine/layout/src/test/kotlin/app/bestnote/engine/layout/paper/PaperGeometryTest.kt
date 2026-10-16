@@ -119,4 +119,56 @@ class PaperGeometryTest {
         assertEquals(0.5f, PixelSnap.centerIn(0f, 3f, 100), 0f)
         assertEquals(99.5f, PixelSnap.centerIn(595f, 1000f / 595f * 0.1f + 1f, 100), 0f)
     }
+
+    @Test fun graphPaperHasTwoMmSquaresWithHeavyCentimetreLines() {
+        for (size in sizes) {
+            val g = PaperGeometry.of(PaperTemplate.Graph, size)
+            val v = g.lines.filter { !it.horizontal }
+            assertTrue(v.size > 20)
+            val xs = v.map { it.x0 }.sorted()
+            xs.zipWithNext().forEach { (a, b) -> assertEquals(PaperGeometry.GRAPH, b - a, 0.01f) }
+            val majors = v.filter { it.role == LineRole.GridMajor }.map { it.x0 }.sorted()
+            majors.zipWithNext().forEach { (a, b) -> assertEquals(PaperGeometry.GRAPH * 5, b - a, 0.02f) }
+            g.lines.forEach { assertTrue(it.x0 in 0f..size.widthPt && it.y0 in 0f..size.heightPt) }
+        }
+    }
+
+    @Test fun dailyPlannerHasSixteenHourRowsAndATaskColumn() {
+        for (size in sizes) {
+            val g = PaperGeometry.of(PaperTemplate.PlannerDaily, size)
+            val split = PaperGeometry.plannerSplitX(size)
+            val hourLines = g.lines.filter { it.horizontal && it.x1 == split }
+            assertEquals(PaperGeometry.PLANNER_HOURS, hourLines.size)
+            val ys = hourLines.map { it.y0 }.sorted()
+            val row = PaperGeometry.plannerHourHeight(size)
+            ys.zipWithNext().forEach { (a, b) -> assertEquals(row, b - a, 0.01f) }
+            assertTrue(ys.last() < size.heightPt)
+            assertTrue(g.lines.any { !it.horizontal && it.x0 == split })
+            g.lines.forEach { assertTrue(it.x1 <= size.widthPt + 0.01f && it.y1 <= size.heightPt + 0.01f) }
+        }
+    }
+
+    @Test fun weeklyPlannerHasEightBoxesInsideThePage() {
+        for (size in sizes) {
+            val g = PaperGeometry.of(PaperTemplate.PlannerWeekly, size)
+            val dividers = g.lines.filter { it.role == LineRole.Divider }
+            // header + 4 row bottoms, and the centre column divider
+            assertEquals(5, dividers.count { it.horizontal })
+            assertEquals(1, dividers.count { !it.horizontal })
+            assertEquals(size.widthPt / 2, dividers.first { !it.horizontal }.x0, 0.01f)
+            for (i in 0 until 8) {
+                val (x, y, w, h) = PaperGeometry.weekBox(size, i).toList()
+                assertTrue(x >= 0f && y >= 0f && x + w <= size.widthPt + 0.01f && y + h <= size.heightPt)
+            }
+            g.lines.filter { it.role == LineRole.Rule }.forEach { assertTrue(it.y0 < size.heightPt) }
+        }
+    }
+
+    @Test fun newTemplatesNeverDrawOutsideThePage() {
+        for (t in listOf(PaperTemplate.PlannerDaily, PaperTemplate.PlannerWeekly, PaperTemplate.Graph, PaperTemplate.Cornell, PaperTemplate.MusicStaff)) {
+            for (size in sizes) PaperGeometry.of(t, size).lines.forEach {
+                assertTrue("$t $it", it.x0 >= 0f && it.y0 >= 0f && it.x1 <= size.widthPt + 0.01f && it.y1 <= size.heightPt + 0.01f)
+            }
+        }
+    }
 }

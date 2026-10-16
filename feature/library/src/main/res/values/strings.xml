@@ -205,4 +205,11 @@
     <string name="library_models_download">Download</string>
     <string name="library_models_retry">Try again</string>
     <string name="library_models_downloading">Downloading handwriting models…</string>
+    <string name="library_template_narrow">Ruled · narrow</string>
+    <string name="library_template_wide">Ruled · wide</string>
+    <string name="library_template_cornell">Cornell</string>
+    <string name="library_template_music">Music staff</string>
+    <string name="library_template_planner_daily">Planner · daily</string>
+    <string name="library_template_planner_weekly">Planner · weekly</string>
+    <string name="library_template_graph">Graph paper</string>
 </resources>

@@ -48,7 +48,7 @@ A backup folder holds `backup.json` (written last), `notebooks/<id>-<updatedAt>.
 
 ## Page metadata (`pages/<pageId>.json`)
 `format`, `id`, `index`, `template` (a `PaperTemplate` name: `Blank`, `Ruled` (college), `RuledNarrow`,
-`RuledWide`, `Grid`, `Dotted`, `Cornell`, `MusicStaff`), `widthPt`, `heightPt` (the page size in points,
+`RuledWide`, `Grid`, `Dotted`, `Cornell`, `MusicStaff`, `PlannerDaily`, `PlannerWeekly`, `Graph`), `widthPt`, `heightPt` (the page size in points,
 already oriented, so A5 landscape is 595 x 420), `ink` (the chunk file name) and `paper` (`White`,
 `Cream` or `Dark`; optional, missing or unknown reads as `White`). Ink coordinates are page-local points.
 

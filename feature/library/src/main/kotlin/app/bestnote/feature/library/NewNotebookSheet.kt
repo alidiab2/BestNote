@@ -317,6 +317,50 @@ internal fun PaperPreview(template: PaperTemplate, modifier: Modifier = Modifier
                     y += step
                 }
             }
+            PaperTemplate.Graph -> {
+                val fine = step / 2f
+                var i = 0
+                var p = fine
+                while (p < size.height) {
+                    val c = if (i % 5 == 4) paper.marginLine.copy(alpha = 0.5f) else paper.ruledLine
+                    drawLine(c, Offset(0f, p), Offset(size.width, p), line * 0.6f)
+                    if (p < size.width) drawLine(c, Offset(p, 0f), Offset(p, size.height), line * 0.6f)
+                    p += fine
+                    i++
+                }
+            }
+            PaperTemplate.Cornell -> {
+                drawLine(paper.marginLine, Offset(0f, step * 1.5f), Offset(size.width, step * 1.5f), line)
+                drawLine(paper.marginLine, Offset(size.width * 0.3f, step * 1.5f), Offset(size.width * 0.3f, size.height * 0.8f), line)
+                drawLine(paper.marginLine, Offset(0f, size.height * 0.8f), Offset(size.width, size.height * 0.8f), line)
+            }
+            PaperTemplate.MusicStaff -> {
+                var top = step * 1.2f
+                while (top + step * 0.8f < size.height) {
+                    for (l in 0 until 5) {
+                        val y = top + l * step * 0.2f
+                        drawLine(paper.ruledLine, Offset(step * 0.5f, y), Offset(size.width - step * 0.5f, y), line)
+                    }
+                    top += step * 1.8f
+                }
+            }
+            PaperTemplate.PlannerDaily -> {
+                val split = size.width * 0.62f
+                drawLine(paper.marginLine, Offset(0f, step * 1.2f), Offset(size.width, step * 1.2f), line)
+                drawLine(paper.marginLine, Offset(split, step * 1.2f), Offset(split, size.height), line)
+                var y = step * 1.2f + step * 0.5f
+                while (y < size.height) {
+                    drawLine(paper.ruledLine, Offset(0f, y), Offset(size.width, y), line)
+                    y += step * 0.5f
+                }
+            }
+            PaperTemplate.PlannerWeekly -> {
+                val top = step * 1.2f
+                val cell = (size.height - top) / 4f
+                drawLine(paper.marginLine, Offset(0f, top), Offset(size.width, top), line)
+                for (r in 1..3) drawLine(paper.marginLine, Offset(0f, top + r * cell), Offset(size.width, top + r * cell), line)
+                drawLine(paper.marginLine, Offset(size.width / 2f, top), Offset(size.width / 2f, size.height), line)
+            }
             else -> Unit
         }
     }

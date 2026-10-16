@@ -20,6 +20,9 @@ enum class LineRole {
 
     /** One of the five lines of a music staff. */
     Staff,
+
+    /** Every fifth line of graph paper, drawn heavier than the [Grid] lines between. */
+    GridMajor,
 }
 
 /** A straight template line in page points. Lines are always horizontal or vertical. */
@@ -70,6 +73,9 @@ object PaperGeometry {
         PaperTemplate.Dotted -> dotted(size)
         PaperTemplate.Cornell -> cornell(size)
         PaperTemplate.MusicStaff -> music(size)
+        PaperTemplate.PlannerDaily -> plannerDaily(size)
+        PaperTemplate.PlannerWeekly -> plannerWeekly(size)
+        PaperTemplate.Graph -> graph(size)
     }
 
     /** First writing line: about 1 in on a full-size page, never less than two line heights. */
@@ -145,6 +151,105 @@ object PaperGeometry {
         lines += TemplateLine(0f, top, size.widthPt, top, LineRole.Divider)
         lines += TemplateLine(cue, top, cue, summary, LineRole.Divider)
         lines += TemplateLine(0f, summary, size.widthPt, summary, LineRole.Divider)
+        return TemplateGeometry(lines)
+    }
+
+    /** Graph paper pitch: 2 mm squares, a heavier line every 5th (1 cm). */
+    const val GRAPH = 2f * MM
+    const val GRAPH_MAJOR_EVERY = 5
+
+    /** Daily planner: hours listed in the left schedule, tasks on the right. */
+    const val PLANNER_FIRST_HOUR = 6
+    const val PLANNER_HOURS = 16
+    const val PLANNER_TIME_COLUMN = 14f * MM
+    const val PLANNER_BOTTOM = 10f * MM
+
+    /** Weekly planner: two columns of day boxes, four rows (Mon-Sat, then Sunday + notes). */
+    const val WEEK_COLS = 2
+    const val WEEK_ROWS = 4
+
+    /** x of the divider between the daily planner's schedule and its task list. */
+    fun plannerSplitX(size: PageSize): Float = size.widthPt * 0.62f
+
+    /** Height of one hour row of the daily planner. */
+    fun plannerHourHeight(size: PageSize): Float =
+        (size.heightPt - headerHeight(size, COLLEGE) - PLANNER_BOTTOM) / PLANNER_HOURS
+
+    private fun plannerDaily(size: PageSize): TemplateGeometry {
+        val w = size.widthPt
+        val h = size.heightPt
+        val top = headerHeight(size, COLLEGE)
+        val bottom = h - PLANNER_BOTTOM
+        val split = plannerSplitX(size)
+        val timeX = PLANNER_TIME_COLUMN.coerceAtMost(split / 3f)
+        val row = plannerHourHeight(size)
+        val lines = ArrayList<TemplateLine>()
+        lines += TemplateLine(0f, top, w, top, LineRole.Divider)
+        for (i in 1..PLANNER_HOURS) {
+            val y = top + i * row
+            lines += TemplateLine(0f, y, split, y, if (i == PLANNER_HOURS) LineRole.Divider else LineRole.Rule)
+        }
+        lines += TemplateLine(timeX, top, timeX, bottom, LineRole.Divider)
+        lines += TemplateLine(split, top, split, bottom, LineRole.Divider)
+        // Task list: college rules right of the split.
+        var y = top + COLLEGE
+        while (y <= bottom + 0.01f) {
+            lines += TemplateLine(split, y, w, y, LineRole.Rule)
+            y += COLLEGE
+        }
+        return TemplateGeometry(lines)
+    }
+
+    /** Top-left corner and size of weekly planner box [index] (0..7, row-major, 2 columns). */
+    fun weekBox(size: PageSize, index: Int): FloatArray {
+        val top = headerHeight(size, COLLEGE)
+        val bottom = size.heightPt - PLANNER_BOTTOM
+        val cw = size.widthPt / WEEK_COLS
+        val ch = (bottom - top) / WEEK_ROWS
+        return floatArrayOf((index % WEEK_COLS) * cw, top + (index / WEEK_COLS) * ch, cw, ch)
+    }
+
+    private fun plannerWeekly(size: PageSize): TemplateGeometry {
+        val w = size.widthPt
+        val top = headerHeight(size, COLLEGE)
+        val bottom = size.heightPt - PLANNER_BOTTOM
+        val lines = ArrayList<TemplateLine>()
+        lines += TemplateLine(0f, top, w, top, LineRole.Divider)
+        for (r in 1..WEEK_ROWS) {
+            val y = weekBox(size, (r - 1) * WEEK_COLS)[1] + weekBox(size, 0)[3]
+            lines += TemplateLine(0f, y, w, y, LineRole.Divider)
+        }
+        lines += TemplateLine(w / WEEK_COLS, top, w / WEEK_COLS, bottom, LineRole.Divider)
+        // Writing rules inside each box, under a one-line day heading.
+        for (i in 0 until WEEK_COLS * WEEK_ROWS) {
+            val (x, y0, bw, bh) = weekBox(size, i).toList()
+            var y = y0 + COLLEGE * 1.8f
+            while (y < y0 + bh - 0.5f) {
+                lines += TemplateLine(x + 6f, y, x + bw - 6f, y, LineRole.Rule)
+                y += COLLEGE
+            }
+        }
+        return TemplateGeometry(lines)
+    }
+
+    private fun graph(size: PageSize): TemplateGeometry {
+        val lines = ArrayList<TemplateLine>()
+        val x0 = centered(size.widthPt, GRAPH)
+        val y0 = centered(size.heightPt, GRAPH)
+        var i = 0
+        var x = x0
+        while (x < size.widthPt) {
+            lines += TemplateLine(x, 0f, x, size.heightPt, if (i % GRAPH_MAJOR_EVERY == 0) LineRole.GridMajor else LineRole.Grid)
+            x += GRAPH
+            i++
+        }
+        i = 0
+        var y = y0
+        while (y < size.heightPt) {
+            lines += TemplateLine(0f, y, size.widthPt, y, if (i % GRAPH_MAJOR_EVERY == 0) LineRole.GridMajor else LineRole.Grid)
+            y += GRAPH
+            i++
+        }
         return TemplateGeometry(lines)
     }
 

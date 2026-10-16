@@ -252,4 +252,11 @@
     <string name="library_models_download">تنزيل</string>
     <string name="library_models_retry">أعد المحاولة</string>
     <string name="library_models_downloading">جارٍ تنزيل نماذج الخط اليدوي…</string>
+    <string name="library_template_narrow">مسطّر · ضيّق</string>
+    <string name="library_template_wide">مسطّر · واسع</string>
+    <string name="library_template_cornell">كورنيل</string>
+    <string name="library_template_music">سلّم موسيقي</string>
+    <string name="library_template_planner_daily">مخطِّط · يومي</string>
+    <string name="library_template_planner_weekly">مخطِّط · أسبوعي</string>
+    <string name="library_template_graph">ورق رسم بياني</string>
 </resources>

@@ -10,13 +10,23 @@ import app.bestnote.core.model.PaperTemplate
  * `PaperPreview`) for them here. Order: the most used first.
  */
 internal object PaperTemplates {
-    private val preferredOrder = listOf(PaperTemplate.Ruled, PaperTemplate.Blank, PaperTemplate.Grid, PaperTemplate.Dotted)
+    private val preferredOrder = listOf(
+        PaperTemplate.Ruled, PaperTemplate.Blank, PaperTemplate.Grid, PaperTemplate.Dotted,
+        PaperTemplate.Graph, PaperTemplate.Cornell, PaperTemplate.MusicStaff, PaperTemplate.PlannerDaily, PaperTemplate.PlannerWeekly,
+    )
 
     private val labels: Map<PaperTemplate, Int> = mapOf(
         PaperTemplate.Blank to R.string.library_template_blank,
         PaperTemplate.Ruled to R.string.library_template_ruled,
         PaperTemplate.Grid to R.string.library_template_grid,
         PaperTemplate.Dotted to R.string.library_template_dotted,
+        PaperTemplate.RuledNarrow to R.string.library_template_narrow,
+        PaperTemplate.RuledWide to R.string.library_template_wide,
+        PaperTemplate.Cornell to R.string.library_template_cornell,
+        PaperTemplate.MusicStaff to R.string.library_template_music,
+        PaperTemplate.PlannerDaily to R.string.library_template_planner_daily,
+        PaperTemplate.PlannerWeekly to R.string.library_template_planner_weekly,
+        PaperTemplate.Graph to R.string.library_template_graph,
     )
 
     val all: List<PaperTemplate> =
