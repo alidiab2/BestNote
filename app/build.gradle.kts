@@ -42,6 +42,7 @@ dependencies {
     implementation(projects.ai.visionGemini)
 
     implementation(projects.engine.export)
+    implementation(projects.engine.recognitionMlkit)
     implementation(projects.feature.library)
     implementation(projects.feature.editor)
     implementation(projects.feature.settings)

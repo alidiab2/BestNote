@@ -3,6 +3,8 @@ package app.bestnote.feature.library
 import app.bestnote.core.common.SearchText
 import app.bestnote.core.model.Notebook
 import app.bestnote.core.model.NotebookId
+import app.bestnote.core.model.PageSearchHit
+import app.bestnote.engine.recognition.ModelsState
 import java.text.Collator
 import java.util.Calendar
 import java.util.Locale
@@ -56,6 +58,9 @@ data class NotebookItem(
     val progress: Float get() = (lastPageIndex + 1f) / pageCount
 }
 
+/** A page found by the content search, with the notebook it belongs to. */
+data class PageResult(val hit: PageSearchHit, val notebookTitle: String)
+
 /** A folder with its notebook count and nesting depth (0 = top level), in sidebar order. */
 data class FolderItem(val folder: Folder, val count: Int, val depth: Int = 0)
 
@@ -99,6 +104,10 @@ data class LibraryUiState(
     /** Folder colors in use, for the color filter. */
     val folderColors: List<Int> = emptyList(),
     val emptyKind: EmptyKind = EmptyKind.NoNotebooks,
+    /** Pages whose handwriting, typed text or PDF text match the query (REC-03). */
+    val pageResults: List<PageResult> = emptyList(),
+    /** Whether the handwriting models are on the device (REC-01); until then handwriting is not searchable. */
+    val models: ModelsState = ModelsState(),
 ) {
     val searching: Boolean get() = controls.query.isNotBlank()
 

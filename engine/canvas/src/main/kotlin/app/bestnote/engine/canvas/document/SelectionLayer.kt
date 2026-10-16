@@ -13,6 +13,7 @@ import android.view.View
 import android.view.animation.DecelerateInterpolator
 import androidx.ink.strokes.Stroke
 import app.bestnote.core.model.PageElement
+import app.bestnote.core.model.PageRect
 import app.bestnote.core.model.TextElement
 import app.bestnote.engine.canvas.StrokeBrushes
 import app.bestnote.engine.canvas.select.Affine
@@ -331,6 +332,14 @@ internal class SelectionLayer(
             notifyMenu()
             invalidate()
         }
+    }
+
+    fun selectedInk(): PagedDocumentView.SelectedInk? {
+        val sel = selection ?: return null
+        val index = indexOf(sel.page)
+        if (index < 0 || sel.strokes.isEmpty()) return null
+        val b = sel.box
+        return PagedDocumentView.SelectedInk(index, sel.strokes, PageRect(b.minX, b.minY, b.maxX, b.maxY))
     }
 
     fun delete() {
