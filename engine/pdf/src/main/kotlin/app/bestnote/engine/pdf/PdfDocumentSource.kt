@@ -25,6 +25,17 @@ interface PdfDocumentSource : Closeable {
 
     /** Renders page [index] scaled to [widthPx] wide (height follows the aspect ratio) on white. */
     fun renderPage(index: Int, widthPx: Int): Bitmap
+
+    /**
+     * Renders the pixel rect ([left], [top], [width] x [height]) of page [index] laid out [pageWidthPx]
+     * wide (PDF-02 zoom tiles), on white. The default crops a whole-page render; override it.
+     */
+    fun renderRegion(index: Int, pageWidthPx: Int, left: Int, top: Int, width: Int, height: Int): Bitmap {
+        val full = renderPage(index, pageWidthPx)
+        val w = width.coerceAtMost(full.width - left).coerceAtLeast(1)
+        val h = height.coerceAtMost(full.height - top).coerceAtLeast(1)
+        return Bitmap.createBitmap(full, left.coerceIn(0, full.width - 1), top.coerceIn(0, full.height - 1), w, h)
+    }
 }
 
 /**
@@ -49,6 +60,22 @@ class PdfRendererDocumentSource(descriptor: ParcelFileDescriptor) : PdfDocumentS
             val bitmap = Bitmap.createBitmap(widthPx, heightPx, Bitmap.Config.ARGB_8888)
             bitmap.eraseColor(Color.WHITE)
             page.render(bitmap, null, Matrix().apply { setScale(scale, scale) }, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
+            bitmap
+        }
+    }
+
+    override fun renderRegion(index: Int, pageWidthPx: Int, left: Int, top: Int, width: Int, height: Int): Bitmap = synchronized(lock) {
+        require(pageWidthPx > 0 && width > 0 && height > 0) { "sizes must be positive" }
+        renderer.openPage(index).use { page ->
+            val scale = pageWidthPx.toFloat() / page.width
+            val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+            bitmap.eraseColor(Color.WHITE)
+            // Pdfium clips to the bitmap, so the cost follows the tile, not the zoomed page.
+            val m = Matrix().apply {
+                setScale(scale, scale)
+                postTranslate(-left.toFloat(), -top.toFloat())
+            }
+            page.render(bitmap, null, m, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
             bitmap
         }
     }

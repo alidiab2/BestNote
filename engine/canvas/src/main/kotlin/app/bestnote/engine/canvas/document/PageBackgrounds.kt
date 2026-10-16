@@ -1,6 +1,7 @@
 package app.bestnote.engine.canvas.document
 
 import android.graphics.Bitmap
+import android.graphics.Rect
 import app.bestnote.core.model.Page
 
 /**
@@ -19,4 +20,11 @@ interface PageBackgrounds {
 
     /** Renders [page]'s background [widthPx] wide now, for thumbnails; blocks, so call off the main thread. */
     fun thumbnail(page: Page, widthPx: Int): Bitmap? = null
+
+    /**
+     * PDF-02: renders only the pixel rect [region] of [page] laid out [widthPx] x [heightPx] (any zoom,
+     * so text stays sharp at 400 %+), as a bitmap the size of [region]; null if this source can't.
+     * Blocks: called from the dry-ink tile workers (CANVAS-06), never the main thread.
+     */
+    fun region(page: Page, widthPx: Int, heightPx: Int, region: Rect): Bitmap? = null
 }
