@@ -15,6 +15,7 @@ data class InkBrush(
     val colorArgb: Int = 0xFF1F1F1F.toInt(),
     val size: Float,
     val family: String? = null,
+    val audio: AudioSync? = null,
 ) {
     init {
         require(tool.inks) { "$tool does not lay down ink" }
@@ -26,4 +27,7 @@ data class InkStroke(val brush: InkBrush, val samples: List<StylusSample>) {
     init {
         require(samples.isNotEmpty()) { "A stroke has at least one sample" }
     }
+
+    /** The recording moment this stroke was written at, if any. */
+    val audio: AudioSync? get() = brush.audio
 }

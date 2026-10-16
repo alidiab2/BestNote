@@ -14,6 +14,7 @@
  */
 package app.bestnote.core.storage
 
+import app.bestnote.core.model.AudioRecording
 import app.bestnote.core.model.Notebook
 import app.bestnote.core.model.NotebookId
 import app.bestnote.core.model.Page
@@ -45,6 +46,8 @@ class NotebookPackage(
     val notebook: Notebook,
     val pages: List<PageContent>,
     val assets: Map<String, ByteArray> = emptyMap(),
+    /** Voice recordings (MEDIA-04); each one's audio is the asset at [AudioRecording.assetPath]. */
+    val recordings: List<AudioRecording> = emptyList(),
 ) {
     init {
         require(pages.all { it.page.notebookId == notebook.id }) { "Pages must belong to ${notebook.id}" }

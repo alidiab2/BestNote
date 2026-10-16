@@ -26,5 +26,6 @@ class InMemoryNotebookStore : NotebookStore {
         notebook = notebook,
         pages = pages.map { PageContent(it.page, it.strokes.copyOf(), it.id, it.elements) },
         assets = assets.mapValues { it.value.copyOf() },
+        recordings = recordings,
     )
 }
