@@ -4,6 +4,8 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.foundation.background
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -104,6 +106,8 @@ internal fun SelectionMenu(
     origin: Offset,
     colors: List<Int>,
     actions: SelectionActions,
+    chromeBottomPx: Float = 0f,
+    bottomChromeTopPx: Float = 0f,
 ) {
     val reduce = reducedMotion()
     val shown = remember { MutableTransitionState(false) }.apply { targetState = true }
@@ -114,11 +118,12 @@ internal fun SelectionMenu(
             visibleState = shown,
             enter = Motion.Enter.popover(reduce),
             exit = ExitTransition.None,
-            modifier = Modifier.anchoredTo(menu, origin),
+            modifier = Modifier.anchoredTo(menu, origin, chromeBottomPx, bottomChromeTopPx),
         ) {
             Row(
                 Modifier
                     .chromeSurface(MenuShape)
+                    .horizontalScroll(rememberScrollState()) // a phone is narrower than the full row
                     .padding(horizontal = Spacing.S, vertical = Spacing.XS),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(2.dp),
@@ -207,19 +212,63 @@ internal fun SelectionMenu(
     }
 }
 
-/** Centers the child over the selection, above it when it fits, clamped inside the parent. */
-private fun Modifier.anchoredTo(menu: PagedDocumentView.SelectionMenu, origin: Offset): Modifier = layout { measurable, constraints ->
-    val placeable = measurable.measure(constraints.copy(minWidth = 0, minHeight = 0))
+/**
+ * Where the lasso menu's top edge goes (px). It prefers the spot above the selection, but never
+ * under the floating chrome ([chromeBottom]: title row and pen tray) or the bottom chrome
+ * ([chromeTop] of the compact bottom tray): when "above" would cover them it flips below the
+ * selection, and when neither fits it is pinned inside the free band (over the selection, never
+ * over the tray). Pure so it can be tested (DS-05).
+ */
+internal fun selectionMenuY(
+    selTop: Float,
+    selBottom: Float,
+    menuHeight: Float,
+    aboveGap: Float,
+    belowGap: Float,
+    margin: Float,
+    chromeBottom: Float,
+    containerHeight: Float,
+    bottomChromeTop: Float = containerHeight,
+): Float {
+    val minY = maxOf(margin, chromeBottom)
+    val maxY = (minOf(containerHeight - margin, bottomChromeTop) - menuHeight).coerceAtLeast(minY)
+    val above = selTop - aboveGap - menuHeight
+    val below = selBottom + belowGap
+    val y = when {
+        above >= minY -> above
+        below <= maxY -> below
+        else -> maxY
+    }
+    return y.coerceIn(minY, maxY)
+}
+
+/** Centers the child over the selection, above it when it fits (else below), clamped inside the free band. */
+private fun Modifier.anchoredTo(
+    menu: PagedDocumentView.SelectionMenu,
+    origin: Offset,
+    chromeBottomPx: Float,
+    bottomChromeTopPx: Float,
+): Modifier = layout { measurable, constraints ->
     val margin = EdgeMargin.roundToPx()
+    val placeable = measurable.measure(
+        constraints.copy(minWidth = 0, minHeight = 0, maxWidth = (constraints.maxWidth - margin * 2).coerceAtLeast(0)),
+    )
     val cx = origin.x + (menu.left + menu.right) / 2
-    val above = origin.y + menu.top - AboveGap.toPx() - placeable.height
-    val below = origin.y + menu.bottom + BelowGap.toPx()
-    val y = if (above >= margin || menu.count == 0) above.coerceAtLeast(margin.toFloat()) else below
+    val y = selectionMenuY(
+        selTop = origin.y + menu.top,
+        selBottom = origin.y + menu.bottom,
+        menuHeight = placeable.height.toFloat(),
+        aboveGap = AboveGap.toPx(),
+        belowGap = BelowGap.toPx(),
+        margin = margin.toFloat(),
+        chromeBottom = chromeBottomPx,
+        containerHeight = constraints.maxHeight.toFloat(),
+        bottomChromeTop = bottomChromeTopPx.takeIf { it > 0f } ?: constraints.maxHeight.toFloat(),
+    )
     val maxX = (constraints.maxWidth - placeable.width - margin).coerceAtLeast(margin)
-    val maxY = (constraints.maxHeight - placeable.height - margin).coerceAtLeast(margin)
     val x = (cx - placeable.width / 2f).roundToInt().coerceIn(margin, maxX)
     layout(constraints.maxWidth, constraints.maxHeight) {
-        placeable.place(x, y.roundToInt().coerceIn(margin, maxY))
+        placeable.place(x, y.roundToInt())
     }
 }
 

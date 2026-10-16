@@ -35,6 +35,7 @@
     <string name="library_nav_ai_badge">AI</string>
     <string name="library_nav_folders">المجلدات</string>
     <string name="library_nav_trash">المحذوفات</string>
+    <string name="library_open_menu">فتح القائمة</string>
     <string name="library_nav_settings">الإعدادات</string>
     <string name="library_storage_title">على هذا الجهاز</string>
     <string name="library_storage_detail">بلا حساب · نسخة احتياطية %1$s</string>

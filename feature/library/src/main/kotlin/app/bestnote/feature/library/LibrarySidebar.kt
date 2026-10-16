@@ -229,7 +229,7 @@ internal fun LibrarySidebar(
 
 /** "BestNote" in Fraunces with "Note" in italic. A brand mark: never translated or font-swapped. */
 @Composable
-private fun Wordmark(modifier: Modifier = Modifier) {
+internal fun Wordmark(modifier: Modifier = Modifier) {
     Text(
         buildAnnotatedString {
             append("Best")

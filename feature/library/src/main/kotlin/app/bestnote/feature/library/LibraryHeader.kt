@@ -23,6 +23,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -80,6 +81,7 @@ import app.bestnote.core.designsystem.theme.hairline
 import app.bestnote.core.designsystem.theme.softShadow
 
 private val ControlHeight = 44.dp
+private val NarrowContinueRow = 640.dp
 
 /** Greeting (or destination name), breadcrumb, count, search, Select, layout switch and "New". */
 @Composable
@@ -89,6 +91,7 @@ internal fun LibraryHeader(
     callbacks: LibraryCallbacks,
     modifier: Modifier = Modifier,
     searchFocus: FocusRequester = remember { FocusRequester() },
+    phone: Boolean = false,
 ) {
     val destination = state.controls.destination
     val title = when (destination) {
@@ -116,8 +119,8 @@ internal fun LibraryHeader(
         if (destination is LibraryDestination.InFolder) {
             Breadcrumb(state.breadcrumb, callbacks.select, Modifier.padding(bottom = Spacing.S))
         }
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
+        val titleBlock: @Composable (Modifier) -> Unit = { mod ->
+            Column(mod) {
                 Text(
                     title,
                     style = MaterialTheme.typography.displayMedium,
@@ -132,11 +135,8 @@ internal fun LibraryHeader(
                     modifier = Modifier.padding(top = Spacing.XS),
                 )
             }
-            Spacer(Modifier.width(Spacing.L))
-            if (!compact) {
-                SearchField(state.controls.query, callbacks.query, Modifier.width(300.dp).focusRequester(searchFocus))
-                Spacer(Modifier.width(Spacing.M))
-            }
+        }
+        val controls: @Composable () -> Unit = {
             if (canSelect) {
                 OutlinePill(stringResource(R.string.library_select), Icons.Outlined.CheckCircleOutline, onClick = { callbacks.startSelection(null) })
                 Spacer(Modifier.width(Spacing.M))
@@ -144,6 +144,24 @@ internal fun LibraryHeader(
             LayoutSwitch(state.controls.layout, callbacks.layout)
             Spacer(Modifier.width(Spacing.M))
             NewButton(callbacks)
+        }
+        if (phone) {
+            // DS-05: on a phone the title gets its own line and the controls scroll sideways under it.
+            titleBlock(Modifier.fillMaxWidth())
+            Row(
+                Modifier.fillMaxWidth().padding(top = Spacing.M).horizontalScroll(rememberScrollState()),
+                verticalAlignment = Alignment.CenterVertically,
+            ) { controls() }
+        } else {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                titleBlock(Modifier.weight(1f))
+                Spacer(Modifier.width(Spacing.L))
+                if (!compact) {
+                    SearchField(state.controls.query, callbacks.query, Modifier.width(300.dp).focusRequester(searchFocus))
+                    Spacer(Modifier.width(Spacing.M))
+                }
+                controls()
+            }
         }
         if (compact) {
             SearchField(state.controls.query, callbacks.query, Modifier.fillMaxWidth().padding(top = Spacing.L).focusRequester(searchFocus))
@@ -349,10 +367,24 @@ internal fun ContinueWritingRow(
     onSmartBoard: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Row(modifier.fillMaxWidth().height(ContinueCardHeight), horizontalArrangement = Arrangement.spacedBy(Spacing.L)) {
-        LastNotebookCard(last, now, onClick = { onOpen(last) }, modifier = Modifier.weight(1.35f))
-        QuicknoteCard(onQuicknote, Modifier.weight(1f))
-        SmartBoardCard(onSmartBoard, Modifier.weight(1f))
+    BoxWithConstraints(modifier.fillMaxWidth()) {
+        if (maxWidth < NarrowContinueRow) {
+            // DS-05: on a phone the three cards keep a readable width and scroll sideways.
+            Row(
+                Modifier.fillMaxWidth().height(ContinueCardHeight).horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(Spacing.M),
+            ) {
+                LastNotebookCard(last, now, onClick = { onOpen(last) }, modifier = Modifier.width(300.dp))
+                QuicknoteCard(onQuicknote, Modifier.width(190.dp))
+                SmartBoardCard(onSmartBoard, Modifier.width(190.dp))
+            }
+        } else {
+            Row(Modifier.fillMaxWidth().height(ContinueCardHeight), horizontalArrangement = Arrangement.spacedBy(Spacing.L)) {
+                LastNotebookCard(last, now, onClick = { onOpen(last) }, modifier = Modifier.weight(1.35f))
+                QuicknoteCard(onQuicknote, Modifier.weight(1f))
+                SmartBoardCard(onSmartBoard, Modifier.weight(1f))
+            }
+        }
     }
 }
 

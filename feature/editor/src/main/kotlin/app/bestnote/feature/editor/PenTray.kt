@@ -40,6 +40,8 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import app.bestnote.core.designsystem.theme.BestNoteShapes
@@ -51,8 +53,11 @@ import app.bestnote.core.designsystem.theme.reducedMotion
 import app.bestnote.core.designsystem.theme.softShadow
 import app.bestnote.feature.editor.PenArt.drawPen
 
-/** Physical edge the tray floats on. Side docks never follow RTL (handedness is physical). */
-enum class TraySide { Top, Left, Right }
+/**
+ * Physical edge the tray floats on. Side docks never follow RTL (handedness is physical). [Bottom] is
+ * not a dock the user picks: compact windows (phones) put the tray there so a thumb reaches it (DS-05).
+ */
+enum class TraySide { Top, Left, Right, Bottom }
 
 /** What a picker popover is anchored to. */
 enum class PickerAnchor { Pen, Colors, Width }
@@ -111,14 +116,17 @@ internal fun PenTray(
     picker: @Composable (PickerAnchor) -> Unit,
     modifier: Modifier = Modifier,
     grip: Modifier? = null,
+    /** Compact windows: the tray is capped to the window width and scrolls sideways. */
+    scrollable: Boolean = false,
 ) {
-    val vertical = side != TraySide.Top
+    val vertical = side == TraySide.Left || side == TraySide.Right
     val inks = toolbox.active.inks
     TrayLine(
         vertical,
         modifier
             .softShadow(Elevation.Medium, BestNoteShapes.ToolTray)
             .background(MaterialTheme.colorScheme.surface, BestNoteShapes.ToolTray)
+            .then(if (scrollable) Modifier.clip(BestNoteShapes.ToolTray).horizontalScroll(rememberScrollState()) else Modifier)
             .padding(if (vertical) PaddingTrayVertical else PaddingTrayHorizontal),
         spacing = 10.dp,
     ) {
@@ -161,6 +169,7 @@ internal fun PenTray(
             modifier = Modifier.graphicsLayer {
                 rotationZ = when (side) {
                     TraySide.Top -> 0f
+                    TraySide.Bottom -> 180f
                     TraySide.Left -> -90f
                     TraySide.Right -> 90f
                 }
@@ -211,14 +220,14 @@ private fun PenSlot(kind: PenKind, ink: Color, active: Boolean, side: TraySide, 
     val rim = penRim()
     val name = penName(kind)
     val description = if (active) stringResource(R.string.pen_selected, name) else name
-    val vertical = side != TraySide.Top
+    val vertical = side == TraySide.Left || side == TraySide.Right
     Box(
         Modifier.drawBehind {
             if (dotAlpha == 0f) return@drawBehind
             val r = 2.5.dp.toPx()
             val gap = 7.dp.toPx() + r
             val c = when (side) {
-                TraySide.Top -> Offset(size.width / 2, size.height + gap)
+                TraySide.Top, TraySide.Bottom -> Offset(size.width / 2, size.height + gap)
                 TraySide.Left -> Offset(-gap, size.height / 2)
                 TraySide.Right -> Offset(size.width + gap, size.height / 2)
             }
@@ -247,7 +256,7 @@ private fun PenSlot(kind: PenKind, ink: Color, active: Boolean, side: TraySide, 
                     .graphicsLayer {
                         val shift = (ArtOverhang + sink).toPx()
                         when (side) {
-                            TraySide.Top -> translationY = shift
+                            TraySide.Top, TraySide.Bottom -> translationY = shift
                             TraySide.Left -> {
                                 rotationZ = 90f
                                 translationX = -shift

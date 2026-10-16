@@ -5,6 +5,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -67,6 +68,7 @@ import app.bestnote.core.designsystem.theme.BestNoteTheme
 import app.bestnote.core.designsystem.theme.Elevation
 import app.bestnote.core.designsystem.theme.Motion
 import app.bestnote.core.designsystem.theme.Spacing
+import app.bestnote.core.designsystem.theme.WidthClass
 import app.bestnote.core.designsystem.theme.hairline
 import app.bestnote.core.designsystem.theme.softShadow
 import app.bestnote.core.model.PaperTemplate
@@ -98,16 +100,17 @@ internal fun NewNotebookSheet(folderName: String?, onDismiss: () -> Unit, onCrea
     ) {
         BoxWithConstraints(Modifier.fillMaxWidth()) {
             val wide = maxWidth >= 720.dp
+            val phone = WidthClass.of(maxWidth) == WidthClass.Compact
             Column(
                 Modifier
                     .fillMaxWidth()
                     .verticalScroll(rememberScrollState())
-                    .padding(horizontal = Spacing.XXL)
+                    .padding(horizontal = if (phone) Spacing.L else Spacing.XXL)
                     .padding(bottom = Spacing.XXL)
                     .navigationBarsPadding(),
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f)) {
+                val heading: @Composable (Modifier) -> Unit = { mod ->
+                    Column(mod) {
                         Text(stringResource(R.string.library_new_notebook), style = MaterialTheme.typography.headlineMedium, color = MaterialTheme.colorScheme.onBackground)
                         Text(
                             if (folderName != null) stringResource(R.string.library_new_in_folder, folderName) else stringResource(R.string.library_new_subtitle),
@@ -115,9 +118,20 @@ internal fun NewNotebookSheet(folderName: String?, onDismiss: () -> Unit, onCrea
                             color = BestNoteTheme.colors.muted,
                         )
                     }
+                }
+                val actions: @Composable () -> Unit = {
                     PillButton(stringResource(R.string.library_cancel), onDismiss, background = Color.Transparent, foreground = MaterialTheme.colorScheme.onSurfaceVariant, outlined = true)
                     Spacer(Modifier.width(Spacing.M))
                     PillButton(stringResource(R.string.library_create), create, icon = Icons.Outlined.Add)
+                }
+                if (phone) {
+                    heading(Modifier.fillMaxWidth())
+                    Row(Modifier.fillMaxWidth().padding(top = Spacing.M), verticalAlignment = Alignment.CenterVertically) { actions() }
+                } else {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        heading(Modifier.weight(1f))
+                        actions()
+                    }
                 }
                 Spacer(Modifier.height(Spacing.XL))
                 Row(horizontalArrangement = Arrangement.spacedBy(Spacing.XXL)) {
@@ -136,7 +150,7 @@ internal fun NewNotebookSheet(folderName: String?, onDismiss: () -> Unit, onCrea
                         SheetLabel(stringResource(R.string.library_new_paper))
                         TemplateGrid(template, format) { template = it }
                         SheetLabel(stringResource(R.string.library_new_size))
-                        Row(horizontalArrangement = Arrangement.spacedBy(Spacing.M)) {
+                        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(Spacing.M)) {
                             Segmented(PaperSize.entries.map { stringResource(it.label) to null }, PaperSize.entries.indexOf(size)) { size = PaperSize.entries[it] }
                             Segmented(
                                 listOf(

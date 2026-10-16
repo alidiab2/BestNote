@@ -10,7 +10,7 @@
 | [x] DS-02 | Motion tokens: springs, durations, easing, enter/exit patterns | M1 | S | — | No hard-coded durations anywhere outside `Motion` (lint check) |
 | [x] DS-03 | Editor toolbar: floating, collapsible, dockable top/left/right, left-handed mode | M1 | L | DS-02 | Collapses to a pill while writing; one tap to restore |
 | [x] DS-04 | Pen picker and color palette: presets, custom colors, size preview with live stroke | M1 | M | INK-06 | Second tap on the active tool opens the picker as a popover anchored to it |
-| [ ] DS-05 | Adaptive layouts: phone, tablet, foldable, DeX window, using WindowSizeClass | M2 | M | — | Every screen reviewed at compact/medium/expanded |
+| [x] DS-05 | Adaptive layouts: phone, tablet, foldable, DeX window, using WindowSizeClass | M2 | M | — | Every screen reviewed at compact/medium/expanded |
 | [ ] DS-06 | Haptics map (tool switch, snap, undo) with system-setting respect | M2 | S | — | — |
 | [ ] DS-07 | Icon set: custom tool icons (pen types, eraser modes, lasso) | M2 | M | — | — |
 | [ ] DS-08 | Accessibility: TalkBack labels, 48 dp targets, contrast AA, reduced motion | M3 | M | — | Accessibility Scanner shows zero issues |
