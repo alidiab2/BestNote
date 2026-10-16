@@ -66,7 +66,7 @@ data class RuledPaper(
 
         /**
          * The writing lines of [template] at [size], matching what the editor prints (PAGES-01
-         * geometry, points). Music paper (not writable) falls back to college ruling.
+         * geometry, points). Music, planner and graph paper (not writable) falls back to college ruling.
          */
         fun of(template: PaperTemplate, size: PageSize): RuledPaper = when (template) {
             PaperTemplate.Grid, PaperTemplate.Dotted -> lattice(template, size)
@@ -75,7 +75,8 @@ data class RuledPaper(
             PaperTemplate.RuledNarrow -> ruled(template, size, PaperGeometry.NARROW)
             PaperTemplate.RuledWide -> ruled(template, size, PaperGeometry.WIDE)
             PaperTemplate.Ruled -> ruled(template, size, PaperGeometry.COLLEGE)
-            PaperTemplate.MusicStaff -> ruled(PaperTemplate.Ruled, size, PaperGeometry.COLLEGE)
+            PaperTemplate.MusicStaff, PaperTemplate.PlannerDaily, PaperTemplate.PlannerWeekly, PaperTemplate.Graph ->
+                ruled(PaperTemplate.Ruled, size, PaperGeometry.COLLEGE)
         }
 
         private fun ruled(template: PaperTemplate, size: PageSize, gap: Float) = RuledPaper(

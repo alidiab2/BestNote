@@ -27,6 +27,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.text.input.KeyboardType
 import app.bestnote.core.designsystem.theme.BestNoteTheme
 import app.bestnote.core.designsystem.theme.Spacing
+import androidx.compose.ui.res.stringResource
 import app.bestnote.core.model.Page
 import app.bestnote.core.model.PageSize
 import app.bestnote.core.model.PaperColor
@@ -38,20 +39,26 @@ import app.bestnote.engine.canvas.document.PagedDocumentView
 import kotlin.math.roundToInt
 
 internal val PaperTemplate.label: String
-    get() = when (this) {
-        PaperTemplate.Blank -> "Blank"
-        PaperTemplate.RuledNarrow -> "Ruled · narrow"
-        PaperTemplate.Ruled -> "Ruled · college"
-        PaperTemplate.RuledWide -> "Ruled · wide"
-        PaperTemplate.Grid -> "Grid"
-        PaperTemplate.Dotted -> "Dotted"
-        PaperTemplate.Cornell -> "Cornell"
-        PaperTemplate.MusicStaff -> "Music staff"
-    }
+    @Composable get() = stringResource(
+        when (this) {
+            PaperTemplate.Blank -> R.string.editor_paper_blank
+            PaperTemplate.RuledNarrow -> R.string.editor_paper_narrow
+            PaperTemplate.Ruled -> R.string.editor_paper_college
+            PaperTemplate.RuledWide -> R.string.editor_paper_wide
+            PaperTemplate.Grid -> R.string.editor_paper_grid
+            PaperTemplate.Dotted -> R.string.editor_paper_dotted
+            PaperTemplate.Cornell -> R.string.editor_paper_cornell
+            PaperTemplate.MusicStaff -> R.string.editor_paper_music
+            PaperTemplate.PlannerDaily -> R.string.editor_paper_planner_daily
+            PaperTemplate.PlannerWeekly -> R.string.editor_paper_planner_weekly
+            PaperTemplate.Graph -> R.string.editor_paper_graph
+        },
+    )
 
 private val templateOrder = listOf(
     PaperTemplate.Blank, PaperTemplate.RuledNarrow, PaperTemplate.Ruled, PaperTemplate.RuledWide,
-    PaperTemplate.Grid, PaperTemplate.Dotted, PaperTemplate.Cornell, PaperTemplate.MusicStaff,
+    PaperTemplate.Grid, PaperTemplate.Dotted, PaperTemplate.Graph, PaperTemplate.Cornell,
+    PaperTemplate.MusicStaff, PaperTemplate.PlannerDaily, PaperTemplate.PlannerWeekly,
 )
 
 private val PaperSizePreset.label: String

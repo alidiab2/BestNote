@@ -180,4 +180,15 @@
     <string name="text_spacing_tighter">Tighter lines</string>
     <string name="text_spacing_looser">Looser lines</string>
     <string name="text_applies_selection">Formatting the selected text</string>
+    <string name="editor_paper_blank">Blank</string>
+    <string name="editor_paper_narrow">Ruled · narrow</string>
+    <string name="editor_paper_college">Ruled · college</string>
+    <string name="editor_paper_wide">Ruled · wide</string>
+    <string name="editor_paper_grid">Grid</string>
+    <string name="editor_paper_dotted">Dotted</string>
+    <string name="editor_paper_cornell">Cornell</string>
+    <string name="editor_paper_music">Music staff</string>
+    <string name="editor_paper_planner_daily">Planner · daily</string>
+    <string name="editor_paper_planner_weekly">Planner · weekly</string>
+    <string name="editor_paper_graph">Graph paper</string>
 </resources>

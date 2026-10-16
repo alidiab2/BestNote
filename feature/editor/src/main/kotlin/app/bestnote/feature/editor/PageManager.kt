@@ -542,7 +542,8 @@ private fun BarAction(label: String, icon: ImageVector?, enabled: Boolean, onCli
 
 private val pickerTemplates = listOf(
     PaperTemplate.Blank, PaperTemplate.RuledNarrow, PaperTemplate.Ruled, PaperTemplate.RuledWide,
-    PaperTemplate.Grid, PaperTemplate.Dotted, PaperTemplate.Cornell, PaperTemplate.MusicStaff,
+    PaperTemplate.Grid, PaperTemplate.Dotted, PaperTemplate.Graph, PaperTemplate.Cornell,
+    PaperTemplate.MusicStaff, PaperTemplate.PlannerDaily, PaperTemplate.PlannerWeekly,
 )
 
 /** Template picker for "Insert page" (PAGES-05): live previews of each template on the chosen paper color. */

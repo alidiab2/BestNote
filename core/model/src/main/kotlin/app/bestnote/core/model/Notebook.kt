@@ -20,7 +20,7 @@ value class NotebookId(val value: String) {
  * Background pattern printed on a page. Persisted by name, so entries are only ever appended.
  * [Ruled] is college rule; [PaperColor] and the page size are separate properties of [Page].
  */
-enum class PaperTemplate { Blank, Ruled, Grid, Dotted, RuledNarrow, RuledWide, Cornell, MusicStaff }
+enum class PaperTemplate { Blank, Ruled, Grid, Dotted, RuledNarrow, RuledWide, Cornell, MusicStaff, PlannerDaily, PlannerWeekly, Graph }
 
 /** A notebook as shown in the library. Timestamps are epoch milliseconds. */
 data class Notebook(
