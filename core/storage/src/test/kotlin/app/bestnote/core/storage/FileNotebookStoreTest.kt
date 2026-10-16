@@ -144,7 +144,7 @@ class FileNotebookStoreTest {
         // A future manifest with an unknown schema is still reported as "newer", not "corrupt".
         val zip = ByteArrayOutputStream()
         java.util.zip.ZipOutputStream(zip).use { z ->
-            z.putNextEntry(ZipEntry("manifest.json")); z.write("{\"format\": 7, \"everything\": \"changed\"}".toByteArray()); z.closeEntry()
+            z.putNextEntry(ZipEntry("manifest.json")); z.write("{\"format\": 99, \"everything\": \"changed\"}".toByteArray()); z.closeEntry()
         }
         assertThrows(UnsupportedFormatVersionException::class.java) { BnoteArchive.import(ByteArrayInputStream(zip.toByteArray())) }
     }

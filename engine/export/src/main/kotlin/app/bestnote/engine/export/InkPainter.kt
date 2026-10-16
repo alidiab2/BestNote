@@ -24,9 +24,23 @@ internal class InkPainter {
     private val path = Path()
 
     fun draw(canvas: Canvas, strokes: List<InkStroke>, paper: PaperColors) {
+        strokes.forEach { drawFill(canvas, it, paper) }
         val (marker, ink) = strokes.partition { StrokeGeometry.familyOf(it.brush) == InkFamily.Highlighter }
         marker.forEach { drawHighlighter(canvas, it, paper) }
         ink.forEach { drawInk(canvas, it, paper) }
+    }
+
+    /** INK-11: the filled shape of a closed stroke, under all ink. */
+    private fun drawFill(canvas: Canvas, stroke: InkStroke, paper: PaperColors) {
+        val argb = stroke.brush.fillArgb ?: return
+        val s = stroke.samples
+        if (s.size < 3) return
+        fill.color = PaperInk.colorOn(argb, paper)
+        path.rewind()
+        path.moveTo(s[0].x, s[0].y)
+        for (i in 1 until s.size) path.lineTo(s[i].x, s[i].y)
+        path.close()
+        canvas.drawPath(path, fill)
     }
 
     private fun colorOf(stroke: InkStroke, paper: PaperColors): Int {

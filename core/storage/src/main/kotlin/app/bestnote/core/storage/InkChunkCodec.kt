@@ -28,7 +28,8 @@ interface StrokeChunkCodec {
 }
 
 /**
- * `.ink` chunk, v3 (v1 and v2 are still read). v3 adds the audio sync stamp after the family key:
+ * `.ink` chunk, v4 (v1..v3 are still read). v4 adds the shape fill after the audio stamp:
+ * `u8 hasFill (0 or 1) | i32 fillArgb (only when hasFill = 1)`. v3 adds the audio sync stamp after the family key:
  * `u8 idLength (0 = none) | idLength x UTF-8 recording id | i64 offsetMillis (only when idLength > 0)`.
  * v2 adds the brush-family key after the size:
  * `u8 keyLength (0 = none) | keyLength x UTF-8`.
@@ -42,7 +43,7 @@ interface StrokeChunkCodec {
  * ```
  */
 object InkChunkCodec : StrokeChunkCodec {
-    const val VERSION = 3
+    const val VERSION = 4
     private const val MAX_FAMILY_BYTES = 255
     const val HEADER_SIZE = 16
     private val MAGIC = byteArrayOf('B'.code.toByte(), 'N'.code.toByte(), 'I'.code.toByte(), 'K'.code.toByte())
@@ -68,7 +69,7 @@ object InkChunkCodec : StrokeChunkCodec {
             id
         }
         val payloadSize = 4 + strokes.indices.sumOf { i ->
-            STROKE_HEADER.toLong() + 1 + families[i].size + 1 + audioIds[i].size + (if (audioIds[i].isEmpty()) 0 else 8) +
+            STROKE_HEADER.toLong() + 1 + families[i].size + 1 + audioIds[i].size + 1 + (if (strokes[i].brush.fillArgb == null) 0 else 4) + (if (audioIds[i].isEmpty()) 0 else 8) +
                 strokes[i].samples.size.toLong() * SAMPLE_SIZE
         }
         require(payloadSize <= Int.MAX_VALUE - HEADER_SIZE) { "Page too large for one chunk" }
@@ -87,6 +88,9 @@ object InkChunkCodec : StrokeChunkCodec {
                 buf.put(audioIds[i])
                 buf.putLong(s.audio!!.offsetMillis)
             }
+            val fill = s.brush.fillArgb
+            buf.put((if (fill == null) 0 else 1).toByte())
+            if (fill != null) buf.putInt(fill)
             buf.putInt(s.samples.size)
             for (p in s.samples) {
                 buf.putFloat(p.x); buf.putFloat(p.y); buf.putFloat(p.pressure)
@@ -146,13 +150,14 @@ object InkChunkCodec : StrokeChunkCodec {
             } else {
                 null
             }
+            val fill = if (version >= 4 && buf.get().toInt() != 0) buf.int else null
             val n = buf.int
             if (n < 0 || n.toLong() * SAMPLE_SIZE > buf.remaining()) throw CorruptChunkException("Bad sample count $n")
             val samples = ArrayList<StylusSample>(n)
             repeat(n) {
                 samples += StylusSample(buf.float, buf.float, buf.float, buf.float, buf.float, buf.long)
             }
-            strokes += InkStroke(InkBrush(tool, style, color, size, family, audio), samples)
+            strokes += InkStroke(InkBrush(tool, style, color, size, family, audio, fill), samples)
         }
         if (buf.hasRemaining()) throw CorruptChunkException("${buf.remaining()} trailing bytes")
         return strokes

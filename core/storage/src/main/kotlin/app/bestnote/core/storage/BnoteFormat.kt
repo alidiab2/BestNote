@@ -97,8 +97,8 @@ internal data class ElementJson(
  * Shared by the unpacked directory store and the zip archive so both stay byte-identical.
  */
 object BnoteFormat {
-    /** Current layout. History: 1 = DOC-01 draft, 2 = page metadata always carries `paper`, 3 = pages carry `elements`, 4 = manifest lists audio `recordings`, 5 = manifest lists `extras`, 6 = pages may have an edit journal `pages/<id>.jrnl` (see [FormatMigrations]). */
-    const val VERSION = 6
+    /** Current layout. History: 1 = DOC-01 draft, 2 = page metadata always carries `paper`, 3 = pages carry `elements`, 4 = manifest lists audio `recordings`, 5 = manifest lists `extras`, 6 = pages may have an edit journal `pages/<id>.jrnl`, 7 = strokes may carry a shape fill (see [FormatMigrations]). */
+    const val VERSION = 7
     const val MANIFEST = "manifest.json"
     const val PAGES_DIR = "pages/"
     const val ASSETS_DIR = "assets/"

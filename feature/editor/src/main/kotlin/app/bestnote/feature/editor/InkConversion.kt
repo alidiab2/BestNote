@@ -7,9 +7,7 @@ import androidx.ink.strokes.Stroke
 import androidx.ink.strokes.StrokeInput
 import app.bestnote.core.model.InkBrush
 import app.bestnote.core.model.InkStroke
-import app.bestnote.core.model.PenStyle
 import app.bestnote.core.model.StylusSample
-import app.bestnote.core.model.Tool
 import app.bestnote.engine.ink.BrushCatalog
 import app.bestnote.engine.ink.InkFamily
 
@@ -55,14 +53,7 @@ internal object InkConversion {
      * Best-effort model brush for a stroke the canvas has no pen-down record of, read from the
      * stroke's own brush (its family is unique per tool and pen style). Opacity is undone approximately.
      */
-    fun brushFromInk(brush: Brush): InkBrush {
-        val family = BrushCatalog.familyOf(brush)
-        val (tool, style) = SPECS.firstOrNull { (t, s) -> BrushCatalog.spec(t, s)?.family == family } ?: (Tool.Pen to PenStyle.Fountain)
-        val spec = BrushCatalog.spec(tool, style)!!
-        val alpha = ((brush.colorIntArgb ushr 24) / spec.opacity).toInt().coerceIn(0, 255)
-        val color = (alpha shl 24) or (brush.colorIntArgb and 0x00FFFFFF)
-        return InkBrush(tool, style, color, brush.size / spec.sizeScale, family?.key)
-    }
+    fun brushFromInk(brush: Brush): InkBrush = BrushCatalog.modelBrush(brush)
 
     /** True when [text] has more Arabic/Hebrew letters than Latin ones (the review field then reads right to left). */
     fun isMostlyRtl(text: String): Boolean {
@@ -76,6 +67,4 @@ internal object InkConversion {
         }
         return rtl > ltr
     }
-
-    private val SPECS = Tool.entries.filter { it.inks }.flatMap { t -> PenStyle.entries.map { t to it } }
 }

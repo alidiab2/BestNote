@@ -67,6 +67,7 @@ internal class PageContent(
 internal class PagePainter(private val density: Float) {
     private val paper = PaperRenderer()
     private val ink = InkRenderer()
+    private val fills = FillPainter()
     private val elementPainter = ElementPainter()
     private val matrix = Matrix()
     private val src = Rect()
@@ -125,6 +126,7 @@ internal class PagePainter(private val density: Float) {
         list.clear()
         if (withInk) for (i in c.strokes.indices) if (c.intersects(i, l, t, r, b)) list += c.strokes[i]
         matrix.setScale(scale, scale)
+        fills.draw(canvas, list, c.colors)
         ink.draw(canvas, list, matrix, wet, wetColorArgb)
         list.clear()
         canvas.restoreToCount(save)

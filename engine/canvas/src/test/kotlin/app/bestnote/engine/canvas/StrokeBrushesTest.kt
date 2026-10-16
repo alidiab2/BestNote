@@ -43,4 +43,27 @@ class StrokeBrushesTest {
         assertNull(brushes.brushOf(s))
         assertNull(StrokeBrushes.capture(Tool.Eraser, PenStyle.Fountain, 0, 5f))
     }
+
+    @Test fun fillFollowsCopiesAndIsDroppedFromErasedPieces() {
+        val brushes = StrokeBrushes<Int, Stroke>()
+        val shape = Stroke()
+        brushes.put(shape, InkBrush(Tool.Pen, PenStyle.Ball, 0xFF000000.toInt(), 4f, "ballpoint.v1", fillArgb = 0x80336699.toInt()))
+        assertEquals(0x80336699.toInt(), StrokeFills.of(shape))
+        val moved = Stroke()
+        brushes.derive(moved, shape) { it }
+        assertEquals(0x80336699.toInt(), StrokeFills.of(moved))
+        assertEquals(0x80336699.toInt(), brushes.brushOf(moved)!!.fillArgb)
+        val cleared = Stroke()
+        brushes.derive(cleared, moved) { it.copy(fillArgb = null) }
+        assertNull(StrokeFills.of(cleared))
+        val piece = Stroke()
+        brushes.inherit(piece, shape)
+        assertNull(StrokeFills.of(piece))
+        assertNull(brushes.brushOf(piece)!!.fillArgb)
+        // A copy of a stroke the brushes never saw still takes its fill along.
+        val loaded = Stroke().also { StrokeFills.set(it, 0x40112233) }
+        val loadedCopy = Stroke()
+        brushes.derive(loadedCopy, loaded) { it }
+        assertEquals(0x40112233, StrokeFills.of(loadedCopy))
+    }
 }

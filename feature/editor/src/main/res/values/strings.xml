@@ -149,6 +149,11 @@
     <string name="convert_ai_failed">The AI provider didn\'t answer. Check Settings → Smart Board AI and try again.</string>
     <string name="convert_ai_key">The AI key was rejected. Check it in Settings → Smart Board AI.</string>
     <string name="selection_tidy">Tidy</string>
+    <string name="selection_pen">Pen</string>
+    <string name="selection_fill">Fill</string>
+    <string name="selection_fill_with">Fill with %1$s</string>
+    <string name="selection_fill_none">No fill</string>
+    <string name="selection_back">Back</string>
     <string name="tidy_title">Tidy handwriting</string>
     <string name="tidy_working">Reading your notes and rewriting them neatly…</string>
     <string name="tidy_done">Tidied. Undo brings your original back.</string>

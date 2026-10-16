@@ -9,6 +9,7 @@ import android.view.View
 import androidx.core.graphics.withTranslation
 import androidx.ink.strokes.InProgressStroke
 import androidx.ink.strokes.Stroke
+import app.bestnote.engine.canvas.StrokeFills
 import app.bestnote.engine.layout.document.PxRect
 import java.util.WeakHashMap
 
@@ -370,9 +371,9 @@ internal class PageSlotView(context: Context, private val style: SheetStyle) : V
         return if (cached != null && cached.brush.colorIntArgb == want) {
             cached
         } else if (s === morphFrame) {
-            s.copy(s.brush.copyWithColorIntArgb(want)) // a frame is drawn once: don't cache it
+            s.copy(s.brush.copyWithColorIntArgb(want)).also { StrokeFills.copy(it, s) } // a frame is drawn once: don't cache it
         } else {
-            s.copy(s.brush.copyWithColorIntArgb(want)).also { tinted[s] = it }
+            s.copy(s.brush.copyWithColorIntArgb(want)).also { tinted[s] = it; StrokeFills.copy(it, s) }
         }
     }
 }

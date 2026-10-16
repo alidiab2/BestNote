@@ -21,6 +21,7 @@ import app.bestnote.core.model.PageElement
 import app.bestnote.core.storage.Autosaver
 import app.bestnote.core.storage.ImageAssets
 import app.bestnote.core.storage.InkChunkCodec
+import app.bestnote.engine.canvas.StrokeFills
 import app.bestnote.engine.canvas.document.AssetImageCache
 import app.bestnote.engine.canvas.document.DocumentPage
 import app.bestnote.engine.canvas.document.ElementImages
@@ -185,6 +186,7 @@ internal class DocumentSession(
         savedLayout = pages.mapIndexed { i, content -> content.id to content.page.copy(index = i) }
         val strokes = loaded.map { page -> page.mapNotNull { (model, stroke) -> stroke?.also { models[it] = model } } }
         saver = open.autosaver
+        adoptLoadedBrushes()
         assets.putAll(open.pkg.assets)
         document.images = imageCache
         audio.attach(open.pkg.recordings, open.pkg.assets, open.autosaver)
@@ -214,9 +216,17 @@ internal class DocumentSession(
         for ((model, stroke) in strokes) models[stroke] = model
     }
 
+    /** Tells the view the stored brush (and fill, INK-11) of every loaded stroke, so edits keep them. */
+    private fun adoptLoadedBrushes() {
+        if (models.isEmpty()) return
+        for ((stroke, model) in models) StrokeFills.set(stroke, model.brush.fillArgb)
+        view?.adoptBrushes(models.map { (stroke, model) -> stroke to model.brush })
+    }
+
     /** The view that draws (for pen-down brushes). Call again after a configuration change. */
     fun attach(view: PagedDocumentView) {
         this.view = view
+        adoptLoadedBrushes()
         view.audioStamper = audio::stamp
         view.inkTapListener = if (audio.state.value.playFromInk) PagedDocumentView.InkTapListener(audio::onInkTap) else null
         dimKey = null
@@ -333,7 +343,9 @@ internal class DocumentSession(
      * The brush captured at pen-down for [stroke]. The fallback (a stroke the canvas has no record
      * of) identifies the family from the stroke's own androidx.ink brush, never from the toolbar.
      */
-    private fun brushOf(stroke: Stroke): InkBrush = view?.brushOf(stroke) ?: InkConversion.brushFromInk(stroke.brush)
+    private fun brushOf(stroke: Stroke): InkBrush = (view?.brushOf(stroke) ?: InkConversion.brushFromInk(stroke.brush)).let { b ->
+        StrokeFills.of(stroke)?.let { b.copy(fillArgb = it) } ?: b
+    }
 
     /** Re-renders the thumbnail when the cached one predates the last save. @return true if rendered. */
     private suspend fun refreshThumbnail(
