@@ -267,7 +267,7 @@ class Autosaver(
     private suspend fun runWorker() {
         var retryDelay = RETRY_MIN_MILLIS
         while (true) {
-            if (idleCompactMillis > 0 && hasJournals()) {
+            if (idleCompactMillis > 0 && hasIdleWork()) {
                 // Edits are journalled; fold them into the chunks once the user stops writing.
                 if (withTimeoutOrNull(idleCompactMillis) { signal.receive() } == null) {
                     try {
@@ -305,7 +305,17 @@ class Autosaver(
         }
     }
 
-    private fun hasJournals() = synchronized(lock) { journals.isNotEmpty() }
+    /**
+     * True when idling is a good moment to fold journals: they hold at least [MIN_IDLE_COMPACT_BYTES] and at least
+     * 1/[IDLE_COMPACT_RATIO] of the chunk they extend, so rewriting a big page is paid for by the edits saved
+     * since the last rewrite (a dense page is not rewritten for a few strokes).
+     */
+    private fun hasIdleWork() = synchronized(lock) {
+        journals.any { (id, stat) ->
+            val chunk = saved.pages.firstOrNull { it.id == id }?.strokes?.size ?: 0
+            stat[0] >= MIN_IDLE_COMPACT_BYTES && stat[0] * IDLE_COMPACT_RATIO >= chunk
+        }
+    }
 
     private suspend fun saveLocked(compact: Boolean) {
         val batch: Map<String, List<InkStroke>>
@@ -484,6 +494,8 @@ class Autosaver(
         const val DEFAULT_MAX_JOURNAL_OPS = 2_000
         const val DEFAULT_IDLE_COMPACT_MILLIS = 30_000L
         private const val MIN_JOURNAL_ADDED = 64
+        private const val MIN_IDLE_COMPACT_BYTES = 256L * 1024
+        private const val IDLE_COMPACT_RATIO = 16
         private const val MILLIS_PER_SECOND = 1_000L
         private const val RETRY_MIN_MILLIS = 1_000L
         private const val RETRY_MAX_MILLIS = 30_000L
