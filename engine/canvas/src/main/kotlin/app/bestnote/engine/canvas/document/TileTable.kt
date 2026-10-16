@@ -82,7 +82,12 @@ internal class IdentityDiff<T>(val all: Boolean, val removed: List<T>, val added
  * Generations: every change that touches a tile bumps its [Entry.gen]; a render started for gen g is
  * installed only if the tile is still at g, so a slow render never overwrites newer content.
  */
-internal class TileTable<B : Any, S : Any>(var budgetBytes: Long, private val sizeOf: (B) -> Long) {
+internal class TileTable<B : Any, S : Any>(
+    var budgetBytes: Long,
+    private val sizeOf: (B) -> Long,
+    /** A bitmap left the table (replaced, evicted, dropped): free it now rather than waiting for GC. */
+    private val onDrop: (B) -> Unit = {},
+) {
     data class Key(val page: String, val scale: Float, val col: Int, val row: Int)
 
     class Entry<B, S>(val key: Key) {
@@ -125,7 +130,7 @@ internal class TileTable<B : Any, S : Any>(var budgetBytes: Long, private val si
     fun install(key: Key, gen: Int, bitmap: B, placeholder: Boolean): Boolean {
         val e = map[key] ?: return false
         if (e.gen != gen) return false
-        e.bitmap?.let { bytes -= sizeOf(it) }
+        e.bitmap?.let { drop(it) }
         e.bitmap = bitmap
         bytes += sizeOf(bitmap)
         e.bitmapGen = gen
@@ -177,15 +182,21 @@ internal class TileTable<B : Any, S : Any>(var budgetBytes: Long, private val si
         while (it.hasNext()) {
             val e = it.next()
             if (e.key.page !in keep) {
-                e.bitmap?.let { b -> bytes -= sizeOf(b) }
+                e.bitmap?.let { b -> drop(b) }
                 it.remove()
             }
         }
     }
 
     fun clear() {
+        for (e in map.values) e.bitmap?.let(onDrop)
         map.clear()
         bytes = 0
+    }
+
+    private fun drop(b: B) {
+        bytes -= sizeOf(b)
+        onDrop(b)
     }
 
     /** Least recently used tiles go first; tiles drawn within [protectMs] stay. */
@@ -195,7 +206,7 @@ internal class TileTable<B : Any, S : Any>(var budgetBytes: Long, private val si
         while (bytes > budgetBytes && it.hasNext()) {
             val e = it.next()
             if (e.lastUse > now - protectMs) continue
-            e.bitmap?.let { b -> bytes -= sizeOf(b) }
+            e.bitmap?.let { b -> drop(b) }
             it.remove()
         }
     }

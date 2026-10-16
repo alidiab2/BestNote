@@ -93,6 +93,7 @@ internal class PagePainter(private val density: Float) {
         regionBackground: Bitmap? = null,
         wet: InProgressStroke? = null,
         wetColorArgb: Int = 0,
+        withInk: Boolean = true,
     ) {
         if (c.page.pdf != null) {
             canvas.drawColor(c.colors.page)
@@ -122,10 +123,31 @@ internal class PagePainter(private val density: Float) {
             if (els.isNotEmpty()) elementPainter.draw(canvas, els, scale, c.imageSource, noop) { PaperInk.colorOn(it, c.colors) }
         }
         list.clear()
-        for (i in c.strokes.indices) if (c.intersects(i, l, t, r, b)) list += c.strokes[i]
+        if (withInk) for (i in c.strokes.indices) if (c.intersects(i, l, t, r, b)) list += c.strokes[i]
         matrix.setScale(scale, scale)
         ink.draw(canvas, list, matrix, wet, wetColorArgb)
         list.clear()
+        canvas.restoreToCount(save)
+    }
+
+    /** Strokes of [c] that reach the pixel rect [region] at [scale]. */
+    fun countIn(c: PageContent, scale: Float, region: RectF): Int {
+        val pad = PAD_PX / scale
+        val l = region.left / scale - pad
+        val t = region.top / scale - pad
+        val r = region.right / scale + pad
+        val b = region.bottom / scale + pad
+        var n = 0
+        for (i in c.strokes.indices) if (c.intersects(i, l, t, r, b)) n++
+        return n
+    }
+
+    /** Only [wet] (a highlighter in progress), over what is there. */
+    fun drawWet(canvas: Canvas, wet: InProgressStroke, wetColorArgb: Int, scale: Float) {
+        val save = canvas.save()
+        canvas.scale(scale, scale)
+        matrix.setScale(scale, scale)
+        ink.draw(canvas, emptyList(), matrix, wet, wetColorArgb)
         canvas.restoreToCount(save)
     }
 

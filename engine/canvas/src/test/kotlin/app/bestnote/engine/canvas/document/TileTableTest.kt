@@ -9,7 +9,7 @@ import org.junit.Test
 class TileTableTest {
     private class Bmp(val bytes: Long)
 
-    private fun table(budget: Long = 1_000) = TileTable<Bmp, String>(budget) { it.bytes }
+    private fun table(budget: Long = 1_000) = TileTable<Bmp, String>(budget, sizeOf = { it.bytes })
 
     private fun key(col: Int, row: Int, page: String = "p", scale: Float = 1f) = TileTable.Key(page, scale, col, row)
 

@@ -284,6 +284,18 @@ internal class PagesLayer(context: Context, private val sheet: SheetStyle, var m
     /** Main-thread time of the last redraw of the slot showing page [index], in ns (0 if not bound). */
     fun lastDrawNanos(index: Int): Long = window.slotFor(index)?.lastDrawNanos ?: 0L
 
+    /** Median and worst main-thread redraw of page [index]'s slot over its recent redraws, in ns. */
+    fun recentDrawNanos(index: Int): Pair<Long, Long> = window.slotFor(index)?.recentDrawNanos() ?: (0L to 0L)
+
+    /** Hidden (app in the background): give the tile memory back; it re-renders when shown again. */
+    override fun onWindowVisibilityChanged(visibility: Int) {
+        super.onWindowVisibilityChanged(visibility)
+        if (visibility != VISIBLE) {
+            tiles.close()
+            for (i in 0 until childCount) getChildAt(i).invalidate()
+        }
+    }
+
     override fun onDetachedFromWindow() {
         super.onDetachedFromWindow()
         tiles.close()

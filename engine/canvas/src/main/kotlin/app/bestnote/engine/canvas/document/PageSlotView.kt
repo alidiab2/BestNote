@@ -205,8 +205,10 @@ internal class PageSlotView(context: Context, private val style: SheetStyle) : V
             } else {
                 visibleRect(visible)
                 // Record a margin around what is visible, so scrolling within it never re-records.
-                val mx = (viewportWidth() / 2)
-                val my = viewportHeight()
+                // One tile sideways, a tile and a half up and down: enough for a fling's first frames,
+                // and bounded at 800 % (about 50 tiles on a 2560 x 1600 screen).
+                val mx = TileMath.SIZE
+                val my = TileMath.SIZE * 3 / 2
                 coverage.set(visible.left - mx, visible.top - my, visible.right + mx, visible.bottom + my)
                 if (visible.isEmpty) {
                     // An overscan slot: record the edge nearest the viewport so it is ready when it scrolls in.
@@ -221,6 +223,18 @@ internal class PageSlotView(context: Context, private val style: SheetStyle) : V
             }
         }
         lastDrawNanos = System.nanoTime() - start
+        recent[recentCount++ % recent.size] = lastDrawNanos
+    }
+
+    private val recent = LongArray(64)
+    private var recentCount = 0
+
+    /** Median and worst of the last (up to 64) redraws, in ns. */
+    fun recentDrawNanos(): Pair<Long, Long> {
+        val n = minOf(recentCount, recent.size)
+        if (n == 0) return 0L to 0L
+        val sorted = recent.copyOf(n).also { it.sort() }
+        return sorted[n / 2] to sorted[n - 1]
     }
 
     private var fallback: PagePainter? = null
@@ -229,10 +243,6 @@ internal class PageSlotView(context: Context, private val style: SheetStyle) : V
         val painter = fallback ?: PagePainter(density).also { fallback = it }
         painter.draw(canvas, c, s, w, h, android.graphics.RectF(0f, 0f, w.toFloat(), h.toFloat()), null, wet, PaperInk.colorOn(wetColor, c.colors))
     }
-
-    private fun viewportWidth(): Int = (parent as? View)?.width ?: width
-
-    private fun viewportHeight(): Int = (parent as? View)?.height ?: height
 
     /**
      * The page's content as drawn now; rebuilt (and handed to the tile cache, which diffs it) only

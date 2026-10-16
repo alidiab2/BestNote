@@ -38,7 +38,10 @@ internal class DryInkTiles(
     budgetBytes: Long = defaultBudget(),
     private val workerCount: Int = 2,
 ) {
-    val table = TileTable<Bitmap, Stroke>(budgetBytes) { it.allocationByteCount.toLong() }
+    // Freed explicitly: tiles churn quickly while writing and the GC doesn't see native pixel memory
+    // soon enough (the app grew by ~60 MB/s on the emulator without this). A display list that still
+    // shows a dropped tile holds its own reference to the pixels, so this never blanks the screen.
+    val table = TileTable<Bitmap, Stroke>(budgetBytes, { it.allocationByteCount.toLong() }, { it.recycle() })
 
     /** False draws every page live, like before the cache (benchmarks compare the two). */
     var enabled = true
@@ -267,6 +270,27 @@ internal class DryInkTiles(
             }
         }
         if (vector.isEmpty()) return
+        region.setEmpty()
+        val r = RectF()
+        for (e in vector) {
+            tileRect(e.key, w, h, r)
+            region.union(r)
+        }
+        if (livePainter.countIn(c, scale, region) > LIVE_STROKES) {
+            // Too much ink to draw now without stalling the main thread (it grows with the page):
+            // show each tile's last bitmap (briefly out of date) or bare paper until the workers finish.
+            for (e in vector) {
+                tileRect(e.key, w, h, r)
+                val save = canvas.save()
+                canvas.clipRect(r)
+                val b = e.bitmap
+                if (b != null) canvas.drawBitmap(b, r.left, r.top, null) else livePainter.draw(canvas, c, scale, w, h, r, null, withInk = false)
+                if (wet != null) livePainter.drawWet(canvas, wet, wetColor, scale)
+                canvas.restoreToCount(save)
+                lastStale++
+            }
+            return
+        }
         lastLive += vector.size
         if (vector.size <= PER_TILE_LIVE) {
             for (e in vector) {
@@ -277,12 +301,6 @@ internal class DryInkTiles(
                 canvas.restoreToCount(save)
             }
         } else {
-            region.setEmpty()
-            val r = RectF()
-            for (e in vector) {
-                tileRect(e.key, w, h, r)
-                region.union(r)
-            }
             val save = canvas.save()
             canvas.clipRect(region)
             livePainter.draw(canvas, c, scale, w, h, region, null, wet, wetColor)
@@ -414,6 +432,7 @@ internal class DryInkTiles(
                     canvas.translate(-x.toFloat(), -y.toFloat())
                     canvas.clipRect(region)
                     painter.draw(canvas, c, k.scale, job.widthPx, job.heightPx, region, piece)
+                    piece?.recycle()
                     result = bitmap
                 }
             } catch (_: OutOfMemoryError) {
@@ -429,7 +448,10 @@ internal class DryInkTiles(
     }
 
     private fun installed(job: Job, bitmap: Bitmap, placeholder: Boolean) {
-        if (closed || job.epoch != epoch || !table.install(job.key, job.gen, bitmap, placeholder)) return
+        if (closed || job.epoch != epoch || !table.install(job.key, job.gen, bitmap, placeholder)) {
+            bitmap.recycle()
+            return
+        }
         val page = job.key.page
         pendingReady += page
         // Coalesce: one redraw when this page's visible work is done, or every READY_MS meanwhile.
@@ -477,11 +499,17 @@ internal class DryInkTiles(
         private const val MAX_PRECISE = 400
         private const val MAX_QUEUE = 96
         private const val PER_TILE_LIVE = 4
+
+        /** Most strokes drawn as vectors in one redraw (a few ms on a phone); past it tiles wait for the workers. */
+        private const val LIVE_STROKES = 600
         private const val READY_MS = 120L
         private const val SHARP_ENOUGH = 0.98f
         private const val MIN_BUDGET = 16L shl 20
 
-        /** Half the app's heap limit, between 48 and 160 MB (tile bitmaps live in native memory, so this is a policy, not a heap share). */
-        fun defaultBudget(): Long = (Runtime.getRuntime().maxMemory() / 2).coerceIn(48L shl 20, 160L shl 20)
+        /**
+         * A quarter of the app's heap limit, between 32 and 96 MB: a full screen of tiles plus the margin
+         * is ~30 MB on a 2560 x 1600 tablet. (Tile bitmaps live in native memory; this is a policy.)
+         */
+        fun defaultBudget(): Long = (Runtime.getRuntime().maxMemory() / 4).coerceIn(32L shl 20, 96L shl 20)
     }
 }
