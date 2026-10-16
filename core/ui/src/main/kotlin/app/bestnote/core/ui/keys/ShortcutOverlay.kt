@@ -82,7 +82,7 @@ internal fun ShortcutSheet(onDismiss: () -> Unit) {
                 verticalArrangement = Arrangement.spacedBy(Spacing.L),
             ) {
                 ShortcutGroup.entries.forEach { group ->
-                    val actions = ShortcutAction.entries.filter { it.group == group }
+                    val actions = ShortcutAction.entries.filter { it.group == group && ShortcutTable.combosOf(it, includeAliases = false).isNotEmpty() }
                     if (actions.isNotEmpty()) {
                         Column(Modifier.width(320.dp), verticalArrangement = Arrangement.spacedBy(Spacing.S)) {
                             Text(

@@ -20,6 +20,7 @@ class ShortcutHost {
     private class Entry(val scope: ShortcutScope, var handler: (ShortcutAction) -> Boolean)
 
     private val entries = ArrayList<Entry>()
+    private val typists = ArrayList<(KeyEvent) -> Boolean>()
     private val textOwners = HashSet<Any>()
 
     /** Meta is held down: the help overlay shows for as long as it is. */
@@ -43,6 +44,15 @@ class ShortcutHost {
         val entry = Entry(scope, handler)
         entries.add(entry)
         return { entries.remove(entry) }
+    }
+
+    /**
+     * Adds a handler for plain typing that no shortcut took while no text field has focus (TEXT-04: typing with the
+     * Text tool starts a text box). The most recently added one is asked. Returns the remover.
+     */
+    fun registerTyping(handler: (KeyEvent) -> Boolean): () -> Unit {
+        typists.add(handler)
+        return { typists.remove(handler) }
     }
 
     /** Forgets held keys (the window lost focus). */
@@ -78,7 +88,8 @@ class ShortcutHost {
             }
             if (entry.handler(action)) return true
         }
-        return false
+        val typing = !editing && !event.isCtrlPressed && !event.isAltPressed && !event.isMetaPressed && event.unicodeChar != 0
+        return typing && typists.lastOrNull()?.invoke(event) == true
     }
 }
 
@@ -91,6 +102,17 @@ fun ShortcutHandler(scope: ShortcutScope, onAction: (ShortcutAction) -> Boolean)
     val current by rememberUpdatedState(onAction)
     DisposableEffect(host, scope) {
         val remove = host.register(scope) { current(it) }
+        onDispose(remove)
+    }
+}
+
+/** Registers [onType] for plain typing no shortcut took (see [ShortcutHost.registerTyping]) while in the composition. */
+@Composable
+fun TypingHandler(onType: (KeyEvent) -> Boolean) {
+    val host = LocalShortcutHost.current
+    val current by rememberUpdatedState(onType)
+    DisposableEffect(host) {
+        val remove = host.registerTyping { current(it) }
         onDispose(remove)
     }
 }

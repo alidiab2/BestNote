@@ -12,6 +12,9 @@ import app.bestnote.core.model.PdfPageRef
 import app.bestnote.core.model.PaperTemplate
 import app.bestnote.core.model.ListStyle
 import app.bestnote.core.model.Numerals
+import app.bestnote.core.model.ParagraphFormat
+import app.bestnote.core.model.ParagraphStyle
+import app.bestnote.core.model.Paragraphs
 import app.bestnote.core.model.RunStyle
 import app.bestnote.core.model.TextAlignment
 import app.bestnote.core.model.TextRun
@@ -104,6 +107,16 @@ internal data class ElementJson(
     val lineSpacing: Float = TextElement.DEFAULT_LINE_SPACING,
     /** Group id (CANVAS-14); absent for ungrouped elements and in older files. */
     val group: String? = null,
+    /** Per-paragraph formats (v9, TEXT-04); absent = every paragraph plain. */
+    val paras: List<ParaJson> = emptyList(),
+)
+
+/** One paragraph's format: [st] a [ParagraphStyle] name, [list] a [ListStyle] name or null (the box's), [ind] indent level. */
+@Serializable
+internal data class ParaJson(
+    val st: String = "Body",
+    val list: String? = null,
+    val ind: Int = 0,
 )
 
 /** One styled part of a text element: characters [s] until [e]. Flags are only ever "on" additions. */
@@ -125,8 +138,8 @@ internal data class RunJson(
  * Shared by the unpacked directory store and the zip archive so both stay byte-identical.
  */
 object BnoteFormat {
-    /** Current layout. History: 1 = DOC-01 draft, 2 = page metadata always carries `paper`, 3 = pages carry `elements`, 4 = manifest lists audio `recordings`, 5 = manifest lists `extras`, 6 = pages may have an edit journal `pages/<id>.jrnl`, 7 = strokes may carry a shape fill, 8 = text elements may carry underline/strike, style runs, lists and line spacing (see [FormatMigrations]). */
-    const val VERSION = 8
+    /** Current layout. History: 1 = DOC-01 draft, 2 = page metadata always carries `paper`, 3 = pages carry `elements`, 4 = manifest lists audio `recordings`, 5 = manifest lists `extras`, 6 = pages may have an edit journal `pages/<id>.jrnl`, 7 = strokes may carry a shape fill, 8 = text elements may carry underline/strike, style runs, lists and line spacing, 9 = text elements may carry paragraph formats (see [FormatMigrations]). */
+    const val VERSION = 9
     const val MANIFEST = "manifest.json"
     const val PAGES_DIR = "pages/"
     const val ASSETS_DIR = "assets/"
@@ -248,6 +261,7 @@ object BnoteFormat {
             underline = e.underline, strike = e.strike, list = e.list.name, numerals = e.numerals.name, lineSpacing = e.lineSpacing,
             runs = e.runs.map { RunJson(it.start, it.end, it.style.bold, it.style.italic, it.style.underline, it.style.strike, it.style.colorArgb, it.style.font, it.style.sizePt) },
             group = e.group,
+            paras = Paragraphs.normalized(e.paragraphs, e.text).map { ParaJson(it.style.name, it.list?.name, it.indent) },
         )
     }
 
@@ -272,6 +286,16 @@ object BnoteFormat {
                 Numerals.entries.firstOrNull { it.name == j.numerals } ?: Numerals.Latin,
                 j.lineSpacing.coerceIn(TextElement.MIN_LINE_SPACING, TextElement.MAX_LINE_SPACING),
                 j.group,
+                Paragraphs.normalized(
+                    j.paras.map { p ->
+                        ParagraphFormat(
+                            ParagraphStyle.entries.firstOrNull { it.name == p.st } ?: ParagraphStyle.Body,
+                            p.list?.let { name -> ListStyle.entries.firstOrNull { it.name == name } },
+                            p.ind.coerceIn(0, ParagraphFormat.MAX_INDENT),
+                        )
+                    },
+                    j.text.orEmpty(),
+                ),
             )
             else -> null
         }

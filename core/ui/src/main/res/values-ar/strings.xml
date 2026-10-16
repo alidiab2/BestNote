@@ -31,4 +31,21 @@
     <string name="shortcut_clear_selection">إلغاء التحديد</string>
     <string name="shortcut_new_notebook">دفتر جديد</string>
     <string name="shortcut_search_library">البحث في المكتبة</string>
+    <string name="shortcut_group_text">النص (أثناء الكتابة)</string>
+    <string name="shortcut_nudge_left">تحريك لليسار (Shift = ‎10×)</string>
+    <string name="shortcut_nudge_right">تحريك لليمين (Shift = ‎10×)</string>
+    <string name="shortcut_nudge_up">تحريك للأعلى (Shift = ‎10×)</string>
+    <string name="shortcut_nudge_down">تحريك للأسفل (Shift = ‎10×)</string>
+    <string name="shortcut_text_bold">غامق</string>
+    <string name="shortcut_text_italic">مائل</string>
+    <string name="shortcut_text_underline">تسطير</string>
+    <string name="shortcut_text_numbers">قائمة مرقّمة</string>
+    <string name="shortcut_text_bullets">قائمة نقطية</string>
+    <string name="shortcut_text_title">عنوان رئيسي</string>
+    <string name="shortcut_text_heading">عنوان</string>
+    <string name="shortcut_text_subheading">عنوان فرعي</string>
+    <string name="shortcut_text_body">نص عادي</string>
+    <string name="shortcut_text_indent">زيادة إزاحة عنصر القائمة</string>
+    <string name="shortcut_text_outdent">إنقاص إزاحة عنصر القائمة</string>
+    <string name="shortcut_text_done">إنهاء الكتابة</string>
 </resources>

@@ -71,6 +71,38 @@ class PageElementsRoundTripTest {
         assertEquals(listOf<PageElement>(english), BnoteFormat.fromEntries { entries[it] }.pages[0].elements)
     }
 
+    @Test fun paragraphStylesListsAndIndentsRoundTrip() {
+        val styled = TextElement(
+            "el-10", 50f, 60f, 200f, 80f, "Title\nعنوان فرعي\nitem\nnested\ncode()",
+            paragraphs = listOf(
+                app.bestnote.core.model.ParagraphFormat(app.bestnote.core.model.ParagraphStyle.Title),
+                app.bestnote.core.model.ParagraphFormat(app.bestnote.core.model.ParagraphStyle.Subheading),
+                app.bestnote.core.model.ParagraphFormat(list = app.bestnote.core.model.ListStyle.Bullet),
+                app.bestnote.core.model.ParagraphFormat(list = app.bestnote.core.model.ListStyle.Numbered, indent = 2),
+                app.bestnote.core.model.ParagraphFormat(app.bestnote.core.model.ParagraphStyle.Code, list = app.bestnote.core.model.ListStyle.None),
+            ),
+        )
+        val entries = BnoteFormat.toEntries(pkg(listOf(styled)))
+        assertTrue(entries.getValue(BnoteFormat.pageMetaPath("p0")).decodeToString().contains("\"paras\""))
+        assertEquals(listOf<PageElement>(styled), BnoteFormat.fromEntries { entries[it] }.pages[0].elements)
+    }
+
+    @Test fun plainParagraphsStoreNothing() {
+        val plain = english.copy(paragraphs = listOf(app.bestnote.core.model.ParagraphFormat.PLAIN))
+        val entries = BnoteFormat.toEntries(pkg(listOf(plain)))
+        val back = BnoteFormat.fromEntries { entries[it] }.pages[0].elements.single() as TextElement
+        assertTrue(back.paragraphs.isEmpty())
+    }
+
+    @Test fun v8TextWithoutParagraphFormatsStillReads() {
+        val rich = english.copy(underline = true, list = app.bestnote.core.model.ListStyle.Bullet)
+        val entries = BnoteFormat.toEntries(pkg(listOf(rich))).toMutableMap()
+        for (path in listOf(BnoteFormat.pageMetaPath("p0"), BnoteFormat.pageMetaPath("p1"), BnoteFormat.MANIFEST)) {
+            entries[path] = entries.getValue(path).decodeToString().replace("\"format\": ${BnoteFormat.VERSION}", "\"format\": 8").encodeToByteArray()
+        }
+        assertEquals(listOf<PageElement>(rich), BnoteFormat.fromEntries { entries[it] }.pages[0].elements)
+    }
+
     @Test fun groupsAndOrderRoundTrip() {
         val grouped = listOf(english.withGroup("g-1"), image.withGroup("g-1"), arabic) // order is the z-order, bottom to top
         val entries = BnoteFormat.toEntries(pkg(grouped))

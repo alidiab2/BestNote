@@ -234,6 +234,7 @@ internal fun ToolsCapsule(
     onLasso: () -> Unit = {},
     shapesActive: Boolean = false,
     onShapes: () -> Unit = {},
+    textActive: Boolean = false,
     onText: () -> Unit = {},
     onImage: () -> Unit = {},
     audioActive: Boolean = false,
@@ -245,9 +246,10 @@ internal fun ToolsCapsule(
             val label = stringResource(tool.label)
             val isLasso = tool.label == R.string.tool_lasso
             val isShapes = tool.label == R.string.tool_shapes
-            val toggle = isLasso || isShapes
+            val isText = tool.label == R.string.tool_text
+            val toggle = isLasso || isShapes || isText
             val isAudio = tool.label == R.string.tool_audio
-            val selected = (isLasso && lassoActive) || (isShapes && shapesActive) || (isAudio && audioActive)
+            val selected = (isLasso && lassoActive) || (isShapes && shapesActive) || (isText && textActive) || (isAudio && audioActive)
             val shape = androidx.compose.foundation.shape.RoundedCornerShape(13.dp)
             ChromeIconButton(
                 tool.icon,
@@ -256,7 +258,7 @@ internal fun ToolsCapsule(
                     when {
                         isLasso -> onLasso()
                         isShapes -> onShapes()
-                        tool.label == R.string.tool_text -> onText()
+                        isText -> onText()
                         tool.label == R.string.tool_image -> onImage()
                         isAudio -> onAudio()
                         else -> onComingSoon(label)

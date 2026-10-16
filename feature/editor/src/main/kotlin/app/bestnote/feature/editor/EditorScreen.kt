@@ -122,6 +122,13 @@ import app.bestnote.core.model.Tool
 import app.bestnote.core.ui.keys.ShortcutAction
 import app.bestnote.core.ui.keys.ShortcutHandler
 import app.bestnote.core.ui.keys.ShortcutScope
+import app.bestnote.core.ui.keys.TypingHandler
+import app.bestnote.core.model.ListStyle
+import app.bestnote.core.model.ParagraphStyle
+import app.bestnote.feature.editor.text.CanvasTextEditor
+import app.bestnote.feature.editor.text.Flag
+import app.bestnote.feature.editor.text.FormatBarActions
+import app.bestnote.feature.editor.text.TextFormatBar
 import app.bestnote.engine.canvas.document.PagedDocument
 import app.bestnote.engine.canvas.document.PagedDocumentView
 import app.bestnote.engine.export.ExportDialog
@@ -335,6 +342,25 @@ private val ChromeGap = 12.dp
 /** Below this width the top dock floats the tools capsule on its own, down the end edge. */
 private val WideTopTray = 960.dp
 private val AudioPillBottom = 64.dp
+private val FormatBarGap = 8.dp
+
+/** Tools picked with a bare letter key; with the Text tool on these letters are typed instead (TEXT-04). */
+private val LetterTools = setOf(ShortcutAction.ToolPen, ShortcutAction.ToolHighlighter, ShortcutAction.ToolEraser, ShortcutAction.ToolLasso, ShortcutAction.ToolText)
+
+/** Arrow-key nudge of a selection in page points: 1 pt, Shift 10 pt. */
+private fun nudgeOf(action: ShortcutAction): Pair<Float, Float> {
+    val far = action.name.endsWith("Far")
+    val step = if (far) NUDGE_FAR_PT else NUDGE_PT
+    return when (action) {
+        ShortcutAction.NudgeLeft, ShortcutAction.NudgeLeftFar -> -step to 0f
+        ShortcutAction.NudgeRight, ShortcutAction.NudgeRightFar -> step to 0f
+        ShortcutAction.NudgeUp, ShortcutAction.NudgeUpFar -> 0f to -step
+        else -> 0f to step
+    }
+}
+
+private const val NUDGE_PT = 1f
+private const val NUDGE_FAR_PT = 10f
 private const val DeskMidStop = 0.6f
 private const val DeskMidMix = 0.45f
 private const val DeskCenterY = 0.45f
@@ -378,6 +404,17 @@ fun EditorScreen(
         onSelecting = { viewModel.setLasso(true) },
         onMessage = { id -> scope.launch { snackbar.currentSnackbarData?.dismiss(); snackbar.showSnackbar(messages.getValue(id)) } },
     )
+    // TEXT-04: typing on the page. The editor follows the pages as they scroll and zoom.
+    val typing = elements.typing
+    var viewportTick by remember { mutableIntStateOf(0) }
+    var formatBarPx by remember { mutableIntStateOf(0) }
+    DisposableEffect(canvas, typing.textTool) {
+        val view = canvas
+        view?.textTapListener = if (typing.textTool) PagedDocumentView.InkTapListener { page, x, y -> typing.tapAt(page, x, y) } else null
+        onDispose { view?.textTapListener = null }
+    }
+    LaunchedEffect(writing) { if (writing) typing.commit() }
+    androidx.activity.compose.BackHandler(enabled = typing.editing != null) { typing.commit() }
     val audio = viewModel.audio
     val audioState by audio.state.collectAsStateWithLifecycle()
     var recordingsOpen by remember { mutableStateOf(false) }
@@ -427,7 +464,8 @@ fun EditorScreen(
             autoHidden = false
         }
     }
-    val trayShown = !collapsed && !autoHidden
+    // DS-05 compact: the format bar takes the bottom while typing, so the tray steps aside.
+    val trayShown = !collapsed && !autoHidden && !(compact && typing.editing != null)
     val chromeAlpha by animateFloatAsState(if (writing) Motion.Toolbar.WritingAlpha else 1f, Motion.Toolbar.fadeSpec(), label = "chromeAlpha")
 
     val micDenied = stringResource(R.string.audio_permission_denied)
@@ -495,14 +533,17 @@ fun EditorScreen(
     }
     fun toggleLasso() {
         picker = null
+        elements.leaveTextTool()
         viewModel.setLasso(!toolbox.lasso)
     }
     fun toggleShapes() {
         picker = null
+        elements.leaveTextTool()
         // From the lasso, Shapes means "draw shapes now"; otherwise it toggles.
         viewModel.setShapes(toolbox.lasso || !toolbox.shapes)
     }
     fun onPen(kind: PenKind) {
+        elements.leaveTextTool()
         if (kind == toolbox.active && !toolbox.lasso) {
             picker = if (picker == PickerAnchor.Pen) null else PickerAnchor.Pen
         } else {
@@ -534,10 +575,14 @@ fun EditorScreen(
     // SPEN-10: hardware-keyboard shortcuts. Dialogs are their own windows (they never see these keys); the
     // sheets drawn in this window pause them too.
     val dialogOpen = elements.newText != null || elements.editing != null || elements.cropping != null || elements.sourceMenu ||
+        elements.moreFor != null || elements.pickingFont ||
         managerPage != null || exporting || recordingsOpen || smartBoardChoice != null
     ShortcutHandler(ShortcutScope.Editor) { action ->
         val view = canvas
         if (dialogOpen || view == null) return@ShortcutHandler false
+        // TEXT-04: with the Text tool on, bare letters are typing (they start a text box), not tools.
+        if (typing.textTool && action in LetterTools) return@ShortcutHandler false
+        if (action in LetterTools) elements.leaveTextTool()
         picker = null
         when (action) {
             ShortcutAction.Undo -> document.undo()
@@ -546,7 +591,16 @@ fun EditorScreen(
             ShortcutAction.ToolHighlighter -> viewModel.selectPen(PenKind.Highlighter)
             ShortcutAction.ToolEraser -> viewModel.selectPen(PenKind.Eraser)
             ShortcutAction.ToolLasso -> viewModel.setLasso(true)
-            ShortcutAction.ToolText -> elements.insertText()
+            ShortcutAction.ToolText -> {
+                if (!typing.textTool && toolbox.lasso) viewModel.setLasso(false)
+                elements.toggleTextTool()
+            }
+            ShortcutAction.NudgeLeft, ShortcutAction.NudgeRight, ShortcutAction.NudgeUp, ShortcutAction.NudgeDown,
+            ShortcutAction.NudgeLeftFar, ShortcutAction.NudgeRightFar, ShortcutAction.NudgeUpFar, ShortcutAction.NudgeDownFar,
+            -> {
+                val (dx, dy) = nudgeOf(action)
+                if (!view.nudgeSelection(dx, dy)) return@ShortcutHandler false
+            }
             ShortcutAction.ZoomIn -> view.zoomTo(view.zoom * KEY_ZOOM_STEP)
             ShortcutAction.ZoomOut -> view.zoomTo(view.zoom / KEY_ZOOM_STEP)
             ShortcutAction.ZoomReset -> view.zoomTo(1f)
@@ -567,6 +621,39 @@ fun EditorScreen(
             }
             else -> return@ShortcutHandler false
         }
+        true
+    }
+    // TEXT-04: formatting keys while typing on the page (the "Text" group of the shortcut help).
+    ShortcutHandler(ShortcutScope.Text) { action ->
+        if (typing.editing == null || dialogOpen) return@ShortcutHandler false
+        when (action) {
+            ShortcutAction.TextBold -> typing.act { it.toggle(Flag.Bold) }
+            ShortcutAction.TextItalic -> typing.act { it.toggle(Flag.Italic) }
+            ShortcutAction.TextUnderline -> typing.act { it.toggle(Flag.Underline) }
+            ShortcutAction.TextBullets -> typing.act { it.toggleList(ListStyle.Bullet) }
+            ShortcutAction.TextNumbers -> typing.act { it.toggleList(ListStyle.Numbered) }
+            ShortcutAction.TextTitle -> typing.act { it.setStyle(ParagraphStyle.Title) }
+            ShortcutAction.TextHeading -> typing.act { it.setStyle(ParagraphStyle.Heading) }
+            ShortcutAction.TextSubheading -> typing.act { it.setStyle(ParagraphStyle.Subheading) }
+            ShortcutAction.TextBody -> typing.act { it.setStyle(ParagraphStyle.Body) }
+            ShortcutAction.TextIndent, ShortcutAction.TextOutdent -> {
+                val session = typing.editing?.session ?: return@ShortcutHandler false
+                if (!session.indent(if (action == ShortcutAction.TextIndent) 1 else -1)) return@ShortcutHandler false
+                typing.sync()
+            }
+            ShortcutAction.TextDone -> typing.commit()
+            else -> return@ShortcutHandler false
+        }
+        true
+    }
+    // TEXT-04: with the Text tool on and nothing selected, a hardware keyboard just types: a box starts at the last
+    // tap (or mid-page) and catches every key until the on-page field has focus.
+    TypingHandler { event ->
+        val code = event.unicodeChar
+        if (!typing.textTool || dialogOpen || canvas?.hasSelection == true || code == 0 || Character.isISOControl(code)) {
+            return@TypingHandler false
+        }
+        typing.typeIntoNewBox(String(Character.toChars(code)))
         true
     }
     val pickerContent: @Composable (PickerAnchor) -> Unit = { anchor ->
@@ -726,6 +813,7 @@ fun EditorScreen(
                     view.writingListener = PagedDocumentView.WritingListener { writing = it }
                     view.selectionListener = PagedDocumentView.SelectionListener { selectionMenu = it }
                     view.selectionAppearMs = Motion.Duration.Short
+                    view.viewportListener = { viewportTick++ }
                     view.temporaryToolListener = { tool -> temporary = if (tool == Tool.Eraser) PenKind.Eraser else null }
                     view.quickPaletteListener = PagedDocumentView.QuickPaletteListener { x, y ->
                         picker = null
@@ -743,6 +831,22 @@ fun EditorScreen(
                     .fillMaxSize()
                     .onGloballyPositioned { pageOrigin = it.positionInRoot() },
             )
+            // TEXT-04: the box being typed into, right on the page (same px as the canvas view).
+            val view = canvas
+            if (view != null && typing.editing != null) {
+                val keyboardTop = screen.y - with(density) { WindowInsets.safeDrawing.getBottom(this) } - formatBarPx -
+                    with(density) { FormatBarGap.toPx() }
+                Box(Modifier.fillMaxSize()) {
+                    CanvasTextEditor(
+                        typing = typing,
+                        view = view,
+                        viewport = viewportTick,
+                        visibleTop = topInsetPx.toFloat(),
+                        visibleBottom = keyboardTop,
+                        frameColor = MaterialTheme.colorScheme.primary,
+                    )
+                }
+            }
         }
 
         // ---- floating chrome ----
@@ -780,7 +884,12 @@ fun EditorScreen(
                     onLasso = ::toggleLasso,
                     shapesActive = toolbox.shapes && !toolbox.lasso,
                     onShapes = ::toggleShapes,
-                    onText = { picker = null; elements.insertText() },
+                    textActive = typing.textTool,
+                    onText = {
+                        picker = null
+                        if (!typing.textTool && toolbox.lasso) viewModel.setLasso(false)
+                        elements.toggleTextTool()
+                    },
                     onImage = { picker = null; elements.sourceMenu = true },
                     audioActive = audioState.recording != null || recordingsOpen,
                     onAudio = ::onMic,
@@ -875,6 +984,26 @@ fun EditorScreen(
                     .padding(bottom = if (bottomChromeShown) with(density) { bottomChromePx.toDp() } + 8.dp else AudioPillBottom)
                     .graphicsLayer { alpha = chromeAlpha },
             )
+            // TEXT-04: the format bar docks just above the keyboard (safe drawing includes the IME), or the bottom edge.
+            AnimatedVisibility(
+                visible = typing.editing != null && !writing,
+                enter = Motion.Enter.sheet(reduce),
+                exit = Motion.Exit.sheet(reduce),
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(start = edge, end = edge, bottom = FormatBarGap)
+                    .onSizeChanged { formatBarPx = it.height },
+            ) {
+                TextFormatBar(
+                    typing = typing,
+                    colors = toolbox.quickColors(PenKind.Fountain),
+                    actions = FormatBarActions(
+                        onFont = { elements.pickingFont = true },
+                        onMore = { elements.moreFor = typing.editing?.session?.draft?.box },
+                        onDone = { typing.commit() },
+                    ),
+                )
+            }
             SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).padding(bottom = 16.dp)) { data ->
                 Snackbar(
                     data,

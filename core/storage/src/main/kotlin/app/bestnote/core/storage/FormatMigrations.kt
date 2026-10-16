@@ -68,7 +68,13 @@ internal object FormatMigrations {
      */
     private val V7_TO_V8 = Step(from = 7, manifest = { it.withFormat(8) }, page = { it.withFormat(8) })
 
-    val steps: List<Step> = listOf(V1_TO_V2, V2_TO_V3, V3_TO_V4, V4_TO_V5, V5_TO_V6, V6_TO_V7, V7_TO_V8)
+    /**
+     * v8 → v9: text elements may carry `paras`, per-paragraph styles, lists and indents (TEXT-04). Absent means every
+     * paragraph is plain, so only the version changes; the bump makes a v8 app refuse rather than drop headings.
+     */
+    private val V8_TO_V9 = Step(from = 8, manifest = { it.withFormat(9) }, page = { it.withFormat(9) })
+
+    val steps: List<Step> = listOf(V1_TO_V2, V2_TO_V3, V3_TO_V4, V4_TO_V5, V5_TO_V6, V6_TO_V7, V7_TO_V8, V8_TO_V9)
 
     fun formatOf(json: JsonObject): Int = json["format"]?.jsonPrimitive?.int ?: throw CorruptChunkException("Missing format")
 

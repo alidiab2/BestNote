@@ -146,6 +146,8 @@ data class TextElement(
     /** Line height as a multiple of the font size's natural line. */
     val lineSpacing: Float = DEFAULT_LINE_SPACING,
     override val group: String? = null,
+    /** Per-paragraph style, list and indent (TEXT-04); see [Paragraphs]. Empty = every paragraph plain. */
+    val paragraphs: List<ParagraphFormat> = emptyList(),
 ) : PageElement {
     init {
         require(width > 0f && height > 0f) { "Text frame must be positive" }
@@ -173,6 +175,9 @@ data class TextElement(
 
         /** Handwriting font, Arabic first (Aref Ruqaa, then Caveat for Latin letters). */
         const val FONT_HANDWRITING_ARABIC = "hand-ar"
+
+        /** Monospaced font (Code paragraphs and `inline code`, TEXT-04). */
+        const val FONT_MONO = "mono"
     }
 }
 

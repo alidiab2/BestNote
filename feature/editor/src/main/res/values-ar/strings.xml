@@ -196,4 +196,16 @@
     <string name="editor_paper_planner_daily">مخطِّط · يومي</string>
     <string name="editor_paper_planner_weekly">مخطِّط · أسبوعي</string>
     <string name="editor_paper_graph">ورق رسم بياني</string>
+    <string name="text_style_title">عنوان رئيسي</string>
+    <string name="text_style_heading">عنوان</string>
+    <string name="text_style_subheading">عنوان فرعي</string>
+    <string name="text_style_body">نص</string>
+    <string name="text_style_quote">اقتباس</string>
+    <string name="text_style_code">شيفرة</string>
+    <string name="text_bold">غامق</string>
+    <string name="text_italic">مائل</string>
+    <string name="text_underline">تسطير</string>
+    <string name="text_strike">يتوسطه خط</string>
+    <string name="text_more">تنسيق إضافي</string>
+    <string name="text_done_typing">إنهاء الكتابة</string>
 </resources>
