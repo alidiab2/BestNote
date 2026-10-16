@@ -58,6 +58,7 @@ class NotebookRepository @Inject constructor(
      * every save into the index. Call [Autosaver.close] when done.
      */
     suspend fun openForEditing(id: NotebookId, now: Long = System.currentTimeMillis()): OpenNotebook {
+        store.compactJournals(id) // leftovers of a crash or a missed close: fold them before the saver takes over
         val pkg = store.read(id) ?: newPackage(dao.get(id.value)?.toModel() ?: Notebook(id, "Notebook", now, now))
             .also { store.write(it) }
         dao.syncFromPackage(pkg.notebook)

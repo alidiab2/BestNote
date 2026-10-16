@@ -44,11 +44,16 @@ sealed interface SaveState {
  * after the first unsaved edit, so continuous writing still reaches the disk every few seconds.
  * Only pages edited since the last save are re-encoded and rewritten.
  *
- * A page is always encoded whole, so one save costs as many bytes (allocated, checksummed and
- * written) as the pages it touches: ~30 MB for a page of 5k strokes. While writing continuously on
- * such a page, saving every few seconds turned into tens of MB/s of garbage and disk traffic. So the
- * worker waits at least `encoded bytes / [saveBytesPerSecond]` (at most [maxCooldownMillis]) after
- * a save before starting the next one; edits made meanwhile are coalesced into it. Normal pages
+ * Incremental saves (DOC-11): once the saver knows what a page holds on disk (its first full save, or
+ * [adoptBaseline] for a page just loaded), an edit is diffed against that and only the change (strokes
+ * added or removed) is appended to the page's journal ([PageJournal]), so a save costs the size of the
+ * edit, not of the page. The page is rewritten whole ("compaction") when the journal passes
+ * [maxJournalBytes] or [maxJournalOps], after [idleCompactMillis] without edits (0 = never), and on [close].
+ * Stores without journals ([NotebookStore.appendJournal] returns null) get whole-page saves.
+ *
+ * A whole-page save encodes and writes as many bytes as the page has: ~30 MB for 5k strokes. When one is
+ * needed, the worker waits at least `encoded bytes / [saveBytesPerSecond]` (at most [maxCooldownMillis]) after
+ * it before starting the next; edits made meanwhile are coalesced into it. Normal pages
  * (a few hundred KB) are unaffected; [flush] and [close] never wait. [updateLayout] adds pages and
  * changes their paper or size (PAGES-01/02); only new or changed pages are rewritten. Callers should [flush] when
  * the app goes to the background, so a later process kill finds everything on disk.
@@ -67,6 +72,9 @@ class Autosaver(
     private val maxDelayMillis: Long = DEFAULT_MAX_DELAY_MILLIS,
     private val saveBytesPerSecond: Long = DEFAULT_SAVE_BYTES_PER_SECOND,
     private val maxCooldownMillis: Long = DEFAULT_MAX_COOLDOWN_MILLIS,
+    private val maxJournalBytes: Long = DEFAULT_MAX_JOURNAL_BYTES,
+    private val maxJournalOps: Int = DEFAULT_MAX_JOURNAL_OPS,
+    private val idleCompactMillis: Long = DEFAULT_IDLE_COMPACT_MILLIS,
     private val clock: () -> Long = System::currentTimeMillis,
     private val timeSource: TimeSource = TimeSource.Monotonic,
     private val onSaved: suspend (NotebookPackage) -> Unit = {},
@@ -99,6 +107,13 @@ class Autosaver(
     /** Extra name -> newest bytes not yet committed (format 5). Guarded by [lock]. */
     private val pendingExtras = LinkedHashMap<String, ByteArray>()
     private var closed = false
+
+    /** pageId -> strokes as on disk (chunk plus journal), when known. Guarded by [lock]. */
+    private val baselines = HashMap<String, List<InkStroke>>()
+
+    /** pageId -> journal size in bytes and edits, for pages whose journal is not empty. Guarded by [lock]. */
+    private val journals = HashMap<String, LongArray>()
+    @Volatile private var journalsUnsupported = false
 
     private val signal = Channel<Unit>(Channel.CONFLATED)
 
@@ -138,6 +153,15 @@ class Autosaver(
     val recordings: List<AudioRecording> get() = synchronized(lock) { saved.recordings }
 
     private class PendingAudio(val recordings: List<AudioRecording>, val added: Map<String, ByteArray>)
+
+    /**
+     * Tells the saver that page [pageId] currently holds [strokes] on disk, so later edits are saved as a
+     * journal of the difference. Call right after loading a page, before its first [updatePage], with the
+     * same stroke instances the editor will pass back (strokes are compared by identity).
+     */
+    fun adoptBaseline(pageId: String, strokes: List<InkStroke>) {
+        synchronized(lock) { if (pageId !in pending) baselines[pageId] = strokes }
+    }
 
     private val worker = scope.launch { runWorker() }
 
@@ -222,13 +246,18 @@ class Autosaver(
 
     /** Saves pending edits now and returns once they are on disk. @throws on I/O failure. */
     suspend fun flush() {
-        saveMutex.withLock { saveLocked() }
+        saveMutex.withLock { saveLocked(compact = false) }
     }
 
-    /** Flushes, then stops the worker. Further [updatePage] calls fail. */
+    /** Like [flush], and also folds every page journal into its chunk. */
+    suspend fun compact() {
+        saveMutex.withLock { saveLocked(compact = true) }
+    }
+
+    /** Flushes and compacts, then stops the worker. Further [updatePage] calls fail. */
     suspend fun close() {
         try {
-            flush()
+            compact()
         } finally {
             synchronized(lock) { closed = true }
             worker.cancel()
@@ -238,7 +267,21 @@ class Autosaver(
     private suspend fun runWorker() {
         var retryDelay = RETRY_MIN_MILLIS
         while (true) {
-            signal.receive()
+            if (idleCompactMillis > 0 && hasJournals()) {
+                // Edits are journalled; fold them into the chunks once the user stops writing.
+                if (withTimeoutOrNull(idleCompactMillis) { signal.receive() } == null) {
+                    try {
+                        compact()
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (@Suppress("TooGenericExceptionCaught") _: Exception) {
+                        delay(retryDelay)
+                    }
+                    continue
+                }
+            } else {
+                signal.receive()
+            }
             val first = timeSource.markNow()
             while (true) {
                 val left = maxDelayMillis - first.elapsedNow().inWholeMilliseconds
@@ -262,7 +305,9 @@ class Autosaver(
         }
     }
 
-    private suspend fun saveLocked() {
+    private fun hasJournals() = synchronized(lock) { journals.isNotEmpty() }
+
+    private suspend fun saveLocked(compact: Boolean) {
         val batch: Map<String, List<InkStroke>>
         val elements: Map<String, List<PageElement>>
         val newAssets: Map<String, ByteArray>
@@ -271,7 +316,9 @@ class Autosaver(
         val audio: PendingAudio?
         val extras: Map<String, ByteArray>
         synchronized(lock) {
-            if (pending.isEmpty() && pendingElements.isEmpty() && pendingAssets.isEmpty() && pendingLayout == null && pendingAudio == null && pendingExtras.isEmpty()) {
+            if (pending.isEmpty() && pendingElements.isEmpty() && pendingAssets.isEmpty() && pendingLayout == null && pendingAudio == null && pendingExtras.isEmpty() &&
+                !(compact && journals.isNotEmpty())
+            ) {
                 lastEncodedBytes = 0
                 return
             }
@@ -290,14 +337,16 @@ class Autosaver(
             base = saved
         }
         val pkg = try {
-            val encoded = withContext(cpu) { batch.mapValues { (_, strokes) -> codec.encode(strokes) } }
-            lastEncodedBytes = encoded.values.sumOf { it.size.toLong() }
+            lastEncodedBytes = 0
+            val whole = journalEdits(base, batch, layout != null, compact)
+            val encoded = withContext(cpu) { whole.mapValues { (_, strokes) -> codec.encode(strokes) } }
+            lastEncodedBytes += encoded.values.sumOf { it.size.toLong() }
             val (pages, changed) = if (layout == null) {
                 base.pages.map { p ->
                     val ink = encoded[p.id]
                     val shapes = elements[p.id]
                     if (ink == null && shapes == null) p else PageContent(p.page, ink ?: p.strokes, p.id, shapes ?: p.elements)
-                } to (batch.keys + elements.keys)
+                } to (encoded.keys + elements.keys)
             } else {
                 relayout(base, layout, encoded, elements)
             }
@@ -311,7 +360,22 @@ class Autosaver(
                 val keep = audio.recordings.mapTo(HashSet()) { it.assetPath }
                 (base.assets.filterKeys { !it.startsWith(AudioRecording.ASSET_DIR) || it in keep } + newAssets + audio.added) to audio.recordings
             }
-            NotebookPackage(notebook, pages, assets, recordings, base.extras + extras).also { store.writePages(it, changed) }
+            val pkg = NotebookPackage(notebook, pages, assets, recordings, base.extras + extras)
+            val others = changed.isNotEmpty() || newAssets.isNotEmpty() || layout != null || audio != null || extras.isNotEmpty()
+            // Only journalled edits: the journal is the commit; the manifest is rewritten with the next full save.
+            if (others) store.writePages(pkg, changed)
+            synchronized(lock) {
+                for ((id, strokes) in whole) {
+                    baselines[id] = strokes
+                    journals.remove(id)
+                }
+                if (layout != null) {
+                    val live = layout.mapTo(HashSet()) { it.first }
+                    baselines.keys.retainAll(live)
+                    journals.keys.retainAll(live)
+                }
+            }
+            pkg
         } catch (e: Throwable) {
             // Put the batch back unless the page was edited again meanwhile (newer content wins).
             synchronized(lock) {
@@ -338,6 +402,51 @@ class Autosaver(
             // The content is safely on disk; a stale index entry is rebuilt from the package later.
         }
     }
+
+    /**
+     * Appends the edits of [batch] that are cheap to journal and returns the pages that must be rewritten
+     * whole instead (id -> strokes): pages with no known baseline, big or reordering edits, pages whose
+     * journal is full, every page with a journal when [compact], and everything when a [layout] change is saved.
+     */
+    private suspend fun journalEdits(base: NotebookPackage, batch: Map<String, List<InkStroke>>, hasLayout: Boolean, compact: Boolean): Map<String, List<InkStroke>> {
+        val whole = LinkedHashMap<String, List<InkStroke>>()
+        for ((id, strokes) in batch) {
+            val page = base.pages.firstOrNull { it.id == id }
+            val (known, stat) = synchronized(lock) { baselines[id] to journals[id] }
+            val edit = if (page == null || known == null || hasLayout || compact || journalsUnsupported || stat.overLimit()) {
+                null
+            } else {
+                PageJournal.diff(known, strokes, maxOf(MIN_JOURNAL_ADDED, strokes.size / 4))
+            }
+            if (edit == null) {
+                whole[id] = strokes
+                continue
+            }
+            if (edit.removed.isEmpty() && edit.added.isEmpty()) {
+                synchronized(lock) { baselines[id] = strokes }
+                continue
+            }
+            val record = withContext(cpu) { PageJournal.record(edit, codec) }
+            val size = store.appendJournal(base.notebook.id, id, PageJournal.chunkId(page!!.strokes), record)
+            if (size == null) {
+                journalsUnsupported = true
+                whole[id] = strokes
+                continue
+            }
+            lastEncodedBytes += record.size
+            synchronized(lock) {
+                baselines[id] = strokes
+                journals.getOrPut(id) { LongArray(2) }.let { it[0] = size; it[1]++ }
+            }
+        }
+        if (compact) {
+            val rest = synchronized(lock) { journals.keys.filter { it !in whole }.mapNotNull { id -> baselines[id]?.let { id to it } } }
+            for ((id, strokes) in rest) if (base.pages.any { it.id == id }) whole[id] = strokes
+        }
+        return whole
+    }
+
+    private fun LongArray?.overLimit() = this != null && (this[0] > maxJournalBytes || this[1] >= maxJournalOps)
 
     /** Pages in [layout] order with fresh metadata; returns them and the ids whose files must be written. */
     private suspend fun relayout(
@@ -369,6 +478,12 @@ class Autosaver(
         /** Background save budget: a 30 MB page saves every ~7 s while written on, a 300 KB one every 2 s. */
         const val DEFAULT_SAVE_BYTES_PER_SECOND = 4L * 1024 * 1024
         const val DEFAULT_MAX_COOLDOWN_MILLIS = 10_000L
+
+        /** A page journal this big (or with this many edits) is folded into the page chunk. */
+        const val DEFAULT_MAX_JOURNAL_BYTES = 4L * 1024 * 1024
+        const val DEFAULT_MAX_JOURNAL_OPS = 2_000
+        const val DEFAULT_IDLE_COMPACT_MILLIS = 30_000L
+        private const val MIN_JOURNAL_ADDED = 64
         private const val MILLIS_PER_SECOND = 1_000L
         private const val RETRY_MIN_MILLIS = 1_000L
         private const val RETRY_MAX_MILLIS = 30_000L

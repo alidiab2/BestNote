@@ -1,0 +1,11 @@
+{
+  "format": 5,
+  "id": "page-1",
+  "index": 1,
+  "template": "Ruled",
+  "widthPt": 420.0,
+  "heightPt": 595.0,
+  "paper": "Cream",
+  "ink": "page-1.ink",
+  "elements": []
+}
