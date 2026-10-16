@@ -54,12 +54,19 @@ object StrokeEdits {
                 s.strokeUnitLengthCm,
                 s.pressure,
                 s.tiltRadians,
-                if (s.hasOrientation) s.orientationRadians + turn else StrokeInput.NO_ORIENTATION,
+                if (s.hasOrientation) normalizedAngle(s.orientationRadians + turn) else StrokeInput.NO_ORIENTATION,
             )
         }
         val k = m.lengthScale
         val brush = if (k == 1f) stroke.brush else resized(stroke.brush, k)
         return Stroke(brush, batch)
+    }
+
+    /** [radians] wrapped into [0, 2π), the only range androidx.ink accepts for an input's orientation. */
+    internal fun normalizedAngle(radians: Float): Float {
+        val full = (2 * Math.PI).toFloat()
+        val r = radians % full
+        return if (r < 0f) (r + full).coerceAtMost(full - 1e-6f) else r
     }
 
     /** [stroke] with its color's RGB replaced by [colorArgb]'s (its own alpha, e.g. a highlighter's, stays). */
