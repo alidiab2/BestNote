@@ -161,6 +161,8 @@ data class UserPreferences(
     val writing: WritingPreferences = WritingPreferences(),
     val appearance: AppearancePreferences = AppearancePreferences(),
     val storage: StoragePreferences = StoragePreferences(),
+    /** ONB-01: the first-run welcome was finished or skipped. Settings → About → "Show welcome again" clears it. */
+    val onboardingDone: Boolean = false,
 ) {
     /**
      * True when fingers must never ink (palm rejection's strongest mode). Derived from
@@ -233,6 +235,9 @@ class UserPreferencesRepository @Inject constructor(private val store: DataStore
     suspend fun update(transform: (UserPreferences) -> UserPreferences) {
         store.updateData(transform)
     }
+
+    /** ONB-01: [done] = false shows the welcome again. */
+    suspend fun setOnboardingDone(done: Boolean) = update { it.copy(onboardingDone = done) }
 
     suspend fun setThemeMode(mode: ThemeMode) = update { it.copy(themeMode = mode) }
 

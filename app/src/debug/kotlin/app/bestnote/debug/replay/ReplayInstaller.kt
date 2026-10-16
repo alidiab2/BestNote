@@ -76,6 +76,7 @@ class ReplayInstaller : ContentProvider() {
                         STATE -> state(activity, intent)
                         SEED -> seed(activity, intent)
                         PERF -> perf(activity, intent)
+                        ONBOARDING -> showOnboardingAgain(activity)
                         else -> replay(activity, intent)
                     }
             }
@@ -84,6 +85,7 @@ class ReplayInstaller : ContentProvider() {
                 addAction(STATE)
                 addAction(SEED)
                 addAction(PERF)
+                addAction(ONBOARDING)
             }
             ContextCompat.registerReceiver(activity, r, filter, ContextCompat.RECEIVER_EXPORTED)
             receiver = r
@@ -323,6 +325,7 @@ class ReplayInstaller : ContentProvider() {
         const val STATE = "app.bestnote.debug.STATE"
         const val SEED = "app.bestnote.debug.SEED"
         const val PERF = "app.bestnote.debug.PERF"
+        const val ONBOARDING = "app.bestnote.debug.ONBOARDING"
 
         /** The scripted PERF pinch sequence: (span0, span1, dx, dy) per gesture, zooming out and in. */
         val PERF_SCRIPT = listOf(

@@ -57,6 +57,7 @@ include(":ai:vision-providers")
 include(":ai:board-scan")
 
 include(":feature:library")
+include(":feature:onboarding")
 include(":feature:editor")
 include(":feature:settings")
 include(":feature:smartboard")

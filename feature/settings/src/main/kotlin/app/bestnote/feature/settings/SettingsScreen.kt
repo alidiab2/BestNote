@@ -128,7 +128,7 @@ fun SettingsScreen(onBack: () -> Unit, onOpenTemplates: () -> Unit = {}, viewMod
             )
             SettingsCategory.Storage -> StorageSection(storage, prefs.storage, viewModel::updateStorage, viewModel::clearThumbnails)
             SettingsCategory.Debug -> DebugSection(hiltViewModel())
-            SettingsCategory.About -> AboutSection(showLicenses, onShowLicenses = { showLicenses = it })
+            SettingsCategory.About -> AboutSection(showLicenses, onShowLicenses = { showLicenses = it }, onShowWelcome = { viewModel.update { it.copy(onboardingDone = false) } })
         }
     }
 

@@ -271,4 +271,6 @@
     <string name="settings_templates">القوالب</string>
     <string name="settings_templates_sub">شكل صفحات السبورة الذكية وما يُقال للذكاء الاصطناعي والعناصر المستخدمة. صمّمها بيدك أو بالذكاء الاصطناعي.</string>
     <string name="settings_licenses_downloaded_fonts">الخطوط المنزَّلة</string>
+    <string name="settings_show_welcome">إظهار الترحيب مرة أخرى</string>
+    <string name="settings_show_welcome_sub">أعد جولة البداية واختبار القلم</string>
 </resources>
