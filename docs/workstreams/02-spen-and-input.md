@@ -15,7 +15,7 @@
 | [ ] SPEN-07 | Stylus handwriting into text fields (search, rename) | M2 | M | — | Writing in the search box with the S Pen inserts text |
 | [ ] SPEN-08 | Multi-window and multi-instance: two notebooks side by side, drag content between them | M2 | L | CANVAS-11 | Split screen with two editors; lasso-drag copies across |
 | [ ] SPEN-09 | DeX / mouse / trackpad: pointer icons, right-click menu, Ctrl+scroll zoom | M2 | M | — | Full editing session in DeX without touching the screen |
-| [ ] SPEN-10 | Keyboard shortcuts (Book Cover Keyboard) + shortcut help overlay (hold Meta) | M2 | M | — | Undo, redo, tools, zoom, new page, search all have shortcuts |
+| [x] SPEN-10 | Keyboard shortcuts (Book Cover Keyboard) + shortcut help overlay (hold Meta) | M2 | M | — | Undo, redo, tools, zoom, new page, search all have shortcuts |
 | [ ] SPEN-11 | Air actions via S Pen Remote SDK, `samsung` build flavor only | M4 | L | D4 | Button click = next page / undo (configurable) in presentation mode |
 | [ ] SPEN-12 | Foldables: Flex mode layout (tools on the bottom half) | M3 | M | DS-05 | Fold 6/7 half-open shows the canvas top and tools bottom |
 | [ ] SPEN-13 | Device matrix test pass + latency measurement report | M1 | M | QA-04 | Report committed to `docs/platform/reports/` |

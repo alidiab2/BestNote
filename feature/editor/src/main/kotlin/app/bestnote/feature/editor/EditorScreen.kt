@@ -116,6 +116,9 @@ import app.bestnote.engine.recognition.PageSearch
 import app.bestnote.core.model.PageElement
 import app.bestnote.core.model.PaperTemplate
 import app.bestnote.core.model.Tool
+import app.bestnote.core.ui.keys.ShortcutAction
+import app.bestnote.core.ui.keys.ShortcutHandler
+import app.bestnote.core.ui.keys.ShortcutScope
 import app.bestnote.engine.canvas.document.PagedDocument
 import app.bestnote.engine.canvas.document.PagedDocumentView
 import app.bestnote.engine.export.ExportDialog
@@ -313,6 +316,9 @@ internal fun dropSide(x: Float, y: Float, width: Float, height: Float): TraySide
 private const val TOP_PULL = 2.5f
 
 private const val INSERT_POLL_MS = 50L
+
+/** Ctrl+= / Ctrl+- zoom by this factor per press. */
+private const val KEY_ZOOM_STEP = 1.25f
 private const val SEARCH_SETTLE_MS = 150L
 private val ChromeEdge = 20.dp
 private val TopRowTop = 12.dp
@@ -517,6 +523,44 @@ fun EditorScreen(
         onOpenSettings = onOpenSettings,
         onExport = { picker = null; exporting = true },
     )
+    // SPEN-10: hardware-keyboard shortcuts. Dialogs are their own windows (they never see these keys); the
+    // sheets drawn in this window pause them too.
+    val dialogOpen = elements.newText != null || elements.editing != null || elements.cropping != null || elements.sourceMenu ||
+        managerPage != null || exporting || recordingsOpen || smartBoardChoice != null
+    ShortcutHandler(ShortcutScope.Editor) { action ->
+        val view = canvas
+        if (dialogOpen || view == null) return@ShortcutHandler false
+        picker = null
+        when (action) {
+            ShortcutAction.Undo -> document.undo()
+            ShortcutAction.Redo -> document.redo()
+            ShortcutAction.ToolPen -> viewModel.selectPen(if (toolbox.active.tool == Tool.Pen) toolbox.active else PenKind.Fountain)
+            ShortcutAction.ToolHighlighter -> viewModel.selectPen(PenKind.Highlighter)
+            ShortcutAction.ToolEraser -> viewModel.selectPen(PenKind.Eraser)
+            ShortcutAction.ToolLasso -> viewModel.setLasso(true)
+            ShortcutAction.ToolText -> elements.insertText()
+            ShortcutAction.ZoomIn -> view.zoomTo(view.zoom * KEY_ZOOM_STEP)
+            ShortcutAction.ZoomOut -> view.zoomTo(view.zoom / KEY_ZOOM_STEP)
+            ShortcutAction.ZoomReset -> view.zoomTo(1f)
+            ShortcutAction.NextPage -> view.revealPage((view.currentPage + 1).coerceIn(0, (document.pages.size - 1).coerceAtLeast(0)))
+            ShortcutAction.PreviousPage -> view.revealPage((view.currentPage - 1).coerceAtLeast(0))
+            ShortcutAction.NewPage -> view.addPage()
+            ShortcutAction.Paste -> if (!view.paste()) elements.pasteImage()
+            // These act on a selection; with none, the key goes on to whoever wants it.
+            ShortcutAction.Copy, ShortcutAction.Cut, ShortcutAction.Duplicate, ShortcutAction.Delete, ShortcutAction.ClearSelection -> {
+                if (!view.hasSelection) return@ShortcutHandler false
+                when (action) {
+                    ShortcutAction.Copy -> view.copySelection()
+                    ShortcutAction.Cut -> view.cutSelection()
+                    ShortcutAction.Duplicate -> view.duplicateSelection()
+                    ShortcutAction.Delete -> view.deleteSelection()
+                    else -> view.clearSelection()
+                }
+            }
+            else -> return@ShortcutHandler false
+        }
+        true
+    }
     val pickerContent: @Composable (PickerAnchor) -> Unit = { anchor ->
         AnchoredPopover(side, onDismissed = { if (picker == anchor) picker = null }) {
             if (toolbox.active == PenKind.Eraser) {

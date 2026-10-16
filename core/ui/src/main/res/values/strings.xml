@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="shortcuts_title">Keyboard shortcuts</string>
+    <string name="shortcuts_hint">Hold Meta to peek, or press Ctrl+/ to pin. Esc closes.</string>
+    <string name="shortcut_group_general">General</string>
+    <string name="shortcut_group_edit">Edit</string>
+    <string name="shortcut_group_tools">Tools</string>
+    <string name="shortcut_group_view">View</string>
+    <string name="shortcut_group_pages">Pages</string>
+    <string name="shortcut_group_selection">Selection (lasso)</string>
+    <string name="shortcut_group_library">Library</string>
+    <string name="shortcut_show">Show shortcuts</string>
+    <string name="shortcut_undo">Undo</string>
+    <string name="shortcut_redo">Redo</string>
+    <string name="shortcut_tool_pen">Pen</string>
+    <string name="shortcut_tool_highlighter">Highlighter</string>
+    <string name="shortcut_tool_eraser">Eraser</string>
+    <string name="shortcut_tool_lasso">Lasso</string>
+    <string name="shortcut_tool_text">Text box</string>
+    <string name="shortcut_zoom_in">Zoom in</string>
+    <string name="shortcut_zoom_out">Zoom out</string>
+    <string name="shortcut_zoom_reset">Reset zoom</string>
+    <string name="shortcut_next_page">Next page</string>
+    <string name="shortcut_previous_page">Previous page</string>
+    <string name="shortcut_new_page">New page</string>
+    <string name="shortcut_copy">Copy</string>
+    <string name="shortcut_cut">Cut</string>
+    <string name="shortcut_paste">Paste</string>
+    <string name="shortcut_duplicate">Duplicate</string>
+    <string name="shortcut_delete">Delete</string>
+    <string name="shortcut_clear_selection">Clear selection</string>
+    <string name="shortcut_new_notebook">New notebook</string>
+    <string name="shortcut_search_library">Search the library</string>
+</resources>

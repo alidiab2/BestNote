@@ -55,6 +55,10 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.focus.FocusRequester
+import app.bestnote.core.ui.keys.ShortcutAction
+import app.bestnote.core.ui.keys.ShortcutHandler
+import app.bestnote.core.ui.keys.ShortcutScope
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -288,6 +292,17 @@ internal fun LibraryContent(
         )
     }
     val controls = state.controls
+    // SPEN-10: Ctrl+N a new notebook, Ctrl+F the search field.
+    val searchFocus = remember { FocusRequester() }
+    ShortcutHandler(ShortcutScope.Library) { action ->
+        if (dialog != null) return@ShortcutHandler false
+        when (action) {
+            ShortcutAction.NewNotebook -> ui.newNotebook()
+            ShortcutAction.SearchLibrary -> runCatching { searchFocus.requestFocus() }
+            else -> return@ShortcutHandler false
+        }
+        true
+    }
     val actions = NotebookActions(
         open = { ui.open(it.id) },
         menu = { item, action ->
@@ -347,7 +362,7 @@ internal fun LibraryContent(
                         Modifier.fillMaxSize(),
                         contentPadding = PaddingValues(start = MainPaddingH, end = MainPaddingH, top = Spacing.XXL, bottom = Spacing.XXL * 4),
                     ) {
-                        item(key = "header", contentType = "header") { LibraryHeader(state, compact, ui) }
+                        item(key = "header", contentType = "header") { LibraryHeader(state, compact, ui, searchFocus = searchFocus) }
                         val last = state.continueWith
                         if (state.showContinueWriting && last != null) {
                             item(key = "continue-title", contentType = "section") { SectionTitle(stringResource(R.string.library_continue_writing)) }
