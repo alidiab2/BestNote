@@ -10,4 +10,5 @@ dependencies {
     implementation(projects.engine.pdf)
     implementation(projects.engine.export)
     implementation(libs.androidx.compose.material.icons.extended)
+    implementation(libs.androidx.activity.compose)
 }

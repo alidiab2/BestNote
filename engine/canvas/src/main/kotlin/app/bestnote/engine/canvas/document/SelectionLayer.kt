@@ -12,9 +12,12 @@ import android.view.HapticFeedbackConstants
 import android.view.View
 import android.view.animation.DecelerateInterpolator
 import androidx.ink.strokes.Stroke
+import app.bestnote.core.model.PageElement
+import app.bestnote.core.model.TextElement
 import app.bestnote.engine.canvas.StrokeBrushes
 import app.bestnote.engine.canvas.select.Affine
 import app.bestnote.engine.canvas.select.Box
+import app.bestnote.engine.canvas.select.ElementTransforms
 import app.bestnote.engine.canvas.select.Grip
 import app.bestnote.engine.canvas.select.InkClipboard
 import app.bestnote.engine.canvas.select.LassoPolygon
@@ -40,6 +43,7 @@ internal class SelectionLayer(
     context: Context,
     private val pages: PagesLayer,
     private val brushes: StrokeBrushes<*, Stroke>,
+    private val elementPainter: ElementPainter,
 ) : View(context) {
 
     var document: PagedDocument? = null
@@ -89,7 +93,7 @@ internal class SelectionLayer(
         }
     }
 
-    private class Selected(val page: DocumentPage, val strokes: List<Stroke>, val box: Box)
+    private class Selected(val page: DocumentPage, val strokes: List<Stroke>, val elements: List<PageElement>, val box: Box)
 
     private var draft: Draft? = null
     private var selection: Selected? = null
@@ -97,6 +101,8 @@ internal class SelectionLayer(
     private var gesturePointer = -1
     private var gestureBox: Box? = null
     private var previewStrokes: List<Stroke> = emptyList()
+    private var previewElements: List<PageElement> = emptyList()
+    private val imageReady = Runnable { invalidate() }
     private var lastSnap: Int? = null
 
     /** Where the pen last touched a page (page, x, y in page points): where paste lands. */
@@ -141,6 +147,8 @@ internal class SelectionLayer(
     /** The handle or body of the selection under ([x], [y]), or null. */
     fun gripAt(x: Float, y: Float): Grip? {
         val sel = selection ?: return null
+        // Only locked pictures or text selected: nothing can move, so the box is not grabbable.
+        if (sel.strokes.isEmpty() && sel.elements.all { it.locked }) return null
         val index = indexOf(sel.page)
         if (index < 0 || !pageToScreen(index, matrix)) return null
         val b = padded(sel.box)
@@ -188,6 +196,8 @@ internal class SelectionLayer(
             lastSnap = null
             previewStrokes = readable(sel.page, sel.strokes)
             pages.setHidden(selIndex, identitySet(sel.strokes))
+            previewElements = sel.elements.filter { !it.locked }
+            pages.setHiddenElements(selIndex, previewElements.mapTo(HashSet()) { it.id })
             listener?.onSelectionMenu(null)
             invalidate()
             return true
@@ -259,7 +269,13 @@ internal class SelectionLayer(
         val index = indexOf(d.page)
         if (index < 0) return invalidate()
         if (d.screenLength < TAP_DP * density) {
-            // A tap: nothing to select. With ink on the clipboard, offer Paste right here.
+            // A tap on a text box or picture selects it.
+            val hit = d.page.elements.lastOrNull { ElementTransforms.contains(it, d.xs[0], d.ys[0]) }
+            if (hit != null) {
+                select(d.page, emptyList(), listOf(hit))
+                return invalidate()
+            }
+            // Otherwise nothing to select. With ink on the clipboard, offer Paste right here.
             if (InkClipboard.hasContent) pasteOffer = Triple(d.page, d.xs[0], d.ys[0])
             notifyMenu()
             return invalidate()
@@ -270,7 +286,8 @@ internal class SelectionLayer(
             val o = outlines.of(s)
             poly.selects(o.xs, o.ys)
         }
-        if (chosen.isNotEmpty()) select(d.page, chosen) else notifyMenu()
+        val chosenElements = d.page.elements.filter { ElementTransforms.selectedBy(poly, it) }
+        if (chosen.isNotEmpty() || chosenElements.isNotEmpty()) select(d.page, chosen, chosenElements) else notifyMenu()
         invalidate()
     }
 
@@ -279,15 +296,19 @@ internal class SelectionLayer(
         gesture = null
         gesturePointer = -1
         previewStrokes = emptyList()
+        previewElements = emptyList()
         val sel = selection
         val m = g.transform
         if (commit && sel != null && !nearlyIdentity(m)) {
             val k = m.lengthScale
-            replace(sel) { s ->
+            replace(sel, { s ->
                 StrokeEdits.transformed(s, m).also { n -> brushes.derive(n, s) { if (k != 1f) StrokeEdits.resized(it, k) else it } }
+            }) { e ->
+                ElementTransforms.transformed(e, m).let { if (it is TextElement && it !== e) elementPainter.fitted(it) else it }
             }
         }
         pages.setHidden(-1, emptySet())
+        pages.setHiddenElements(-1, emptySet())
         notifyMenu()
         invalidate()
     }
@@ -314,13 +335,14 @@ internal class SelectionLayer(
 
     fun delete() {
         val sel = selection ?: return
-        edit { document?.deleteStrokes(indexOf(sel.page), sel.strokes) }
+        val gone = sel.elements.mapTo(HashSet()) { it.id }
+        edit { document?.editContent(indexOf(sel.page), removedStrokes = sel.strokes, elements = sel.page.elements.filter { it.id !in gone }) }
         clear()
     }
 
     fun copy() {
         val sel = selection ?: return
-        InkClipboard.set(sel.strokes.map { InkClipboard.Item(it, brushes.brushOf(it)) }, sel.box)
+        InkClipboard.set(sel.strokes.map { InkClipboard.Item(it, brushes.brushOf(it)) }, sel.box, sel.elements)
     }
 
     fun cut() {
@@ -334,8 +356,9 @@ internal class SelectionLayer(
         if (index < 0) return
         val m = Affine.translate(PastePlacement.DUPLICATE_OFFSET, PastePlacement.DUPLICATE_OFFSET)
         val copies = sel.strokes.map { s -> StrokeEdits.transformed(s, m).also { n -> brushes.derive(n, s) { it } } }
-        edit { document?.addStrokes(index, copies) }
-        select(sel.page, copies)
+        val shapes = sel.elements.map { it.withId(PageElement.newId()).placed(cx = it.cx + PastePlacement.DUPLICATE_OFFSET, cy = it.cy + PastePlacement.DUPLICATE_OFFSET) }
+        edit { document?.editContent(index, addedStrokes = copies, elements = sel.page.elements + shapes) }
+        select(sel.page, copies, shapes)
     }
 
     /** Pastes the clipboard centered where the pen last touched (the offered spot, if any). @return true if pasted. */
@@ -353,33 +376,61 @@ internal class SelectionLayer(
             StrokeEdits.transformed(item.stroke, m).also { n -> item.brush?.let { brushes.put(n, it) } }
         }
         pasteOffer = null
-        edit { doc.addStrokes(index, pasted) }
-        select(page, pasted)
+        val shapes = InkClipboard.elements.map { it.withId(PageElement.newId()).placed(cx = it.cx + dx, cy = it.cy + dy) }
+        edit { doc.editContent(index, addedStrokes = pasted, elements = page.elements + shapes) }
+        select(page, pasted, shapes)
         return true
     }
 
     fun recolor(colorArgb: Int) {
         val sel = selection ?: return
-        replace(sel) { s -> StrokeEdits.recolored(s, colorArgb).also { n -> brushes.derive(n, s) { StrokeEdits.recolored(it, colorArgb) } } }
+        replace(sel, { s -> StrokeEdits.recolored(s, colorArgb).also { n -> brushes.derive(n, s) { StrokeEdits.recolored(it, colorArgb) } } }) { e ->
+            if (e is TextElement) e.copy(colorArgb = colorArgb) else e
+        }
         notifyMenu()
     }
 
     fun thicken(factor: Float) {
         val sel = selection ?: return
-        replace(sel) { s -> StrokeEdits.thickened(s, factor).also { n -> brushes.derive(n, s) { StrokeEdits.resized(it, factor) } } }
+        if (sel.strokes.isEmpty()) return
+        replace(sel, { s -> StrokeEdits.thickened(s, factor).also { n -> brushes.derive(n, s) { StrokeEdits.resized(it, factor) } } })
         notifyMenu()
     }
 
     /** Swaps every selected stroke for [make]'s copy as one undo step, and selects the copies. */
-    private inline fun replace(sel: Selected, make: (Stroke) -> Stroke) {
+    private inline fun replace(sel: Selected, make: (Stroke) -> Stroke, makeElement: (PageElement) -> PageElement = { it }) {
         val index = indexOf(sel.page)
         if (index < 0) return
         val mapping = LinkedHashMap<Stroke, Stroke>()
         for (s in sel.strokes) mapping[s] = make(s)
-        edit { document?.replaceStrokes(index, mapping) }
-        selection = Selected(sel.page, mapping.values.toList(), outlines.boxOf(mapping.values) ?: sel.box)
+        val changed = LinkedHashMap<String, PageElement>()
+        for (e in sel.elements) changed[e.id] = makeElement(e)
+        edit { document?.editContent(index, replacements = mapping, elements = sel.page.elements.map { changed[it.id] ?: it }) }
+        val shapes = changed.values.toList()
+        selection = Selected(sel.page, mapping.values.toList(), shapes, boxOf(mapping.values, shapes) ?: sel.box)
         invalidate()
     }
+
+    /** The selected element when it is the only thing selected (a picture or a text box), else null. */
+    val singleElement: PageElement? get() = selection?.takeIf { it.strokes.isEmpty() && it.elements.size == 1 }?.elements?.first()
+
+    /** Selects the element [id] of page [pageIndex] (a freshly inserted text box or picture). */
+    fun selectElement(pageIndex: Int, id: String) {
+        val page = document?.pages?.getOrNull(pageIndex) ?: return
+        val element = page.elements.firstOrNull { it.id == id } ?: return
+        clear()
+        select(page, emptyList(), listOf(element))
+    }
+
+    /** Applies [change] to the single selected element as one undo step (crop, turn, lock, text edit). */
+    fun updateSingleElement(change: (PageElement) -> PageElement) {
+        val sel = selection?.takeIf { it.strokes.isEmpty() && it.elements.size == 1 } ?: return
+        replace(sel, { it }, change)
+        notifyMenu()
+    }
+
+    private fun boxOf(strokes: Collection<Stroke>, elements: List<PageElement>): Box? =
+        Box.union(listOfNotNull(outlines.boxOf(strokes)) + elements.map { ElementTransforms.bounds(it) })
 
     private inline fun edit(block: () -> Unit) {
         editing = true
@@ -390,9 +441,9 @@ internal class SelectionLayer(
         }
     }
 
-    private fun select(page: DocumentPage, strokes: List<Stroke>) {
-        val box = outlines.boxOf(strokes) ?: return
-        selection = Selected(page, strokes, box)
+    private fun select(page: DocumentPage, strokes: List<Stroke>, elements: List<PageElement> = emptyList()) {
+        val box = boxOf(strokes, elements) ?: return
+        selection = Selected(page, strokes, elements, box)
         pasteOffer = null
         startAppear()
         notifyMenu()
@@ -409,6 +460,15 @@ internal class SelectionLayer(
         // Undo, redo or an eraser changed this page: keep the selection only if all of it is still there.
         val present = identitySet(page.strokes)
         if (!sel.strokes.all { it in present }) clear()
+    }
+
+    fun onPageElementsChanged(index: Int) {
+        if (editing) return
+        val sel = selection ?: return
+        val page = document?.pages?.getOrNull(index) ?: return
+        if (page !== sel.page) return
+        // Undo, redo or another change touched this page's elements: keep the selection only if all of it is still there as selected.
+        if (!sel.elements.all { it in page.elements }) clear() else invalidate()
     }
 
     fun onPagesChanged() {
@@ -437,7 +497,12 @@ internal class SelectionLayer(
             val b = padded(sel.box)
             pts[0] = b.minX; pts[1] = b.minY; pts[2] = b.maxX; pts[3] = b.maxY
             matrix.mapPoints(pts, 0, pts, 0, 2)
-            return l.onSelectionMenu(PagedDocumentView.SelectionMenu(sel.strokes.size, pts[0], pts[1], pts[2], pts[3]))
+            return l.onSelectionMenu(
+                PagedDocumentView.SelectionMenu(
+                    sel.strokes.size + sel.elements.size, pts[0], pts[1], pts[2], pts[3],
+                    strokes = sel.strokes.size, element = singleElement, texts = sel.elements.count { it is TextElement },
+                ),
+            )
         }
         val offer = pasteOffer
         if (offer != null) {
@@ -460,11 +525,17 @@ internal class SelectionLayer(
         if (index < 0 || !pageToScreen(index, matrix)) return
         val g = gesture
         val m = g?.transform ?: Affine.IDENTITY
-        if (g != null && previewStrokes.isNotEmpty()) {
+        if (g != null && (previewStrokes.isNotEmpty() || previewElements.isNotEmpty())) {
             val full = Matrix(matrix).apply { preConcat(m.toMatrix()) }
             canvas.save()
             canvas.concat(full)
-            ink.draw(canvas, previewStrokes, full)
+            if (previewElements.isNotEmpty()) {
+                val colors = PaperColors.of(sel.page.page.paperColor)
+                val pxPerPt = (pages.layout?.scale ?: 1f) * pages.preview.scale * m.lengthScale
+                // Moving text keeps its size; the final box is re-fitted on release.
+                for (e in previewElements) elementPainter.drawOne(canvas, e, pxPerPt, document?.images, imageReady) { PaperInk.colorOn(it, colors) }
+            }
+            if (previewStrokes.isNotEmpty()) ink.draw(canvas, previewStrokes, full)
             canvas.restore()
         }
         drawBox(canvas, gestureBox.takeIf { g != null } ?: padded(sel.box), m, showHandles = g == null)

@@ -77,4 +77,31 @@
     <string name="quick_palette_size">Size %1$s mm. Tap to change</string>
     <string name="editor_pen_detected">Pen detected: fingers now scroll and zoom.</string>
     <string name="toolbar_move">Move toolbar: drag to the top or a side</string>
+
+    <string name="selection_edit">Edit</string>
+    <string name="selection_lock">Lock</string>
+    <string name="selection_unlock">Unlock</string>
+
+    <string name="dialog_done">Done</string>
+    <string name="dialog_cancel">Cancel</string>
+
+    <string name="text_title">Text</string>
+    <string name="text_smaller">Smaller text</string>
+    <string name="text_larger">Larger text</string>
+    <string name="text_align_start">Start</string>
+    <string name="text_align_center">Center</string>
+    <string name="text_align_end">End</string>
+
+    <string name="image_add">Add a picture</string>
+    <string name="image_photos">Photos</string>
+    <string name="image_camera">Camera</string>
+    <string name="image_paste">Paste</string>
+    <string name="image_crop">Crop</string>
+    <string name="image_rotate">Rotate</string>
+    <string name="image_failed">Couldn’t open that picture</string>
+    <string name="image_nothing_to_paste">There is no picture to paste</string>
+    <string name="crop_left">Left edge</string>
+    <string name="crop_right">Right edge</string>
+    <string name="crop_top">Top edge</string>
+    <string name="crop_bottom">Bottom edge</string>
 </resources>

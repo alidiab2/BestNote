@@ -205,7 +205,7 @@ private val Tools = listOf(
     ToolEntry(AtelierIcons.Ruler, R.string.tool_ruler),
 )
 
-/** The lighter second capsule: lasso, shapes, text, image, audio, ruler (the last four are placeholders until built). */
+/** The lighter second capsule: lasso, shapes, text, image, audio, ruler (audio and ruler are placeholders until built). */
 @Composable
 internal fun ToolsCapsule(
     vertical: Boolean,
@@ -215,6 +215,8 @@ internal fun ToolsCapsule(
     onLasso: () -> Unit = {},
     shapesActive: Boolean = false,
     onShapes: () -> Unit = {},
+    onText: () -> Unit = {},
+    onImage: () -> Unit = {},
 ) {
     val content: @Composable () -> Unit = {
         Tools.forEach { tool ->
@@ -231,6 +233,8 @@ internal fun ToolsCapsule(
                     when {
                         isLasso -> onLasso()
                         isShapes -> onShapes()
+                        tool.label == R.string.tool_text -> onText()
+                        tool.label == R.string.tool_image -> onImage()
                         else -> onComingSoon(label)
                     }
                 },

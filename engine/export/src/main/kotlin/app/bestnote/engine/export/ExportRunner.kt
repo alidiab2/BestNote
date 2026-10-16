@@ -4,6 +4,7 @@ import android.content.ClipData
 import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.graphics.pdf.PdfDocument
 import androidx.core.content.FileProvider
 import app.bestnote.core.model.InkStroke
@@ -13,6 +14,7 @@ import app.bestnote.core.storage.BnoteArchive
 import app.bestnote.core.storage.InkChunkCodec
 import app.bestnote.core.storage.NotebookPackage
 import app.bestnote.core.storage.NotebookStore
+import app.bestnote.engine.canvas.document.ElementImages
 import app.bestnote.engine.pdf.PdfNotebookFiles
 import app.bestnote.engine.pdf.PdfPageBackgrounds
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -107,6 +109,7 @@ class ExportRunner @Inject constructor(
         val document = PdfDocument()
         val backgrounds = PdfNotebookFiles.open(pkg, File(context.cacheDir, PDF_SOURCES_DIR))
         val pdfPages = pkg.pages.count { it.page.pdf != null }
+        val images = SyncImages(pkg.assets)
         val rendered = ArrayList<Bitmap>() // must outlive writeTo: the document draws from them then
         try {
             pkg.pages.forEachIndexed { i, content ->
@@ -117,7 +120,7 @@ class ExportRunner @Inject constructor(
                 // The imported PDF page is rasterized (PdfDocument cannot embed another PDF's page), so its
                 // text is not selectable in the export; the ink on top is vector.
                 val background = backgroundOf(backgrounds, page, backgroundWidthPx(page, pdfPages))?.also { rendered += it }
-                PageGraphics.drawVector(pdfPage.canvas, page, strokesOf(content.strokes), background)
+                PageGraphics.drawVector(pdfPage.canvas, page, strokesOf(content.strokes), background, content.elements, images)
                 document.finishPage(pdfPage)
                 progress.update(i + 1, pkg.pages.size)
             }
@@ -126,6 +129,7 @@ class ExportRunner @Inject constructor(
             document.close()
             backgrounds?.close()
             rendered.forEach { it.recycle() }
+            images.release()
         }
         return target
     }
@@ -158,10 +162,12 @@ class ExportRunner @Inject constructor(
             val content = pkg.pages[index]
             val scale = PageGraphics.DEFAULT_PNG_SCALE
             val background = backgroundOf(backgrounds, content.page, (content.page.widthPt * scale).roundToInt().coerceAtMost(MAX_BACKGROUND_PX))
+            val images = SyncImages(pkg.assets)
             val bitmap = try {
-                PageGraphics.bitmap(content.page, strokesOf(content.strokes), scale, background)
+                PageGraphics.bitmap(content.page, strokesOf(content.strokes), scale, background, content.elements, images)
             } finally {
                 background?.recycle()
+                images.release()
             }
             val name = if (pkg.pages.size == 1) "$base.png" else "$base-${(index + 1).toString().padStart(digits, '0')}.png"
             val file = File(dir, name)
@@ -222,4 +228,22 @@ internal object ExportNames {
     /** A title as a file name without extension: no path or reserved characters, at most 80 characters. */
     fun fileBase(title: String): String =
         title.replace(UNSAFE, "_").trim().trim('.').take(80).trim().ifEmpty { "Notebook" }
+}
+
+/**
+ * Decodes a notebook's pictures right when asked (exports run off the main thread and need them now).
+ * Each is decoded once (they are stored downsampled already) and kept until [release].
+ */
+internal class SyncImages(private val assets: Map<String, ByteArray>) : ElementImages {
+    private val decoded = HashMap<String, Bitmap?>()
+
+    override fun bitmap(asset: String, widthPx: Int, onReady: Runnable): Bitmap? = decoded.getOrPut(asset) {
+        val bytes = assets[asset] ?: return@getOrPut null
+        runCatching { BitmapFactory.decodeByteArray(bytes, 0, bytes.size) }.getOrNull()
+    }
+
+    fun release() {
+        decoded.values.forEach { it?.recycle() }
+        decoded.clear()
+    }
 }

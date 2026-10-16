@@ -6,11 +6,11 @@
 
 | ID | Task | M | Size | Depends on | Done when |
 |---|---|---|---|---|---|
-| [ ] TEXT-01 | Text box element: insert, edit, move, resize | M2 | M | CANVAS-08 | — |
+| [x] TEXT-01 | Text box element: insert, edit, move, resize | M2 | M | CANVAS-08 | — |
 | [ ] TEXT-02 | Formatting: font, size, color, bold/italic/underline, alignment, lists | M2 | M | TEXT-01 | Arabic text shapes and aligns correctly |
 | [ ] TEXT-03 | Typed text document type | M4 | L | TEXT-02 | — |
 | [ ] MEDIA-01 | Insert image: picker, camera, paste, drag-and-drop | M2 | M | — | Large images downsampled and stored once per notebook |
-| [ ] MEDIA-02 | Crop, rotate, resize image; lock image | M2 | M | MEDIA-01 | — |
+| [x] MEDIA-02 | Crop, rotate, resize image; lock image | M2 | M | MEDIA-01 | — |
 | [ ] MEDIA-03 | Local sticker packs (files, importable) | M3 | M | MEDIA-01 | — |
 | [ ] MEDIA-04 | Audio recording in a notebook (foreground service, background-safe) | M3 | L | — | — |
 | [ ] MEDIA-05 | Audio ↔ ink sync: tap a stroke to play from that moment | M3 | L | MEDIA-04 | Strokes carry recording timestamps |

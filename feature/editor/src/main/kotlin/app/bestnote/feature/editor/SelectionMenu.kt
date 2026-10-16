@@ -32,6 +32,8 @@ import androidx.compose.ui.unit.dp
 import app.bestnote.core.designsystem.theme.Motion
 import app.bestnote.core.designsystem.theme.Spacing
 import app.bestnote.core.designsystem.theme.reducedMotion
+import app.bestnote.core.model.ImageElement
+import app.bestnote.core.model.TextElement
 import app.bestnote.engine.canvas.document.PagedDocumentView
 import kotlin.math.roundToInt
 
@@ -45,6 +47,10 @@ internal class SelectionActions(
     val onDuplicate: () -> Unit,
     val onDelete: () -> Unit,
     val onPaste: () -> Unit,
+    val onEditText: () -> Unit = {},
+    val onCrop: () -> Unit = {},
+    val onRotate: () -> Unit = {},
+    val onToggleLock: () -> Unit = {},
 )
 
 /** Thicker/thinner step for a selection's ink. */
@@ -88,11 +94,28 @@ internal fun SelectionMenu(
                     MenuText(stringResource(R.string.selection_paste), onClick = actions.onPaste)
                     return@Row
                 }
-                colors.forEach { c -> RecolorDot(Color(c), onClick = { actions.onColor(c) }) }
-                MenuDivider()
-                ChromeIconButton(AtelierIcons.Minus, stringResource(R.string.selection_thinner), actions.onThinner, size = 36.dp)
-                ChromeIconButton(AtelierIcons.Plus, stringResource(R.string.selection_thicker), actions.onThicker, size = 36.dp)
-                MenuDivider()
+                val element = menu.element
+                if (menu.strokes > 0 || menu.texts > 0) {
+                    colors.forEach { c -> RecolorDot(Color(c), onClick = { actions.onColor(c) }) }
+                    MenuDivider()
+                }
+                if (menu.strokes > 0) {
+                    ChromeIconButton(AtelierIcons.Minus, stringResource(R.string.selection_thinner), actions.onThinner, size = 36.dp)
+                    ChromeIconButton(AtelierIcons.Plus, stringResource(R.string.selection_thicker), actions.onThicker, size = 36.dp)
+                    MenuDivider()
+                }
+                if (element is TextElement) MenuText(stringResource(R.string.selection_edit), onClick = actions.onEditText)
+                if (element is ImageElement) {
+                    MenuText(stringResource(R.string.image_crop), onClick = actions.onCrop)
+                    MenuText(stringResource(R.string.image_rotate), onClick = actions.onRotate)
+                }
+                if (element != null) {
+                    MenuText(
+                        stringResource(if (element.locked) R.string.selection_unlock else R.string.selection_lock),
+                        onClick = actions.onToggleLock,
+                    )
+                    MenuDivider()
+                }
                 MenuText(stringResource(R.string.selection_cut), onClick = actions.onCut)
                 MenuText(stringResource(R.string.selection_copy), onClick = actions.onCopy)
                 MenuText(stringResource(R.string.selection_duplicate), onClick = actions.onDuplicate)

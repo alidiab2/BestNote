@@ -2,6 +2,7 @@ package app.bestnote.engine.canvas.document
 
 import androidx.ink.strokes.Stroke
 import app.bestnote.core.model.Page
+import app.bestnote.core.model.PageElement
 import app.bestnote.engine.canvas.CanvasEdit
 import app.bestnote.engine.canvas.Command
 import app.bestnote.engine.canvas.CommandStack
@@ -14,6 +15,10 @@ class DocumentPage internal constructor(page: Page, val id: String = newPageId()
         internal set
 
     internal val mutableStrokes = ArrayList<Stroke>()
+
+    /** Text boxes and images, bottom to top (immutable list, replaced whenever they change). */
+    var elements: List<PageElement> = emptyList()
+        internal set
 
     /** Finished strokes in drawing order, in page points (origin at the page's top-left). */
     val strokes: List<Stroke> get() = mutableStrokes
@@ -43,6 +48,23 @@ class PagedDocument {
         fun onPageContentChanged(index: Int) {}
 
         fun onHistoryChanged(canUndo: Boolean, canRedo: Boolean) {}
+
+        /** The text boxes or images of page [index] changed (also by undo and redo). */
+        fun onPageElementsChanged(index: Int) {}
+    }
+
+    /** A page's elements before and after one change. */
+    private class ElementEdit(private val page: DocumentPage, private val before: List<PageElement>, private val after: List<PageElement>) : Command<PagedDocument> {
+        override val retainedBytes: Long get() = ELEMENT_BYTES * (before.size + after.size + 1)
+        override fun apply(target: PagedDocument) = target.setElements(page, after)
+        override fun revert(target: PagedDocument) = target.setElements(page, before)
+    }
+
+    /** Several commands that undo and redo as one step. */
+    private class Composite(private val steps: List<Command<PagedDocument>>) : Command<PagedDocument> {
+        override val retainedBytes: Long get() = steps.sumOf { it.retainedBytes }
+        override fun apply(target: PagedDocument) = steps.forEach { it.apply(target) }
+        override fun revert(target: PagedDocument) = steps.asReversed().forEach { it.revert(target) }
     }
 
     /** An undoable stroke edit on one page. */
@@ -75,6 +97,9 @@ class PagedDocument {
     /** Draws the raster background of pages that have one ([Page.pdf]); set before [reset]. */
     var backgrounds: PageBackgrounds? = null
 
+    /** Supplies the pictures of image elements (MEDIA-01); set before [reset]. */
+    var images: ElementImages? = null
+
     /** Paper for the first page when "+ New page" is used on an empty document. */
     var blankPage: Page? = null
 
@@ -91,11 +116,19 @@ class PagedDocument {
     }
 
     /** Replaces every page (e.g. after loading from storage) and clears the history. */
-    fun reset(pages: List<Page>, ids: List<String>? = null, strokes: (Int) -> Collection<Stroke> = { emptyList() }) {
+    fun reset(
+        pages: List<Page>,
+        ids: List<String>? = null,
+        strokes: (Int) -> Collection<Stroke> = { emptyList() },
+        elements: (Int) -> List<PageElement> = { emptyList() },
+    ) {
         _pages.clear()
         pages.forEachIndexed { i, p ->
             val page = DocumentPage(p.copy(index = i), ids?.getOrNull(i) ?: newPageId())
-            _pages += page.apply { mutableStrokes += strokes(i) }
+            _pages += page.apply {
+                mutableStrokes += strokes(i)
+                this.elements = elements(i)
+            }
         }
         isLoaded = true
         history.clear()
@@ -154,7 +187,10 @@ class PagedDocument {
         restructure {
             for (i in sources.asReversed()) {
                 val original = _pages[i]
-                val copy = DocumentPage(original.page).apply { mutableStrokes += original.strokes }
+                val copy = DocumentPage(original.page).apply {
+                    mutableStrokes += original.strokes
+                    elements = original.elements
+                }
                 copies += copy
                 _pages.add(i + 1, copy)
             }
@@ -298,12 +334,58 @@ class PagedDocument {
         commitStrokeEdit(index, before)
     }
 
-    /** Erases every stroke of page [index] as one undoable step. */
+    /** Erases every stroke, text box and image of page [index] as one undoable step. */
     fun clearPage(index: Int) {
-        val all = _pages.getOrNull(index)?.strokes?.toList().orEmpty()
-        if (all.isEmpty()) return
-        removeStrokes(index, all)
-        commitStrokeEdit(index, all)
+        val page = _pages.getOrNull(index) ?: return
+        editContent(index, removedStrokes = page.strokes.toList(), elements = emptyList())
+    }
+
+    /** Puts [element] on top of page [index]'s elements. Undoable. */
+    fun addElement(index: Int, element: PageElement) {
+        val page = _pages.getOrNull(index) ?: return
+        editContent(index, elements = page.elements + element)
+    }
+
+    /** Replaces page [index]'s elements with [elements] (same ids, new values or order). Undoable. */
+    fun replaceElements(index: Int, elements: List<PageElement>) = editContent(index, elements = elements)
+
+    /**
+     * One undoable step that can change page [index]'s ink and elements together (a lasso move that carries
+     * both, a delete, a paste): [replacements] swap strokes in place, [removedStrokes] go, [addedStrokes] land
+     * on top, and [elements], when given, is the page's new element list.
+     */
+    fun editContent(
+        index: Int,
+        replacements: Map<Stroke, Stroke> = emptyMap(),
+        removedStrokes: Collection<Stroke> = emptyList(),
+        addedStrokes: Collection<Stroke> = emptyList(),
+        elements: List<PageElement>? = null,
+    ) {
+        val page = _pages.getOrNull(index) ?: return
+        val strokesBefore = strokesSnapshot(index)
+        val elementsBefore = page.elements
+        if (replacements.isNotEmpty() || removedStrokes.isNotEmpty()) {
+            eraseStep(index, removedStrokes, replacements.mapValues { listOf(it.value) })
+        }
+        if (addedStrokes.isNotEmpty()) {
+            page.mutableStrokes += addedStrokes
+            contentChanged(index)
+        }
+        val steps = ArrayList<Command<PagedDocument>>(2)
+        StrokeSplice.diff(strokesBefore, page.strokes)?.let { steps += PageEdit(page, CanvasEdit.Spliced(it)) }
+        if (elements != null && elements != elementsBefore) {
+            setElements(page, elements)
+            steps += ElementEdit(page, elementsBefore, elements)
+        }
+        if (steps.isEmpty()) return
+        history.record(steps.singleOrNull() ?: Composite(steps))
+        notifyHistory()
+    }
+
+    private fun setElements(page: DocumentPage, elements: List<PageElement>) {
+        page.elements = elements
+        val index = _pages.indexOf(page)
+        if (index >= 0) listeners.forEach { it.onPageElementsChanged(index) }
     }
 
     fun undo() {
@@ -340,6 +422,7 @@ class PagedDocument {
 
     private companion object {
         const val SLOT_BYTES = 64L
+        const val ELEMENT_BYTES = 160L
     }
 
     private fun contentChanged(index: Int) {

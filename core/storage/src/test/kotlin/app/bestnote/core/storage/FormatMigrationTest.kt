@@ -42,6 +42,14 @@ class FormatMigrationTest {
         assertEquals(readV1().notebook, again.notebook)
     }
 
+    @Test fun `v2 fixture migrates and gets an empty element list`() {
+        val pkg = BnoteFormat.fromEntries { runCatching { checkNotNull(javaClass.getResourceAsStream("/fixtures/v2-notebook/$it")).readBytes() }.getOrNull() }
+        assertEquals(listOf("page-0", "page-1"), pkg.pages.map { it.id })
+        assertTrue(pkg.pages.all { it.elements.isEmpty() })
+        val page = Json.parseToJsonElement(BnoteFormat.toEntries(pkg).getValue("pages/page-0.json").decodeToString()).jsonObject
+        assertEquals("3", page["format"]!!.jsonPrimitive.content)
+    }
+
     @Test fun `a newer format is refused not migrated`() {
         val future = fixture("manifest.json").decodeToString().replace("\"format\": 1", "\"format\": 99")
         assertThrows(UnsupportedFormatVersionException::class.java) {
