@@ -144,4 +144,8 @@
     <string name="convert_lang_en">English</string>
     <string name="convert_review">راجع النص</string>
     <string name="convert_insert">إدراج</string>
+    <string name="convert_with_ai">تحويل بالذكاء الاصطناعي</string>
+    <string name="convert_ai_nothing">لم يتمكن الذكاء الاصطناعي من قراءة هذا الخط.</string>
+    <string name="convert_ai_failed">لم يستجب مزود الذكاء. تحقق من الإعدادات ← السبورة الذكية وحاول مجددًا.</string>
+    <string name="convert_ai_key">رُفض مفتاح الذكاء. تحقق منه في الإعدادات ← السبورة الذكية.</string>
 </resources>

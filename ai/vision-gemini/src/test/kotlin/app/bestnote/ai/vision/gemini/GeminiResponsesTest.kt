@@ -42,27 +42,31 @@ class GeminiResponsesTest {
 
     @Test
     fun dropsOnlyTheMalformedBlock() {
-        // Second block: diagram without its required size; third: unknown keys and a null field.
+        // Second block: diagram without a size (kept here, judged by the mapper); third: unknown keys and a null field.
         val doc = GeminiResponses.document(
             """{"blocks":[{"type":"paragraph","text":"ok"},{"type":"diagram","diagram":{"shapes":[]}},{"type":"math","latex":"x","extra":1,"order":null}]}""",
         )
-        assertEquals(listOf("paragraph", "math"), doc.blocks.map { it.type })
-        assertNull(doc.blocks[1].order)
+        assertEquals(listOf("paragraph", "diagram", "math"), doc.blocks.map { it.type })
+        assertNull(doc.blocks[2].order)
     }
 
     @Test
     fun acceptsFencedJsonAndRejectsNonsense() {
         assertEquals(1, GeminiResponses.document("```json\n${Fixtures.NOTES}\n```").blocks.size)
         assertFails<VisionError.BadResponse> { GeminiResponses.document("I can't read this board") }
-        assertFails<VisionError.BadResponse> { GeminiResponses.document("""{"title":"no blocks"}""") }
-        assertFails<VisionError.BadResponse> { GeminiResponses.document("""{"blocks":[{"text":"no type"}]}""") }
+        // A title alone, or a block without a type, still carries words: kept for the mapper.
+        assertEquals("no blocks", GeminiResponses.document("""{"title":"no blocks"}""").title)
+        assertEquals("no type", GeminiResponses.document("""{"blocks":[{"text":"no type"}]}""").blocks.single().text)
     }
 
     @Test
     fun blockedTruncatedAndEmptyResponses() {
         assertFails<VisionError.Blocked> { GeminiResponses.candidateText("""{"promptFeedback":{"blockReason":"SAFETY"}}""") }
         assertFails<VisionError.Blocked> { GeminiResponses.candidateText(Fixtures.ok("", finish = "IMAGE_SAFETY")) }
-        assertFails<VisionError.BadResponse> { GeminiResponses.candidateText(Fixtures.ok("{\"blocks\":[", finish = "MAX_TOKENS")) }
+        // Cut off: what was written is handed on for salvage; nothing complete → Truncated.
+        assertTrue(GeminiResponses.answer(Fixtures.ok("{\"blocks\":[", finish = "MAX_TOKENS")).truncated)
+        assertFails<VisionError.Truncated> { GeminiResponses.document("{\"blocks\":[", truncated = true) }
+        assertFails<VisionError.Truncated> { GeminiResponses.candidateText(Fixtures.ok("", finish = "MAX_TOKENS")) }
         assertFails<VisionError.BadResponse> { GeminiResponses.candidateText("""{"candidates":[]}""") }
         assertFails<VisionError.BadResponse> { GeminiResponses.candidateText(Fixtures.ok("  ")) }
         assertFails<VisionError.BadResponse> { GeminiResponses.candidateText("<html>502</html>") }
@@ -73,8 +77,8 @@ class GeminiResponsesTest {
         assertTrue(GeminiResponses.errorFor(400, Fixtures.read("invalid_key.json"), null, "m") is VisionError.InvalidKey)
         assertTrue(GeminiResponses.errorFor(403, Fixtures.error(403, "Permission denied"), null, "m") is VisionError.InvalidKey)
         val missing = GeminiResponses.errorFor(404, Fixtures.error(404, "models/gemini-x is not found"), null, "gemini-x")
-        assertTrue(missing is VisionError.BadResponse && "gemini-x" in missing.message!!)
-        assertTrue(GeminiResponses.errorFor(503, Fixtures.error(503, "overloaded"), null, "m") is VisionError.BadResponse)
+        assertTrue(missing is VisionError.ModelUnavailable && "gemini-x" in missing.message!!)
+        assertTrue(GeminiResponses.errorFor(503, Fixtures.error(503, "overloaded"), null, "m") is VisionError.ServiceUnavailable)
         assertTrue(GeminiResponses.errorFor(400, "not json", null, "m") is VisionError.BadResponse)
     }
 
@@ -91,5 +95,20 @@ class GeminiResponsesTest {
     fun detectsAnEndpointThatRejectsResponseJsonSchema() {
         assertTrue(GeminiResponses.rejectsJsonSchema(400, Fixtures.error(400, "Unknown name \\\"responseJsonSchema\\\"")))
         assertTrue(!GeminiResponses.rejectsJsonSchema(400, Fixtures.read("invalid_key.json")))
+    }
+}
+
+class GeminiModelsTest {
+    @Test
+    fun keepsOnlyGenerateContentVisionModels() {
+        val page = GeminiModels.parse(Fixtures.read("models_page1.json"))
+        assertEquals(
+            listOf("gemini-2.5-flash", "gemini-2.5-pro", "gemini-3.1-pro-preview", "gemini-3.6-flash", "gemini-3.8-flash", "gemini-3.5-flash-lite", "gemini-4-argon"),
+            page.models.map { it.id },
+        )
+        assertEquals("Gemini 4 Argon", page.models.last().displayName)
+        assertEquals("Ch1tb2RlbHMvZ2VtaW5pLTQ", page.nextPageToken)
+        assertEquals("gemini-4-argon", app.bestnote.ai.vision.ModelCatalog.pick(page.models, app.bestnote.ai.vision.ModelCatalog.Preference.Quality)!!.id)
+        assertEquals("gemini-3.8-flash", app.bestnote.ai.vision.ModelCatalog.pick(page.models, app.bestnote.ai.vision.ModelCatalog.Preference.Fast)!!.id)
     }
 }

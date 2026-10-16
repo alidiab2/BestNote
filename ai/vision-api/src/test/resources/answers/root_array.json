@@ -1,0 +1,1 @@
+[{"type":"title","text":"Big-O notation"},{"type":"text","text":"f = O(g) when f grows no faster than g."},{"type":"formula","text":"f(n) \\le c\\,g(n) \\text{ for } n \\ge n_0"},"Examples: n^2 + n = O(n^2)"]

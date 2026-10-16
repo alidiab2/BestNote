@@ -11,6 +11,7 @@
     <string name="settings_cat_ai">السبورة الذكية</string>
     <string name="settings_cat_appearance">المظهر</string>
     <string name="settings_cat_storage">التخزين والنسخ الاحتياطي</string>
+    <string name="settings_cat_debug">تصحيح الأخطاء</string>
     <string name="settings_cat_about">حول التطبيق</string>
     <string name="settings_sum_stylus_eraser">ضغط الزر: ممحاة</string>
     <string name="settings_sum_stylus_lasso">ضغط الزر: تحديد حر</string>
@@ -19,6 +20,7 @@
     <string name="settings_sum_writing">القلم والورق وشريط الأدوات</string>
     <string name="settings_sum_ai">مفتاحك ومزوّدك</string>
     <string name="settings_sum_storage">المستخدم %1$s</string>
+    <string name="settings_sum_debug">سجل للإبلاغ عن الأخطاء</string>
     <string name="settings_sum_about">الإصدار %1$s</string>
 
     <string name="settings_stylus_desc">كيف يتصرف القلم وزره الجانبي ويدك على الصفحة.</string>
@@ -101,13 +103,20 @@
     <string name="settings_ai_gemini">Google Gemini</string>
     <string name="settings_ai_gemini_sub">قوي في الخط اليدوي والرياضيات والرسوم</string>
     <string name="settings_ai_claude">Anthropic Claude</string>
-    <string name="settings_ai_claude_sub">نماذج Claude</string>
+    <string name="settings_ai_claude_sub">نماذج Sonnet وOpus وHaiku</string>
     <string name="settings_ai_openai">OpenAI</string>
     <string name="settings_ai_openai_sub">نماذج GPT</string>
+    <string name="settings_ai_compatible">متوافق مع OpenAI</string>
+    <string name="settings_ai_compatible_sub">OpenRouter أو Groq أو DeepSeek أو Ollama محلي… أي خادم بواجهة OpenAI</string>
     <string name="settings_ai_key_group">مفتاح API الخاص بك</string>
     <string name="settings_ai_key_saved">المفتاح محفوظ</string>
     <string name="settings_ai_key_none">لا يوجد مفتاح بعد</string>
-    <string name="settings_ai_key_none_sub">أضف مفتاح Gemini API الخاص بك لاستخدام السبورة الذكية</string>
+    <string name="settings_ai_key_none_sub">أضف مفتاح %1$s الخاص بك لاستخدام السبورة الذكية</string>
+    <string name="settings_ai_key_optional_sub">اختياري لخادم محلي، ومطلوب للخدمات المستضافة</string>
+    <string name="settings_ai_base_url">عنوان الخادم (Base URL)</string>
+    <string name="settings_ai_base_url_sub">ينتهي بـ ‎/v1، مثل https://openrouter.ai/api/v1. يعمل http العادي فقط مع localhost و10.0.2.2 و‎*.local.</string>
+    <string name="settings_ai_model_required">اسم النموذج على الخادم، مثل qwen2.5vl:7b. يجب أن يقرأ الصور.</string>
+    <string name="settings_ai_err_base_url">أدخل عنوان الخادم أولًا.</string>
     <string name="settings_ai_key_hint">ينتهي بـ %1$s · مشفّر على هذا الجهاز</string>
     <string name="settings_ai_key_remove">إزالة</string>
     <string name="settings_ai_key_field">مفتاح API</string>
@@ -115,7 +124,22 @@
     <string name="settings_ai_model">النموذج</string>
     <string name="settings_ai_model_sub">الافتراضي: %1$s</string>
     <string name="settings_ai_model_reset">استعادة</string>
-    <string name="settings_ai_test">اختبار المفتاح</string>
+    <string name="settings_ai_model_group">النموذج</string>
+    <string name="settings_ai_model_current">يُستخدم %1$s</string>
+    <string name="settings_ai_model_none">لم يُختر نموذج بعد</string>
+    <string name="settings_ai_models_loading">جارٍ تحميل النماذج المتاحة لمفتاحك…</string>
+    <string name="settings_ai_models_failed">تعذّر تحميل قائمة النماذج: %1$s</string>
+    <string name="settings_ai_models_never">أضف مفتاحًا لتحميل قائمة النماذج الحية.</string>
+    <string name="settings_ai_models_count">%1$d نموذجًا متاحًا لمفتاحك</string>
+    <string name="settings_ai_models_refresh">تحديث قائمة النماذج</string>
+    <string name="settings_ai_model_auto_best">الأفضل: %1$s</string>
+    <string name="settings_ai_model_auto_fast">الأسرع: %1$s</string>
+    <string name="settings_ai_models_filter">ابحث في النماذج</string>
+    <string name="settings_ai_model_favorite">أضف إلى المفضلة</string>
+    <string name="settings_ai_model_unfavorite">أزل من المفضلة</string>
+    <string name="settings_ai_model_custom">معرّف نموذج آخر</string>
+    <string name="settings_ai_model_custom_sub">لنموذج لا يظهر في القائمة بعد</string>
+    <string name="settings_ai_test">اختبار الاتصال</string>
     <string name="settings_ai_testing">جارٍ الاختبار…</string>
     <string name="settings_ai_save">حفظ</string>
     <string name="settings_ai_saved">تم الحفظ.</string>
@@ -202,4 +226,16 @@
     <string name="settings_licenses_libraries">المكتبات</string>
     <string name="settings_license_ofl">SIL Open Font License 1.1</string>
     <string name="settings_license_apache">Apache License 2.0</string>
+    <!-- Debug -->
+    <string name="settings_debug_desc">أرسل لنا سجلًا عندما يحدث خطأ. تُحذف مفاتيح API قبل أن يغادر أي شيء هذه الشاشة.</string>
+    <string name="settings_debug_log_group">سجل التصحيح</string>
+    <string name="settings_debug_share">مشاركة سجل التصحيح</string>
+    <string name="settings_debug_share_sub">إصدار التطبيق والجهاز وسجل التطبيق والأعطال الأخيرة وطلبات ذكاء السبورة</string>
+    <string name="settings_debug_copy">نسخ سجل التصحيح</string>
+    <string name="settings_debug_copied">تم نسخ سجل التصحيح</string>
+    <string name="settings_debug_view">عرض سجل التصحيح</string>
+    <string name="settings_debug_close">إغلاق</string>
+    <string name="settings_debug_ai_group">ذكاء السبورة</string>
+    <string name="settings_debug_verbose">سجل مفصّل للذكاء</string>
+    <string name="settings_debug_verbose_sub">احتفظ بردود الذكاء الخام لسجل التصحيح (قد تحتوي على ملاحظاتك). لا تُحفظ المفاتيح أبدًا.</string>
 </resources>

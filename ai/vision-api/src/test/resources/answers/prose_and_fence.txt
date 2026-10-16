@@ -1,0 +1,13 @@
+Here are the notes from the board:
+
+```json
+{
+  "title": "Newton's second law",
+  "blocks": [
+    {"type": "heading", "order": 0, "level": 2, "text": "Forces", "role": "main"},
+    {"type": "callout", "order": 1, "tone": "theorem", "title": "Second law", "text": "The net force equals mass times acceleration."},
+    {"type": "math", "order": 2, "text": "F = ma", "latex": "\\vec{F} = m\\vec{a}", "boxed": true, "semantic": "essential", "ink_color": "red"},
+    {"type": "proof", "order": 3, "text": "Units", "steps": [{"latex": "[F] = kg \\cdot m/s^2", "text": ""}, {"latex": "", "text": "so 1 N = 1 kg m/s²", "because": "definition of newton"}]}
+  ]
+}
+```

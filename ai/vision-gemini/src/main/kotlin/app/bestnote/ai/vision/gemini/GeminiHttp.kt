@@ -30,10 +30,11 @@ class GeminiHttp(http: OkHttpClient, private val config: GeminiConfig) {
     suspend fun post(path: String, key: String, json: String): Result =
         call(Request.Builder().url(url(path)).header(KEY_HEADER, key).post(json.toRequestBody(JSON)).build())
 
-    suspend fun get(path: String, key: String): Result =
-        call(Request.Builder().url(url(path)).header(KEY_HEADER, key).get().build())
+    suspend fun get(path: String, key: String, query: Map<String, String> = emptyMap()): Result =
+        call(Request.Builder().url(url(path, query)).header(KEY_HEADER, key).get().build())
 
-    private fun url(path: String): HttpUrl = config.baseUrl.toHttpUrl().newBuilder().addPathSegments(path).build()
+    private fun url(path: String, query: Map<String, String> = emptyMap()): HttpUrl =
+        config.baseUrl.toHttpUrl().newBuilder().addPathSegments(path).apply { query.forEach { (k, v) -> addQueryParameter(k, v) } }.build()
 
     private suspend fun call(request: Request): Result = withContext(Dispatchers.IO) {
         val call = client.newCall(request)

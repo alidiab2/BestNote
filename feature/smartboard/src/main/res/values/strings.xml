@@ -5,8 +5,8 @@
     <string name="smartboard_cancel">Cancel</string>
     <string name="smartboard_key_none">No API key · demo</string>
     <string name="smartboard_key_set">Gemini key %1$s</string>
-    <string name="smartboard_key_title">Your Gemini API key</string>
-    <string name="smartboard_key_body">Smart Board sends the photo straight from this device to Google Gemini with your own key. The key is encrypted with the Android Keystore and never leaves this device otherwise.</string>
+    <string name="smartboard_key_title">Your %1$s API key</string>
+    <string name="smartboard_key_body">Smart Board sends the photo straight from this device to %1$s with your own key. The key is encrypted with the Android Keystore and never leaves this device otherwise. Pick the provider in Settings → Smart Board AI.</string>
     <string name="smartboard_key_save">Save</string>
     <string name="smartboard_key_remove">Remove</string>
     <string name="smartboard_capture_title">Photograph the board</string>
@@ -46,4 +46,17 @@
     <string name="smartboard_error_rate">The AI provider is busy. Try again in a minute.</string>
     <string name="smartboard_error_network">No connection to the AI provider.</string>
     <string name="smartboard_error_other">Something went wrong reading this photo.</string>
+    <string name="smartboard_error_model">This AI model is not available for your key. Pick another model in Settings → Smart Board AI.</string>
+    <string name="smartboard_error_busy">The AI provider is overloaded right now. Try again in a moment.</string>
+    <string name="smartboard_error_blocked">The AI provider declined to read this photo.</string>
+    <string name="smartboard_error_truncated">The answer was cut off before any note was finished. Try a smaller part of the board.</string>
+    <string name="smartboard_copy_raw">Copy raw AI response</string>
+    <string name="smartboard_copied_raw">Copied</string>
+    <string name="smartboard_provider_gemini">Google Gemini</string>
+    <string name="smartboard_provider_claude">Claude</string>
+    <string name="smartboard_provider_openai">OpenAI</string>
+    <string name="smartboard_provider_compatible">your AI server</string>
+    <string name="smartboard_provider_compatible_short">OpenAI-compatible</string>
+    <string name="smartboard_switch_provider">AI provider</string>
+    <string name="smartboard_switch_model">Model</string>
 </resources>

@@ -4,17 +4,22 @@ import android.content.Context
 import app.bestnote.ai.vision.gemini.GeminiKeyChecker
 import app.bestnote.ai.vision.gemini.GeminiSettings
 import app.bestnote.ai.vision.gemini.KeystoreGeminiSettings
+import app.bestnote.ai.vision.providers.AiProviders
+import app.bestnote.ai.vision.providers.KeystoreAiSettings
+import app.bestnote.feature.settings.data.DebugInfo
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
 import okhttp3.OkHttpClient
+import java.io.File
 import javax.inject.Singleton
 
 /**
- * Smart Board provider wiring. The key lives only in [KeystoreGeminiSettings] (Android Keystore);
- * Settings (SET-01) edits it and the Smart Board pipeline (AI-04) reads it through [GeminiSettings].
+ * Smart Board provider wiring. Keys live only in [KeystoreAiSettings] / [KeystoreGeminiSettings]
+ * (Android Keystore); Settings edits them and Smart Board reads the selected provider through
+ * [AiProviders].
  */
 @Module
 @InstallIn(SingletonComponent::class)
@@ -32,4 +37,22 @@ object SmartBoardModule {
 
     @Provides
     fun geminiKeyChecker(http: OkHttpClient): GeminiKeyChecker = GeminiKeyChecker(http)
+
+    @Provides
+    @Singleton
+    fun aiSettings(@ApplicationContext context: Context, gemini: KeystoreGeminiSettings): KeystoreAiSettings = KeystoreAiSettings(context, gemini)
+
+    @Provides
+    @Singleton
+    fun aiProviders(http: OkHttpClient, settings: KeystoreAiSettings): AiProviders = AiProviders(http, settings)
+
+    @Provides
+    @Singleton
+    fun debugInfo(@ApplicationContext context: Context): DebugInfo = object : DebugInfo {
+        override val versionName = BuildConfig.VERSION_NAME
+        override val versionCode = BuildConfig.VERSION_CODE.toLong()
+        override val commit = BuildConfig.GIT_COMMIT
+        override val buildType = BuildConfig.BUILD_TYPE
+        override val crashDir = File(context.filesDir, BestNoteApplication.CRASH_DIR)
+    }
 }

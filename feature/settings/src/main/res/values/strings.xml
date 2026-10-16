@@ -13,6 +13,7 @@
     <string name="settings_cat_ai">Smart Board AI</string>
     <string name="settings_cat_appearance">Appearance</string>
     <string name="settings_cat_storage">Storage &amp; backup</string>
+    <string name="settings_cat_debug">Debug</string>
     <string name="settings_cat_about">About</string>
     <string name="settings_sum_stylus_eraser">Hold button: eraser</string>
     <string name="settings_sum_stylus_lasso">Hold button: lasso</string>
@@ -21,6 +22,7 @@
     <string name="settings_sum_writing">Pen, paper, toolbar</string>
     <string name="settings_sum_ai">Your key, your provider</string>
     <string name="settings_sum_storage">%1$s used</string>
+    <string name="settings_sum_debug">Debug log for bug reports</string>
     <string name="settings_sum_about">Version %1$s</string>
 
     <!-- S Pen -->
@@ -107,13 +109,20 @@
     <string name="settings_ai_gemini">Google Gemini</string>
     <string name="settings_ai_gemini_sub">Strong at handwriting, math and diagrams</string>
     <string name="settings_ai_claude">Anthropic Claude</string>
-    <string name="settings_ai_claude_sub">Claude models</string>
+    <string name="settings_ai_claude_sub">Sonnet, Opus and Haiku models</string>
     <string name="settings_ai_openai">OpenAI</string>
     <string name="settings_ai_openai_sub">GPT models</string>
+    <string name="settings_ai_compatible">OpenAI-compatible</string>
+    <string name="settings_ai_compatible_sub">OpenRouter, Groq, DeepSeek, a local Ollama… any server with the OpenAI API</string>
     <string name="settings_ai_key_group">Your API key</string>
     <string name="settings_ai_key_saved">Key saved</string>
     <string name="settings_ai_key_none">No key yet</string>
-    <string name="settings_ai_key_none_sub">Add your own Gemini API key to use Smart Board</string>
+    <string name="settings_ai_key_none_sub">Add your own %1$s API key to use Smart Board</string>
+    <string name="settings_ai_key_optional_sub">Optional for a local server; needed for hosted services</string>
+    <string name="settings_ai_base_url">Base URL</string>
+    <string name="settings_ai_base_url_sub">Ends in /v1, e.g. https://openrouter.ai/api/v1. Plain http only works for localhost, 10.0.2.2 and *.local.</string>
+    <string name="settings_ai_model_required">The server\'s model name, e.g. qwen2.5vl:7b. It must read images.</string>
+    <string name="settings_ai_err_base_url">Enter the server\'s base URL first.</string>
     <string name="settings_ai_key_hint">Ends in %1$s · encrypted on this device</string>
     <string name="settings_ai_key_remove">Remove</string>
     <string name="settings_ai_key_field">API key</string>
@@ -121,7 +130,22 @@
     <string name="settings_ai_model">Model</string>
     <string name="settings_ai_model_sub">Default: %1$s</string>
     <string name="settings_ai_model_reset">Reset</string>
-    <string name="settings_ai_test">Test key</string>
+    <string name="settings_ai_model_group">Model</string>
+    <string name="settings_ai_model_current">Using %1$s</string>
+    <string name="settings_ai_model_none">No model chosen yet</string>
+    <string name="settings_ai_models_loading">Loading the models your key can use…</string>
+    <string name="settings_ai_models_failed">Couldn\'t load the model list: %1$s</string>
+    <string name="settings_ai_models_never">Add a key to load the live model list.</string>
+    <string name="settings_ai_models_count">%1$d models available to your key</string>
+    <string name="settings_ai_models_refresh">Refresh model list</string>
+    <string name="settings_ai_model_auto_best">Best: %1$s</string>
+    <string name="settings_ai_model_auto_fast">Fast: %1$s</string>
+    <string name="settings_ai_models_filter">Search models</string>
+    <string name="settings_ai_model_favorite">Add to favourites</string>
+    <string name="settings_ai_model_unfavorite">Remove from favourites</string>
+    <string name="settings_ai_model_custom">Other model id</string>
+    <string name="settings_ai_model_custom_sub">For a model the list doesn\'t show yet</string>
+    <string name="settings_ai_test">Test connection</string>
     <string name="settings_ai_testing">Testing…</string>
     <string name="settings_ai_save">Save</string>
     <string name="settings_ai_saved">Saved.</string>
@@ -205,4 +229,16 @@
     <string name="settings_licenses_libraries">Libraries</string>
     <string name="settings_license_ofl">SIL Open Font License 1.1</string>
     <string name="settings_license_apache">Apache License 2.0</string>
+    <!-- Debug -->
+    <string name="settings_debug_desc">Send us a log when something goes wrong. API keys are removed before anything leaves this screen.</string>
+    <string name="settings_debug_log_group">Debug log</string>
+    <string name="settings_debug_share">Share debug log</string>
+    <string name="settings_debug_share_sub">App version, device, this app\'s log, recent crashes and Smart Board AI calls</string>
+    <string name="settings_debug_copy">Copy debug log</string>
+    <string name="settings_debug_copied">Debug log copied</string>
+    <string name="settings_debug_view">View debug log</string>
+    <string name="settings_debug_close">Close</string>
+    <string name="settings_debug_ai_group">Smart Board AI</string>
+    <string name="settings_debug_verbose">Verbose AI logging</string>
+    <string name="settings_debug_verbose_sub">Keep the AI\'s raw answers for the debug log (they can contain your notes). Keys are never kept.</string>
 </resources>

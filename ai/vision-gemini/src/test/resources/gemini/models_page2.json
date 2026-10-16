@@ -1,0 +1,17 @@
+{
+ "models": [
+  {
+   "name": "models/gemini-3-flash-preview",
+   "version": "001",
+   "displayName": "Gemini 3 Flash Preview",
+   "description": "",
+   "inputTokenLimit": 1048576,
+   "outputTokenLimit": 65536,
+   "supportedGenerationMethods": [
+    "generateContent",
+    "countTokens"
+   ],
+   "thinking": true
+  }
+ ]
+}

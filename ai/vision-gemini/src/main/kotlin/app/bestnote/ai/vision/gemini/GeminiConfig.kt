@@ -9,13 +9,20 @@ data class GeminiConfig(
     val retryDelayMs: Long = 1_500,
     /** Faithful transcription, not creativity. */
     val temperature: Double = 0.2,
+    val maxOutputTokens: Int = MAX_OUTPUT_TOKENS,
 ) {
     companion object {
         /**
-         * Used when the user has not picked a model. Model ids change faster than releases, so
-         * the id is a user setting ([GeminiSettings.model]), never hard-wired into requests.
+         * Last-resort id when no live model list is available. The app normally resolves the model
+         * from the key's own `GET v1beta/models` list ([GeminiModels], `ModelCatalog`).
          */
-        const val DEFAULT_MODEL = "gemini-2.5-flash"
+        const val DEFAULT_MODEL = "gemini-3.8-flash"
+
+        /** The old hard-wired default; a stored value equal to it is treated as "automatic". */
+        const val LEGACY_DEFAULT_MODEL = "gemini-2.5-flash"
+
+        /** Room for a full board plus the model's thinking (2.5 models share this budget). */
+        const val MAX_OUTPUT_TOKENS = 32_768
     }
 }
 

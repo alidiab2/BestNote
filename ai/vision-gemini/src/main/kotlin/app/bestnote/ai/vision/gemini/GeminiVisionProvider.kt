@@ -1,8 +1,10 @@
 package app.bestnote.ai.vision.gemini
 
 import app.bestnote.ai.vision.AiDocument
+import app.bestnote.ai.vision.AiModel
 import app.bestnote.ai.vision.BoardRequest
 import app.bestnote.ai.vision.Prompts
+import app.bestnote.ai.vision.VisionDiagnostics
 import app.bestnote.ai.vision.VisionError
 import app.bestnote.ai.vision.VisionImage
 import app.bestnote.ai.vision.VisionProvider
@@ -30,6 +32,9 @@ class GeminiVisionProvider(
     override suspend fun beautify(selection: VisionImage, widthPt: Float, heightPt: Float): AiDocument =
         generate(Prompts.beautify(), beautifyUserText(widthPt, heightPt), selection)
 
+    override suspend fun transcribe(selection: VisionImage, language: String?): AiDocument =
+        generate(Prompts.transcribe(language), Prompts.TRANSCRIBE_USER, selection)
+
     private suspend fun generate(system: String, user: String, image: VisionImage): AiDocument {
         val key = settings.apiKey()?.trim()?.takeIf { it.isNotEmpty() } ?: throw VisionError.MissingKey()
         val model = settings.model().trim().ifEmpty { GeminiConfig.DEFAULT_MODEL }
@@ -37,16 +42,22 @@ class GeminiVisionProvider(
         var schemaField = SchemaField.JsonSchema
         var retriedServer = false
         while (true) {
-            val body = GeminiRequests.generateContent(system, user, image.bytes, mime, config.temperature, schemaField).toString()
+            val body = GeminiRequests.generateContent(system, user, image.bytes, mime, config.temperature, schemaField, config.maxOutputTokens).toString()
             val response = try {
                 transport.post("v1beta/models/$model:generateContent", key, body)
             } catch (e: IOException) {
                 throw VisionError.Network(e)
             }
+            VisionDiagnostics.recordResponse("gemini", model, response.code, response.body)
             when {
-                response.code == 200 -> return GeminiResponses.document(GeminiResponses.candidateText(response.body))
+                response.code == 200 -> {
+                    val answer = GeminiResponses.answer(response.body)
+                    return GeminiResponses.document(answer.text, answer.truncated)
+                }
                 schemaField == SchemaField.JsonSchema && GeminiResponses.rejectsJsonSchema(response.code, response.body) ->
                     schemaField = SchemaField.OpenApi
+                schemaField == SchemaField.OpenApi && GeminiResponses.rejectsResponseSchema(response.code, response.body) ->
+                    schemaField = SchemaField.None
                 response.code in 500..599 && !retriedServer -> {
                     retriedServer = true
                     delay(config.retryDelayMs)
@@ -57,13 +68,9 @@ class GeminiVisionProvider(
     }
 
     internal companion object {
-        const val BOARD_USER_TEXT = "This is a photo of the board. Copy it into your notebook as JSON matching the response schema."
+        const val BOARD_USER_TEXT = Prompts.BOARD_USER
 
-        fun beautifyUserText(widthPt: Float, heightPt: Float) =
-            "This is a selection of my handwritten notes, ${fmt(widthPt)} × ${fmt(heightPt)} pt. " +
-                "Rewrite it neatly as JSON matching the response schema; diagram coordinates use this size."
-
-        private fun fmt(v: Float) = if (v % 1f == 0f) v.toInt().toString() else "%.1f".format(java.util.Locale.ROOT, v)
+        fun beautifyUserText(widthPt: Float, heightPt: Float) = Prompts.beautifyUser(widthPt, heightPt)
     }
 }
 
@@ -80,5 +87,32 @@ class GeminiKeyChecker(http: OkHttpClient, config: GeminiConfig = GeminiConfig()
             throw VisionError.Network(e)
         }
         if (response.code != 200) throw GeminiResponses.errorFor(response.code, response.body, response.retryAfter, model)
+    }
+
+    /** The models this key can use for reading a board (see [GeminiModels]); follows up to 3 pages. */
+    suspend fun listModels(apiKey: String): List<AiModel> {
+        val key = apiKey.trim().takeIf { it.isNotEmpty() } ?: throw VisionError.MissingKey()
+        val out = ArrayList<AiModel>()
+        var token: String? = null
+        repeat(MAX_PAGES) {
+            val query = buildMap {
+                put("pageSize", "1000")
+                token?.let { put("pageToken", it) }
+            }
+            val response = try {
+                transport.get("v1beta/models", key, query)
+            } catch (e: IOException) {
+                throw VisionError.Network(e)
+            }
+            if (response.code != 200) throw GeminiResponses.errorFor(response.code, response.body, response.retryAfter, "")
+            val page = runCatching { GeminiModels.parse(response.body) }.getOrElse { throw VisionError.BadResponse("model list is not JSON", it) }
+            out += page.models
+            token = page.nextPageToken ?: return out
+        }
+        return out
+    }
+
+    private companion object {
+        const val MAX_PAGES = 3
     }
 }

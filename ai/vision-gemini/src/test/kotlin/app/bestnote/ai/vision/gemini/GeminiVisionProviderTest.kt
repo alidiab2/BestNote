@@ -141,7 +141,7 @@ class GeminiVisionProviderTest {
         provider.reconstructBoard(jpeg, request)
         assertEquals(2, server.requestCount)
 
-        failure<VisionError.BadResponse>(respond(500, "boom"), respond(503, "boom"))
+        failure<VisionError.ServiceUnavailable>(respond(500, "boom"), respond(503, "boom"))
         assertEquals(4, server.requestCount)
     }
 
@@ -150,7 +150,7 @@ class GeminiVisionProviderTest {
         failure<VisionError.InvalidKey>(respond(400, Fixtures.read("invalid_key.json")))
         assertEquals(17L + 1, failure<VisionError.RateLimited>(respond(429, Fixtures.read("rate_limited.json"))).retryAfterSeconds)
         failure<VisionError.Blocked>(respond(200, """{"promptFeedback":{"blockReason":"SAFETY"}}"""))
-        failure<VisionError.BadResponse>(respond(200, Fixtures.ok("""{"title":"no blocks"}""")))
+        failure<VisionError.BadResponse>(respond(200, Fixtures.ok("Sorry, I cannot read this board.")))
     }
 
     @Test
@@ -182,5 +182,70 @@ class GeminiVisionProviderTest {
         } catch (e: VisionError.InvalidKey) {
             // expected
         }
+    }
+
+    private fun mapped(doc: app.bestnote.ai.vision.AiDocument) = app.bestnote.ai.vision.DocumentMapper({ "id" }).map(doc)
+
+    @Test
+    fun recordedBoardWithContentInAlternateFieldsIsReadable() = runTest {
+        server.enqueue(respond(200, Fixtures.read("board_optional_fields.json")))
+        val result = mapped(provider.reconstructBoard(jpeg, request))
+        assertEquals(result.dropReasons.toString(), 7, result.blocks.size)
+    }
+
+    @Test
+    fun recordedMixedArabicEnglishBoard() = runTest {
+        server.enqueue(respond(200, Fixtures.read("board_mixed_ar_en.json")))
+        val doc = provider.reconstructBoard(jpeg, request)
+        assertEquals("المتتاليات الحسابية", doc.title)
+        assertEquals(0, mapped(doc).dropped)
+    }
+
+    @Test
+    fun recordedTruncatedAnswerIsSalvaged() = runTest {
+        server.enqueue(respond(200, Fixtures.read("board_truncated_arabic.json")))
+        val doc = provider.reconstructBoard(jpeg, request)
+        assertEquals(4, doc.blocks.size)
+    }
+
+    @Test
+    fun rawResponseIsRecordedForDiagnosticsWhenCaptureIsOn() = runTest {
+        app.bestnote.ai.vision.VisionDiagnostics.captureRaw = true
+        try {
+            server.enqueue(respond(200, Fixtures.ok("not json")))
+            runCatching { provider.reconstructBoard(jpeg, request) }
+            val last = app.bestnote.ai.vision.VisionDiagnostics.latest()!!
+            assertEquals("gemini", last.provider)
+            assertTrue(last.raw!!.contains("not json"))
+        } finally {
+            app.bestnote.ai.vision.VisionDiagnostics.captureRaw = false
+        }
+    }
+
+    @Test
+    fun fallsBackToPlainJsonModeWhenBothSchemaFieldsAreRejected() = runTest {
+        server.enqueue(respond(400, Fixtures.error(400, "Unknown name \\\"responseJsonSchema\\\"")))
+        server.enqueue(respond(400, Fixtures.error(400, "The specified schema produces a constraint that has too many states for serving")))
+        server.enqueue(respond(200, Fixtures.ok(Fixtures.NOTES)))
+        provider.reconstructBoard(jpeg, request)
+        takeJson(); takeJson()
+        val config = takeJson().getValue("generationConfig").jsonObject
+        assertFalse("responseSchema" in config)
+        assertFalse("responseJsonSchema" in config)
+        assertEquals("application/json", config.getValue("responseMimeType").jsonPrimitive.content)
+    }
+
+    @Test
+    fun listModelsFollowsPagesWithTheKeyInTheHeader() = runTest {
+        server.enqueue(respond(200, Fixtures.read("models_page1.json")))
+        server.enqueue(respond(200, Fixtures.read("models_page2.json")))
+        val models = GeminiKeyChecker(OkHttpClient(), GeminiConfig(baseUrl = server.url("/").toString())).listModels(fakeKey)
+        assertEquals(8, models.size)
+        val first = server.takeRequest()
+        assertEquals("/v1beta/models", first.url.encodedPath)
+        assertEquals("1000", first.url.queryParameter("pageSize"))
+        assertEquals(fakeKey, first.headers[GeminiHttp.KEY_HEADER])
+        assertFalse(first.url.toString().contains(fakeKey))
+        assertEquals("Ch1tb2RlbHMvZ2VtaW5pLTQ", server.takeRequest().url.queryParameter("pageToken"))
     }
 }

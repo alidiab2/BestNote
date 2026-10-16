@@ -1,0 +1,17 @@
+{
+ "object": "list",
+ "data": [
+  {
+   "id": "qwen2.5vl:7b",
+   "object": "model",
+   "created": 1760000000,
+   "owned_by": "library"
+  },
+  {
+   "id": "nomic-embed-text:latest",
+   "object": "model",
+   "created": 1750000000,
+   "owned_by": "library"
+  }
+ ]
+}

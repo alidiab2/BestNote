@@ -5,8 +5,8 @@
     <string name="smartboard_cancel">إلغاء</string>
     <string name="smartboard_key_none">بلا مفتاح · تجربة</string>
     <string name="smartboard_key_set">مفتاح Gemini %1$s</string>
-    <string name="smartboard_key_title">مفتاح Gemini الخاص بك</string>
-    <string name="smartboard_key_body">ترسل السبورة الذكية الصورة مباشرة من هذا الجهاز إلى Google Gemini بمفتاحك. يُشفَّر المفتاح بمخزن مفاتيح أندرويد ولا يغادر الجهاز.</string>
+    <string name="smartboard_key_title">مفتاح %1$s الخاص بك</string>
+    <string name="smartboard_key_body">ترسل السبورة الذكية الصورة مباشرة من هذا الجهاز إلى %1$s بمفتاحك. يُشفَّر المفتاح بمخزن مفاتيح أندرويد ولا يغادر الجهاز. اختر المزود من الإعدادات ← السبورة الذكية.</string>
     <string name="smartboard_key_save">حفظ</string>
     <string name="smartboard_key_remove">إزالة</string>
     <string name="smartboard_capture_title">صوّر السبورة</string>
@@ -46,4 +46,17 @@
     <string name="smartboard_error_rate">مزود الذكاء مشغول. حاول بعد دقيقة.</string>
     <string name="smartboard_error_network">لا اتصال بمزود الذكاء.</string>
     <string name="smartboard_error_other">حدث خطأ أثناء قراءة هذه الصورة.</string>
+    <string name="smartboard_error_model">نموذج الذكاء هذا غير متاح لمفتاحك. اختر نموذجًا آخر من الإعدادات ← السبورة الذكية.</string>
+    <string name="smartboard_error_busy">مزود الذكاء مشغول الآن. حاول بعد قليل.</string>
+    <string name="smartboard_error_blocked">رفض مزود الذكاء قراءة هذه الصورة.</string>
+    <string name="smartboard_error_truncated">انقطعت الإجابة قبل اكتمال أي ملاحظة. جرّب جزءًا أصغر من السبورة.</string>
+    <string name="smartboard_copy_raw">نسخ رد الذكاء الخام</string>
+    <string name="smartboard_copied_raw">تم النسخ</string>
+    <string name="smartboard_provider_gemini">Google Gemini</string>
+    <string name="smartboard_provider_claude">Claude</string>
+    <string name="smartboard_provider_openai">OpenAI</string>
+    <string name="smartboard_provider_compatible">خادم الذكاء الخاص بك</string>
+    <string name="smartboard_provider_compatible_short">متوافق مع OpenAI</string>
+    <string name="smartboard_switch_provider">مزود الذكاء</string>
+    <string name="smartboard_switch_model">النموذج</string>
 </resources>

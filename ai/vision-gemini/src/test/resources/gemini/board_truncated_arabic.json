@@ -1,0 +1,28 @@
+{
+ "candidates": [
+  {
+   "content": {
+    "role": "model",
+    "parts": [
+     {
+      "text": "**Reading the board**\n\nRight-to-left panels…",
+      "thought": true
+     },
+     {
+      "text": "{\"title\":\"التكامل المحدد\",\"blocks\":[{\"type\":\"definition\",\"order\":0,\"text\":\"التكامل المحدد هو المساحة تحت المنحنى بين a و b\",\"title\":\"تعريف\"},{\"type\":\"math\",\"order\":1,\"text\":\"∫_a^b f(x) dx = F(b) − F(a)\",\"latex\":\"\\\\int_a^b f(x)\\\\,dx = F(b) - F(a)\",\"boxed\":true,\"semantic\":\"essential\"},{\"type\":\"bullets\",\"order\":2,\"text\":\"خصائص\",\"items\":[\"∫_a^a f = 0\",\"∫_a^b f = −∫_b^a f\"]},{\"type\":\"proof\",\"order\":3,\"text\":\"مثال\",\"steps\":[{\"latex\":\"\\\\int_0^1 x^2\\,dx\",\"text\":\"\"},{\"latex\":\"= \\\\left[\\\\frac{x^3}{3}\\\\right]_0^1\",\"text\":\"\",\"because\":\"النظرية الأساسية\"},{\"latex\":\"= \\\\frac{1}{\n"
+     }
+    ]
+   },
+   "finishReason": "MAX_TOKENS",
+   "index": 0
+  }
+ ],
+ "usageMetadata": {
+  "promptTokenCount": 1834,
+  "candidatesTokenCount": 912,
+  "thoughtsTokenCount": 2210,
+  "totalTokenCount": 4956
+ },
+ "modelVersion": "gemini-2.5-flash",
+ "responseId": "abc123"
+}

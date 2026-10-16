@@ -42,6 +42,11 @@ class KeystoreGeminiSettings(
         prefs.getString(KEY_MODEL, null)?.takeIf { it.isNotBlank() } ?: GeminiConfig.DEFAULT_MODEL
     }
 
+    /** The stored model id as saved: "" means automatic (also for the old hard-wired default). */
+    suspend fun storedModel(): String = withContext(Dispatchers.IO) {
+        prefs.getString(KEY_MODEL, null)?.trim()?.takeUnless { it == GeminiConfig.LEGACY_DEFAULT_MODEL }.orEmpty()
+    }
+
     val hasApiKey: Boolean get() = prefs.contains(KEY_CIPHERTEXT)
 
     /** e.g. "…a1b2" for the settings screen. */

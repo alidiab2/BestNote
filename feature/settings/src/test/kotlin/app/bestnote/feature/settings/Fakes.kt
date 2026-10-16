@@ -8,6 +8,9 @@ import app.bestnote.feature.settings.data.SmartBoardKeyState
 import app.bestnote.feature.settings.data.SmartBoardKeyStore
 import app.bestnote.feature.settings.data.StorageInspector
 import app.bestnote.feature.settings.data.StorageUsage
+import app.bestnote.ai.vision.AiProviderKind
+import app.bestnote.ai.vision.AiModel
+import app.bestnote.ai.vision.ModelCatalog
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -38,21 +41,66 @@ class FakeStorage : StorageInspector {
 }
 
 /** Records keys only to assert on them; a real store never exposes the key. */
-class FakeKeyStore(var key: String? = null, var model: String = "gemini-2.5-flash") : SmartBoardKeyStore {
+/** In-memory [SmartBoardKeyStore]; [key]/[model] are Gemini's, other providers live in [states]. */
+class FakeKeyStore(var key: String? = null, var model: String = "") : SmartBoardKeyStore {
     val tested = mutableListOf<Pair<String?, String>>()
+    val testedBaseUrls = mutableListOf<String?>()
     var nextResult: KeyTestResult = KeyTestResult.Ok
+    var listResult: KeyTestResult = KeyTestResult.Ok
     var gate: CompletableDeferred<Unit>? = null
+    var selected = AiProviderKind.Gemini
+    val states = mutableMapOf<AiProviderKind, SmartBoardKeyState>()
+    private val keys = mutableMapOf<AiProviderKind, String?>()
+    var listed: List<AiModel> = emptyList()
+    val listCalls = mutableListOf<AiProviderKind>()
 
-    override suspend fun load() = SmartBoardKeyState(key != null, key?.takeLast(4)?.let { "…$it" }, model)
-    override suspend fun saveKey(key: String?) {
-        this.key = key?.trim()?.takeIf { it.isNotEmpty() }
+    private fun state(kind: AiProviderKind): SmartBoardKeyState {
+        val base = states[kind] ?: SmartBoardKeyState()
+        val k = keyOf(kind)
+        val m = if (kind == AiProviderKind.Gemini) model else base.model
+        return base.copy(hasKey = k != null, hint = k?.takeLast(4)?.let { "…$it" }, model = m, resolvedModel = ModelCatalog.resolve(kind, m, base.models))
     }
-    override suspend fun saveModel(model: String) {
-        this.model = model
+
+    fun keyOf(kind: AiProviderKind) = if (kind == AiProviderKind.Gemini) key else keys[kind]
+
+    override suspend fun selected() = selected
+    override suspend fun select(kind: AiProviderKind) {
+        selected = kind
     }
-    override suspend fun test(draftKey: String?, model: String): KeyTestResult {
+
+    override suspend fun load(kind: AiProviderKind) = state(kind)
+
+    override suspend fun saveKey(kind: AiProviderKind, key: String?) {
+        val k = key?.trim()?.takeIf { it.isNotEmpty() }
+        if (kind == AiProviderKind.Gemini) this.key = k else keys[kind] = k
+    }
+
+    override suspend fun saveModel(kind: AiProviderKind, model: String) {
+        if (kind == AiProviderKind.Gemini) this.model = model
+        val s = states[kind] ?: SmartBoardKeyState()
+        val recents = if (ModelCatalog.isAuto(model)) s.recents else (listOf(model) + s.recents).distinct()
+        states[kind] = s.copy(model = model, recents = recents)
+    }
+
+    override suspend fun saveBaseUrl(kind: AiProviderKind, url: String) {
+        states[kind] = (states[kind] ?: SmartBoardKeyState()).copy(baseUrl = url)
+    }
+
+    override suspend fun refreshModels(kind: AiProviderKind, draftKey: String?, baseUrl: String?): KeyTestResult {
+        listCalls += kind
+        if (listResult == KeyTestResult.Ok) states[kind] = (states[kind] ?: SmartBoardKeyState()).copy(models = ModelCatalog.sorted(listed), modelsFetchedAt = 1L)
+        return listResult
+    }
+
+    override suspend fun toggleFavorite(kind: AiProviderKind, id: String) {
+        val s = states[kind] ?: SmartBoardKeyState()
+        states[kind] = s.copy(favorites = if (id in s.favorites) s.favorites - id else s.favorites + id)
+    }
+
+    override suspend fun test(kind: AiProviderKind, draftKey: String?, model: String, baseUrl: String?): KeyTestResult {
         tested += draftKey to model
+        testedBaseUrls += baseUrl
         gate?.await()
-        return if (draftKey == null && key == null) KeyTestResult.NoKey else nextResult
+        return if (draftKey == null && keyOf(kind) == null && kind != AiProviderKind.OpenAiCompatible) KeyTestResult.NoKey else nextResult
     }
 }

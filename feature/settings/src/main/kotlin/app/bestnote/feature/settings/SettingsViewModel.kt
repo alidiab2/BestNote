@@ -24,7 +24,7 @@ import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 /** The categories of the Settings screen, in display order. */
-enum class SettingsCategory { Stylus, Gestures, Writing, SmartBoard, Appearance, Storage, About }
+enum class SettingsCategory { Stylus, Gestures, Writing, SmartBoard, Appearance, Storage, Debug, About }
 
 /** Storage numbers; null while measuring. */
 data class StorageUiState(val usage: StorageUsage? = null, val clearing: Boolean = false)

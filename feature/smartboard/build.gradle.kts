@@ -6,7 +6,7 @@ plugins {
 dependencies {
     implementation(projects.core.designsystem)
     implementation(projects.ai.visionApi)
-    implementation(projects.ai.visionGemini)
+    implementation(projects.ai.visionProviders)
     implementation(projects.engine.layout)
     implementation(projects.engine.handwriting)
     implementation(libs.androidx.compose.material.icons.extended)

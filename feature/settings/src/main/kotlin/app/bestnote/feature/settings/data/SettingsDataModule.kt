@@ -8,9 +8,11 @@ import dagger.hilt.components.SingletonComponent
 @Module
 @InstallIn(SingletonComponent::class)
 internal interface SettingsDataModule {
-    @Binds fun keyStore(impl: GeminiKeyStore): SmartBoardKeyStore
+    @Binds fun keyStore(impl: ProvidersKeyStore): SmartBoardKeyStore
 
     @Binds fun locale(impl: SystemAppLocaleController): AppLocaleController
 
     @Binds fun storage(impl: FileStorageInspector): StorageInspector
+
+    @Binds fun debugLog(impl: AndroidDebugLogCollector): DebugLogCollector
 }

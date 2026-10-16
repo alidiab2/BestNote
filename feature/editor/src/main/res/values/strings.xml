@@ -144,4 +144,8 @@
     <string name="convert_lang_en">English</string>
     <string name="convert_review">Check the text</string>
     <string name="convert_insert">Insert</string>
+    <string name="convert_with_ai">Convert with AI</string>
+    <string name="convert_ai_nothing">The AI couldn\'t read that handwriting.</string>
+    <string name="convert_ai_failed">The AI provider didn\'t answer. Check Settings → Smart Board AI and try again.</string>
+    <string name="convert_ai_key">The AI key was rejected. Check it in Settings → Smart Board AI.</string>
 </resources>

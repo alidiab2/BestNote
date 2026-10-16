@@ -1,0 +1,184 @@
+{
+ "models": [
+  {
+   "name": "models/gemini-2.5-flash",
+   "version": "001",
+   "displayName": "Gemini 2.5 Flash",
+   "description": "",
+   "inputTokenLimit": 1048576,
+   "outputTokenLimit": 65536,
+   "supportedGenerationMethods": [
+    "generateContent",
+    "countTokens"
+   ],
+   "thinking": true
+  },
+  {
+   "name": "models/gemini-2.5-pro",
+   "version": "001",
+   "displayName": "Gemini 2.5 Pro",
+   "description": "",
+   "inputTokenLimit": 1048576,
+   "outputTokenLimit": 65536,
+   "supportedGenerationMethods": [
+    "generateContent",
+    "countTokens"
+   ],
+   "thinking": true
+  },
+  {
+   "name": "models/gemini-2.5-pro-002",
+   "version": "001",
+   "displayName": "Gemini 2.5 Pro 002",
+   "description": "",
+   "inputTokenLimit": 1048576,
+   "outputTokenLimit": 65536,
+   "supportedGenerationMethods": [
+    "generateContent",
+    "countTokens"
+   ],
+   "thinking": true
+  },
+  {
+   "name": "models/gemini-3.1-pro-preview",
+   "version": "001",
+   "displayName": "Gemini 3.1 Pro Preview",
+   "description": "",
+   "inputTokenLimit": 1048576,
+   "outputTokenLimit": 65536,
+   "supportedGenerationMethods": [
+    "generateContent",
+    "countTokens"
+   ],
+   "thinking": true
+  },
+  {
+   "name": "models/gemini-3.6-flash",
+   "version": "001",
+   "displayName": "Gemini 3.6 Flash",
+   "description": "",
+   "inputTokenLimit": 1048576,
+   "outputTokenLimit": 65536,
+   "supportedGenerationMethods": [
+    "generateContent",
+    "countTokens"
+   ],
+   "thinking": true
+  },
+  {
+   "name": "models/gemini-3.8-flash",
+   "version": "001",
+   "displayName": "Gemini 3.8 Flash",
+   "description": "",
+   "inputTokenLimit": 1048576,
+   "outputTokenLimit": 65536,
+   "supportedGenerationMethods": [
+    "generateContent",
+    "countTokens"
+   ],
+   "thinking": true
+  },
+  {
+   "name": "models/gemini-3.8-flash-tts",
+   "version": "001",
+   "displayName": "Gemini 3.8 Flash TTS",
+   "description": "",
+   "inputTokenLimit": 1048576,
+   "outputTokenLimit": 65536,
+   "supportedGenerationMethods": [
+    "generateContent",
+    "countTokens"
+   ],
+   "thinking": true
+  },
+  {
+   "name": "models/gemini-3.5-flash-lite",
+   "version": "001",
+   "displayName": "Gemini 3.5 Flash-Lite",
+   "description": "",
+   "inputTokenLimit": 1048576,
+   "outputTokenLimit": 65536,
+   "supportedGenerationMethods": [
+    "generateContent",
+    "countTokens"
+   ],
+   "thinking": true
+  },
+  {
+   "name": "models/gemini-4-argon",
+   "version": "001",
+   "displayName": "Gemini 4 Argon",
+   "description": "",
+   "inputTokenLimit": 1048576,
+   "outputTokenLimit": 65536,
+   "supportedGenerationMethods": [
+    "generateContent",
+    "countTokens"
+   ],
+   "thinking": true
+  },
+  {
+   "name": "models/gemini-3.1-flash-image",
+   "version": "001",
+   "displayName": "Nano Banana 2",
+   "description": "",
+   "inputTokenLimit": 1048576,
+   "outputTokenLimit": 65536,
+   "supportedGenerationMethods": [
+    "generateContent",
+    "countTokens"
+   ],
+   "thinking": true
+  },
+  {
+   "name": "models/gemini-3.8-live",
+   "version": "001",
+   "displayName": "Gemini 3.8 Live",
+   "description": "",
+   "inputTokenLimit": 1048576,
+   "outputTokenLimit": 65536,
+   "supportedGenerationMethods": [
+    "bidiGenerateContent"
+   ],
+   "thinking": true
+  },
+  {
+   "name": "models/gemini-embedding-001",
+   "version": "001",
+   "displayName": "Gemini Embedding",
+   "description": "",
+   "inputTokenLimit": 1048576,
+   "outputTokenLimit": 65536,
+   "supportedGenerationMethods": [
+    "embedContent"
+   ],
+   "thinking": true
+  },
+  {
+   "name": "models/gemma-3-27b-it",
+   "version": "001",
+   "displayName": "Gemma 3 27B",
+   "description": "",
+   "inputTokenLimit": 1048576,
+   "outputTokenLimit": 65536,
+   "supportedGenerationMethods": [
+    "generateContent",
+    "countTokens"
+   ],
+   "thinking": true
+  },
+  {
+   "name": "models/imagen-4.0-generate-001",
+   "version": "001",
+   "displayName": "Imagen 4",
+   "description": "",
+   "inputTokenLimit": 1048576,
+   "outputTokenLimit": 65536,
+   "supportedGenerationMethods": [
+    "predict"
+   ],
+   "thinking": true
+  }
+ ],
+ "nextPageToken": "Ch1tb2RlbHMvZ2VtaW5pLTQ"
+}
