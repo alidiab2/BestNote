@@ -48,6 +48,30 @@ class GeminiVisionProvider(
     override suspend fun transcribe(selection: VisionImage, language: String?): AiDocument =
         generate(Prompts.transcribe(language), Prompts.TRANSCRIBE_USER, selection)
 
+    override suspend fun completeText(system: String, turns: List<app.bestnote.ai.vision.ChatTurn>, json: Boolean): String {
+        val key = settings.apiKey()?.trim()?.takeIf { it.isNotEmpty() } ?: throw VisionError.MissingKey()
+        val model = settings.model().trim().ifEmpty { GeminiConfig.DEFAULT_MODEL }
+        var thinking = Thinking.Level
+        var retriedServer = false
+        while (true) {
+            val body = GeminiRequests.chat(system, turns, 0.4, CHAT_MAX_TOKENS, thinking, json).toString()
+            val response = try {
+                transport.post("v1beta/models/$model:generateContent", key, body)
+            } catch (e: IOException) {
+                throw VisionError.Network(e)
+            }
+            when {
+                response.code == 200 -> return GeminiResponses.answer(response.body).text
+                thinking != Thinking.None && GeminiResponses.rejectsThinking(response.code, response.body) -> thinking = Thinking.entries[thinking.ordinal + 1]
+                response.code in 500..599 && !retriedServer -> {
+                    retriedServer = true
+                    delay(config.retryDelayMs)
+                }
+                else -> throw GeminiResponses.errorFor(response.code, response.body, response.retryAfter, model)
+            }
+        }
+    }
+
     private suspend fun generate(system: String, user: String, image: VisionImage): AiDocument =
         generate(system, user, image, { AiSchema.document(it) }) { text, truncated -> GeminiResponses.document(text, truncated) }
 
@@ -94,6 +118,7 @@ class GeminiVisionProvider(
 
     internal companion object {
         const val BOARD_USER_TEXT = Prompts.BOARD_USER
+        const val CHAT_MAX_TOKENS = 8_000
 
         fun beautifyUserText(widthPt: Float, heightPt: Float) = Prompts.beautifyUser(widthPt, heightPt)
     }

@@ -24,6 +24,8 @@ internal class FallbackVisionProvider(
 
     override suspend fun writeNotes(image: VisionImage, request: NotesRequest) = attempt { it.writeNotes(image, request) }
 
+    override suspend fun completeText(system: String, turns: List<app.bestnote.ai.vision.ChatTurn>, json: Boolean) = attempt { it.completeText(system, turns, json) }
+
     private suspend fun <T> attempt(call: suspend (VisionProvider) -> T): T {
         val models = candidates().filterNot { it in skipped }.take(MAX_ATTEMPTS).ifEmpty { candidates().take(1) }
         var last: VisionError? = null

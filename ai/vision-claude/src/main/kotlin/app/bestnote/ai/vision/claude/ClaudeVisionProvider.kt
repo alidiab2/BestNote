@@ -51,6 +51,29 @@ class ClaudeVisionProvider(
     override suspend fun transcribe(selection: VisionImage, language: String?): AiDocument =
         generate(Prompts.transcribe(language), Prompts.TRANSCRIBE_USER, selection)
 
+    override suspend fun completeText(system: String, turns: List<app.bestnote.ai.vision.ChatTurn>, json: Boolean): String {
+        val key = credentials.apiKey()?.trim()?.takeIf { it.isNotEmpty() } ?: throw VisionError.MissingKey()
+        val model = credentials.model().trim().ifEmpty { ClaudeConfig.DEFAULT_MODEL }
+        val base = credentials.baseUrl()?.takeIf { it.isNotBlank() } ?: config.baseUrl
+        var retriedServer = false
+        while (true) {
+            val body = ClaudeRequests.chat(model, system, turns, CHAT_MAX_TOKENS).toString()
+            val response = try {
+                transport.post(ClaudeHttp.url(base, "v1/messages"), ClaudeRequests.headers(key, fallbacks = false), body)
+            } catch (e: IOException) {
+                throw VisionError.Network(e)
+            }
+            when {
+                response.code == 200 -> return ClaudeResponses.answer(response.body).text
+                response.code in 500..599 && !retriedServer -> {
+                    retriedServer = true
+                    delay(config.retryDelayMs)
+                }
+                else -> throw ClaudeResponses.errorFor(response.code, response.body, response.retryAfter, model)
+            }
+        }
+    }
+
     private suspend fun generate(system: String, user: String, image: VisionImage): AiDocument =
         generate(system, user, image, AiSchema.document(AiSchema.Dialect.Closed)) { text, truncated -> AiDocumentParser.answer(text, truncated) }
 
@@ -86,6 +109,8 @@ class ClaudeVisionProvider(
         }
     }
 }
+
+private const val CHAT_MAX_TOKENS = 8_000
 
 /** "Test connection": a free metadata call that checks the key and that it can see the model. */
 class ClaudeKeyChecker(http: OkHttpClient, private val config: ClaudeConfig = ClaudeConfig()) {

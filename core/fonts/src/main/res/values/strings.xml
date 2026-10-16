@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="fonts_title">Fonts</string>
+    <string name="fonts_default">Default (sans)</string>
+    <string name="fonts_section_handwriting">Handwriting</string>
+    <string name="fonts_section_mine">My fonts</string>
+    <string name="fonts_section_more">More fonts</string>
+    <string name="fonts_more_hint">Free fonts (SIL Open Font License) from Google Fonts, downloaded when you pick them.</string>
+    <string name="fonts_download">Download · %1$s</string>
+    <string name="fonts_downloading">Downloading…</string>
+    <string name="fonts_add_own">Add my own font…</string>
+    <string name="fonts_add_hint">A .ttf or .otf file. It stays on this device.</string>
+    <string name="fonts_delete">Delete %1$s</string>
+    <string name="fonts_script_latin">Latin</string>
+    <string name="fonts_script_arabic">Arabic</string>
+    <string name="fonts_script_hebrew">Hebrew</string>
+    <string name="fonts_error_not_font">That file is not a font.</string>
+    <string name="fonts_error_collection">Font collections (.ttc) are not supported. Pick one .ttf or .otf.</string>
+    <string name="fonts_error_too_large">That font file is too large.</string>
+    <string name="fonts_error_damaged">That font file is damaged or cannot be loaded.</string>
+    <string name="fonts_error_no_letters">That font has no Latin, Arabic or Hebrew letters.</string>
+    <string name="fonts_error_network">Could not download the font. Check your connection.</string>
+    <string name="fonts_added">Added %1$s</string>
+    <string name="fonts_close">Done</string>
+    <string name="fonts_missing_script">No %1$s letters</string>
+    <string name="fonts_licenses_title">Downloaded fonts</string>
+    <string name="fonts_licenses_none">No fonts downloaded.</string>
+    <string name="fonts_license_ofl">SIL Open Font License 1.1 · Google Fonts</string>
+    <string name="fonts_license_show">Show licence</string>
+    <string name="fonts_license_hide">Hide licence</string>
+    <string name="fonts_license_source">Source: %1$s</string>
+</resources>

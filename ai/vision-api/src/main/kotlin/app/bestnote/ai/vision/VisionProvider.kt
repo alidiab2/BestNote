@@ -5,6 +5,9 @@ import app.bestnote.core.model.LayoutTemplate
 /** An image handed to a provider. */
 class VisionImage(val bytes: ByteArray, val mimeType: String)
 
+/** One message of a text-only conversation (TPL-02 "Design with AI"). */
+data class ChatTurn(val fromUser: Boolean, val text: String)
+
 /** What the provider needs besides the image. [rtl] is true for Arabic/Hebrew boards. */
 data class BoardRequest(val template: LayoutTemplate, val rtl: Boolean = false, val language: String? = null)
 
@@ -88,4 +91,11 @@ interface VisionProvider {
         val fresh = LegacyNotes.fromAiDocument(reconstructBoard(image, request.legacy()))
         return request.current?.let { NoteMerge.merge(it, fresh) } ?: fresh
     }
+
+    /**
+     * Text only (TPL-02 "Design with AI"): [system] + the conversation [turns] → the model's answer text,
+     * with low reasoning. With [json] the model is asked for a single JSON object. No image, no schema.
+     */
+    suspend fun completeText(system: String, turns: List<ChatTurn>, json: Boolean = true): String =
+        throw VisionError.BadResponse("this provider cannot chat")
 }

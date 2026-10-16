@@ -38,6 +38,7 @@ internal class PaintMeasure : TextMeasure {
             HandFont.ArefRuqaa -> HandwritingTypefaces.ARABIC_FIRST
             HandFont.GveretLevin -> HandwritingTypefaces.HEBREW_FIRST
             HandFont.System -> HandwritingTypefaces.SYSTEM
+            else -> f.id
         }
     }
 }

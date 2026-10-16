@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="fonts_title">الخطوط</string>
+    <string name="fonts_default">الافتراضي (بدون زخرفة)</string>
+    <string name="fonts_section_handwriting">خطوط اليد</string>
+    <string name="fonts_section_mine">خطوطي</string>
+    <string name="fonts_section_more">المزيد من الخطوط</string>
+    <string name="fonts_more_hint">خطوط مجانية (رخصة SIL OFL) من Google Fonts تُنزَّل عند اختيارها.</string>
+    <string name="fonts_download">تنزيل · %1$s</string>
+    <string name="fonts_downloading">جارٍ التنزيل…</string>
+    <string name="fonts_add_own">إضافة خطي الخاص…</string>
+    <string name="fonts_add_hint">ملف ‎.ttf‎ أو ‎.otf‎. يبقى على هذا الجهاز.</string>
+    <string name="fonts_delete">حذف %1$s</string>
+    <string name="fonts_script_latin">اللاتينية</string>
+    <string name="fonts_script_arabic">العربية</string>
+    <string name="fonts_script_hebrew">العبرية</string>
+    <string name="fonts_error_not_font">هذا الملف ليس خطًا.</string>
+    <string name="fonts_error_collection">مجموعات الخطوط (‎.ttc‎) غير مدعومة. اختر ملف ‎.ttf‎ أو ‎.otf‎ واحدًا.</string>
+    <string name="fonts_error_too_large">ملف الخط كبير جدًا.</string>
+    <string name="fonts_error_damaged">ملف الخط تالف أو لا يمكن تحميله.</string>
+    <string name="fonts_error_no_letters">هذا الخط لا يحتوي حروفًا لاتينية أو عربية أو عبرية.</string>
+    <string name="fonts_error_network">تعذّر تنزيل الخط. تحقق من الاتصال.</string>
+    <string name="fonts_added">تمت إضافة %1$s</string>
+    <string name="fonts_close">تم</string>
+    <string name="fonts_missing_script">لا يحتوي حروف %1$s</string>
+    <string name="fonts_licenses_title">الخطوط المنزَّلة</string>
+    <string name="fonts_licenses_none">لا توجد خطوط منزَّلة.</string>
+    <string name="fonts_license_ofl">رخصة SIL OFL 1.1 · Google Fonts</string>
+    <string name="fonts_license_show">عرض الرخصة</string>
+    <string name="fonts_license_hide">إخفاء الرخصة</string>
+    <string name="fonts_license_source">المصدر: %1$s</string>
+</resources>
