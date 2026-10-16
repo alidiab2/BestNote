@@ -234,4 +234,18 @@ class GeminiVisionProviderTest {
         assertFalse("responseJsonSchema" in config)
         assertEquals("application/json", config.getValue("responseMimeType").jsonPrimitive.content)
     }
+
+    @Test
+    fun listModelsFollowsPagesWithTheKeyInTheHeader() = runTest {
+        server.enqueue(respond(200, Fixtures.read("models_page1.json")))
+        server.enqueue(respond(200, Fixtures.read("models_page2.json")))
+        val models = GeminiKeyChecker(OkHttpClient(), GeminiConfig(baseUrl = server.url("/").toString())).listModels(fakeKey)
+        assertEquals(8, models.size)
+        val first = server.takeRequest()
+        assertEquals("/v1beta/models", first.url.encodedPath)
+        assertEquals("1000", first.url.queryParameter("pageSize"))
+        assertEquals(fakeKey, first.headers[GeminiHttp.KEY_HEADER])
+        assertFalse(first.url.toString().contains(fakeKey))
+        assertEquals("Ch1tb2RlbHMvZ2VtaW5pLTQ", server.takeRequest().url.queryParameter("pageToken"))
+    }
 }

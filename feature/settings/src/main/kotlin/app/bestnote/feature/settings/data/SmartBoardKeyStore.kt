@@ -1,6 +1,8 @@
 package app.bestnote.feature.settings.data
 
+import app.bestnote.ai.vision.AiModel
 import app.bestnote.ai.vision.AiProviderKind
+import app.bestnote.ai.vision.ModelCatalog
 import app.bestnote.ai.vision.VisionError
 import app.bestnote.ai.vision.providers.AiProviderDefaults
 import app.bestnote.ai.vision.providers.AiProviders
@@ -11,10 +13,25 @@ import kotlin.coroutines.cancellation.CancellationException
 data class SmartBoardKeyState(
     val hasKey: Boolean = false,
     val hint: String? = null,
-    val model: String = AiProviderDefaults.model(AiProviderKind.Gemini),
+    /** As chosen: an id, "" = automatic best, [ModelCatalog.AUTO_FAST] = automatic fast. */
+    val model: String = "",
     /** Only for [AiProviderKind.OpenAiCompatible]. */
     val baseUrl: String = "",
-)
+    /** What [model] resolves to right now. */
+    val resolvedModel: String = AiProviderDefaults.model(AiProviderKind.Gemini),
+    /** The provider's live list as last fetched, picker order. */
+    val models: List<AiModel> = emptyList(),
+    val recents: List<String> = emptyList(),
+    val favorites: List<String> = emptyList(),
+    /** Epoch millis of the last list fetch; 0 = never. */
+    val modelsFetchedAt: Long = 0L,
+) {
+    /** What auto-best / auto-fast resolve to with the cached list. */
+    fun autoModel(kind: AiProviderKind, preference: ModelCatalog.Preference): String =
+        ModelCatalog.pick(models, preference)?.id ?: ModelCatalog.fallback(kind, preference)
+
+    fun displayName(id: String): String = models.firstOrNull { it.id == id }?.displayName ?: id
+}
 
 /** Outcome of "Test connection". */
 sealed interface KeyTestResult {
@@ -56,6 +73,11 @@ interface SmartBoardKeyStore {
     suspend fun saveModel(kind: AiProviderKind, model: String)
     suspend fun saveBaseUrl(kind: AiProviderKind, url: String)
 
+    /** Fetches the live model list (with [draftKey] or the stored key) into the cache; [KeyTestResult.Ok] on success. */
+    suspend fun refreshModels(kind: AiProviderKind, draftKey: String?, baseUrl: String?): KeyTestResult
+
+    suspend fun toggleFavorite(kind: AiProviderKind, id: String)
+
     /** Tests [draftKey] when given, else the stored key, against [model] (and [baseUrl] for a compatible server). */
     suspend fun test(kind: AiProviderKind, draftKey: String?, model: String, baseUrl: String?): KeyTestResult
 }
@@ -68,8 +90,28 @@ class ProvidersKeyStore @Inject constructor(private val providers: AiProviders) 
 
     override suspend fun select(kind: AiProviderKind) = settings.setProvider(kind)
 
-    override suspend fun load(kind: AiProviderKind) =
-        SmartBoardKeyState(settings.hasKey(kind), settings.keyHint(kind), settings.model(kind), settings.baseUrl(kind).orEmpty())
+    override suspend fun load(kind: AiProviderKind) = SmartBoardKeyState(
+        hasKey = settings.hasKey(kind),
+        hint = settings.keyHint(kind),
+        model = settings.storedModel(kind),
+        baseUrl = settings.baseUrl(kind).orEmpty(),
+        resolvedModel = settings.model(kind),
+        models = ModelCatalog.sorted(settings.cachedModels(kind)),
+        recents = settings.recentModels(kind),
+        favorites = settings.favoriteModels(kind),
+        modelsFetchedAt = settings.modelsFetchedAt(kind),
+    )
+
+    override suspend fun refreshModels(kind: AiProviderKind, draftKey: String?, baseUrl: String?): KeyTestResult = try {
+        providers.refreshModels(kind, draftKey, baseUrl)
+        KeyTestResult.Ok
+    } catch (e: CancellationException) {
+        throw e
+    } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+        KeyTestResult.from(e)
+    }
+
+    override suspend fun toggleFavorite(kind: AiProviderKind, id: String) = settings.toggleFavorite(kind, id)
 
     override suspend fun saveKey(kind: AiProviderKind, key: String?) = settings.setApiKey(kind, key)
 

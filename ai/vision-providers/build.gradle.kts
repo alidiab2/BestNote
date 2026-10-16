@@ -11,6 +11,7 @@ dependencies {
     api(projects.ai.visionClaude)
     api(projects.ai.visionOpenai)
     implementation(libs.kotlinx.coroutines.core)
+    implementation(libs.kotlinx.serialization.json)
 
     testImplementation(libs.kotlinx.coroutines.test)
 }

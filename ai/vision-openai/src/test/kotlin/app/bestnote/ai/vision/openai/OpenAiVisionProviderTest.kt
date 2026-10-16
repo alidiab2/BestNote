@@ -167,4 +167,32 @@ class OpenAiVisionProviderTest {
         assertEquals("/v1/chat/completions", r.url.encodedPath)
         assertEquals("16", Json.parseToJsonElement(r.body!!.utf8()).jsonObject.getValue("max_tokens").jsonPrimitive.content)
     }
+
+    @Test
+    fun listsCompatibleModels() = runTest {
+        server.enqueue(respond(200, fixture("models_ollama.json")))
+        val models = OpenAiKeyChecker(OkHttpClient()).listModels(null, server.url("/v1/").toString())
+        assertEquals(listOf("qwen2.5vl:7b"), models.map { it.id })
+        assertEquals("/v1/models", server.takeRequest().url.encodedPath)
+    }
+}
+
+class OpenAiModelsTest {
+    @Test
+    fun officialListKeepsChatModelsAndFoldsSnapshots() {
+        val models = OpenAiModels.parse(fixture("models_openai.json"), official = true)
+        assertEquals(listOf("gpt-6-astra", "gpt-6.1-sol", "gpt-6-luna", "gpt-5-mini", "o4-mini"), models.map { it.id })
+        val pick = app.bestnote.ai.vision.ModelCatalog.pick(models, app.bestnote.ai.vision.ModelCatalog.Preference.Quality)
+        assertEquals("gpt-6-astra", pick!!.id)
+        assertEquals("gpt-6-luna", app.bestnote.ai.vision.ModelCatalog.pick(models, app.bestnote.ai.vision.ModelCatalog.Preference.Fast)!!.id)
+    }
+
+    @Test
+    fun openRouterModalitiesMarkVision() {
+        val models = OpenAiModels.parse(fixture("models_openrouter.json"), official = false)
+        assertEquals(3, models.size)
+        assertEquals(false, models.first { it.id == "deepseek/deepseek-v4" }.vision)
+        assertEquals("Google: Gemini 3.8 Flash", models.first().displayName)
+        assertEquals(1776000000L, models.first().created)
+    }
 }

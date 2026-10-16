@@ -180,4 +180,18 @@ class ClaudeVisionProviderTest {
         assertEquals("/v1/models/claude-sonnet-5-5", r.url.encodedPath)
         assertEquals("GET", r.method)
     }
+
+    @Test
+    fun listsModelsWithVisionAndPicksTheNewestOpus() = runTest {
+        server.enqueue(respond(200, fixture("models.json")))
+        val models = ClaudeKeyChecker(OkHttpClient(), ClaudeConfig(baseUrl = server.url("/").toString())).listModels(fakeKey)
+        assertEquals(6, models.size)
+        assertEquals("Claude Opus 5.5", models[1].displayName)
+        assertEquals(true, models[1].vision)
+        assertTrue(models[1].created!! > 0)
+        val r = server.takeRequest()
+        assertEquals("/v1/models", r.url.encodedPath)
+        assertEquals("1000", r.url.queryParameter("limit"))
+        assertEquals("claude-opus-5-5", app.bestnote.ai.vision.ModelCatalog.pick(models, app.bestnote.ai.vision.ModelCatalog.Preference.Quality)!!.id)
+    }
 }

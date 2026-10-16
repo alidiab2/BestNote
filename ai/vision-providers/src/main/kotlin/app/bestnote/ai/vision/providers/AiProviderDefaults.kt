@@ -1,26 +1,14 @@
 package app.bestnote.ai.vision.providers
 
 import app.bestnote.ai.vision.AiProviderKind
-import app.bestnote.ai.vision.claude.ClaudeConfig
-import app.bestnote.ai.vision.gemini.GeminiConfig
+import app.bestnote.ai.vision.ModelCatalog
 import app.bestnote.ai.vision.openai.OpenAiConfig
 
-/** Per-provider defaults shown in Settings. Model ids are suggestions; the user may type any id. */
+/** Per-provider facts shown in Settings. Models come from each provider's live list (see [ModelCatalog]). */
 object AiProviderDefaults {
-    fun model(kind: AiProviderKind): String = when (kind) {
-        AiProviderKind.Gemini -> GeminiConfig.DEFAULT_MODEL
-        AiProviderKind.Claude -> ClaudeConfig.DEFAULT_MODEL
-        AiProviderKind.OpenAi -> OpenAiConfig.DEFAULT_MODEL
-        // No sensible universal default: depends on the server (e.g. "qwen2.5vl:7b" on Ollama).
-        AiProviderKind.OpenAiCompatible -> ""
-    }
-
-    fun suggestions(kind: AiProviderKind): List<String> = when (kind) {
-        AiProviderKind.Gemini -> listOf(GeminiConfig.DEFAULT_MODEL, "gemini-2.5-pro", "gemini-2.5-flash-lite")
-        AiProviderKind.Claude -> ClaudeConfig.SUGGESTED_MODELS
-        AiProviderKind.OpenAi -> OpenAiConfig.SUGGESTED_MODELS
-        AiProviderKind.OpenAiCompatible -> listOf("google/gemini-2.5-flash", "meta-llama/llama-4-scout-17b-16e-instruct", "qwen2.5vl:7b")
-    }
+    /** The newest-known model, used only before the live list has been fetched. */
+    fun model(kind: AiProviderKind, preference: ModelCatalog.Preference = ModelCatalog.Preference.Quality): String =
+        ModelCatalog.fallback(kind, preference)
 
     /** Where to get a key; null for compatible servers (depends on the server). */
     fun keyUrl(kind: AiProviderKind): String? = when (kind) {

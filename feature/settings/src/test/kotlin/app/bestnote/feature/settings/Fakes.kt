@@ -9,7 +9,8 @@ import app.bestnote.feature.settings.data.SmartBoardKeyStore
 import app.bestnote.feature.settings.data.StorageInspector
 import app.bestnote.feature.settings.data.StorageUsage
 import app.bestnote.ai.vision.AiProviderKind
-import app.bestnote.ai.vision.providers.AiProviderDefaults
+import app.bestnote.ai.vision.AiModel
+import app.bestnote.ai.vision.ModelCatalog
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -40,42 +41,61 @@ class FakeStorage : StorageInspector {
 }
 
 /** Records keys only to assert on them; a real store never exposes the key. */
-/** Gemini fields are the plain [key]/[model]; other providers live in [others]. */
-class FakeKeyStore(var key: String? = null, var model: String = "gemini-2.5-flash") : SmartBoardKeyStore {
+/** In-memory [SmartBoardKeyStore]; [key]/[model] are Gemini's, other providers live in [states]. */
+class FakeKeyStore(var key: String? = null, var model: String = "") : SmartBoardKeyStore {
     val tested = mutableListOf<Pair<String?, String>>()
     val testedBaseUrls = mutableListOf<String?>()
     var nextResult: KeyTestResult = KeyTestResult.Ok
+    var listResult: KeyTestResult = KeyTestResult.Ok
     var gate: CompletableDeferred<Unit>? = null
     var selected = AiProviderKind.Gemini
-    val others = mutableMapOf<AiProviderKind, SmartBoardKeyState>()
-    private val otherKeys = mutableMapOf<AiProviderKind, String?>()
+    val states = mutableMapOf<AiProviderKind, SmartBoardKeyState>()
+    private val keys = mutableMapOf<AiProviderKind, String?>()
+    var listed: List<AiModel> = emptyList()
+    val listCalls = mutableListOf<AiProviderKind>()
+
+    private fun state(kind: AiProviderKind): SmartBoardKeyState {
+        val base = states[kind] ?: SmartBoardKeyState()
+        val k = keyOf(kind)
+        val m = if (kind == AiProviderKind.Gemini) model else base.model
+        return base.copy(hasKey = k != null, hint = k?.takeLast(4)?.let { "…$it" }, model = m, resolvedModel = ModelCatalog.resolve(kind, m, base.models))
+    }
+
+    fun keyOf(kind: AiProviderKind) = if (kind == AiProviderKind.Gemini) key else keys[kind]
 
     override suspend fun selected() = selected
     override suspend fun select(kind: AiProviderKind) {
         selected = kind
     }
 
-    override suspend fun load(kind: AiProviderKind) =
-        if (kind == AiProviderKind.Gemini) SmartBoardKeyState(key != null, key?.takeLast(4)?.let { "…$it" }, model)
-        else others[kind] ?: SmartBoardKeyState(model = AiProviderDefaults.model(kind))
+    override suspend fun load(kind: AiProviderKind) = state(kind)
 
     override suspend fun saveKey(kind: AiProviderKind, key: String?) {
         val k = key?.trim()?.takeIf { it.isNotEmpty() }
-        if (kind == AiProviderKind.Gemini) this.key = k else {
-            otherKeys[kind] = k
-            others[kind] = load(kind).copy(hasKey = k != null, hint = k?.takeLast(4)?.let { "…$it" })
-        }
+        if (kind == AiProviderKind.Gemini) this.key = k else keys[kind] = k
     }
 
     override suspend fun saveModel(kind: AiProviderKind, model: String) {
-        if (kind == AiProviderKind.Gemini) this.model = model else others[kind] = load(kind).copy(model = model)
+        if (kind == AiProviderKind.Gemini) this.model = model
+        val s = states[kind] ?: SmartBoardKeyState()
+        val recents = if (ModelCatalog.isAuto(model)) s.recents else (listOf(model) + s.recents).distinct()
+        states[kind] = s.copy(model = model, recents = recents)
     }
 
     override suspend fun saveBaseUrl(kind: AiProviderKind, url: String) {
-        others[kind] = load(kind).copy(baseUrl = url)
+        states[kind] = (states[kind] ?: SmartBoardKeyState()).copy(baseUrl = url)
     }
 
-    fun keyOf(kind: AiProviderKind) = if (kind == AiProviderKind.Gemini) key else otherKeys[kind]
+    override suspend fun refreshModels(kind: AiProviderKind, draftKey: String?, baseUrl: String?): KeyTestResult {
+        listCalls += kind
+        if (listResult == KeyTestResult.Ok) states[kind] = (states[kind] ?: SmartBoardKeyState()).copy(models = ModelCatalog.sorted(listed), modelsFetchedAt = 1L)
+        return listResult
+    }
+
+    override suspend fun toggleFavorite(kind: AiProviderKind, id: String) {
+        val s = states[kind] ?: SmartBoardKeyState()
+        states[kind] = s.copy(favorites = if (id in s.favorites) s.favorites - id else s.favorites + id)
+    }
 
     override suspend fun test(kind: AiProviderKind, draftKey: String?, model: String, baseUrl: String?): KeyTestResult {
         tested += draftKey to model

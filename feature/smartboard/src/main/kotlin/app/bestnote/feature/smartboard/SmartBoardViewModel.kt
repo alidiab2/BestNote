@@ -18,6 +18,7 @@ import app.bestnote.ai.vision.VisionError
 import app.bestnote.ai.vision.VisionImage
 import app.bestnote.ai.vision.VisionProvider
 import app.bestnote.ai.vision.AiProviderKind
+import app.bestnote.ai.vision.ModelCatalog
 import app.bestnote.ai.vision.Redactor
 import app.bestnote.ai.vision.VisionDiagnostics
 import app.bestnote.ai.vision.providers.AiProviders
@@ -72,7 +73,21 @@ data class SmartBoardUiState(
     val keyHint: String? = null,
     /** The provider Settings selected (Gemini, Claude, OpenAI, compatible). */
     val provider: AiProviderKind = AiProviderKind.Gemini,
+    /** The model that will be called, and how the header shows it. */
+    val modelId: String = "",
+    val modelLabel: String = "",
+    val switcher: ModelSwitcher = ModelSwitcher(),
     val arabic: Boolean = false,
+)
+
+/** One choice in the header's quick switcher. [model] is an id, "" (automatic best) or [ModelCatalog.AUTO_FAST]. */
+data class ModelOption(val model: String, val label: String, val selected: Boolean, val favorite: Boolean = false)
+
+/** The header's quick switcher: every provider (configured or not), then the current provider's models. */
+data class ModelSwitcher(
+    val providers: List<Pair<AiProviderKind, Boolean>> = emptyList(),
+    val options: List<ModelOption> = emptyList(),
+    val loading: Boolean = false,
 )
 
 /** Handwriting to insert into the notebook as new pages, on [template] paper. */
@@ -100,13 +115,60 @@ class SmartBoardViewModel @Inject constructor(
         get() = (context.applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0 || settings.verboseLogging
 
     init {
-        viewModelScope.launch { refreshKey() }
+        viewModelScope.launch {
+            refreshKey()
+            // Keep the live model list fresh (at most daily) so "automatic" means the newest model.
+            providers.refreshModelsIfStale()
+            refreshKey()
+        }
     }
 
     private suspend fun refreshKey() {
         val kind = providers.selected
         val configured = providers.isConfigured(kind)
-        state.update { it.copy(provider = kind, hasKey = configured, keyHint = settings.keyHint(kind)) }
+        val stored = settings.storedModel(kind)
+        val models = settings.cachedModels(kind)
+        val id = settings.model(kind)
+        fun name(m: String) = models.firstOrNull { it.id == m }?.displayName ?: m
+        val favorites = settings.favoriteModels(kind)
+        val options = buildList {
+            if (kind != AiProviderKind.OpenAiCompatible) {
+                add(ModelOption("", "★ " + name(ModelCatalog.resolve(kind, "", models)), stored.isBlank()))
+                add(ModelOption(ModelCatalog.AUTO_FAST, "⚡ " + name(ModelCatalog.resolve(kind, ModelCatalog.AUTO_FAST, models)), stored == ModelCatalog.AUTO_FAST))
+            }
+            val ids = (favorites + settings.recentModels(kind) + ModelCatalog.sorted(models).take(SWITCHER_LIST).map { it.id }).distinct()
+            ids.forEach { add(ModelOption(it, name(it), stored == it, it in favorites)) }
+        }
+        val all = AiProviderKind.entries.map { it to providers.isConfigured(it) }
+        state.update {
+            it.copy(
+                provider = kind,
+                hasKey = configured,
+                keyHint = settings.keyHint(kind),
+                modelId = id,
+                modelLabel = name(id),
+                switcher = ModelSwitcher(all, options),
+            )
+        }
+    }
+
+    /** Header quick switcher: another provider (its key and model come from Settings). */
+    fun switchProvider(kind: AiProviderKind) {
+        viewModelScope.launch {
+            settings.setProvider(kind)
+            refreshKey()
+            state.update { it.copy(switcher = it.switcher.copy(loading = true)) }
+            providers.refreshModelsIfStale(kind)
+            refreshKey()
+        }
+    }
+
+    /** Header quick switcher: a model id, "" (automatic best) or [ModelCatalog.AUTO_FAST]. */
+    fun switchModel(model: String) {
+        viewModelScope.launch {
+            settings.setModel(providers.selected, model)
+            refreshKey()
+        }
     }
 
     private var job: Job? = null
@@ -242,5 +304,6 @@ class SmartBoardViewModel @Inject constructor(
         private const val JPEG_QUALITY = 88
         private const val TAG = "BestNoteSmartBoard"
         private const val DETAIL_CHARS = 400
+        private const val SWITCHER_LIST = 8
     }
 }

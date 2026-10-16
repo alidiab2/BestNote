@@ -2,13 +2,17 @@ package app.bestnote.ai.vision.providers
 
 import android.content.Context
 import android.content.SharedPreferences
+import app.bestnote.ai.vision.AiModel
 import app.bestnote.ai.vision.AiProviderKind
+import app.bestnote.ai.vision.ModelCatalog
 import app.bestnote.ai.vision.ProviderCredentials
 import app.bestnote.ai.vision.gemini.KeystoreCipher
 import app.bestnote.ai.vision.gemini.KeystoreGeminiSettings
 import app.bestnote.ai.vision.gemini.SecretCipher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.builtins.ListSerializer
+import kotlinx.serialization.json.Json
 
 /**
  * Settings for every Smart Board provider. Keys are stored only as AES-GCM ciphertext with a
@@ -52,15 +56,53 @@ class KeystoreAiSettings(
         }
     }
 
-    suspend fun model(kind: AiProviderKind): String =
-        if (kind == AiProviderKind.Gemini) gemini.model()
-        else withContext(Dispatchers.IO) { prefs.getString(k(kind, MODEL), null)?.takeIf { it.isNotBlank() } } ?: AiProviderDefaults.model(kind)
+    /**
+     * The model as the user chose it: an id, "" for automatic (newest pro-class model from the live
+     * list) or [ModelCatalog.AUTO_FAST].
+     */
+    suspend fun storedModel(kind: AiProviderKind): String =
+        if (kind == AiProviderKind.Gemini) gemini.storedModel()
+        else withContext(Dispatchers.IO) { prefs.getString(k(kind, MODEL), null)?.trim().orEmpty() }
 
-    /** Blank resets to the provider's default. */
+    /** The model id to call: [storedModel] resolved against the cached live list, else the newest-known fallback. */
+    suspend fun model(kind: AiProviderKind): String = ModelCatalog.resolve(kind, storedModel(kind), cachedModels(kind))
+
+    /** Blank = automatic. A concrete id is also added to the recent models. */
     suspend fun setModel(kind: AiProviderKind, model: String) {
-        if (kind == AiProviderKind.Gemini) return gemini.setModel(model)
-        edit { putString(k(kind, MODEL), model.trim()) }
+        val m = model.trim()
+        if (kind == AiProviderKind.Gemini) gemini.setModel(m) else edit { putString(k(kind, MODEL), m) }
+        if (!ModelCatalog.isAuto(m)) addRecent(kind, m)
     }
+
+    /** The provider's model list as last fetched (empty before the first fetch). */
+    suspend fun cachedModels(kind: AiProviderKind): List<AiModel> = withContext(Dispatchers.IO) {
+        prefs.getString(k(kind, MODELS), null)?.let { runCatching { json.decodeFromString(modelList, it) }.getOrNull() }.orEmpty()
+    }
+
+    /** When [cachedModels] was fetched, epoch millis; 0 = never. */
+    fun modelsFetchedAt(kind: AiProviderKind): Long = prefs.getLong(k(kind, MODELS_AT), 0L)
+
+    suspend fun setCachedModels(kind: AiProviderKind, models: List<AiModel>, now: Long = System.currentTimeMillis()) = edit {
+        putString(k(kind, MODELS), json.encodeToString(modelList, models))
+        putLong(k(kind, MODELS_AT), now)
+    }
+
+    /** Last [RECENT_MAX] concrete models used, newest first. */
+    fun recentModels(kind: AiProviderKind): List<String> = list(k(kind, RECENT))
+
+    fun favoriteModels(kind: AiProviderKind): List<String> = list(k(kind, FAVORITES))
+
+    suspend fun toggleFavorite(kind: AiProviderKind, id: String) {
+        val now = favoriteModels(kind)
+        edit { putString(k(kind, FAVORITES), (if (id in now) now - id else now + id).joinToString("\n")) }
+    }
+
+    private suspend fun addRecent(kind: AiProviderKind, id: String) {
+        val list = (listOf(id) + recentModels(kind).filter { it != id }).take(RECENT_MAX)
+        edit { putString(k(kind, RECENT), list.joinToString("\n")) }
+    }
+
+    private fun list(key: String) = prefs.getString(key, null)?.split('\n')?.filter { it.isNotBlank() }.orEmpty()
 
     /** Only meaningful for [AiProviderKind.OpenAiCompatible]. */
     suspend fun baseUrl(kind: AiProviderKind): String? =
@@ -100,5 +142,12 @@ class KeystoreAiSettings(
         const val HINT = "api_key_hint"
         const val MODEL = "model"
         const val BASE_URL = "base_url"
+        const val MODELS = "models_json"
+        const val MODELS_AT = "models_fetched_at"
+        const val RECENT = "recent_models"
+        const val FAVORITES = "favorite_models"
+        const val RECENT_MAX = 5
+        val json = Json { ignoreUnknownKeys = true }
+        val modelList = ListSerializer(AiModel.serializer())
     }
 }

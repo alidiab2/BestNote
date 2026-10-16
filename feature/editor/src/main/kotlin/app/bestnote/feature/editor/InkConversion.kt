@@ -64,5 +64,18 @@ internal object InkConversion {
         return InkBrush(tool, style, color, brush.size / spec.sizeScale, family?.key)
     }
 
+    /** True when [text] has more Arabic/Hebrew letters than Latin ones (the review field then reads right to left). */
+    fun isMostlyRtl(text: String): Boolean {
+        var rtl = 0
+        var ltr = 0
+        for (c in text) {
+            when {
+                c in '\u0590'..'\u08FF' || c in '\uFB1D'..'\uFDFF' || c in '\uFE70'..'\uFEFF' -> rtl++
+                c in 'a'..'z' || c in 'A'..'Z' -> ltr++
+            }
+        }
+        return rtl > ltr
+    }
+
     private val SPECS = Tool.entries.filter { it.inks }.flatMap { t -> PenStyle.entries.map { t to it } }
 }

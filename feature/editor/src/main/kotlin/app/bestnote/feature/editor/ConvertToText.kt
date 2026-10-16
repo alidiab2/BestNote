@@ -2,6 +2,7 @@ package app.bestnote.feature.editor
 
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.size
+import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.SnackbarHostState
@@ -16,6 +17,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.stringResource
+import app.bestnote.ai.vision.VisionError
+import app.bestnote.ai.vision.VisionImage
+import app.bestnote.ai.vision.providers.AiProviders
+import app.bestnote.ai.vision.transcriptLines
 import app.bestnote.core.model.PageElement
 import app.bestnote.core.model.TextElement
 import app.bestnote.engine.canvas.document.PagedDocument
@@ -43,6 +48,8 @@ internal class InkConverter(
     private val models: HandwritingModels,
     private val recognizer: HandwritingRecognizer,
     private val onSelecting: () -> Unit,
+    /** The Smart Board provider from Settings, for "Convert with AI"; null hides the option. */
+    private val ai: AiProviders?,
     private val message: suspend (Int) -> Unit,
 ) {
     enum class Step { Idle, NeedsModels, Downloading, DownloadFailed, Reading, Confirm }
@@ -57,6 +64,14 @@ internal class InkConverter(
     var step by mutableStateOf(Step.Idle)
         private set
 
+    /** An AI provider is configured in Settings → Smart Board AI. */
+    var aiAvailable by mutableStateOf(false)
+        private set
+
+    /** The draft came from the AI provider (shown so the user knows which reading they see). */
+    var aiReading by mutableStateOf(false)
+        private set
+
     private var pending: PagedDocumentView.SelectedInk? = null
     private var samples: List<List<app.bestnote.core.model.StylusSample>> = emptyList()
 
@@ -64,7 +79,52 @@ internal class InkConverter(
         val selected = canvas()?.selectedInk() ?: return
         pending = selected
         language = null
+        aiReading = false
+        scope.launch { aiAvailable = runCatching { ai?.isConfigured() == true }.getOrDefault(false) }
         if (models.state.value.isReady) read(selected) else step = Step.NeedsModels
+    }
+
+    /**
+     * "Convert with AI" (REC-05): the selection, drawn as black ink on white, goes to the user's own
+     * AI provider, which reads Arabic handwriting far better than the on-device model.
+     */
+    fun convertWithAi() {
+        val selected = pending ?: return
+        val providers = ai ?: return
+        val before = step
+        step = Step.Reading
+        scope.launch {
+            try {
+                val png = withContext(Dispatchers.Default) { InkSnapshot.png(selected.strokes) }
+                if (png == null) {
+                    message(R.string.convert_nothing)
+                    step = before
+                    return@launch
+                }
+                val doc = providers.create().transcribe(VisionImage(png, "image/png"), languageName(language))
+                val lines = doc.transcriptLines()
+                if (lines.isEmpty()) {
+                    message(R.string.convert_ai_nothing)
+                    step = if (before == Step.Confirm) Step.Confirm else before
+                } else {
+                    draft = lines.joinToString("\n")
+                    aiReading = true
+                    step = Step.Confirm
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+                android.util.Log.w("BestNoteConvert", "Convert with AI failed: ${e.javaClass.simpleName}")
+                message(if (e is VisionError.InvalidKey || e is VisionError.MissingKey) R.string.convert_ai_key else R.string.convert_ai_failed)
+                step = before
+            }
+        }
+    }
+
+    private fun languageName(tag: String?) = when (tag) {
+        "ar" -> "Arabic"
+        "en-US" -> "English"
+        else -> null
     }
 
     fun download() {
@@ -86,6 +146,7 @@ internal class InkConverter(
     /** Re-reads the selection in [tag] (null = automatic), e.g. from the language chips in the confirmation. */
     fun readAs(tag: String?) {
         language = tag
+        aiReading = false
         pending?.let(::read)
     }
 
@@ -149,7 +210,12 @@ internal class InkConverter(
                 title = { Text(title) },
                 text = { Text(stringResource(if (step == Step.DownloadFailed) R.string.convert_failed else R.string.convert_models_needed)) },
                 confirmButton = { TextButton(::download) { Text(stringResource(if (step == Step.DownloadFailed) R.string.convert_retry else R.string.convert_download)) } },
-                dismissButton = { TextButton(::dismiss) { Text(stringResource(R.string.dialog_cancel)) } },
+                dismissButton = {
+                    androidx.compose.foundation.layout.Row {
+                        if (aiAvailable) TextButton(::convertWithAi) { Text(stringResource(R.string.convert_with_ai)) }
+                        TextButton(::dismiss) { Text(stringResource(R.string.dialog_cancel)) }
+                    }
+                },
             )
             Step.Downloading, Step.Reading -> AlertDialog(
                 onDismissRequest = {},
@@ -161,6 +227,7 @@ internal class InkConverter(
                     ) {
                         CircularProgressIndicator(androidx.compose.ui.Modifier.size(28.dp))
                         Text(stringResource(if (step == Step.Downloading) R.string.convert_downloading else R.string.convert_reading))
+
                     }
                 },
                 confirmButton = {},
@@ -180,13 +247,38 @@ internal class InkConverter(
                             LanguageChip(R.string.convert_lang_ar, language == "ar") { readAs("ar") }
                             LanguageChip(R.string.convert_lang_en, language == "en-US") { readAs("en-US") }
                         }
-                        androidx.compose.material3.OutlinedTextField(
-                            value = draft,
-                            onValueChange = { draft = it },
-                            label = { Text(stringResource(R.string.convert_review)) },
-                            placeholder = { Text(stringResource(R.string.convert_nothing)) },
-                            modifier = androidx.compose.ui.Modifier.fillMaxWidth(),
-                        )
+                        if (aiAvailable) {
+                            androidx.compose.material3.FilterChip(
+                                selected = aiReading,
+                                onClick = ::convertWithAi,
+                                label = { Text(stringResource(R.string.convert_with_ai)) },
+                                leadingIcon = {
+                                    androidx.compose.material3.Icon(
+                                        androidx.compose.material.icons.Icons.Rounded.AutoAwesome,
+                                        null,
+                                        androidx.compose.ui.Modifier.size(18.dp),
+                                    )
+                                },
+                            )
+                        }
+                        // Arabic reads right to left: the field follows the text, not the UI language.
+                        val rtl = InkConversion.isMostlyRtl(draft)
+                        androidx.compose.runtime.CompositionLocalProvider(
+                            androidx.compose.ui.platform.LocalLayoutDirection provides
+                                if (rtl) androidx.compose.ui.unit.LayoutDirection.Rtl else androidx.compose.ui.unit.LayoutDirection.Ltr,
+                        ) {
+                            androidx.compose.material3.OutlinedTextField(
+                                value = draft,
+                                onValueChange = { draft = it },
+                                label = { Text(stringResource(R.string.convert_review)) },
+                                placeholder = { Text(stringResource(R.string.convert_nothing)) },
+                                textStyle = androidx.compose.material3.LocalTextStyle.current.copy(
+                                    textDirection = if (rtl) androidx.compose.ui.text.style.TextDirection.Rtl else androidx.compose.ui.text.style.TextDirection.Content,
+                                    textAlign = androidx.compose.ui.text.style.TextAlign.Start,
+                                ),
+                                modifier = androidx.compose.ui.Modifier.fillMaxWidth(),
+                            )
+                        }
                     }
                 },
                 confirmButton = { TextButton(::insert, enabled = draft.isNotBlank()) { Text(stringResource(R.string.convert_insert)) } },
@@ -219,11 +311,12 @@ internal fun rememberInkConverter(
     recognizer: HandwritingRecognizer,
     onSelecting: () -> Unit,
     snackbar: SnackbarHostState,
+    ai: AiProviders? = null,
 ): InkConverter {
     val scope = rememberCoroutineScope()
     val resources = LocalResources.current
     return remember(document, models, recognizer) {
-        InkConverter(scope, canvas, document, models, recognizer, onSelecting) { id ->
+        InkConverter(scope, canvas, document, models, recognizer, onSelecting, ai) { id ->
             snackbar.currentSnackbarData?.dismiss()
             snackbar.showSnackbar(resources.getString(id))
         }

@@ -97,3 +97,18 @@ class GeminiResponsesTest {
         assertTrue(!GeminiResponses.rejectsJsonSchema(400, Fixtures.read("invalid_key.json")))
     }
 }
+
+class GeminiModelsTest {
+    @Test
+    fun keepsOnlyGenerateContentVisionModels() {
+        val page = GeminiModels.parse(Fixtures.read("models_page1.json"))
+        assertEquals(
+            listOf("gemini-2.5-flash", "gemini-2.5-pro", "gemini-3.1-pro-preview", "gemini-3.6-flash", "gemini-3.8-flash", "gemini-3.5-flash-lite", "gemini-4-argon"),
+            page.models.map { it.id },
+        )
+        assertEquals("Gemini 4 Argon", page.models.last().displayName)
+        assertEquals("Ch1tb2RlbHMvZ2VtaW5pLTQ", page.nextPageToken)
+        assertEquals("gemini-4-argon", app.bestnote.ai.vision.ModelCatalog.pick(page.models, app.bestnote.ai.vision.ModelCatalog.Preference.Quality)!!.id)
+        assertEquals("gemini-3.8-flash", app.bestnote.ai.vision.ModelCatalog.pick(page.models, app.bestnote.ai.vision.ModelCatalog.Preference.Fast)!!.id)
+    }
+}

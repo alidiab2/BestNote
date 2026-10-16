@@ -2,6 +2,7 @@ package app.bestnote.ai.vision.claude
 
 import app.bestnote.ai.vision.AiDocument
 import app.bestnote.ai.vision.AiDocumentParser
+import app.bestnote.ai.vision.AiModel
 import app.bestnote.ai.vision.BoardRequest
 import app.bestnote.ai.vision.Prompts
 import app.bestnote.ai.vision.ProviderCredentials
@@ -83,5 +84,33 @@ class ClaudeKeyChecker(http: OkHttpClient, private val config: ClaudeConfig = Cl
             throw VisionError.Network(e)
         }
         if (response.code != 200) throw ClaudeResponses.errorFor(response.code, response.body, response.retryAfter, id)
+    }
+
+    /** Every model this key can use, newest first as the API returns them (up to 3 pages of 1000). */
+    suspend fun listModels(apiKey: String): List<AiModel> {
+        val key = apiKey.trim().takeIf { it.isNotEmpty() } ?: throw VisionError.MissingKey()
+        val out = ArrayList<AiModel>()
+        var after: String? = null
+        repeat(MAX_PAGES) {
+            val url = ClaudeHttp.url(config.baseUrl, "v1/models").newBuilder()
+                .addQueryParameter("limit", "1000")
+                .apply { after?.let { addQueryParameter("after_id", it) } }
+                .build()
+            val response = try {
+                transport.get(url, ClaudeRequests.headers(key, fallbacks = false))
+            } catch (e: IOException) {
+                throw VisionError.Network(e)
+            }
+            if (response.code != 200) throw ClaudeResponses.errorFor(response.code, response.body, response.retryAfter, "")
+            val page = runCatching { ClaudeModels.parse(response.body) }.getOrElse { throw VisionError.BadResponse("model list is not JSON", it) }
+            out += page.models
+            if (!page.hasMore || page.lastId == null) return out
+            after = page.lastId
+        }
+        return out
+    }
+
+    private companion object {
+        const val MAX_PAGES = 3
     }
 }

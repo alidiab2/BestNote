@@ -2,6 +2,7 @@ package app.bestnote.ai.vision.openai
 
 import app.bestnote.ai.vision.AiDocument
 import app.bestnote.ai.vision.AiDocumentParser
+import app.bestnote.ai.vision.AiModel
 import app.bestnote.ai.vision.BoardRequest
 import app.bestnote.ai.vision.Prompts
 import app.bestnote.ai.vision.ProviderCredentials
@@ -102,5 +103,22 @@ class OpenAiKeyChecker(http: OkHttpClient, private val config: OpenAiConfig = Op
             throw VisionError.BadResponse("invalid base URL", e)
         }
         if (response.code != 200) throw OpenAiResponses.errorFor(response.code, response.body, response.retryAfter, id)
+    }
+
+    /** Chat models from `GET {base}/models` (see [OpenAiModels]); a local server may need no key. */
+    suspend fun listModels(apiKey: String?, baseUrl: String? = null): List<AiModel> {
+        val base = baseUrl?.trim()?.takeIf { it.isNotEmpty() } ?: config.baseUrl
+        val official = OpenAiVisionProvider.isOfficial(base)
+        val key = apiKey?.trim()?.takeIf { it.isNotEmpty() }
+        if (key == null && official) throw VisionError.MissingKey()
+        val response = try {
+            transport.get(OpenAiHttp.url(base, "models"), OpenAiRequests.headers(key, base))
+        } catch (e: IOException) {
+            throw VisionError.Network(e)
+        } catch (e: IllegalArgumentException) {
+            throw VisionError.BadResponse("invalid base URL", e)
+        }
+        if (response.code != 200) throw OpenAiResponses.errorFor(response.code, response.body, response.retryAfter, "")
+        return runCatching { OpenAiModels.parse(response.body, official) }.getOrElse { throw VisionError.BadResponse("model list is not JSON", it) }
     }
 }

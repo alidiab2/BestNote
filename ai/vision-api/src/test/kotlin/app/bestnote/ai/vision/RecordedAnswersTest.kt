@@ -175,3 +175,17 @@ class RecordedAnswersTest {
         assertTrue(openApi.contains("\"propertyOrdering\":[\"type\",\"order\",\"text\""))
     }
 }
+
+class TranscriptLinesTest {
+    @Test
+    fun `transcription answer becomes lines in reading order`() {
+        val doc = AiDocumentParser.parse(
+            """{"title":"","blocks":[
+              {"type":"paragraph","order":1,"text":"والمشتقة هي ميل المماس"},
+              {"type":"paragraph","order":0,"text":"تعريف: الدالة المتصلة"},
+              {"type":"math","order":2,"text":"f'(x) = 2x","latex":"f'(x) = 2x"},
+              {"type":"paragraph","order":3,"text":"see p. 12\nfor proof"}]}""",
+        ).document
+        assertEquals(listOf("تعريف: الدالة المتصلة", "والمشتقة هي ميل المماس", "f'(x) = 2x", "see p. 12", "for proof"), doc.transcriptLines())
+    }
+}

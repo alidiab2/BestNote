@@ -56,4 +56,7 @@
     <string name="smartboard_provider_claude">Claude</string>
     <string name="smartboard_provider_openai">OpenAI</string>
     <string name="smartboard_provider_compatible">your AI server</string>
+    <string name="smartboard_provider_compatible_short">OpenAI-compatible</string>
+    <string name="smartboard_switch_provider">AI provider</string>
+    <string name="smartboard_switch_model">Model</string>
 </resources>

@@ -19,11 +19,11 @@ data class ClaudeConfig(
     val maxTokens: Int = 16_000,
 ) {
     companion object {
-        /** Sonnet-class default: fast, strong vision, sensible cost. The user may type any model id. */
-        const val DEFAULT_MODEL = "claude-sonnet-5-5"
-
-        /** Shown as suggestions in Settings. */
-        val SUGGESTED_MODELS = listOf("claude-sonnet-5-5", "claude-opus-5-5", "claude-haiku-5-5")
+        /**
+         * Last-resort id when the key's live model list (`GET /v1/models`) is unavailable: the
+         * current Opus, the pro-class pick for board reconstruction.
+         */
+        const val DEFAULT_MODEL = "claude-opus-5-5"
 
         const val API_VERSION = "2023-06-01"
         const val KEY_HEADER = "x-api-key"

@@ -1,6 +1,7 @@
 package app.bestnote.ai.vision.gemini
 
 import app.bestnote.ai.vision.AiDocument
+import app.bestnote.ai.vision.AiModel
 import app.bestnote.ai.vision.BoardRequest
 import app.bestnote.ai.vision.Prompts
 import app.bestnote.ai.vision.VisionDiagnostics
@@ -86,5 +87,32 @@ class GeminiKeyChecker(http: OkHttpClient, config: GeminiConfig = GeminiConfig()
             throw VisionError.Network(e)
         }
         if (response.code != 200) throw GeminiResponses.errorFor(response.code, response.body, response.retryAfter, model)
+    }
+
+    /** The models this key can use for reading a board (see [GeminiModels]); follows up to 3 pages. */
+    suspend fun listModels(apiKey: String): List<AiModel> {
+        val key = apiKey.trim().takeIf { it.isNotEmpty() } ?: throw VisionError.MissingKey()
+        val out = ArrayList<AiModel>()
+        var token: String? = null
+        repeat(MAX_PAGES) {
+            val query = buildMap {
+                put("pageSize", "1000")
+                token?.let { put("pageToken", it) }
+            }
+            val response = try {
+                transport.get("v1beta/models", key, query)
+            } catch (e: IOException) {
+                throw VisionError.Network(e)
+            }
+            if (response.code != 200) throw GeminiResponses.errorFor(response.code, response.body, response.retryAfter, "")
+            val page = runCatching { GeminiModels.parse(response.body) }.getOrElse { throw VisionError.BadResponse("model list is not JSON", it) }
+            out += page.models
+            token = page.nextPageToken ?: return out
+        }
+        return out
+    }
+
+    private companion object {
+        const val MAX_PAGES = 3
     }
 }

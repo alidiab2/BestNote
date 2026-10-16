@@ -105,6 +105,7 @@ import app.bestnote.core.designsystem.theme.Elevation
 import app.bestnote.core.designsystem.theme.Motion
 import app.bestnote.core.designsystem.theme.reducedMotion
 import app.bestnote.core.designsystem.theme.softShadow
+import app.bestnote.ai.vision.providers.AiProviders
 import app.bestnote.core.model.InkStroke
 import app.bestnote.core.model.NotebookId
 import app.bestnote.core.model.Page
@@ -186,6 +187,8 @@ class EditorViewModel @Inject constructor(
     private val pageSearch: PageSearch,
     val models: HandwritingModels,
     val recognizer: HandwritingRecognizer,
+    /** Smart Board AI providers, for "Convert with AI" (REC-05). */
+    val aiProviders: AiProviders,
 ) : ViewModel() {
     private val route = savedStateHandle.toRoute<EditorRoute>()
     val notebookId = NotebookId(route.notebookId)
@@ -347,6 +350,7 @@ fun EditorScreen(
         recognizer = viewModel.recognizer,
         onSelecting = { viewModel.setLasso(true) },
         snackbar = snackbar,
+        ai = viewModel.aiProviders,
     )
     val reduce = reducedMotion()
     val side = traySide(state.dock, state.leftHanded)

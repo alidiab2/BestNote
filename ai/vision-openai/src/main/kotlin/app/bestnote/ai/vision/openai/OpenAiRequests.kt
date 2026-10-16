@@ -23,9 +23,8 @@ data class OpenAiConfig(
     companion object {
         const val OPENAI_BASE_URL = "https://api.openai.com/v1/"
 
-        /** Vision-capable, inexpensive default. The user may type any model id. */
-        const val DEFAULT_MODEL = "gpt-5-mini"
-        val SUGGESTED_MODELS = listOf("gpt-5-mini", "gpt-5.1", "gpt-5", "gpt-4.1")
+        /** Last-resort id when the key's live model list is unavailable (newest flagship, 2026-10). */
+        const val DEFAULT_MODEL = "gpt-6-astra"
 
         /** Base URLs offered for "OpenAI-compatible" (the user can type any other). */
         val COMPATIBLE_PRESETS = linkedMapOf(
