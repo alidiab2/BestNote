@@ -7,6 +7,7 @@ import android.graphics.Paint
 import android.graphics.Rect
 import android.graphics.RectF
 import android.graphics.Typeface
+import android.graphics.text.LineBreaker
 import android.text.Layout
 import android.text.SpannableStringBuilder
 import android.text.Spanned
@@ -176,7 +177,7 @@ class ElementPainter {
                     TextAlignment.End -> Layout.Alignment.ALIGN_OPPOSITE
                 },
             )
-            .setJustificationMode(if (e.align == TextAlignment.Justify) Layout.JUSTIFICATION_MODE_INTER_WORD else Layout.JUSTIFICATION_MODE_NONE)
+            .setJustificationMode(if (e.align == TextAlignment.Justify) LineBreaker.JUSTIFICATION_MODE_INTER_WORD else LineBreaker.JUSTIFICATION_MODE_NONE)
             .setTextDirection(TextDirectionHeuristics.FIRSTSTRONG_LTR)
             .setIncludePad(false)
             .setLineSpacing(0f, e.lineSpacing.coerceIn(TextElement.MIN_LINE_SPACING, TextElement.MAX_LINE_SPACING))
