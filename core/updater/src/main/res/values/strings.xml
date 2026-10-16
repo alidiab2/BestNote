@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="update_title">Update available</string>
+    <string name="update_versions">%1$s → %2$s</string>
+    <string name="update_prerelease">pre-release</string>
+    <string name="update_now">Update now</string>
+    <string name="update_retry">Try again</string>
+    <string name="update_later">Later</string>
+    <string name="update_skip">Skip this version</string>
+    <string name="update_hide">Hide</string>
+    <string name="update_downloading">Downloading… %1$s of %2$s</string>
+    <string name="update_needs_permission">Allow BestNote to install apps in the settings screen that just opened, then come back and tap Update now. Your notebooks are kept.</string>
+    <string name="update_failed">Update failed: %1$s</string>
+</resources>

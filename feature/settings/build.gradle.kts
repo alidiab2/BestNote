@@ -5,6 +5,7 @@ plugins {
 dependencies {
     implementation(projects.core.designsystem)
     implementation(projects.core.datastore)
+    implementation(projects.core.updater)
     implementation(projects.engine.export)
     // Smart Board key settings (Keystore-backed) and the key checker. Feature → ai is allowed.
     implementation(projects.ai.visionProviders)

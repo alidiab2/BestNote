@@ -238,4 +238,20 @@
     <string name="settings_debug_ai_group">ذكاء السبورة</string>
     <string name="settings_debug_verbose">سجل مفصّل للذكاء</string>
     <string name="settings_debug_verbose_sub">احتفظ بردود الذكاء الخام لسجل التصحيح (قد تحتوي على ملاحظاتك). لا تُحفظ المفاتيح أبدًا.</string>
+    <string name="settings_updates_group">التحديثات</string>
+    <string name="settings_updates_version">الإصدار</string>
+    <string name="settings_updates_version_value">%1$s · رمز %2$d · %3$s</string>
+    <string name="settings_updates_check">التحقق من التحديثات</string>
+    <string name="settings_updates_check_action">تحقق</string>
+    <string name="settings_updates_update">حدّث</string>
+    <string name="settings_updates_checking">جارٍ التحقق…</string>
+    <string name="settings_updates_up_to_date">لديك أحدث إصدار.</string>
+    <string name="settings_updates_available">الإصدار %1$s متاح.</string>
+    <string name="settings_updates_downloading">جارٍ تنزيل التحديث…</string>
+    <string name="settings_updates_needs_permission">اسمح بالتثبيت من BestNote ثم اضغط «حدّث» مرة أخرى.</string>
+    <string name="settings_updates_failed">تعذّر التحقق: %1$s</string>
+    <string name="settings_updates_last">آخر تحقق %1$s</string>
+    <string name="settings_updates_never">لم يتم التحقق بعد</string>
+    <string name="settings_updates_auto">التحقق تلقائيًا</string>
+    <string name="settings_updates_auto_sub">يبحث عن إصدار جديد مرة في اليوم عند فتح BestNote.</string>
 </resources>
