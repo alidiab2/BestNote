@@ -172,6 +172,8 @@ internal class TileTable<B : Any, S : Any>(
 
     private fun touch(e: Entry<B, S>, added: S?) {
         e.gen++
+        // No bitmap yet: nothing on screen is wrong, the pending render just restarts.
+        if (e.bitmap == null) return
         if (added != null && !e.broken) {
             (e.overlay ?: ArrayList<S>().also { e.overlay = it }) += added
         } else {

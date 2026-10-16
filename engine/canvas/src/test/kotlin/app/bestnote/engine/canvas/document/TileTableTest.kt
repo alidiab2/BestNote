@@ -152,4 +152,15 @@ class TileTableTest {
         assertEquals(listOf(1.2f, 1.5f), out.toList())
         assertTrue(standInCost(0.5f, 1f) > standInCost(2f, 1f))
     }
+
+    @Test
+    fun invalidatingATileWithoutBitmapOnlyRestartsItsRender() {
+        val t = table()
+        val e = t.obtain(key(0, 0))
+        t.invalidatePage("p")
+        assertEquals(1, e.gen)
+        assertFalse(e.broken) // a missing tile gets a stand-in, never vectors
+        assertNull(e.overlay)
+        assertTrue(e.needsRender)
+    }
 }

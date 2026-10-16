@@ -344,8 +344,8 @@ internal class DryInkTiles(
         vector.clear()
         var nScales = -1
         for (e in tiles) {
-            val edited = e.bitmap != null || e.gen > 0
-            if (vectorAllowed && (wet != null || (edited && e.broken))) {
+            // Vectors only where an edit made a bitmap wrong (an erase, an undo) or a highlighter is wet.
+            if (vectorAllowed && (wet != null || (e.bitmap != null && e.broken))) {
                 vector += e
             } else {
                 if (nScales < 0) nScales = table.scalesOf(c.pageId, scale, scales)
