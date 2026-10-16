@@ -129,30 +129,37 @@ object StylusEventMapper {
     fun map(src: PointerEventSource): List<StylusEvent> {
         val canceledFlag = (src.flags and FLAG_CANCELED) != 0
         val legacyButton = src.actionMasked in SAMSUNG_ACTION_PEN_DOWN..SAMSUNG_ACTION_PEN_MOVE
-        val (action, indices) = when (src.actionMasked) {
-            ACTION_DOWN, ACTION_POINTER_DOWN, SAMSUNG_ACTION_PEN_DOWN -> StylusAction.Down to listOf(src.actionIndex)
-            ACTION_UP, ACTION_POINTER_UP, SAMSUNG_ACTION_PEN_UP ->
-                (if (canceledFlag) StylusAction.Cancel else StylusAction.Up) to listOf(src.actionIndex)
-            ACTION_MOVE, SAMSUNG_ACTION_PEN_MOVE -> StylusAction.Move to (0 until src.pointerCount).toList()
-            ACTION_CANCEL -> StylusAction.Cancel to (0 until src.pointerCount).toList()
-            ACTION_HOVER_ENTER -> StylusAction.HoverEnter to (0 until src.pointerCount).toList()
-            ACTION_HOVER_MOVE -> StylusAction.HoverMove to (0 until src.pointerCount).toList()
-            ACTION_HOVER_EXIT -> StylusAction.HoverExit to (0 until src.pointerCount).toList()
+        // Called for every input event (120-240 Hz): no boxed index lists or ranges, exact-size lists.
+        val action = when (src.actionMasked) {
+            ACTION_DOWN, ACTION_POINTER_DOWN, SAMSUNG_ACTION_PEN_DOWN -> StylusAction.Down
+            ACTION_UP, ACTION_POINTER_UP, SAMSUNG_ACTION_PEN_UP -> if (canceledFlag) StylusAction.Cancel else StylusAction.Up
+            ACTION_MOVE, SAMSUNG_ACTION_PEN_MOVE -> StylusAction.Move
+            ACTION_CANCEL -> StylusAction.Cancel
+            ACTION_HOVER_ENTER -> StylusAction.HoverEnter
+            ACTION_HOVER_MOVE -> StylusAction.HoverMove
+            ACTION_HOVER_EXIT -> StylusAction.HoverExit
             else -> return emptyList()
         }
+        val changedOnly = action == StylusAction.Down || action == StylusAction.Up || (action == StylusAction.Cancel && src.actionMasked != ACTION_CANCEL)
         val buttons = src.buttonState
-        return indices.map { i ->
-            StylusEvent(
-                pointerId = src.pointerId(i),
-                tool = toolOf(src.toolType(i)),
-                action = action,
-                samples = samplesOf(src, i, includeHistory = action == StylusAction.Move || action == StylusAction.HoverMove),
-                primaryButtonPressed = legacyButton || (buttons and BUTTON_STYLUS_PRIMARY) != 0,
-                secondaryButtonPressed = (buttons and BUTTON_STYLUS_SECONDARY) != 0,
-                canceled = action == StylusAction.Cancel,
-            )
-        }
+        if (changedOnly) return listOf(eventOf(src, src.actionIndex, action, legacyButton, buttons))
+        val n = src.pointerCount
+        if (n == 1) return listOf(eventOf(src, 0, action, legacyButton, buttons))
+        val out = ArrayList<StylusEvent>(n)
+        for (i in 0 until n) out += eventOf(src, i, action, legacyButton, buttons)
+        return out
     }
+
+    private fun eventOf(src: PointerEventSource, i: Int, action: StylusAction, legacyButton: Boolean, buttons: Int) =
+        StylusEvent(
+            pointerId = src.pointerId(i),
+            tool = toolOf(src.toolType(i)),
+            action = action,
+            samples = samplesOf(src, i, includeHistory = action == StylusAction.Move || action == StylusAction.HoverMove),
+            primaryButtonPressed = legacyButton || (buttons and BUTTON_STYLUS_PRIMARY) != 0,
+            secondaryButtonPressed = (buttons and BUTTON_STYLUS_SECONDARY) != 0,
+            canceled = action == StylusAction.Cancel,
+        )
 
     fun toolOf(toolType: Int): PointerTool = when (toolType) {
         TOOL_TYPE_STYLUS -> PointerTool.Stylus
@@ -163,16 +170,20 @@ object StylusEventMapper {
     }
 
     private fun samplesOf(src: PointerEventSource, index: Int, includeHistory: Boolean): List<StylusSample> {
-        val history = if (includeHistory) (0 until src.historySize) else IntRange.EMPTY
-        return (history + PointerEventSource.CURRENT).map { h ->
-            StylusSample(
-                x = src.x(index, h),
-                y = src.y(index, h),
-                pressure = src.pressure(index, h).coerceIn(0f, 1f),
-                tiltRad = src.tilt(index, h),
-                orientationRad = src.orientation(index, h),
-                timeMillis = src.timeMillis(h),
-            )
-        }
+        val history = if (includeHistory) src.historySize else 0
+        if (history == 0) return listOf(sampleOf(src, index, PointerEventSource.CURRENT))
+        val out = ArrayList<StylusSample>(history + 1)
+        for (h in 0 until history) out += sampleOf(src, index, h)
+        out += sampleOf(src, index, PointerEventSource.CURRENT)
+        return out
     }
+
+    private fun sampleOf(src: PointerEventSource, index: Int, h: Int) = StylusSample(
+        x = src.x(index, h),
+        y = src.y(index, h),
+        pressure = src.pressure(index, h).coerceIn(0f, 1f),
+        tiltRad = src.tilt(index, h),
+        orientationRad = src.orientation(index, h),
+        timeMillis = src.timeMillis(h),
+    )
 }

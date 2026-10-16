@@ -95,6 +95,46 @@ class AutosaverTest {
         assertTrue("commits=${store.commits.size}", store.commits.size >= 9_000 / Autosaver.DEFAULT_MAX_DELAY_MILLIS.toInt() - 1)
     }
 
+    @Test fun bigPagesAreSavedWithinTheByteBudget() = runTest {
+        // A 5k-stroke page encodes to ~30 MB: saving it every 2 s while writing churned tens of MB/s.
+        val store = RecordingStore()
+        val budget = 50L // bytes per second (tiny pages stand in for a 30 MB one)
+        val s = Autosaver(
+            initial(), store, backgroundScope,
+            cpu = StandardTestDispatcher(testScheduler),
+            saveBytesPerSecond = budget,
+            maxCooldownMillis = 60_000,
+            timeSource = testScheduler.timeSource,
+        )
+        val minute = 60_000
+        val bytes = (0 until minute / 300).minOf { InkChunkCodec.encode(strokes(it)).size }
+        repeat(minute / 300) {
+            s.updatePage("p1", strokes(it))
+            testScheduler.advanceTimeBy(300)
+        }
+        val unthrottled = minute / Autosaver.DEFAULT_MAX_DELAY_MILLIS.toInt()
+        val allowed = minute / (bytes * 1000 / budget).toInt() + 1
+        assertTrue("commits=${store.commits.size} allowed=$allowed", store.commits.size in 1..allowed)
+        assertTrue(allowed < unthrottled / 2)
+        // The newest content still reaches the disk on flush.
+        s.flush()
+        assertEquals(strokes(minute / 300 - 1), store.page("p1"))
+    }
+
+    @Test fun smallPagesKeepTheMaxDelay() = runTest {
+        val store = RecordingStore()
+        val s = Autosaver(
+            initial(), store, backgroundScope,
+            cpu = StandardTestDispatcher(testScheduler),
+            timeSource = testScheduler.timeSource,
+        )
+        repeat(30) {
+            s.updatePage("p1", strokes(it))
+            testScheduler.advanceTimeBy(300)
+        }
+        assertTrue("commits=${store.commits.size}", store.commits.size >= 9_000 / Autosaver.DEFAULT_MAX_DELAY_MILLIS.toInt() - 1)
+    }
+
     @Test fun onlyDirtyPagesAreRewritten() = runTest {
         val store = RecordingStore()
         val saved = mutableListOf<NotebookPackage>()
