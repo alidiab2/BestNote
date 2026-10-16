@@ -17,6 +17,7 @@ notebook.bnote
 ├── pages/
 │   ├── <pageId>.json        page metadata: size, template, background ref, layer list, element list
 │   └── <pageId>.ink         binary strokes for the page (our sample encoding + header, see below)
+├── extras/<name>.json       notebook-level records (format 5), e.g. smartboard.json
 ├── assets/
 │   ├── <sha256>.pdf         imported PDFs (stored once, referenced by pages)
 │   ├── <sha256>.webp        images
@@ -27,10 +28,11 @@ notebook.bnote
 On disk inside the app, a notebook lives **unpacked** as a directory with the same layout, which makes partial writes cheap. The `.bnote` zip is produced for export, share and backup.
 
 ## Versioning
-- `manifest.json` and every `pages/<id>.json` carry `"format": N` (current: **4**). Readers refuse versions newer than they know and offer "update the app".
+- `manifest.json` and every `pages/<id>.json` carry `"format": N` (current: **5**). Readers refuse versions newer than they know and offer "update the app".
 - Older versions are upgraded in memory on read by `FormatMigrations` (one step per version, on the JSON tree); the next save writes the current version.
 - v1 → v2: page metadata always states `paper` (v1 drafts could omit it, meaning White).
 - v3 → v4: the manifest may list `recordings` (MEDIA-04): `{id, title?, startedAtMillis, durationMillis}`; each one's audio is `assets/audio/<id>.m4a` (AAC, mono). Absent means none, so the step only stamps the version.
+- v4 → v5: the manifest may list `extras` (TPL-01): names of small notebook-level JSON records stored at `extras/<name>` (`[a-z0-9_-]{1,40}.json`), rewritten on every save. `smartboard.json` holds Smart Board's notebook glossary and, per insert, the template id, page ids and the page's notes in the compact element format (for follow-up photos). Absent means none, so the step only stamps the version.
 - Every migration ships as a test fixture (`core/storage/src/test/resources/fixtures/v<N>-notebook/`) with a test in `FormatMigrationTest`.
 
 ## Backup (DOC-08)

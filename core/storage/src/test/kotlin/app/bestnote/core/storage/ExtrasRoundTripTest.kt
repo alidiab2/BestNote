@@ -59,4 +59,13 @@ class ExtrasRoundTripTest {
         assertTrue(manifest.extras.isEmpty())
         assertEquals(BnoteFormat.VERSION, manifest.format)
     }
+
+    @Test fun `the v4 fixture reads with no extras and saves as v5`() {
+        fun entry(path: String) = javaClass.getResourceAsStream("/fixtures/v4-notebook/$path")?.readBytes()
+        val pkg = BnoteFormat.fromEntries(::entry)
+        assertTrue(pkg.extras.isEmpty())
+        assertEquals(2, pkg.pages.size)
+        val again = BnoteFormat.fromEntries(BnoteFormat.toEntries(pkg.withExtras(mapOf("smartboard.json" to "{}".encodeToByteArray())))::get)
+        assertEquals("{}", again.extras["smartboard.json"]!!.decodeToString())
+    }
 }

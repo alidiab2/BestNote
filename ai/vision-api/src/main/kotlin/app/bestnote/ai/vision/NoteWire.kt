@@ -132,7 +132,8 @@ object NoteWire {
             math = math,
             items = strings(o["items"]).map { AiDocumentParser.restoreText(it)!! },
             steps = (o["steps"] as? JsonArray).orEmpty().mapNotNull(::step),
-            rows = (o["rows"] as? JsonArray).orEmpty().mapNotNull { r -> (r as? JsonArray)?.map { c -> str(c)?.let { AiDocumentParser.restoreText(it) }.orEmpty() } },
+            // Cells hold symbols and units as written ("m/s^2"): control characters restored, no ASCII-maths rewriting.
+            rows = (o["rows"] as? JsonArray).orEmpty().mapNotNull { r -> (r as? JsonArray)?.map { c -> str(c)?.let { AiDocumentParser.restoreLatex(it) }.orEmpty() } },
             terms = (o["terms"] as? JsonArray)?.let(::terms).orEmpty(),
             target = num(o["target"])?.toInt(),
             number = num(o["n"])?.toInt(),

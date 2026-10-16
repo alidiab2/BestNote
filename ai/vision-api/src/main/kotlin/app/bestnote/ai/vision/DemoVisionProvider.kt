@@ -58,9 +58,15 @@ class DemoVisionProvider(private val latencyMs: Long = 900) : VisionProvider {
     companion object {
         /** What a second photo of the same board adds: one repeated element and a new section. */
         fun followUp(current: NoteDocument): NoteDocument {
-            val rtl = WritingScript.mostlyRtl(current.elements.joinToString(" ") { it.words() })
+            val script = WritingScript.dominant(current.elements.joinToString(" ") { it.words() })
             val repeat = current.elements.firstOrNull { it.element != NoteElement.Title }
-            val more = if (rtl) {
+            val more = if (script == WritingScript.Hebrew) {
+                listOf(
+                    NoteBlock(NoteElement.Heading, text = "תנועה בנפילה חופשית"),
+                    NoteBlock(NoteElement.NumberedFormula, math = "V_t = g t"),
+                    NoteBlock(NoteElement.StarNote, text = "התאוצה \\(g\\) זהה לכל הגופים"),
+                )
+            } else if (script == WritingScript.Arabic) {
                 listOf(
                     NoteBlock(NoteElement.Heading, text = "المشتقة الثانية (נגזרת שנייה)"),
                     NoteBlock(NoteElement.KeyResult, math = "f''(x) = (f'(x))'"),
@@ -69,7 +75,8 @@ class DemoVisionProvider(private val latencyMs: Long = 900) : VisionProvider {
             } else {
                 listOf(NoteBlock(NoteElement.Heading, text = "Second derivative"), NoteBlock(NoteElement.KeyResult, math = "f''(x) = (f'(x))'"))
             }
-            return NoteDocument(listOfNotNull(repeat) + more, listOf(GlossaryTerm("التقعر", "קעירות")))
+            val term = if (script == WritingScript.Hebrew) GlossaryTerm("נפילה חופשית", "free fall") else GlossaryTerm("التقعر", "קעירות")
+            return NoteDocument(listOfNotNull(repeat) + more, listOf(term))
         }
 
         /** A 30° slope with a block, its weight and the normal force. */
