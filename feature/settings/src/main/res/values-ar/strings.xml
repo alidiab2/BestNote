@@ -254,4 +254,15 @@
     <string name="settings_updates_never">لم يتم التحقق بعد</string>
     <string name="settings_updates_auto">التحقق تلقائيًا</string>
     <string name="settings_updates_auto_sub">يبحث عن إصدار جديد مرة في اليوم عند فتح BestNote.</string>
+    <string name="settings_ai_notes_group">الملاحظات</string>
+    <string name="settings_ai_notes_style">نمط الدفاتر الجديدة</string>
+    <string name="settings_ai_notes_style_sub">يتذكر كل دفتر آخر نمط استُخدم فيه لتبقى صفحاته متناسقة.</string>
+    <string name="settings_ai_notes_language">لغة الملاحظات</string>
+    <string name="settings_ai_notes_language_sub">مثل السبورة، أو ترجمة الملاحظات (تبقى الرياضيات كما هي).</string>
+    <string name="settings_ai_style_classic">كلاسيكي</string>
+    <string name="settings_ai_style_minimal">بسيط</string>
+    <string name="settings_ai_style_colorful">ملوّن</string>
+    <string name="settings_ai_style_cornell">كورنيل</string>
+    <string name="settings_ai_style_cheatsheet">ملخص مكثف</string>
+    <string name="settings_ai_language_board">مثل السبورة</string>
 </resources>

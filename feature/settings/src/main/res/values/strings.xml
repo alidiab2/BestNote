@@ -257,4 +257,15 @@
     <string name="settings_updates_never">Not checked yet</string>
     <string name="settings_updates_auto">Check automatically</string>
     <string name="settings_updates_auto_sub">Looks for a new version once a day when BestNote starts.</string>
+    <string name="settings_ai_notes_group">Notes</string>
+    <string name="settings_ai_notes_style">Style for new notebooks</string>
+    <string name="settings_ai_notes_style_sub">Each notebook remembers the style last used in it, so its pages stay consistent.</string>
+    <string name="settings_ai_notes_language">Notes language</string>
+    <string name="settings_ai_notes_language_sub">Same as the board, or translate the notes (maths stays as written).</string>
+    <string name="settings_ai_style_classic">Classic</string>
+    <string name="settings_ai_style_minimal">Minimal</string>
+    <string name="settings_ai_style_colorful">Colorful</string>
+    <string name="settings_ai_style_cornell">Cornell</string>
+    <string name="settings_ai_style_cheatsheet">Cheat sheet</string>
+    <string name="settings_ai_language_board">Same as the board</string>
 </resources>
