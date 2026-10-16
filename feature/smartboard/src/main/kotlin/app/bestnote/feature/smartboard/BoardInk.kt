@@ -10,6 +10,7 @@ import app.bestnote.core.model.PageBlock
 import app.bestnote.core.model.RectPt
 import app.bestnote.engine.handwriting.FontComposer
 import app.bestnote.engine.handwriting.HandwritingStyle
+import app.bestnote.engine.handwriting.StrokeHand
 import app.bestnote.engine.handwriting.TextMeasure
 import app.bestnote.engine.handwriting.TypesetPages
 import app.bestnote.engine.layout.StyleTemplate
@@ -68,7 +69,7 @@ class BoardToInk(private val newId: () -> String) {
             }
         }
         val placed = mapper.realise(ordered, flow.place(ordered.map { it.item }).map { it.placement })
-        return BoardInk(paper, composer.compose(placed), placed, mapped.dropped, rtl, mapped.dropReasons)
+        return BoardInk(paper, composer.compose(placed), placed, mapped.dropped, rtl, mapped.dropReasons + unknownLatex(doc))
     }
 
     /** The default output: the same notes typed with the handwriting fonts, in [style]'s colours, sizes and decorations. */
@@ -89,7 +90,7 @@ class BoardToInk(private val newId: () -> String) {
             }
         }
         val placed = mapper.realise(ordered, flow.place(ordered.map { it.item }).map { it.placement })
-        return BoardText(paper, style, composer.compose(placed), mapped.dropped, rtl, mapped.dropReasons)
+        return BoardText(paper, style, composer.compose(placed), mapped.dropped, rtl, mapped.dropReasons + unknownLatex(doc))
     }
 
     /** Right to left when most letters are Hebrew or Arabic (any mix of scripts, not just Arabic vs Latin). */
@@ -103,10 +104,37 @@ class BoardToInk(private val newId: () -> String) {
             doc.blocks.forEach { b -> b.text?.let(::append); b.items?.forEach(::append); b.title?.let(::append) }
         }
 
-        /** The stroke hand has Latin and Arabic letters only; anything else must be written with fonts. */
-        fun strokesCanWrite(doc: AiDocument): Boolean = textOf(doc).none { c ->
-            val sc = WritingScript.of(c)
-            sc != null && sc != WritingScript.Latin && sc != WritingScript.Arabic
+        /** Every piece of prose and every formula of [doc]. */
+        private fun pieces(doc: AiDocument): Pair<List<String>, List<String>> {
+            val prose = ArrayList<String>()
+            val tex = ArrayList<String>()
+            doc.title?.let(prose::add)
+            for (b in doc.blocks) {
+                listOfNotNull(b.text, b.title).forEach(prose::add)
+                b.items?.let(prose::addAll)
+                b.latex?.let(tex::add)
+                b.steps?.forEach { s -> listOfNotNull(s.text, s.because).forEach(prose::add); s.latex?.let(tex::add) }
+                b.diagram?.shapes?.forEach { sh -> sh.text?.let { if (sh.latex == true) tex += it else prose += it } }
+            }
+            return prose to tex
+        }
+
+        /**
+         * The stroke hand has Latin, Arabic and a set of maths symbols; a page with anything else
+         * (Hebrew, Cyrillic, a rare symbol) is written with the fonts, so nothing comes out as "?".
+         */
+        fun strokesCanWrite(doc: AiDocument): Boolean {
+            val (prose, tex) = pieces(doc)
+            return prose.all(StrokeHand::canWriteProse) && tex.all(StrokeHand::canWriteLatex)
+        }
+
+        /** One diagnostics line per LaTeX command written as its bare name ("\\dotsm" → "dotsm"). */
+        fun unknownLatex(doc: AiDocument): List<String> {
+            val (prose, tex) = pieces(doc)
+            val names = LinkedHashSet<String>()
+            prose.forEach { names += StrokeHand.unknownCommandsInProse(it) }
+            tex.forEach { names += StrokeHand.unknownCommands(it) }
+            return names.map { "unknown LaTeX command \\$it written as \"$it\"" }
         }
     }
 }

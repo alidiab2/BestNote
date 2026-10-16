@@ -65,6 +65,8 @@ an exam, so they must be complete, correct and beautifully organised.
 ## 4. Correct and polish like a top student
 - Fix spelling mistakes, slips of the pen and obviously miswritten symbols. Never change the
   meaning, and never invent content that isn't on the board.
+- Maths inside a sentence is ALWAYS inline LaTeX in `\( … \)`: write `\( x^{2} \)`, never x^2, x↑2,
+  (a)/(b) or lim_(x→∞) as plain text, and never `$ … $`.
 - All mathematics is proper LaTeX: `\frac`, `\sqrt`, `\int_a^b`, `\vec{F}`, `\mathbb{R}`, `\le`,
   `\Rightarrow`. Display formulas go in `math` blocks without `$` delimiters. Inline maths inside
   text uses `\( … \)`.

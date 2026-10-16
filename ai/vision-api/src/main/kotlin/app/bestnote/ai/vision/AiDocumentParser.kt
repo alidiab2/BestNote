@@ -186,12 +186,12 @@ object AiDocumentParser {
         ?.replace("\u000C", "\\f")?.replace("\b", "\\b")
         ?.replace(TAB_COMMAND) { "\\t" + it.groupValues[1] }
         ?.replace(NEWLINE_COMMAND) { "\\n" + it.groupValues[1] }
-        ?.let(::arrowScripts)
+        ?.let(AsciiMath::inline)
 
     /** "x↑30" or "e↑(x+1)" (a superscript written as an arrow) → "x^{30}", "e^{(x+1)}". */
     internal fun arrowScripts(s: String): String = if ('↑' !in s) s else ARROW_SCRIPT.replace(s) { "^{" + it.groupValues[1] + "}" }
 
-    private val ARROW_SCRIPT = Regex("↑\\s*(\\([^)]*\\)|\\{[^}]*\\}|[A-Za-z0-9.+\\-]+)")
+    private val ARROW_SCRIPT = Regex("↑\\s*(\\([^)]*\\)|\\{[^}]*\\}|[A-Za-z0-9.]+)")
     private val TAB_COMMAND = Regex("\t(heta|imes|au|ext|extbf|frac|ilde|o|op|riangle|herefore|an)(?![a-z])")
 
     private val NEWLINE_COMMAND = Regex("\n(abla|eq|u|ot|otin|e|ewline|leq|geq|ewcommand|i|exists|subset|mid|parallel|cong|sim|rightarrow|leftarrow|Rightarrow|Leftarrow)(?![a-z])")
@@ -259,7 +259,7 @@ object AiDocumentParser {
             level = int(o["level"]),
             title = restoreText(s("title", "term", "heading")),
             text = restoreText(s("text", "content", "body", "value", "caption")),
-            items = strings(o["items"] ?: o["bullets"] ?: o["points_list"]),
+            items = strings(o["items"] ?: o["bullets"] ?: o["points_list"])?.map { restoreText(it)!! },
             tone = s("tone"),
             latex = restoreLatex(s("latex", "equation", "formula", "math")),
             boxed = bool(o["boxed"]),

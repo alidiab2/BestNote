@@ -664,19 +664,33 @@ class FontComposer(
         }
     }
 
+    /**
+     * A short green arrow from the margin note to the FIRST line of the block it annotates (the note
+     * sits level with that line), ending just past where that line's writing stops — never into the
+     * middle of a long derivation.
+     */
     private fun marginArrow(sheet: Sheet, note: PageBlock.MarginNote, anchor: PageBlock) {
-        val a = boundsOf(sheet, anchor.id.value) ?: return
         val n = boundsOf(sheet, note.id.value) ?: return
-        val y = (a[1] + a[3]) / 2
+        val a = boundsOf(sheet, anchor.id.value) ?: return
+        // The anchor's first written line: runs within a line gap of its top.
+        val anchorRuns = sheet.runs.filter { it.block == anchor.id.value }
+        val firstBaseline = anchorRuns.minOfOrNull { it.baseline }
+        val firstLine = anchorRuns.filter { firstBaseline != null && it.baseline - firstBaseline < 0.6f * gap }
+        val noteRuns = sheet.runs.filter { it.block == note.id.value }
+        val noteBaseline = noteRuns.minOfOrNull { it.baseline } ?: (note.frame.top + gap)
+        val y = firstBaseline?.let { it - 0.3f * gap } ?: (a[1] + 0.5f * gap)
+        val fromY = noteBaseline - 0.3f * gap
         val color = colorOf(style.role(NoteRole.Margin))
         if (!pageRtl) {
-            val from = P(n[0] - 0.25f * gap, note.frame.top + 0.6f * gap)
-            val to = P(min(a[2] + 0.3f * gap, from.x - gap), y)
-            if (from.x - to.x > 0.6f * gap) sheet.shapes.curvedArrow(from, to, color, bend = -0.1f)
+            val end = firstLine.maxOfOrNull { it.left + it.width } ?: a[2]
+            val from = P(n[0] - 0.25f * gap, fromY)
+            val to = P(min(end + 0.3f * gap, from.x - gap), y)
+            if (from.x - to.x > 0.6f * gap) sheet.shapes.curvedArrow(from, to, color, bend = -0.08f)
         } else {
-            val from = P(n[2] + 0.25f * gap, note.frame.top + 0.6f * gap)
-            val to = P(max(a[0] - 0.3f * gap, from.x + gap), y)
-            if (to.x - from.x > 0.6f * gap) sheet.shapes.curvedArrow(from, to, color, bend = 0.1f)
+            val start = firstLine.minOfOrNull { it.left } ?: a[0]
+            val from = P(n[2] + 0.25f * gap, fromY)
+            val to = P(max(start - 0.3f * gap, from.x + gap), y)
+            if (to.x - from.x > 0.6f * gap) sheet.shapes.curvedArrow(from, to, color, bend = 0.08f)
         }
     }
 

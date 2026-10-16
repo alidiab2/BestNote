@@ -188,7 +188,7 @@ class RecordedAnswersTest {
         assertTrue(proof.steps[0].latex!!.startsWith("\\frac"))
         assertEquals(null, proof.steps[1].latex)
         assertTrue(proof.steps[2].latex!!, proof.steps[2].latex!!.contains("\\theta") && proof.steps[2].latex!!.contains("\\beta") && proof.steps[2].latex!!.contains("\\nabla"))
-        assertEquals("exp beats x^{30}", (built[2] as PageBlock.MarginNote).text)
+        assertEquals("exp beats \\( x^{30} \\)", (built[2] as PageBlock.MarginNote).text)
         val para = (built[3] as PageBlock.Paragraph).text
         assertTrue(para, para.contains("\\frac{1}{e^x}") && para.contains("\n"))
         assertTrue((built[4] as PageBlock.Math).latex.startsWith("\\rho"))

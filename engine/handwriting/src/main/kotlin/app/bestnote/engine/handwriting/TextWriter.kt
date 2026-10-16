@@ -86,7 +86,8 @@ internal class TextWriter(private val hand: Hand, private val ink: InkBuilder) {
         val first = if (script == Script.Cursive) GlyphData.cursive else GlyphData.print
         first.glyphs[ch]?.let { return first to it }
         val print = GlyphData.print
-        return print to (print.glyphs[ch] ?: print.glyphs.getValue('?'))
+        // Never a "?" for a missing letter: an empty slot (callers switch to the font writer first, see StrokeHand).
+        return print to (print.glyphs[ch] ?: print.glyphs[' '] ?: print.glyphs.getValue('?'))
     }
 
     /** Arabic em size for a Latin x-height scale: Ruqaa letters sit about 3.4 x-heights per em. */

@@ -367,7 +367,8 @@ class PageComposer(
     private fun marginArrow(pen: Pen, note: PageBlock.MarginNote, anchor: PageBlock) {
         val inkBounds = pen.ink.boundsOf(anchor.id.value) ?: return
         val noteBounds = pen.ink.boundsOf(note.id.value) ?: return
-        val y = (inkBounds[1] + inkBounds[3]) / 2
+        // Level with the anchor's first line, not the middle of a long block.
+        val y = min(inkBounds[1] + 0.55f * gap, (inkBounds[1] + inkBounds[3]) / 2)
         val color = roleColor(note, InkSemantic.Annotation)
         if (!rtl) {
             val from = P(noteBounds[0] - 0.25f * gap, note.frame.top + 0.55f * gap)

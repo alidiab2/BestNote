@@ -21,7 +21,14 @@ internal object MathParser {
     fun parse(latex: String): List<List<Node>> =
         latex.split("\\\\").map { Reader(it).group(untilBrace = false) }.filter { it.isNotEmpty() }
 
-    private class Reader(val s: String) {
+    /** Commands this parser does not know, in the order met; they are written as their bare name. */
+    fun unknownCommands(latex: String): Set<String> {
+        val out = LinkedHashSet<String>()
+        Reader(latex, out).group(untilBrace = false)
+        return out
+    }
+
+    private class Reader(val s: String, val unknown: MutableSet<String>? = null) {
         var i = 0
 
         fun group(untilBrace: Boolean): List<Node> {
@@ -126,18 +133,34 @@ internal object MathParser {
                     // "\lim_{x→0}": the limits attach to the name, not to the air after it.
                     if (i >= s.length || (s[i] != '_' && s[i] != '^')) out += Space(0.25f)
                 }
-                else -> out += Text(SYMBOLS[name] ?: name)
+                "limits", "nolimits", "displaylimits", "big", "Bigl", "Bigr", "bigl", "bigr", "middle" -> Unit
+                "binom", "dbinom", "tbinom" -> {
+                    val n = argument()
+                    val k = argument()
+                    out += Text("(")
+                    out += Frac(n, k)
+                    out += Text(")")
+                }
+                else -> {
+                    val symbol = SYMBOLS[name]
+                    if (symbol == null) unknown?.add(name)
+                    // Last resort: the bare name, never a backslash.
+                    out += Text(symbol ?: name)
+                }
             }
         }
     }
 
-    private val FUNCTIONS = setOf("sin", "cos", "tan", "cot", "sec", "csc", "log", "ln", "exp", "lim", "max", "min", "det")
+    private val FUNCTIONS = setOf(
+        "sin", "cos", "tan", "cot", "sec", "csc", "log", "ln", "exp", "lim", "max", "min", "det",
+        "sinh", "cosh", "arcsin", "arccos", "arctan", "sup", "inf", "gcd", "deg", "dim", "ker", "arg", "limsup", "liminf",
+    )
 
     private val SYMBOLS = mapOf(
-        "alpha" to "α", "beta" to "β", "gamma" to "γ", "delta" to "Δ", "Delta" to "Δ", "epsilon" to "ε", "varepsilon" to "ε",
+        "alpha" to "α", "beta" to "β", "gamma" to "γ", "delta" to "δ", "Delta" to "Δ", "epsilon" to "ε", "varepsilon" to "ε",
         "eta" to "η", "theta" to "θ", "vartheta" to "θ", "lambda" to "λ", "mu" to "μ", "pi" to "π", "rho" to "ρ",
         "sigma" to "σ", "tau" to "τ", "phi" to "φ", "varphi" to "φ", "omega" to "ω", "Sigma" to "Σ", "Pi" to "Π",
-        "Omega" to "Ω", "Phi" to "Φ", "Theta" to "θ", "Lambda" to "λ",
+        "Omega" to "Ω", "Phi" to "Φ", "Theta" to "Θ", "Lambda" to "Λ",
         "cdot" to "·", "times" to "×", "div" to "÷", "pm" to "±", "le" to "≤", "leq" to "≤", "ge" to "≥", "geq" to "≥",
         "neq" to "≠", "ne" to "≠", "approx" to "≈", "sim" to "≈", "infty" to "∞", "partial" to "∂", "int" to "∫",
         "sum" to "Σ", "prod" to "Π", "to" to "→", "rightarrow" to "→", "leftarrow" to "←", "Rightarrow" to "⇒",
@@ -146,6 +169,19 @@ internal object MathParser {
         "sin" to "sin", "cos" to "cos", "tan" to "tan", "log" to "log", "ln" to "ln", "exp" to "exp", "lim" to "lim",
         "max" to "max", "min" to "min", "det" to "det",
         "lbrace" to "{", "rbrace" to "}", "langle" to "<", "rangle" to ">", "mid" to "|", "vert" to "|",
+        // Dots in every flavour models use (\dotsm 1 was showing as "dotsm1").
+        "dotsm" to "…", "dotsc" to "…", "dotsb" to "…", "dotsi" to "…", "dotso" to "…", "vdots" to "⋮", "ddots" to "⋱",
+        "cdotp" to "·", "colon" to ":", "lvert" to "|", "rvert" to "|", "lVert" to "‖", "rVert" to "‖", "Vert" to "‖",
+        "nabla" to "∇", "forall" to "∀", "exists" to "∃", "subset" to "⊂", "subseteq" to "⊆", "supset" to "⊃",
+        "cup" to "∪", "cap" to "∩", "emptyset" to "∅", "varnothing" to "∅", "neg" to "¬", "land" to "∧", "wedge" to "∧",
+        "lor" to "∨", "vee" to "∨", "iff" to "⇔", "Leftrightarrow" to "⇔", "leftrightarrow" to "↔", "mapsto" to "↦",
+        "gets" to "←", "prime" to "′", "hbar" to "ℏ", "ell" to "ℓ", "notin" to "∉", "ni" to "∋", "equiv" to "≡",
+        "propto" to "∝", "cong" to "≅", "simeq" to "≃", "ll" to "≪", "gg" to "≫", "leqslant" to "≤", "geqslant" to "≥",
+        "zeta" to "ζ", "xi" to "ξ", "chi" to "χ", "psi" to "ψ", "kappa" to "κ", "iota" to "ι", "nu" to "ν", "upsilon" to "υ",
+        "Gamma" to "Γ", "Psi" to "Ψ", "Xi" to "Ξ", "varrho" to "ρ", "varsigma" to "ς", "star" to "⋆", "ast" to "∗",
+        "bullet" to "•", "oint" to "∮", "iint" to "∬", "coprod" to "∐", "bigcup" to "∪", "bigcap" to "∩",
+        "sinh" to "sinh", "cosh" to "cosh", "arcsin" to "arcsin", "arccos" to "arccos", "arctan" to "arctan",
+        "sup" to "sup", "inf" to "inf", "gcd" to "gcd", "deg" to "deg", "dim" to "dim", "ker" to "ker", "arg" to "arg",
     )
 }
 
@@ -275,7 +311,8 @@ internal class MathWriter(private val hand: Hand, private val text: TextWriter, 
 
 /** Inline maths inside prose (`\( … \)` or `$ … $`) flattened to what a hand writes on one line. */
 internal object InlineMath {
-    private val INLINE = Regex("""\\\((.+?)\\\)|\$(.+?)\$""")
+    /** `\( … \)`, `\[ … \]`, `$$ … $$` and `$ … $` (all seen in real answers). */
+    private val INLINE = Regex("""\\\((.+?)\\\)|\\\[(.+?)\\]|\$\$(.+?)\$\$|\$(.+?)\$""")
     private const val OPEN = '\uE000'
     private const val CLOSE = '\uE001'
     private val TOKEN = Regex("$OPEN(\\d+)$CLOSE")
@@ -286,7 +323,7 @@ internal object InlineMath {
      */
     fun encode(text: String, table: MutableList<String>): String =
         if (!text.contains('\\') && !text.contains('$')) text else INLINE.replace(text) { m ->
-            val tex = m.groupValues[1].ifEmpty { m.groupValues[2] }.trim()
+            val tex = m.groupValues.drop(1).firstOrNull { it.isNotEmpty() }.orEmpty().trim()
             var i = table.indexOf(tex)
             if (i < 0) {
                 table += tex
@@ -313,7 +350,7 @@ internal object InlineMath {
     fun stripTokens(word: String) = TOKEN.replace(word, "")
 
     fun flatten(text: String): String = if (!text.contains('\\') && !text.contains('$')) text else INLINE.replace(text) { m ->
-        val tex = m.groupValues[1].ifEmpty { m.groupValues[2] }
+        val tex = m.groupValues.drop(1).firstOrNull { it.isNotEmpty() }.orEmpty()
         MathParser.parse(tex).joinToString(" ") { flat(it) }
     }
 
