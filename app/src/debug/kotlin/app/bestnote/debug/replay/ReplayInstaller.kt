@@ -19,6 +19,10 @@
  * left/top  where the writing starts, in dp from the canvas' corner (default 16; 112 on the paged
  *        notebook, so the words land on the first page's writing lines)
  *
+ * Also: app.bestnote.debug.SEED (--es file, --ei cols, --ei rows) puts a corpus file's handwriting
+ * straight onto the current page as finished strokes, to build 5k-stroke pages in a second, and
+ * app.bestnote.debug.STATE --ez tiles false|true switches the CANVAS-06 tile cache for A/B checks.
+ *
  * Progress goes to files/replay/status ("running …" / "done …" / "error …") and logcat tag
  * BestNoteReplay. scripts/agent/replay.sh wraps all of this.
  */
