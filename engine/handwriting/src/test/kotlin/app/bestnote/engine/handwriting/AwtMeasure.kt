@@ -12,6 +12,7 @@ internal object AwtMeasure : TextMeasure {
         return when (f) {
             HandFont.Caveat -> File(root, "core/designsystem/src/main/res/font/caveat.ttf")
             HandFont.ArefRuqaa -> File(root, "core/designsystem/src/main/res/font/aref_ruqaa.ttf")
+            HandFont.GveretLevin -> File(root, "core/designsystem/src/main/res/font/gveret_levin.ttf")
             HandFont.System -> null
         }
     }
