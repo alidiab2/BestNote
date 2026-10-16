@@ -71,6 +71,27 @@ class PageElementsRoundTripTest {
         assertEquals(listOf<PageElement>(english), BnoteFormat.fromEntries { entries[it] }.pages[0].elements)
     }
 
+    @Test fun groupsAndOrderRoundTrip() {
+        val grouped = listOf(english.withGroup("g-1"), image.withGroup("g-1"), arabic) // order is the z-order, bottom to top
+        val entries = BnoteFormat.toEntries(pkg(grouped))
+        val back = BnoteFormat.fromEntries { entries[it] }.pages[0].elements
+        assertEquals(grouped, back)
+        assertEquals(listOf("g-1", "g-1", null), back.map { it.group })
+        assertEquals(listOf("el-3", "el-1", "el-2"), back.map { it.id })
+    }
+
+    @Test fun olderFilesWithoutGroupsStillRead() {
+        val entries = BnoteFormat.toEntries(pkg())
+        val back = BnoteFormat.fromEntries { entries[it] }
+        assertTrue(back.pages[0].elements.all { it.group == null })
+    }
+
+    @Test fun lockStatePersists() {
+        val entries = BnoteFormat.toEntries(pkg(listOf(image, english.withLocked(true))))
+        val back = BnoteFormat.fromEntries { entries[it] }.pages[0].elements
+        assertEquals(listOf(true, true), back.map { it.locked })
+    }
+
     @Test fun survivesTheDirectoryStoreAndPartialSaves() = runTest {
         val store = FileNotebookStore(tmp.root)
         store.write(pkg())

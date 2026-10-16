@@ -102,6 +102,8 @@ internal data class ElementJson(
     val list: String = "None",
     val numerals: String = "Latin",
     val lineSpacing: Float = TextElement.DEFAULT_LINE_SPACING,
+    /** Group id (CANVAS-14); absent for ungrouped elements and in older files. */
+    val group: String? = null,
 )
 
 /** One styled part of a text element: characters [s] until [e]. Flags are only ever "on" additions. */
@@ -238,13 +240,14 @@ object BnoteFormat {
     private fun elementJson(e: PageElement): ElementJson = when (e) {
         is ImageElement -> ElementJson(
             "image", e.id, e.cx, e.cy, e.width, e.height, e.rotation, e.locked,
-            asset = e.asset, srcW = e.srcWidth, srcH = e.srcHeight, crop = listOf(e.crop.left, e.crop.top, e.crop.right, e.crop.bottom),
+            asset = e.asset, srcW = e.srcWidth, srcH = e.srcHeight, crop = listOf(e.crop.left, e.crop.top, e.crop.right, e.crop.bottom), group = e.group,
         )
         is TextElement -> ElementJson(
             "text", e.id, e.cx, e.cy, e.width, e.height, e.rotation, e.locked,
             text = e.text, size = e.sizePt, color = e.colorArgb, bold = e.bold, italic = e.italic, align = e.align.name, font = e.font,
             underline = e.underline, strike = e.strike, list = e.list.name, numerals = e.numerals.name, lineSpacing = e.lineSpacing,
             runs = e.runs.map { RunJson(it.start, it.end, it.style.bold, it.style.italic, it.style.underline, it.style.strike, it.style.colorArgb, it.style.font, it.style.sizePt) },
+            group = e.group,
         )
     }
 
@@ -255,7 +258,7 @@ object BnoteFormat {
                 val asset = j.asset ?: return null
                 requireValidAssetPath(asset)
                 val c = j.crop?.takeIf { it.size == 4 }?.let { CropRect.sanitized(it[0], it[1], it[2], it[3]) } ?: CropRect()
-                ImageElement(j.id, j.cx, j.cy, j.w, j.h, asset, j.srcW, j.srcH, c, j.rot, j.locked)
+                ImageElement(j.id, j.cx, j.cy, j.w, j.h, asset, j.srcW, j.srcH, c, j.rot, j.locked, j.group)
             }
             "text" -> TextElement(
                 j.id, j.cx, j.cy, j.w, j.h, j.text.orEmpty(), j.size, j.color, j.bold, j.italic,
@@ -268,6 +271,7 @@ object BnoteFormat {
                 ListStyle.entries.firstOrNull { it.name == j.list } ?: ListStyle.None,
                 Numerals.entries.firstOrNull { it.name == j.numerals } ?: Numerals.Latin,
                 j.lineSpacing.coerceIn(TextElement.MIN_LINE_SPACING, TextElement.MAX_LINE_SPACING),
+                j.group,
             )
             else -> null
         }

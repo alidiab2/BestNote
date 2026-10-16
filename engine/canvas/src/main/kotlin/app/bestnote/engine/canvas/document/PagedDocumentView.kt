@@ -233,6 +233,12 @@ class PagedDocumentView(context: Context) : FrameLayout(context), InProgressStro
         val fillable: Int = 0,
         /** How many selected strokes have a fill. */
         val filled: Int = 0,
+        /** Two or more things are selected that are not yet one group (CANVAS-14). */
+        val canGroup: Boolean = false,
+        /** Something selected belongs to a group. */
+        val grouped: Boolean = false,
+        /** Only locked pictures or text are selected (a tap selected one so it can be unlocked, CANVAS-13). */
+        val onlyLocked: Boolean = false,
     )
 
     var selectionListener: SelectionListener?
@@ -323,6 +329,14 @@ class PagedDocumentView(context: Context) : FrameLayout(context), InProgressStro
 
     /** Draws every selected stroke with pen [type], keeping geometry, color and size setting. One undo step. */
     fun restyleSelection(type: PenType) = selection.restyle(type)
+
+    /** Groups the selection, so the lasso picks it up as one (CANVAS-14). One undo step. */
+    fun groupSelection() = selection.group()
+    fun ungroupSelection() = selection.ungroup()
+
+    /** Draws the selection above / below the rest of the page's things of its kind (CANVAS-14). One undo step. */
+    fun bringSelectionToFront() = selection.toFront()
+    fun sendSelectionToBack() = selection.toBack()
 
     /** Strokes loaded from disk: remembers each one's stored [brush] (and fill), as if drawn here. */
     fun adoptBrushes(brushes: Collection<Pair<Stroke, InkBrush>>) {

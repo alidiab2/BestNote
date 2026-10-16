@@ -8,6 +8,7 @@ package app.bestnote.core.model
  * @property size base brush size in page points.
  * @property family versioned brush-family key the stroke was drawn with (e.g. `fountain.v1`), so
  *   strokes keep rendering identically after brush tuning; null for strokes stored without one.
+ * @property group id shared by the strokes (and elements) grouped together on the page, or null (CANVAS-14).
  * @property fillArgb packed 0xAARRGGBB fill of the shape a closed stroke outlines (INK-11; alpha is the fill's opacity); null for none.
  */
 data class InkBrush(
@@ -18,6 +19,7 @@ data class InkBrush(
     val family: String? = null,
     val audio: AudioSync? = null,
     val fillArgb: Int? = null,
+    val group: String? = null,
 ) {
     init {
         require(tool.inks) { "$tool does not lay down ink" }

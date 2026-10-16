@@ -67,7 +67,7 @@ class InkChunkCodecTest {
     @Test fun headerHasMagicAndVersion() {
         val bytes = InkChunkCodec.encode(randomStrokes(3))
         assertEquals("BNIK", bytes.copyOfRange(0, 4).decodeToString())
-        assertEquals(InkChunkCodec.VERSION, (bytes[4].toInt() shl 8) or bytes[5].toInt())
+        assertEquals(4, (bytes[4].toInt() shl 8) or bytes[5].toInt()) // no grouped stroke: written as v4 (CANVAS-14)
     }
 
     @Test fun everyFlippedPayloadByteIsDetectedByCrc() {
@@ -133,6 +133,18 @@ class InkChunkCodecTest {
         assertEquals(0, back[2].brush.fillArgb)
         val v1 = randomStrokes(5, seed = 6).map { it.copy(brush = it.brush.copy(family = null, fillArgb = null)) }
         assertEquals(v1, InkChunkCodec.decode(encodeV1(v1)))
+    }
+
+    @Test fun groupsRoundTripAndUngroupedChunksStayReadableByV4Readers() {
+        val a = randomStrokes(3, seed = 11).map { it.copy(brush = it.brush.copy(group = null)) }
+        val grouped = listOf(a[0].copy(brush = a[0].brush.copy(group = "g-abc")), a[1], a[2].copy(brush = a[2].brush.copy(group = "g-abc")))
+        val bytes = InkChunkCodec.encode(grouped)
+        assertEquals(5, java.nio.ByteBuffer.wrap(bytes).getShort(4).toInt())
+        val back = InkChunkCodec.decode(bytes)
+        assertEquals(grouped, back)
+        assertEquals(listOf("g-abc", null, "g-abc"), back.map { it.brush.group })
+        // No grouped stroke: still the v4 layout, so apps from before CANVAS-14 open the notebook.
+        assertEquals(4, java.nio.ByteBuffer.wrap(InkChunkCodec.encode(a)).getShort(4).toInt())
     }
 
     /** The original v1 layout (no family key), as written by DOC-01 builds. */

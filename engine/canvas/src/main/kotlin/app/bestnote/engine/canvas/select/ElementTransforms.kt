@@ -74,5 +74,8 @@ object ElementTransforms {
         return poly.selects(xs, ys) || poly.contains(e.cx, e.cy)
     }
 
+    /** Does a lasso area pick [e] up? Locked elements ignore it: only a tap selects one (CANVAS-13). */
+    fun lassoPicks(poly: LassoPolygon, e: PageElement): Boolean = !e.locked && selectedBy(poly, e)
+
     private const val CORNER_VALUES = 8
 }

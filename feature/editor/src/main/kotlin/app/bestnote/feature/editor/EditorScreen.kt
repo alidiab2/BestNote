@@ -842,6 +842,10 @@ fun EditorScreen(
                     onTidy = tidier::tidy,
                     onFill = { view?.fillSelection(it) },
                     onPen = { view?.restyleSelection(it) },
+                    onGroup = { view?.groupSelection() },
+                    onUngroup = { view?.ungroupSelection() },
+                    onToFront = { view?.bringSelectionToFront() },
+                    onToBack = { view?.sendSelectionToBack() },
                 ),
             )
         }

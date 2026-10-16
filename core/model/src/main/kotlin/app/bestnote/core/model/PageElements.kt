@@ -49,6 +49,11 @@ sealed interface PageElement {
 
     fun withLocked(locked: Boolean): PageElement
 
+    /** Id shared by everything grouped together on the page (strokes and elements), or null when ungrouped (CANVAS-14). */
+    val group: String?
+
+    fun withGroup(group: String?): PageElement
+
     /** The same element under a new id (duplicate, paste). */
     fun withId(id: String): PageElement
 
@@ -75,6 +80,7 @@ data class ImageElement(
     val crop: CropRect = CropRect(),
     override val rotation: Float = 0f,
     override val locked: Boolean = false,
+    override val group: String? = null,
 ) : PageElement {
     init {
         require(width > 0f && height > 0f) { "Image frame must be positive" }
@@ -85,6 +91,7 @@ data class ImageElement(
         copy(cx = cx, cy = cy, width = width, height = height, rotation = rotation)
 
     override fun withLocked(locked: Boolean) = copy(locked = locked)
+    override fun withGroup(group: String?) = copy(group = group)
     override fun withId(id: String) = copy(id = id)
 
     /**
@@ -138,6 +145,7 @@ data class TextElement(
     val numerals: Numerals = Numerals.Latin,
     /** Line height as a multiple of the font size's natural line. */
     val lineSpacing: Float = DEFAULT_LINE_SPACING,
+    override val group: String? = null,
 ) : PageElement {
     init {
         require(width > 0f && height > 0f) { "Text frame must be positive" }
@@ -148,6 +156,7 @@ data class TextElement(
         copy(cx = cx, cy = cy, width = width, height = height, rotation = rotation)
 
     override fun withLocked(locked: Boolean) = copy(locked = locked)
+    override fun withGroup(group: String?) = copy(group = group)
     override fun withId(id: String) = copy(id = id)
 
     companion object {

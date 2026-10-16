@@ -25,6 +25,7 @@ import app.bestnote.engine.canvas.select.FillGeometry
 import app.bestnote.engine.canvas.select.InkClipboard
 import app.bestnote.engine.canvas.select.PenType
 import app.bestnote.engine.canvas.select.LassoPolygon
+import app.bestnote.engine.canvas.select.ObjectOrder
 import app.bestnote.engine.canvas.select.PastePlacement
 import app.bestnote.engine.canvas.select.SpatialGrid
 import app.bestnote.engine.canvas.select.StrokeEdits
@@ -278,7 +279,13 @@ internal class SelectionLayer(
             // A tap on a text box or picture selects it.
             val hit = d.page.elements.lastOrNull { ElementTransforms.contains(it, d.xs[0], d.ys[0]) }
             if (hit != null) {
-                select(d.page, emptyList(), listOf(hit))
+                // A locked picture is selected alone (so it can be unlocked); otherwise its group comes with it.
+                if (hit.locked) {
+                    select(d.page, emptyList(), listOf(hit))
+                } else {
+                    val (strokes, elements) = withGroupMates(d.page, emptyList(), listOf(hit))
+                    select(d.page, strokes, elements)
+                }
                 return invalidate()
             }
             // Otherwise nothing to select. With ink on the clipboard, offer Paste right here.
@@ -292,8 +299,14 @@ internal class SelectionLayer(
             val o = outlines.of(s)
             poly.selects(o.xs, o.ys)
         }
-        val chosenElements = d.page.elements.filter { ElementTransforms.selectedBy(poly, it) }
-        if (chosen.isNotEmpty() || chosenElements.isNotEmpty()) select(d.page, chosen, chosenElements) else notifyMenu()
+        // Locked pictures and text ignore the lasso: only a tap on one selects it.
+        val chosenElements = d.page.elements.filter { ElementTransforms.lassoPicks(poly, it) }
+        if (chosen.isNotEmpty() || chosenElements.isNotEmpty()) {
+            val (strokes, elements) = withGroupMates(d.page, chosen, chosenElements)
+            select(d.page, strokes, elements)
+        } else {
+            notifyMenu()
+        }
         invalidate()
     }
 
@@ -369,8 +382,9 @@ internal class SelectionLayer(
         val index = indexOf(sel.page)
         if (index < 0) return
         val m = Affine.translate(PastePlacement.DUPLICATE_OFFSET, PastePlacement.DUPLICATE_OFFSET)
-        val copies = sel.strokes.map { s -> StrokeEdits.transformed(s, m).also { n -> brushes.derive(n, s) { it } } }
-        val shapes = sel.elements.map { it.withId(PageElement.newId()).placed(cx = it.cx + PastePlacement.DUPLICATE_OFFSET, cy = it.cy + PastePlacement.DUPLICATE_OFFSET) }
+        val groups = ObjectOrder.Regrouper()
+        val copies = sel.strokes.map { s -> StrokeEdits.transformed(s, m).also { n -> brushes.derive(n, s) { it.copy(group = groups.of(it.group)) } } }
+        val shapes = sel.elements.map { it.withId(PageElement.newId()).withGroup(groups.of(it.group)).placed(cx = it.cx + PastePlacement.DUPLICATE_OFFSET, cy = it.cy + PastePlacement.DUPLICATE_OFFSET) }
         edit { document?.editContent(index, addedStrokes = copies, elements = sel.page.elements + shapes) }
         select(sel.page, copies, shapes)
     }
@@ -386,14 +400,84 @@ internal class SelectionLayer(
         if (index < 0) return false
         val (dx, dy) = PastePlacement.offset(box, x, y, page.page.widthPt, page.page.heightPt)
         val m = Affine.translate(dx, dy)
+        val groups = ObjectOrder.Regrouper()
         val pasted = InkClipboard.items.map { item ->
-            StrokeEdits.transformed(item.stroke, m).also { n -> item.brush?.let { brushes.put(n, it) } }
+            StrokeEdits.transformed(item.stroke, m).also { n -> item.brush?.let { brushes.put(n, it.copy(group = groups.of(it.group))) } }
         }
         pasteOffer = null
-        val shapes = InkClipboard.elements.map { it.withId(PageElement.newId()).placed(cx = it.cx + dx, cy = it.cy + dy) }
+        val shapes = InkClipboard.elements.map { it.withId(PageElement.newId()).withGroup(groups.of(it.group)).placed(cx = it.cx + dx, cy = it.cy + dy) }
         edit { doc.editContent(index, addedStrokes = pasted, elements = page.elements + shapes) }
         select(page, pasted, shapes)
         return true
+    }
+
+    /** The stored group of [stroke], or null. */
+    private fun groupOf(stroke: Stroke): String? = brushes.brushOf(stroke)?.group
+
+    /** [strokes] and [elements] plus everything on [page] grouped with them (never a locked element). */
+    private fun withGroupMates(page: DocumentPage, strokes: List<Stroke>, elements: List<PageElement>): Pair<List<Stroke>, List<PageElement>> {
+        val groups = strokes.mapNotNullTo(HashSet(), ::groupOf) + elements.mapNotNull { it.group }
+        if (groups.isEmpty()) return strokes to elements
+        return ObjectOrder.withGroupMates(strokes, page.strokes, ::groupOf) to
+            ObjectOrder.withGroupMates(elements, page.elements, { it.group }, { !it.locked })
+    }
+
+    /** Can the selection be grouped (two or more things, not already exactly one group)? */
+    private fun canGroup(sel: Selected): Boolean {
+        if (sel.strokes.size + sel.elements.size < 2 || sel.elements.any { it.locked }) return false
+        val ids = sel.strokes.map(::groupOf) + sel.elements.map { it.group }
+        return ids.any { it == null } || ids.toSet().size > 1
+    }
+
+    private fun isGrouped(sel: Selected) = sel.strokes.any { groupOf(it) != null } || sel.elements.any { it.group != null }
+
+    /** Gives every selected thing the same group id, so the lasso picks them up together. One undo step. */
+    fun group() {
+        val sel = selection?.takeIf(::canGroup) ?: return
+        setGroup(sel, ObjectOrder.newGroupId())
+    }
+
+    /** Takes every selected thing out of its group. One undo step. */
+    fun ungroup() {
+        val sel = selection?.takeIf(::isGrouped) ?: return
+        setGroup(sel, null)
+    }
+
+    private fun setGroup(sel: Selected, id: String?) {
+        replace(sel, { s ->
+            if (groupOf(s) == id) s else StrokeEdits.refilled(s).also { n -> brushes.put(n, brushFor(s).copy(group = id)) }
+        }) { e -> if (e.group == id) e else e.withGroup(id) }
+        notifyMenu()
+    }
+
+    /** Draws the selection above everything else of its kind on the page (strokes among strokes, pictures among pictures). One undo step. */
+    fun toFront() = restack(toFront = true)
+
+    /** Draws the selection below everything else of its kind on the page. One undo step. */
+    fun toBack() = restack(toFront = false)
+
+    private fun restack(toFront: Boolean) {
+        val sel = selection ?: return
+        val index = indexOf(sel.page)
+        val doc = document ?: return
+        if (index < 0 || sel.elements.any { it.locked }) return
+        val moveStrokes = ObjectOrder.wouldMove(sel.page.strokes, sel.strokes, toFront)
+        val moveElements = ObjectOrder.wouldMove(sel.page.elements, sel.elements, toFront)
+        if (!moveStrokes && !moveElements) return
+        val picked = identitySet(sel.strokes)
+        val copies = LinkedHashMap<Stroke, Stroke>()
+        if (moveStrokes) for (s in sel.page.strokes) if (s in picked) copies[s] = StrokeEdits.refilled(s).also { n -> brushes.derive(n, s) { it } }
+        val elements = if (moveElements) ObjectOrder.reordered(sel.page.elements, sel.elements, toFront) else sel.page.elements
+        edit {
+            doc.asOneStep {
+                if (copies.isNotEmpty()) doc.restackStrokes(index, copies, toFront)
+                if (moveElements) doc.replaceElements(index, elements)
+            }
+        }
+        val strokes = sel.strokes.map { copies[it] ?: it }
+        selection = Selected(sel.page, strokes, sel.elements, boxOf(strokes, sel.elements) ?: sel.box)
+        notifyMenu()
+        invalidate()
     }
 
     fun recolor(colorArgb: Int) {
@@ -561,6 +645,9 @@ internal class SelectionLayer(
                     strokes = sel.strokes.size, element = singleElement, texts = sel.elements.count { it is TextElement },
                     fillable = sel.strokes.count { isClosed(it) },
                     filled = sel.strokes.count { StrokeFills.of(it) != null },
+                    canGroup = canGroup(sel),
+                    grouped = isGrouped(sel),
+                    onlyLocked = sel.strokes.isEmpty() && sel.elements.all { it.locked },
                 ),
             )
         }

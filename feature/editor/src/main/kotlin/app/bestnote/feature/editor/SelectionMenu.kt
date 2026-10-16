@@ -61,9 +61,14 @@ internal class SelectionActions(
     val onFill: (Int?) -> Unit = {},
     /** CANVAS-10: draw the selected strokes with another pen. */
     val onPen: (PenType) -> Unit = {},
+    /** CANVAS-14: group / ungroup the selection, and restack it. */
+    val onGroup: () -> Unit = {},
+    val onUngroup: () -> Unit = {},
+    val onToFront: () -> Unit = {},
+    val onToBack: () -> Unit = {},
 )
 
-private enum class MenuPanel { Main, Fill, Pen }
+private enum class MenuPanel { Main, Fill, Pen, Arrange }
 
 /** Opacity steps the Fill panel offers (INK-11). */
 private val FILL_OPACITIES = listOf(0.25f, 0.5f, 1f)
@@ -146,7 +151,22 @@ internal fun SelectionMenu(
                     PenType.entries.forEach { type -> MenuText(stringResource(type.label()), onClick = { actions.onPen(type) }) }
                     return@Row
                 }
+                if (panel == MenuPanel.Arrange) {
+                    MenuText(stringResource(R.string.selection_back), onClick = { panel = MenuPanel.Main })
+                    MenuText(stringResource(R.string.selection_to_front), onClick = actions.onToFront)
+                    MenuText(stringResource(R.string.selection_to_back), onClick = actions.onToBack)
+                    MenuDivider()
+                    if (menu.canGroup) MenuText(stringResource(R.string.selection_group), onClick = actions.onGroup)
+                    if (menu.grouped) MenuText(stringResource(R.string.selection_ungroup), onClick = actions.onUngroup)
+                    return@Row
+                }
                 val element = menu.element
+                if (menu.onlyLocked && element != null) {
+                    // A locked picture can only be unlocked (or copied): it ignores everything else until then.
+                    MenuText(stringResource(R.string.selection_unlock), onClick = actions.onToggleLock)
+                    MenuText(stringResource(R.string.selection_copy), onClick = actions.onCopy)
+                    return@Row
+                }
                 if (menu.strokes > 0 || menu.texts > 0) {
                     colors.forEach { c -> RecolorDot(Color(c), onClick = { actions.onColor(c) }) }
                     MenuDivider()
@@ -176,6 +196,8 @@ internal fun SelectionMenu(
                     )
                     MenuDivider()
                 }
+                MenuText(stringResource(R.string.selection_arrange), onClick = { panel = MenuPanel.Arrange })
+                MenuDivider()
                 MenuText(stringResource(R.string.selection_cut), onClick = actions.onCut)
                 MenuText(stringResource(R.string.selection_copy), onClick = actions.onCopy)
                 MenuText(stringResource(R.string.selection_duplicate), onClick = actions.onDuplicate)
