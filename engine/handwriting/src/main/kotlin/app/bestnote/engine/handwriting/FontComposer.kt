@@ -66,26 +66,26 @@ class TypesetPages(val pages: List<TypesetPage>) {
  * real maths (fractions, scripts, roots) made of small text runs and pen strokes.
  */
 class FontComposer(
-    private val paper: RuledPaper,
-    private val style: StyleTemplate,
-    private val measure: TextMeasure,
+    internal val paper: RuledPaper,
+    internal val style: StyleTemplate,
+    internal val measure: TextMeasure,
     /** The page's direction (margin side, maths alignment); each text block also follows its own first letter. */
-    private val pageRtl: Boolean = false,
-    private val penColor: Int = INK,
-    private val seed: Long = 20_261_016L,
+    internal val pageRtl: Boolean = false,
+    internal val penColor: Int = INK,
+    internal val seed: Long = 20_261_016L,
 ) {
-    private val gap = paper.lineGap
+    internal val gap = paper.lineGap
 
     /** Direction of the block being laid out: its own first strong letter, else the page's. */
-    private var rtl = pageRtl
+    internal var rtl = pageRtl
 
     /** Script for words the page adds when a block has none of its own (maths-only proofs). */
-    private val pageScript = if (pageRtl) WritingScript.Arabic else WritingScript.Latin
+    internal val pageScript = if (pageRtl) WritingScript.Arabic else WritingScript.Latin
 
     /** Script of the block being laid out, for the words a student adds ("Definition:", "Solution:"). */
-    private var script = WritingScript.Latin
+    internal var script = WritingScript.Latin
 
-    private fun textOf(b: PageBlock): String = when (b) {
+    internal fun textOf(b: PageBlock): String = when (b) {
         is PageBlock.Heading -> b.text
         is PageBlock.Paragraph -> b.text
         is PageBlock.Bullets -> b.items.joinToString(" ")
@@ -100,21 +100,21 @@ class FontComposer(
      * letters are, or the page is (a Hebrew sentence that starts with an English term stays a Hebrew
      * line); left to right when it has none; the page's direction when it has no letters (maths).
      */
-    private fun directionOf(b: PageBlock): Boolean {
+    internal fun directionOf(b: PageBlock): Boolean {
         val text = textOf(b)
         if (text.none(Char::isLetter)) return pageRtl
         if (!WritingScript.hasRtl(text)) return false
         return pageRtl || WritingScript.mostlyRtl(text)
     }
-    private val body = gap * style.bodyScale
-    private val inlineTex = ArrayList<String>()
+    internal val body = gap * style.bodyScale
+    internal val inlineTex = ArrayList<String>()
 
-    private fun hand(page: Int) = Hand(Rand(seed * 31 + page), xh = gap * 0.3f, unitsPerMm = PageComposer.UNITS_PER_MM, jitter = 0.35f)
+    internal fun hand(page: Int) = Hand(Rand(seed * 31 + page), xh = gap * 0.3f, unitsPerMm = PageComposer.UNITS_PER_MM, jitter = 0.35f)
 
     /** Collects one page's output. */
-    private inner class Sheet(page: Int) {
+    internal inner class Sheet(page: Int) {
         val runs = ArrayList<TypeRun>()
-        private val h = hand(page)
+        internal val h = hand(page)
         val ink = InkBuilder(h, PenChoice(colorArgb = penColor))
         val shapes = ShapeWriter(h, ink)
         val marks = ArrayList<InkStroke>() // highlighter strokes, drawn under the text
@@ -131,9 +131,9 @@ class FontComposer(
         }
     }
 
-    private class Row(val lines: Int, val blank: Boolean = false, val draw: Sheet.(left: Float, right: Float, baseline: Float) -> Unit)
+    internal class Row(val lines: Int, val blank: Boolean = false, val draw: Sheet.(left: Float, right: Float, baseline: Float) -> Unit)
 
-    private fun blankRow() = Row(1, blank = true) { _, _, _ -> }
+    internal fun blankRow() = Row(1, blank = true) { _, _, _ -> }
 
     // ------------------------------------------------------------------ public
 
@@ -168,13 +168,13 @@ class FontComposer(
 
     // ------------------------------------------------------------------ roles
 
-    private fun colorOf(r: RoleStyle): Int = r.color?.toInt() ?: penColor
+    internal fun colorOf(r: RoleStyle): Int = r.color?.toInt() ?: penColor
 
-    private fun sizeOf(r: RoleStyle) = body * r.scale
+    internal fun sizeOf(r: RoleStyle) = body * r.scale
 
-    private fun usable(width: Float) = width * 0.97f
+    internal fun usable(width: Float) = width * 0.97f
 
-    private fun rows(b: PageBlock, width: Float): List<Row> {
+    internal fun rows(b: PageBlock, width: Float): List<Row> {
         rtl = directionOf(b)
         script = WritingScript.dominant(textOf(b)).takeIf { textOf(b).any(Char::isLetter) } ?: if (pageRtl) pageScript else WritingScript.Latin
         val role = style.role(NoteRole.of(b))
@@ -193,38 +193,38 @@ class FontComposer(
     }
 
     /** The font for a run by its script: Arabic → the Arabic hand, Hebrew → the Hebrew hand, everything else → the Latin hand. */
-    private fun fontFor(text: String): HandFont = when (WritingScript.dominant(text)) {
+    internal fun fontFor(text: String): HandFont = when (WritingScript.dominant(text)) {
         WritingScript.Arabic -> style.arabicFont
         WritingScript.Hebrew -> style.hebrewFont
         else -> style.latinFont
     }
 
-    private fun isRtlText(text: String) = WritingScript.mostlyRtl(text)
+    internal fun isRtlText(text: String) = WritingScript.mostlyRtl(text)
 
     /**
      * The device font (Hebrew) is much larger than the handwriting fonts at the same point size, so it is
      * written smaller to match their letter height.
      */
-    private fun scaleOf(font: HandFont) = if (font == HandFont.System) SYSTEM_SCALE else 1f
+    internal fun scaleOf(font: HandFont) = if (font == HandFont.System) SYSTEM_SCALE else 1f
 
     /** Width of [text] in [font] as it will be written (the font's size scale applied). */
-    private fun widthOf(text: String, font: HandFont, size: Float) = measure.width(text, font, size * scaleOf(font))
+    internal fun widthOf(text: String, font: HandFont, size: Float) = measure.width(text, font, size * scaleOf(font))
 
     /** Lines a row of text at [size] needs: its ascent must fit under the line above. */
-    private fun linesForSize(size: Float, font: HandFont = style.latinFont) =
+    internal fun linesForSize(size: Float, font: HandFont = style.latinFont) =
         max(1, ceil((measure.ascent(font) * size * 0.82f) / gap - 0.02f).toInt())
 
     // ------------------------------------------------------------------ text lines
 
     /** A word (or an inline maths token) and its width at a size. */
-    private fun wordWidth(word: String, size: Float): Float =
+    internal fun wordWidth(word: String, size: Float): Float =
         InlineMath.segments(word).sumOf { (token, part) ->
             (if (token != null) mathBox(token, size).width else if (part.isEmpty()) 0f else widthOf(part, fontFor(part), size)).toDouble()
         }.toFloat()
 
-    private fun space(size: Float) = widthOf(" ", style.latinFont, size).coerceAtLeast(size * 0.22f)
+    internal fun space(size: Float) = widthOf(" ", style.latinFont, size).coerceAtLeast(size * 0.22f)
 
-    private fun wrap(text: String, width: Float, size: Float, firstIndent: Float = 0f): List<String> {
+    internal fun wrap(text: String, width: Float, size: Float, firstIndent: Float = 0f): List<String> {
         val lines = ArrayList<String>()
         val cur = ArrayList<String>()
         var curW = 0f
@@ -244,7 +244,7 @@ class FontComposer(
         return lines
     }
 
-    private fun textRows(
+    internal fun textRows(
         content: String,
         width: Float,
         size: Float,
@@ -256,16 +256,36 @@ class FontComposer(
         val encoded = InlineMath.encode(content, inlineTex)
         val lines = wrap(encoded, usable(width) - indent, size, firstIndent)
         val n = linesForSize(size, fontFor(content))
-        return lines.mapIndexed { i, line ->
-            Row(n) { left, right, baseline ->
+        return lines.flatMapIndexed { i, line ->
+            // A tall inline atom (e^{x^2}, a subscript under a superscript) gets the lines it needs.
+            val (above, below) = inlineExtent(line, size)
+            val row = Row(max(n, above)) { left, right, baseline ->
                 val off = indent + if (i == 0) firstIndent else 0f
                 val (x0, x1) = writeLine(this, line, left, right, off, baseline, size, color)
                 decorate(this, decoration, x0, x1, baseline, size, color)
             }
+            if (below) listOf(row, blankRow()) else listOf(row)
         }
     }
 
-    private fun decorate(sheet: Sheet, d: Decoration, x0: Float, x1: Float, baseline: Float, size: Float, color: Int) {
+    /**
+     * Lines an encoded text line needs for its inline maths (ascent under the line above), and whether
+     * its descent would reach the next line's writing (then a blank line follows), so nothing overlaps.
+     */
+    internal fun inlineExtent(line: String, size: Float): Pair<Int, Boolean> {
+        if (!InlineMath.hasToken(line)) return 1 to false
+        var asc = 0f
+        var desc = 0f
+        for (word in line.split(' ')) for ((token, _) in InlineMath.segments(word)) {
+            if (token == null) continue
+            val b = mathBox(token, size)
+            asc = max(asc, b.ascent)
+            desc = max(desc, b.descent)
+        }
+        return max(1, ceil((asc + 0.12f * gap) / gap - 0.02f).toInt()) to (desc > INLINE_DESCENT * gap)
+    }
+
+    internal fun decorate(sheet: Sheet, d: Decoration, x0: Float, x1: Float, baseline: Float, size: Float, color: Int) {
         val lo = min(x0, x1)
         val hi = max(x0, x1)
         when (d) {
@@ -284,7 +304,7 @@ class FontComposer(
      * Writes one line from the column's start ([left] for LTR, [right] for RTL) plus [indent].
      * @return the x range the writing covers.
      */
-    private fun writeLine(sheet: Sheet, line: String, left: Float, right: Float, indent: Float, baseline: Float, size: Float, color: Int): Pair<Float, Float> {
+    internal fun writeLine(sheet: Sheet, line: String, left: Float, right: Float, indent: Float, baseline: Float, size: Float, color: Int): Pair<Float, Float> {
         val words = line.split(' ').filter { it.isNotEmpty() }
         if (words.isEmpty()) return left to left
         val sp = space(size)
@@ -322,9 +342,9 @@ class FontComposer(
         return if (rtl) x to start else start to x
     }
 
-    private fun pieceWidth(piece: String, size: Float) = if (InlineMath.hasToken(piece)) wordWidth(piece, size) else widthOf(piece, fontFor(piece), size)
+    internal fun pieceWidth(piece: String, size: Float) = if (InlineMath.hasToken(piece)) wordWidth(piece, size) else widthOf(piece, fontFor(piece), size)
 
-    private fun writePiece(sheet: Sheet, piece: String, left: Float, baseline: Float, width: Float, size: Float, color: Int, rtl: Boolean) {
+    internal fun writePiece(sheet: Sheet, piece: String, left: Float, baseline: Float, width: Float, size: Float, color: Int, rtl: Boolean) {
         if (!InlineMath.hasToken(piece)) {
             sheet.text(piece, left, baseline, width, size, color, fontFor(piece), rtl || isRtlText(piece))
             return
@@ -343,16 +363,16 @@ class FontComposer(
         }
     }
 
-    private fun bulletRows(item: String, marker: String, width: Float, color: Int): List<Row> {
-        val indent = widthOf("$marker ", style.latinFont, body) + 0.3f * body
+    internal fun bulletRows(item: String, marker: String, width: Float, color: Int): List<Row> {
+        val indent = widthOf("$marker ", fontFor(marker), body) + 0.3f * body
         val rows = textRows(item, width, body, color, indent = indent)
         if (rows.isEmpty()) return rows
         val first = rows[0]
         return listOf(
             Row(first.lines) { left, right, baseline ->
-                val mw = widthOf(marker, style.latinFont, body)
+                val mw = widthOf(marker, fontFor(marker), body)
                 val x = if (rtl) right - 0.15f * body - mw else left + 0.15f * body
-                text(marker, x, baseline, mw, body, color, style.latinFont, false)
+                text(marker, x, baseline, mw, body, color, fontFor(marker), false)
                 first.draw(this, left, right, baseline)
             },
         ) + rows.drop(1)
@@ -360,7 +380,7 @@ class FontComposer(
 
     // ------------------------------------------------------------------ callouts, proofs
 
-    private fun label(tone: CalloutTone): String = when (script) {
+    internal fun label(tone: CalloutTone): String = when (script) {
         WritingScript.Hebrew -> when (tone) {
             CalloutTone.Definition -> "הגדרה"
             CalloutTone.Theorem -> "משפט"
@@ -390,13 +410,13 @@ class FontComposer(
         }
     }
 
-    private fun solutionWord() = when (script) {
+    internal fun solutionWord() = when (script) {
         WritingScript.Hebrew -> "פתרון"
         WritingScript.Arabic -> "الحل"
         else -> "Solution"
     }
 
-    private fun calloutRows(b: PageBlock.Callout, role: RoleStyle, width: Float): List<Row> {
+    internal fun calloutRows(b: PageBlock.Callout, role: RoleStyle, width: Float): List<Row> {
         val color = colorOf(role)
         val text = (b.title ?: label(b.tone)).trimEnd(':', '：') + ":"
         val labelW = wordWidth(InlineMath.encode(text, inlineTex), body).let { widthOf(text, fontFor(text), body).coerceAtLeast(it) }
@@ -411,7 +431,7 @@ class FontComposer(
         return if (fitsAfter) listOf(labelRow) + bodyRows.drop(1) else listOf(labelRow) + bodyRows
     }
 
-    private fun proofRows(b: PageBlock.Proof, width: Float): List<Row> {
+    internal fun proofRows(b: PageBlock.Proof, width: Float): List<Row> {
         val head = style.role(NoteRole.Subheading)
         val stepRole = style.role(NoteRole.Step)
         val note = style.role(NoteRole.Margin)
@@ -448,11 +468,11 @@ class FontComposer(
 
     // ------------------------------------------------------------------ display maths
 
-    private fun displaySize() = body * DISPLAY_SCALE
+    internal fun displaySize() = body * DISPLAY_SCALE
 
-    private fun displayWidth(tex: String) = MathParser.parse(tex).maxOfOrNull { layout(it, displaySize()).width } ?: 0f
+    internal fun displayWidth(tex: String) = MathParser.parse(tex).maxOfOrNull { layout(it, displaySize()).width } ?: 0f
 
-    private fun mathRows(latex: String, width: Float, color: Int, boxed: Boolean, indent: Float = 1.2f * gap): List<Row> {
+    internal fun mathRows(latex: String, width: Float, color: Int, boxed: Boolean, indent: Float = 1.2f * gap): List<Row> {
         val parsed = MathParser.parse(latex)
         val pad = if (boxed) 0.45f * gap else 0f
         val avail = usable(width) - indent - 2 * pad
@@ -487,9 +507,9 @@ class FontComposer(
     // ------------------------------------------------------------------ maths layout (font)
 
     /** A laid-out piece of maths: its size and how to draw it from a pen position on a baseline. */
-    private class MBox(val width: Float, val ascent: Float, val descent: Float, val draw: Sheet.(x: Float, baseline: Float, color: Int) -> Unit)
+    internal class MBox(val width: Float, val ascent: Float, val descent: Float, val draw: Sheet.(x: Float, baseline: Float, color: Int) -> Unit)
 
-    private fun mathBox(token: Int, size: Float): MBox {
+    internal fun mathBox(token: Int, size: Float): MBox {
         val nodes = MathParser.parse(inlineTex.getOrElse(token) { "" }).flatten()
         val b = layout(nodes, size)
         // Inline maths may not hit the lines above and below: shrink tall fractions.
@@ -497,11 +517,11 @@ class FontComposer(
         return if (fit < 0.98f) layout(nodes, size * max(0.6f, fit)) else b
     }
 
-    private val mathFont get() = style.latinFont
+    internal val mathFont get() = style.latinFont
 
-    private fun isOp(n: MathParser.Node) = n is MathParser.Text && n.s.length == 1 && n.s[0] in "=+−-×·<>≤≥≈≠⇒→±÷"
+    internal fun isOp(n: MathParser.Node) = n is MathParser.Text && n.s.length == 1 && n.s[0] in "=+−-×·<>≤≥≈≠⇒→±÷"
 
-    private fun layout(nodes: List<MathParser.Node>, size: Float): MBox {
+    internal fun layout(nodes: List<MathParser.Node>, size: Float): MBox {
         // Consecutive plain symbols become one text run ("x + y = 2"), with air around operators.
         val parts = ArrayList<MBox>()
         val run = StringBuilder()
@@ -544,7 +564,7 @@ class FontComposer(
         }
     }
 
-    private fun textBox(t: String, size: Float): MBox {
+    internal fun textBox(t: String, size: Float): MBox {
         val text = t.trimEnd()
         val font = fontFor(text)
         val w = widthOf(text, font, size) + if (t.endsWith(' ')) space(size) else 0f
@@ -554,7 +574,7 @@ class FontComposer(
         }
     }
 
-    private fun node(n: MathParser.Node, size: Float): MBox = when (n) {
+    internal fun node(n: MathParser.Node, size: Float): MBox = when (n) {
         is MathParser.Text -> textBox(n.s, size)
         is MathParser.Space -> MBox(n.em * size * 0.28f, 0f, 0f) { _, _, _ -> }
         is MathParser.Group -> layout(n.body, size)
@@ -609,7 +629,7 @@ class FontComposer(
 
     // ------------------------------------------------------------------ diagrams, margin arrows
 
-    private fun diagramRows(b: PageBlock.Diagram, width: Float): List<Row> {
+    internal fun diagramRows(b: PageBlock.Diagram, width: Float): List<Row> {
         val vb = b.diagram.viewBox
         if (vb.isEmpty) return emptyList()
         val scale = min(usable(width) * 0.8f / vb.width, gap * PageComposer.MAX_DIAGRAM_LINES / vb.height)
@@ -626,7 +646,7 @@ class FontComposer(
         )
     }
 
-    private fun drawShape(sheet: Sheet, s: VectorShape, map: (Float, Float) -> P) {
+    internal fun drawShape(sheet: Sheet, s: VectorShape, map: (Float, Float) -> P) {
         val c = s.style.colorArgb.let { if (it == NotebookPalette.INK || it == 0xFF1F1F1FL) penColor else it.toInt() }
         val shapes = sheet.shapes
         when (s) {
@@ -669,7 +689,7 @@ class FontComposer(
      * sits level with that line), ending just past where that line's writing stops — never into the
      * middle of a long derivation.
      */
-    private fun marginArrow(sheet: Sheet, note: PageBlock.MarginNote, anchor: PageBlock) {
+    internal fun marginArrow(sheet: Sheet, note: PageBlock.MarginNote, anchor: PageBlock) {
         val n = boundsOf(sheet, note.id.value) ?: return
         val a = boundsOf(sheet, anchor.id.value) ?: return
         // The anchor's first written line: runs within a line gap of its top.
@@ -695,7 +715,7 @@ class FontComposer(
     }
 
     /** Bounds (left, top, right, bottom) of what is written for [block] so far: text runs and pen strokes. */
-    private fun boundsOf(sheet: Sheet, block: String): FloatArray? {
+    internal fun boundsOf(sheet: Sheet, block: String): FloatArray? {
         val runs = sheet.runs.filter { it.block == block }
         val inkB = sheet.ink.boundsOf(block)
         if (runs.isEmpty() && inkB == null) return null
@@ -714,8 +734,9 @@ class FontComposer(
 
     companion object {
         const val INK = 0xFF1E2433.toInt()
-        private const val DISPLAY_SCALE = 1.1f
-        private const val HANG = 0.3f
-        private const val SYSTEM_SCALE = 0.86f
+        internal const val DISPLAY_SCALE = 1.1f
+        internal const val HANG = 0.3f
+        internal const val SYSTEM_SCALE = 0.86f
+        internal const val INLINE_DESCENT = 0.55f
     }
 }

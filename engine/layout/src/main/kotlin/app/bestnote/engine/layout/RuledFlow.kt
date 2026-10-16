@@ -144,11 +144,14 @@ data class RuledPaper(
  * - A block taller than a page is placed anyway (it runs off the bottom) so nothing is lost.
  *
  * @param spaceBefore blank lines wanted before an item (skipped at the top of a page).
+ * @param reserved lines already written on by the user (page index, line index): a main-column block
+ *   never covers one, so a Smart Board re-layout leaves the user's own ink untouched.
  */
 class RuledFlow(
     private val paper: RuledPaper,
     private val measurer: BlockMeasurer,
     private val rtl: Boolean = false,
+    private val reserved: (page: Int, line: Int) -> Boolean = { _, _ -> false },
     private val spaceBefore: (FlowItem) -> Int = { 0 },
 ) {
     /** A placed item, with the ruled lines it occupies. */
@@ -212,6 +215,15 @@ class RuledFlow(
                 page++
                 start = 0
             }
+            // Skip the user's own lines: the block goes on the first free run of lines that fits.
+            var guard = 0
+            while ((start until start + n).any { reserved(page, it) } && guard++ < MAX_SKIP) {
+                start++
+                if (start + n > lineCount && start > 0) {
+                    page++
+                    start = 0
+                }
+            }
             val slot = slot(item, page, start, n, cols.mainLeft, cols.mainRight, inMargin = false)
             out += slot
             byKey[item.key] = slot
@@ -232,6 +244,7 @@ class RuledFlow(
 
     private companion object {
         const val MARGIN_FRACTION = 0.27f
+        const val MAX_SKIP = 4096
         const val EPS = 0.02f
     }
 }
