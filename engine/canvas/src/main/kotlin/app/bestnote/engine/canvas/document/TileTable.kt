@@ -82,6 +82,12 @@ internal class IdentityDiff<T>(val all: Boolean, val removed: List<T>, val added
  * Generations: every change that touches a tile bumps its [Entry.gen]; a render started for gen g is
  * installed only if the tile is still at g, so a slow render never overwrites newer content.
  */
+/** How poor a stand-in tiles at [scale] are for [current]: log distance, blurrier (smaller) scales count double. */
+internal fun standInCost(scale: Float, current: Float): Float {
+    val r = kotlin.math.ln(scale / current)
+    return if (r >= 0f) r else -2f * r
+}
+
 internal class TileTable<B : Any, S : Any>(
     var budgetBytes: Long,
     private val sizeOf: (B) -> Long,
@@ -175,6 +181,32 @@ internal class TileTable<B : Any, S : Any>(
     }
 
     fun pages(): Set<String> = map.keys.mapTo(HashSet()) { it.page }
+
+    /**
+     * Other scales of [page] (not [current]) that have at least one showable tile, best stand-in
+     * first, into [out]; returns how many. Best = closest to [current], a sharper (larger) scale
+     * preferred over a blurrier one the same distance away. No allocation.
+     */
+    fun scalesOf(page: String, current: Float, out: FloatArray): Int {
+        var n = 0
+        for (e in map.values) {
+            val k = e.key
+            if (k.page != page || k.scale == current || !e.showable) continue
+            var dup = false
+            for (i in 0 until n) if (out[i] == k.scale) dup = true
+            if (dup) continue
+            val cost = standInCost(k.scale, current)
+            if (n == out.size && cost >= standInCost(out[n - 1], current)) continue
+            // Insertion sort by cost.
+            var i = if (n == out.size) n - 1 else n++
+            while (i > 0 && standInCost(out[i - 1], current) > cost) {
+                out[i] = out[i - 1]
+                i--
+            }
+            out[i] = k.scale
+        }
+        return n
+    }
 
     /** Drops every tile of the pages not in [keep]. */
     fun retain(keep: Set<String>) {

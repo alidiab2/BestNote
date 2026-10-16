@@ -185,7 +185,9 @@ internal class PagesLayer(context: Context, private val sheet: SheetStyle, var m
     }
 
     /** Recomputes page positions (pages added, paper changed, view resized) and rebinds visible pages. */
-    fun relayout() {
+    fun relayout() = traced("BN.relayout") { relayoutNow() }
+
+    private fun relayoutNow() {
         val doc = document
         if (width <= 0 || doc == null) {
             layout = null
@@ -230,16 +232,38 @@ internal class PagesLayer(context: Context, private val sheet: SheetStyle, var m
      * showed unscaled view point ([vx], [vy]) before, stays there. Pages re-record at the new scale,
      * so ink and paper are vector-sharp at every zoom.
      */
-    fun applyZoom(newZoom: Float, vx: Float, vy: Float, sx: Float, sy: Float) {
+    fun applyZoom(newZoom: Float, vx: Float, vy: Float, sx: Float, sy: Float) = traced("BN.applyZoom") {
         val prev = layout
         zoom = ZoomMath.clamp(newZoom)
-        if (prev == null) return relayout()
-        val (oldX, oldY) = scrollX to scrollY
-        relayout()
-        val next = layout ?: return
+        val doc = document
+        if (prev == null || doc == null || width <= 0 || prev.pageCount != doc.size) return@traced relayout()
+        val oldX = scrollX
+        val oldY = scrollY
+        // Same pages, new scale: rebind the slots in place (each keeps its page's content snapshot),
+        // then let the window bind whatever else the new scale shows.
+        layout = DocumentLayout(doc.pages.map { it.page.size }, width, metrics, zoom)
+        traced("BN.rebindAll") { window.rebindAll() }
+        clampScroll()
+        refreshWindow()
+        invalidate()
+        onViewportChanged?.invoke()
+        val next = layout ?: return@traced
         val (x, y) = ZoomMath.anchoredScroll(prev, oldX, oldY, vx, vy, next, sx, sy)
         scrollToXY(Math.round(x), Math.round(y))
     }
+
+    /**
+     * True while a pinch or zoom animation runs (CANVAS-05): tiles render only once it settles, and
+     * pages show stand-ins (stretched tiles of other scales, or paper) meanwhile. Setting it false
+     * redraws the bound pages so the settled scale's tiles are requested, visible ones first.
+     */
+    var zoomGesture: Boolean = false
+        set(value) {
+            if (field == value) return
+            field = value
+            tiles.deferRendering = value
+            if (!value) for (i in 0 until childCount) getChildAt(i).invalidate()
+        }
 
     /** The pinch preview: the recorded pages scaled by the GPU until the gesture settles. */
     var preview: PreviewTransform = PreviewTransform()
@@ -253,14 +277,16 @@ internal class PagesLayer(context: Context, private val sheet: SheetStyle, var m
             translationY = value.ty
             if (value.scale < 1f) refreshWindow()
             viewportMoved()
-            onViewportChanged?.invoke()
+            traced("BN.viewportListeners") { onViewportChanged?.invoke() }
         }
 
     private fun clampScroll() {
         if (scrollY > maxScrollY || scrollX > maxScrollX) scrollTo(scrollX.coerceAtMost(maxScrollX), scrollY.coerceAtMost(maxScrollY))
     }
 
-    private fun refreshWindow() {
+    private fun refreshWindow() = traced("BN.refreshWindow") { refreshWindowNow() }
+
+    private fun refreshWindowNow() {
         val l = layout ?: return
         val count = document?.size ?: 0
         // While a pinch zooms out, the scaled-down pages reveal more of the document: bind those too.
@@ -277,7 +303,7 @@ internal class PagesLayer(context: Context, private val sheet: SheetStyle, var m
         onViewportChanged?.invoke()
     }
 
-    private fun viewportMoved() {
+    private fun viewportMoved() = traced("BN.viewportMoved") {
         for (i in 0 until childCount) (getChildAt(i) as? PageSlotView)?.onViewportMoved()
     }
 

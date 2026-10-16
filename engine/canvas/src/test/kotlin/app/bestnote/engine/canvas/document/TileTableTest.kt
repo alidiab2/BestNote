@@ -115,4 +115,41 @@ class TileTableTest {
         assertEquals(setOf("b"), t.pages())
         assertEquals(5, t.bytes)
     }
+
+    private fun put(t: TileTable<Bmp, String>, k: TileTable.Key) = t.obtain(k).also { t.install(k, it.gen, Bmp(1), false) }
+
+    @Test
+    fun standInScalesAreNearestFirstPreferringSharper() {
+        val t = table(budget = 1_000_000)
+        for (scale in listOf(0.5f, 1f, 2f, 3f, 0.9f)) put(t, key(0, 0, scale = scale))
+        put(t, key(0, 0, page = "other", scale = 1.1f))
+        val out = FloatArray(4)
+        val n = t.scalesOf("p", 1f, out)
+        // 1f itself is the current scale. Costs: 0.9 -> 2 ln(1/0.9) = 0.21, 2 -> ln 2, 3 -> ln 3, 0.5 -> 2 ln 2.
+        assertEquals(4, n)
+        assertEquals(listOf(0.9f, 2f, 3f, 0.5f), out.take(n))
+    }
+
+    @Test
+    fun standInScalesSkipTilesAnEditMadeWrong() {
+        val t = table(budget = 1_000_000)
+        put(t, key(0, 0, scale = 2f))
+        put(t, key(0, 0, scale = 0.5f))
+        t.invalidate("p", 0f, 0f, 10f, 10f, 0f, null) // an erase: every scale's tile under it is wrong
+        val out = FloatArray(4)
+        assertEquals(0, t.scalesOf("p", 1f, out))
+        put(t, key(0, 0, scale = 0.5f)) // re-rendered
+        assertEquals(1, t.scalesOf("p", 1f, out))
+        assertEquals(0.5f, out[0])
+    }
+
+    @Test
+    fun standInScalesKeepOnlyTheBestWhenFull() {
+        val t = table(budget = 1_000_000)
+        for (scale in listOf(8f, 0.25f, 3f, 1.5f, 1.2f, 0.8f)) put(t, key(0, 0, scale = scale))
+        val out = FloatArray(2)
+        assertEquals(2, t.scalesOf("p", 1f, out))
+        assertEquals(listOf(1.2f, 1.5f), out.toList())
+        assertTrue(standInCost(0.5f, 1f) > standInCost(2f, 1f))
+    }
 }

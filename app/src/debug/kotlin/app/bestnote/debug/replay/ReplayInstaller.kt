@@ -75,6 +75,7 @@ class ReplayInstaller : ContentProvider() {
                         PINCH -> pinch(activity, intent)
                         STATE -> state(activity, intent)
                         SEED -> seed(activity, intent)
+                        PERF -> perf(activity, intent)
                         else -> replay(activity, intent)
                     }
             }
@@ -82,6 +83,7 @@ class ReplayInstaller : ContentProvider() {
                 addAction(PINCH)
                 addAction(STATE)
                 addAction(SEED)
+                addAction(PERF)
             }
             ContextCompat.registerReceiver(activity, r, filter, ContextCompat.RECEIVER_EXPORTED)
             receiver = r
@@ -117,6 +119,38 @@ class ReplayInstaller : ContentProvider() {
                 Log.i(TAG, "PINCH zoom=$zoom")
                 status.writeText("done pinch zoom=$zoom\n")
             }.start()
+        }
+
+        /**
+         * CANVAS-05 frame-time check: runs [PERF_SCRIPT] (a series of two-finger pinches, --ei rounds N
+         * times) while [FrameProbe] records frame times, then writes the summary to the status file:
+         *   am broadcast -a app.bestnote.debug.PERF -p <pkg> --ei rounds 2 --ei steps 40
+         */
+        private fun perf(activity: Activity, intent: Intent) {
+            val status = File(File(activity.filesDir, "replay").apply { mkdirs() }, "status")
+            val canvas = findCanvas(activity.window.decorView) ?: return status.writeText("error no notebook canvas on screen\n")
+            status.writeText("running perf\n")
+            val rounds = intent.getIntExtra("rounds", 2)
+            val steps = intent.getIntExtra("steps", 40)
+            val gapMs = intent.getIntExtra("gap", 150).toLong()
+            val probe = FrameProbe(activity).also { it.start() }
+            val handler = android.os.Handler(android.os.Looper.getMainLooper())
+            val script = List(rounds) { PERF_SCRIPT }.flatten()
+            fun run(i: Int) {
+                if (i == script.size) {
+                    handler.postDelayed({
+                        val line = "done perf gestures=${script.size} zoom=${(canvas as? PagedDocumentView)?.zoom} ${probe.stop()}"
+                        Log.i(TAG, line)
+                        status.writeText(line + "\n")
+                    }, 400)
+                    return
+                }
+                val (s0, s1, dx, dy) = script[i]
+                FingerGesture(canvas, canvas.width / 2f, canvas.height / 2f, s0, s1, dx, dy, steps) {
+                    handler.postDelayed({ run(i + 1) }, gapMs)
+                }.start()
+            }
+            run(0)
         }
 
         /**
@@ -167,6 +201,11 @@ class ReplayInstaller : ContentProvider() {
                 val rows = intent.getIntExtra("rows", 11)
                 val ptPerMm = minOf(wPt / cols / file.widthMm, hPt / rows / file.heightMm)
                 val brush = BrushCatalog.brush(Tool.Pen, PenStyle.Fountain, InkPalette.BLACK, BrushCatalog.DEFAULT_SIZE * 0.3f * 0.5f) ?: error("no brush")
+                // --ei pages N seeds N pages from the current one (adding pages as needed): a dense notebook for PERF.
+                val pageCount = intent.getIntExtra("pages", 1).coerceAtLeast(1)
+                var total = 0
+                for (target in page until page + pageCount) {
+                while (target >= doc.size) doc.addPage()
                 val out = ArrayList<androidx.ink.strokes.Stroke>()
                 for (r in 0 until rows) for (c in 0 until cols) for (st in file.strokes) {
                     if (st.hover || st.samples.isEmpty()) continue
@@ -182,8 +221,10 @@ class ReplayInstaller : ContentProvider() {
                     }
                     out += androidx.ink.strokes.Stroke(brush, batch)
                 }
-                doc.addStrokes(page, out)
-                status.writeText("done seed ${out.size} strokes on page $page\n")
+                doc.addStrokes(target, out)
+                total += out.size
+                }
+                status.writeText("done seed $total strokes on $pageCount page(s) from $page\n")
             } catch (t: Throwable) {
                 status.writeText("error ${t.message}\n")
                 Log.e(TAG, "seed failed", t)
@@ -281,6 +322,17 @@ class ReplayInstaller : ContentProvider() {
         const val PINCH = "app.bestnote.debug.PINCH"
         const val STATE = "app.bestnote.debug.STATE"
         const val SEED = "app.bestnote.debug.SEED"
+        const val PERF = "app.bestnote.debug.PERF"
+
+        /** The scripted PERF pinch sequence: (span0, span1, dx, dy) per gesture, zooming out and in. */
+        val PERF_SCRIPT = listOf(
+            floatArrayOf(700f, 260f, 0f, 0f), // out: more pages enter the view
+            floatArrayOf(260f, 700f, 0f, 0f), // back in
+            floatArrayOf(300f, 900f, 60f, 40f), // in past fit-to-width
+            floatArrayOf(900f, 300f, -60f, -40f), // out again
+            floatArrayOf(600f, 200f, 0f, 300f), // out while panning down
+            floatArrayOf(200f, 600f, 0f, -300f), // in while panning up
+        )
         const val DEFAULT_INSET_DP = 16f
         const val PAGED_INSET_DP = 112f
         val PENS = mapOf(

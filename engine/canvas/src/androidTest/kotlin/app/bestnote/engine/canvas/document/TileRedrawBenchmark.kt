@@ -6,18 +6,12 @@ import android.graphics.RenderNode
 import android.os.Bundle
 import android.util.Log
 import android.view.View
-import androidx.ink.brush.InputToolType
-import androidx.ink.strokes.MutableStrokeInputBatch
 import androidx.ink.strokes.Stroke
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import app.bestnote.core.model.NotebookId
 import app.bestnote.core.model.Page
-import app.bestnote.core.model.PenStyle
-import app.bestnote.core.model.Tool
-import app.bestnote.engine.ink.BrushCatalog
 import app.bestnote.engine.layout.document.DocumentMetrics
-import org.json.JSONObject
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -41,7 +35,7 @@ class TileRedrawBenchmark {
 
     @Test
     fun fiveThousandStrokePageRedrawsUnder8ms() {
-        val strokes = handwriting(copiesX = 4, copiesY = 11)
+        val strokes = BenchStrokes.handwriting(instrumentation.context, copiesX = 4, copiesY = 11)
         assertTrue("need 5k strokes, have ${strokes.size}", strokes.size >= 5000)
 
         lateinit var layer: PagesLayer
@@ -149,48 +143,7 @@ class TileRedrawBenchmark {
         return times[n / 2]
     }
 
-    /** The corpus sample repeated over an A4 page, in page points, with the default fountain pen. */
-    private fun handwriting(copiesX: Int, copiesY: Int): List<Stroke> {
-        val json = JSONObject(instrumentation.context.assets.open("lecture_en.json").bufferedReader().readText())
-        val wMm = json.getDouble("width").toFloat()
-        val hMm = json.getDouble("height").toFloat()
-        val pageW = 595f
-        val pageH = 842f
-        val ptPerMm = minOf(pageW / copiesX / wMm, pageH / copiesY / hMm)
-        val brush = checkNotNull(BrushCatalog.brush(Tool.Pen, PenStyle.Fountain, 0xFF1E2433.toInt(), BrushCatalog.DEFAULT_SIZE * 0.3f * 0.5f))
-        val raw = json.getJSONArray("strokes")
-        val out = ArrayList<Stroke>()
-        for (cy in 0 until copiesY) for (cx in 0 until copiesX) {
-            val ox = cx * wMm * ptPerMm
-            val oy = cy * hMm * ptPerMm
-            for (i in 0 until raw.length()) {
-                val s = raw.getJSONObject(i)
-                if (s.optString("type", "ink") != "ink") continue
-                val samples = s.getJSONArray("samples")
-                if (samples.length() == 0) continue
-                val batch = MutableStrokeInputBatch()
-                val t0 = samples.getJSONObject(0).getDouble("t_ms")
-                for (j in 0 until samples.length()) {
-                    val p = samples.getJSONObject(j)
-                    batch.add(
-                        InputToolType.STYLUS,
-                        ox + p.getDouble("x").toFloat() * ptPerMm,
-                        oy + p.getDouble("y").toFloat() * ptPerMm,
-                        (p.getDouble("t_ms") - t0).toLong(),
-                        CM_PER_PT,
-                        p.optDouble("pressure", 0.5).toFloat(),
-                        p.optDouble("tiltRad", 0.0).toFloat(),
-                        p.optDouble("orientationRad", 0.0).toFloat(),
-                    )
-                }
-                out += Stroke(brush, batch)
-            }
-        }
-        return out
-    }
-
     private companion object {
         const val TAG = "TileRedrawBenchmark"
-        const val CM_PER_PT = 2.54f / 72f
     }
 }

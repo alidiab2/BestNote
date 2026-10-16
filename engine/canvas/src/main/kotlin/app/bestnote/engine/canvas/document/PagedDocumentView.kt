@@ -582,7 +582,7 @@ class PagedDocumentView(context: Context) : FrameLayout(context), InProgressStro
         predictor.record(event)
         val predicted = if (event.actionMasked == MotionEvent.ACTION_MOVE && (inking.isNotEmpty() || highlighting != null)) predictor.predict() else null
         try {
-            handle(event, predicted)
+            traced("BN.touch") { handle(event, predicted) }
         } finally {
             predicted?.recycle()
         }
@@ -656,7 +656,7 @@ class PagedDocumentView(context: Context) : FrameLayout(context), InProgressStro
                         }
                     }
                     if (scrolling.remove(id) != null) {
-                        if (scrolling.size < 2) commitPreview()
+                        if (scrolling.size < 2) endPinch()
                         if (scrolling.isEmpty()) {
                             if (!onFingerTap(se)) fling(id)
                         }
@@ -668,7 +668,7 @@ class PagedDocumentView(context: Context) : FrameLayout(context), InProgressStro
                     finishErase(id)
                     sideButton.onEnd(id)
                     cardTaps.remove(id)
-                    if (scrolling.remove(id) != null && scrolling.size < 2) commitPreview()
+                    if (scrolling.remove(id) != null && scrolling.size < 2) endPinch()
                     tapCandidate = null
                 }
                 else -> Unit
@@ -695,7 +695,7 @@ class PagedDocumentView(context: Context) : FrameLayout(context), InProgressStro
             if (palm.isPalm(cancelled)) {
                 cardTaps.remove(cancelled)
                 tapCandidate = null
-                if (scrolling.remove(cancelled) != null && scrolling.size < 2) commitPreview()
+                if (scrolling.remove(cancelled) != null && scrolling.size < 2) endPinch()
             } else if (wasWriting) {
                 pointerXY(event, cancelled)?.let { scrolling[cancelled] = it }
             }
@@ -779,6 +779,7 @@ class PagedDocumentView(context: Context) : FrameLayout(context), InProgressStro
     /** Applies one frame of finger panning (one finger) or pinching (two or more). */
     private fun panZoom(step: PinchStep) {
         if (scrolling.size >= 2 || !pages.preview.isIdentity) {
+            beginZoomGesture()
             val k = ZoomMath.clampFactor(pages.zoom, pages.preview.scale, step.scale)
             pages.preview = pages.preview.scaledBy(k, step.focusX, step.focusY, step.dx, step.dy)
             // Re-lay out (sharp ink, the right pages bound) whenever the preview drifted far from it.
@@ -790,7 +791,9 @@ class PagedDocumentView(context: Context) : FrameLayout(context), InProgressStro
     }
 
     /** Turns the pinch preview into a real layout at the new zoom, keeping screen point ([fx], [fy]) still. */
-    private fun commitPreview(fx: Float = width / 2f, fy: Float = height / 2f) {
+    private fun commitPreview(fx: Float = width / 2f, fy: Float = height / 2f) = traced("BN.commitPreview") { commitPreviewNow(fx, fy) }
+
+    private fun commitPreviewNow(fx: Float, fy: Float) {
         val p = pages.preview
         if (p.isIdentity) return
         pages.preview = PreviewTransform()
@@ -811,6 +814,34 @@ class PagedDocumentView(context: Context) : FrameLayout(context), InProgressStro
             finishZoomAnimation()
         }
         commitPreview()
+        if (pages.zoomGesture) {
+            removeCallbacks(settleTiles)
+            pages.zoomGesture = false
+        }
+    }
+
+    /**
+     * A pinch, zoom animation or wheel zoom is running (CANVAS-05): tiles stop rendering at the
+     * in-between scales and pages draw stand-ins, so the gesture never waits for rasterization.
+     */
+    private fun beginZoomGesture() {
+        removeCallbacks(settleTiles)
+        pages.zoomGesture = true
+    }
+
+    /** The zoom stopped: render the settled scale once it has stayed put for [SETTLE_MS]. */
+    private fun scheduleSettle() {
+        removeCallbacks(settleTiles)
+        postDelayed(settleTiles, SETTLE_MS)
+    }
+
+    private val settleTiles = Runnable { pages.zoomGesture = false }
+
+    /** The pinch ended (fewer than two fingers left): lay out at the final zoom, render it shortly. */
+    private fun endPinch() {
+        val wasGesture = pages.zoomGesture
+        commitPreview()
+        if (wasGesture && zoomAnimator == null) scheduleSettle()
     }
 
     /** A lone finger lifted: a double-tap zooms to fit the page width. @return true when it was a tap. */
@@ -849,6 +880,7 @@ class PagedDocumentView(context: Context) : FrameLayout(context), InProgressStro
         val endX = fx + rawX - rawX.coerceIn(0f, (next.contentWidth - width).coerceAtLeast(0).toFloat())
         val endY = fy + rawY - rawY.coerceIn(0f, next.maxScroll(height).toFloat())
         val k = z / pages.zoom
+        beginZoomGesture()
         zoomAnimator = ValueAnimator.ofFloat(0f, 1f).apply {
             duration = zoomDurationMs.toLong()
             interpolator = DecelerateInterpolator()
@@ -873,6 +905,7 @@ class PagedDocumentView(context: Context) : FrameLayout(context), InProgressStro
         zoomTarget = null
         pages.preview = PreviewTransform()
         pages.applyZoom(z, fx, fy, fx, fy)
+        if (pages.zoomGesture) scheduleSettle()
         refreshHover()
     }
 
@@ -911,7 +944,9 @@ class PagedDocumentView(context: Context) : FrameLayout(context), InProgressStro
             val v = event.getAxisValue(MotionEvent.AXIS_VSCROLL)
             if (v != 0f && (event.metaState and android.view.KeyEvent.META_CTRL_ON) != 0) {
                 settleZoom()
+                beginZoomGesture()
                 pages.applyZoom(pages.zoom * if (v > 0) WHEEL_ZOOM else 1f / WHEEL_ZOOM, event.x, event.y, event.x, event.y)
+                scheduleSettle()
                 return true
             }
             if (v != 0f) {
@@ -1217,6 +1252,9 @@ class PagedDocumentView(context: Context) : FrameLayout(context), InProgressStro
 
         private const val WHEEL_STEP_DP = 64f
         private const val WHEEL_ZOOM = 1.1f
+
+        /** A zoom must stay put this long before its sharp tiles render (a pinch often pauses briefly). */
+        private const val SETTLE_MS = 120L
 
         /** The pinch preview re-lays out the pages once it has scaled them beyond this range. */
         private const val PREVIEW_MIN = 0.67f
