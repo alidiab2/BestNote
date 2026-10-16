@@ -12,6 +12,19 @@ package app.bestnote.feature.library
 import android.text.format.DateFormat
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.material.icons.outlined.Menu
+import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material3.DrawerValue
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.ModalDrawerSheet
+import androidx.compose.material3.ModalNavigationDrawer
+import androidx.compose.material3.rememberDrawerState
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import app.bestnote.core.designsystem.theme.WidthClass
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -20,7 +33,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
@@ -270,10 +282,13 @@ private sealed interface LibraryDialog {
     data class Export(val id: NotebookId, val share: Boolean) : LibraryDialog
 }
 
-/** Below this width the sidebar is hidden and the header controls tighten. */
-private val SidebarBreakpoint = 720.dp
+/**
+ * DS-05. Compact windows (< 600 dp: phone, Fold outer screen, narrow free-form window) swap the fixed
+ * sidebar for a drawer behind a menu button; below [CompactBreakpoint] the header controls tighten.
+ */
 private val CompactBreakpoint = 1320.dp
 private val MainPaddingH = 40.dp
+private val PhonePaddingH = 16.dp
 
 @Composable
 internal fun LibraryContent(
@@ -326,27 +341,38 @@ internal fun LibraryContent(
     )
     CompositionLocalProvider(LocalLibraryDrag provides drag) {
         BoxWithConstraints(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).libraryDragRoot(drag)) {
-            val showSidebar = maxWidth >= SidebarBreakpoint
+            val phone = WidthClass.of(maxWidth) == WidthClass.Compact
+            val showSidebar = !phone
+            val drawerState = rememberDrawerState(DrawerValue.Closed)
+            val scope = rememberCoroutineScope()
+            val sidebar: @Composable (Boolean) -> Unit = { inDrawer ->
+                LibrarySidebar(
+                    state,
+                    onSelect = {
+                        ui.select(it)
+                        if (inDrawer) scope.launch { drawerState.close() }
+                    },
+                    onOpenSettings = {
+                        if (inDrawer) scope.launch { drawerState.close() }
+                        ui.settings()
+                    },
+                    onNewFolder = ui.newFolder,
+                    onFolderMenu = { folder, action ->
+                        dialog = when (action) {
+                            FolderMenuAction.Rename, FolderMenuAction.Recolor -> LibraryDialog.EditFolder(folder.id)
+                            FolderMenuAction.NewSubfolder -> LibraryDialog.NewFolder(parentId = folder.id)
+                            FolderMenuAction.Delete -> LibraryDialog.DeleteFolder(folder.id)
+                        }
+                    },
+                    modifier = Modifier
+                        .fillMaxHeight()
+                        .background(BestNoteTheme.colors.sidebar) // runs under the system bars
+                        .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Start + WindowInsetsSides.Vertical)),
+                )
+            }
+            val main: @Composable () -> Unit = {
             Row(Modifier.fillMaxSize()) {
-                if (showSidebar) {
-                    LibrarySidebar(
-                        state,
-                        onSelect = ui.select,
-                        onOpenSettings = ui.settings,
-                        onNewFolder = ui.newFolder,
-                        onFolderMenu = { folder, action ->
-                            dialog = when (action) {
-                                FolderMenuAction.Rename, FolderMenuAction.Recolor -> LibraryDialog.EditFolder(folder.id)
-                                FolderMenuAction.NewSubfolder -> LibraryDialog.NewFolder(parentId = folder.id)
-                                FolderMenuAction.Delete -> LibraryDialog.DeleteFolder(folder.id)
-                            }
-                        },
-                        modifier = Modifier
-                            .fillMaxHeight()
-                            .background(BestNoteTheme.colors.sidebar) // runs under the system bars
-                            .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Start + WindowInsetsSides.Vertical)),
-                    )
-                }
+                if (showSidebar) sidebar(false)
                 BoxWithConstraints(
                     Modifier.weight(1f).fillMaxHeight().windowInsetsPadding(
                         WindowInsets.safeDrawing.only(
@@ -355,14 +381,20 @@ internal fun LibraryContent(
                     ),
                 ) {
                     val compact = maxWidth < CompactBreakpoint
-                    val inner = maxWidth - MainPaddingH * 2
+                    val padH = if (phone) PhonePaddingH else MainPaddingH
+                    val inner = maxWidth - padH * 2
                     val shelfColumns = ((inner - Spacing.L * 2 + ShelfGap) / (CoverWidth + ShelfGap)).toInt().coerceAtLeast(1)
                     val gridColumns = ((inner + Spacing.L) / (GridMinCell + Spacing.L)).toInt().coerceAtLeast(1)
                     LazyColumn(
                         Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(start = MainPaddingH, end = MainPaddingH, top = Spacing.XXL, bottom = Spacing.XXL * 4),
+                        contentPadding = PaddingValues(start = padH, end = padH, top = if (phone) Spacing.S else Spacing.XXL, bottom = Spacing.XXL * 4),
                     ) {
-                        item(key = "header", contentType = "header") { LibraryHeader(state, compact, ui, searchFocus = searchFocus) }
+                        if (phone) {
+                            item(key = "phone-bar", contentType = "phone-bar") {
+                                PhoneBar(onMenu = { scope.launch { drawerState.open() } }, onSettings = ui.settings)
+                            }
+                        }
+                        item(key = "header", contentType = "header") { LibraryHeader(state, compact, ui, searchFocus = searchFocus, phone = phone) }
                         val last = state.continueWith
                         if (state.showContinueWriting && last != null) {
                             item(key = "continue-title", contentType = "section") { SectionTitle(stringResource(R.string.library_continue_writing)) }
@@ -404,6 +436,22 @@ internal fun LibraryContent(
                         }
                     }
                 }
+            }
+            }
+            if (phone) {
+                ModalNavigationDrawer(
+                    drawerState = drawerState,
+                    drawerContent = {
+                        ModalDrawerSheet(
+                            drawerContainerColor = BestNoteTheme.colors.sidebar,
+                            drawerShape = RectangleShape,
+                            windowInsets = WindowInsets(0),
+                        ) { sidebar(true) }
+                    },
+                    content = main,
+                )
+            } else {
+                main()
             }
             DragGhost(drag)
         }
@@ -702,5 +750,21 @@ private fun BarButton(icon: ImageVector, label: String, onClick: () -> Unit, ena
     ) {
         Icon(icon, if (showLabel) null else label, tint = tint, modifier = Modifier.size(20.dp))
         if (showLabel) Text(label, style = MaterialTheme.typography.labelLarge, color = tint, maxLines = 1)
+    }
+}
+
+/** Compact windows only: the menu button that opens the sidebar drawer, the wordmark and Settings. */
+@Composable
+private fun PhoneBar(onMenu: () -> Unit, onSettings: () -> Unit) {
+    val menu = stringResource(R.string.library_open_menu)
+    val settings = stringResource(R.string.library_nav_settings)
+    Row(Modifier.fillMaxWidth().padding(bottom = Spacing.S), verticalAlignment = Alignment.CenterVertically) {
+        IconButton(onClick = onMenu, modifier = Modifier.size(48.dp).semantics { contentDescription = menu }) {
+            Icon(Icons.Outlined.Menu, null, tint = MaterialTheme.colorScheme.onSurface)
+        }
+        Wordmark(Modifier.weight(1f).padding(start = Spacing.XS))
+        IconButton(onClick = onSettings, modifier = Modifier.size(48.dp).semantics { contentDescription = settings }) {
+            Icon(Icons.Outlined.Settings, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
     }
 }

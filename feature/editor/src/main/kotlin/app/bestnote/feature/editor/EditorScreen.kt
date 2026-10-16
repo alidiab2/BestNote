@@ -30,6 +30,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.absolutePadding
@@ -78,6 +79,8 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.platform.LocalConfiguration
+import app.bestnote.core.designsystem.theme.WidthClass
 import androidx.compose.ui.unit.max
 import androidx.compose.ui.unit.min
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
@@ -292,7 +295,7 @@ internal fun traySide(dock: ToolbarDock, leftHanded: Boolean): TraySide = when (
 
 /** The dock that puts the tray on physical [side] (the inverse of [traySide]). */
 internal fun dockFor(side: TraySide, leftHanded: Boolean): ToolbarDock = when (side) {
-    TraySide.Top -> ToolbarDock.Top
+    TraySide.Top, TraySide.Bottom -> ToolbarDock.Top
     TraySide.Left -> if (leftHanded) ToolbarDock.Right else ToolbarDock.Left
     TraySide.Right -> if (leftHanded) ToolbarDock.Left else ToolbarDock.Right
 }
@@ -322,6 +325,8 @@ private const val KEY_ZOOM_STEP = 1.25f
 private const val SEARCH_SETTLE_MS = 150L
 private const val SEARCH_MARK_HOLD_MS = 3_500L
 private val ChromeEdge = 20.dp
+private val CompactChromeEdge = 8.dp
+private val BottomTrayGap = 8.dp
 private val TopRowTop = 12.dp
 private val TopRowHeight = 64.dp
 private val TrayTop = 66.dp
@@ -396,7 +401,9 @@ fun EditorScreen(
         language = viewModel::tidyLanguage,
     )
     val reduce = reducedMotion()
-    val side = traySide(state.dock, state.leftHanded)
+    // DS-05: a compact window (phone, Fold outer screen) ignores the dock and floats the tray at the bottom.
+    val compact = WidthClass.of(LocalConfiguration.current.screenWidthDp.dp) == WidthClass.Compact
+    val side = if (compact) TraySide.Bottom else traySide(state.dock, state.leftHanded)
     LifecycleEventEffect(Lifecycle.Event.ON_STOP) { viewModel.session.onStop() }
     DisposableEffect(document) {
         val setHistory = { undo: Boolean, redo: Boolean ->
@@ -687,6 +694,7 @@ fun EditorScreen(
             },
     ) {
         val wide = maxWidth >= WideTopTray
+        val windowWidth = maxWidth
         val density = LocalDensity.current
         // The chrome floats over the page: no reserved bar. Only the first page starts below the
         // title row (so the title never hides its top); everything scrolls under the chrome.
@@ -695,7 +703,10 @@ fun EditorScreen(
             val chrome = if (side == TraySide.Top && trayHeight > 0) TrayTop.roundToPx() + trayHeight + ChromeGap.roundToPx() else TopRowHeight.roundToPx()
             WindowInsets.safeDrawing.getTop(this) + chrome
         }
-        val bottomInsetPx = with(density) { WindowInsets.safeDrawing.getBottom(this) }
+        var bottomChromePx by remember { mutableIntStateOf(0) }
+        val bottomChromeShown = compact && trayShown
+        val bottomInsetPx = with(density) { WindowInsets.safeDrawing.getBottom(this) + if (bottomChromeShown) bottomChromePx else 0 }
+        val edge = if (compact) CompactChromeEdge else ChromeEdge
 
         // ---- the pages: real sheets on the desk, full screen. They never mirror (forced LTR) ----
         CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
@@ -739,23 +750,25 @@ fun EditorScreen(
             Row(
                 Modifier
                     .fillMaxWidth()
-                    .padding(start = ChromeEdge, end = ChromeEdge, top = TopRowTop)
+                    .padding(start = edge, end = edge, top = TopRowTop)
                     .graphicsLayer { alpha = chromeAlpha },
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Box(Modifier.weight(1f)) {
-                    TitleCluster(state.title, page = pageNumber.first, pageCount = maxOf(pageNumber.second, 1), onBack = onBack)
+                    TitleCluster(state.title, page = pageNumber.first, pageCount = maxOf(pageNumber.second, 1), onBack = onBack, compact = compact)
                 }
-                ActionPills(canUndo, canRedo, state.dock, state.leftHanded, actions)
+                ActionPills(canUndo, canRedo, state.dock, state.leftHanded, actions, compact = compact)
             }
 
             val trayAlignment = when (side) {
                 TraySide.Top -> Alignment.TopCenter
+                TraySide.Bottom -> Alignment.BottomCenter
                 TraySide.Left -> AbsoluteAlignment.CenterLeft
                 TraySide.Right -> AbsoluteAlignment.CenterRight
             }
             val trayPadding = when (side) {
                 TraySide.Top -> Modifier.padding(top = TrayTop)
+                TraySide.Bottom -> Modifier.padding(bottom = BottomTrayGap)
                 TraySide.Left -> Modifier.absolutePadding(left = ChromeEdge, top = TopRowHeight)
                 TraySide.Right -> Modifier.absolutePadding(right = ChromeEdge, top = TopRowHeight)
             }
@@ -785,7 +798,10 @@ fun EditorScreen(
             ) {
                 val tray: @Composable () -> Unit = {
                     PenTray(
-                        modifier = Modifier.onSizeChanged { if (side == TraySide.Top && it.height > 0) trayHeight = it.height },
+                        modifier = Modifier
+                            .onSizeChanged { if (side == TraySide.Top && it.height > 0) trayHeight = it.height }
+                            .then(if (compact) Modifier.widthIn(max = windowWidth - edge * 2) else Modifier),
+                        scrollable = compact,
                         toolbox = toolbox,
                         side = side,
                         temporary = temporary,
@@ -795,10 +811,19 @@ fun EditorScreen(
                         onOpenPicker = { picker = if (picker == it) null else it },
                         onCollapse = { picker = null; collapsed = true },
                         picker = pickerContent,
-                        grip = trayGrip,
+                        grip = trayGrip.takeUnless { compact },
                     )
                 }
                 when (side) {
+                    // Compact: the tools capsule rides just above the tray, both in a thumb's reach.
+                    TraySide.Bottom -> Column(
+                        Modifier.onSizeChanged { bottomChromePx = it.height + with(density) { BottomTrayGap.roundToPx() } },
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        tools(false)
+                        tray()
+                    }
                     TraySide.Top -> if (wide) {
                         Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
                             tray()
@@ -823,7 +848,7 @@ fun EditorScreen(
             }
             // Narrow screens, top dock: the tools capsule floats on its own down the end edge.
             AnimatedVisibility(
-                visible = trayShown && side == TraySide.Top && !wide,
+                visible = trayShown && side == TraySide.Top && !wide, // never the compact bottom tray
                 enter = Motion.Enter.toolbar(reduce),
                 exit = Motion.Exit.toolbar(reduce),
                 modifier = Modifier.align(Alignment.TopEnd).padding(top = TrayTop + TopRowHeight, end = ChromeEdge),
@@ -845,7 +870,10 @@ fun EditorScreen(
                 audio,
                 onPlayFromInk = ::setPlayFromInk,
                 onOpenList = { recordingsOpen = true },
-                modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = AudioPillBottom).graphicsLayer { alpha = chromeAlpha },
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = if (bottomChromeShown) with(density) { bottomChromePx.toDp() } + 8.dp else AudioPillBottom)
+                    .graphicsLayer { alpha = chromeAlpha },
             )
             SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).padding(bottom = 16.dp)) { data ->
                 Snackbar(
@@ -871,6 +899,9 @@ fun EditorScreen(
                 menu = menu,
                 origin = pageOrigin,
                 colors = toolbox.quickColors(PenKind.Fountain),
+                // Never cover the floating chrome (the pen tray) with the menu (DS-05).
+                chromeBottomPx = topInsetPx.toFloat(),
+                bottomChromeTopPx = if (bottomChromeShown) screen.y - bottomInsetPx else 0f,
                 actions = SelectionActions(
                     onColor = { view?.recolorSelection(it) },
                     onThinner = { view?.thickenSelection(1f / THICKEN_STEP) },

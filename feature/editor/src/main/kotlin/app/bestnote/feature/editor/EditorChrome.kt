@@ -64,9 +64,9 @@ internal data class ChromeActions(
  * Mirrors in RTL with the rest of the chrome.
  */
 @Composable
-internal fun TitleCluster(title: String, page: Int, pageCount: Int, onBack: () -> Unit, modifier: Modifier = Modifier) {
+internal fun TitleCluster(title: String, page: Int, pageCount: Int, onBack: () -> Unit, modifier: Modifier = Modifier, compact: Boolean = false) {
     Row(
-        modifier.chromeSurface().padding(start = 2.dp, end = Spacing.L),
+        modifier.chromeSurface().padding(start = 2.dp, end = if (compact) Spacing.S else Spacing.L),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(Spacing.XS),
     ) {
@@ -76,7 +76,7 @@ internal fun TitleCluster(title: String, page: Int, pageCount: Int, onBack: () -
             onClick = onBack,
             size = 44.dp,
         )
-        Column(Modifier.widthIn(max = 240.dp)) {
+        Column(Modifier.widthIn(max = if (compact) 120.dp else 240.dp)) {
             Text(
                 title.ifBlank { stringResource(R.string.editor_untitled) },
                 style = MaterialTheme.typography.titleSmall.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold),
@@ -103,20 +103,24 @@ internal fun ActionPills(
     leftHanded: Boolean,
     actions: ChromeActions,
     modifier: Modifier = Modifier,
+    compact: Boolean = false,
 ) {
-    Row(modifier, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+    Row(modifier, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(if (compact) 6.dp else 10.dp)) {
         Row(Modifier.chromeSurface().padding(horizontal = 2.dp)) {
             ChromeIconButton(AtelierIcons.Undo, stringResource(R.string.editor_undo), actions.onUndo, enabled = canUndo, size = 44.dp)
             ChromeIconButton(AtelierIcons.Redo, stringResource(R.string.editor_redo), actions.onRedo, enabled = canRedo, size = 44.dp)
         }
-        SmartBoardPill { actions.onSmartBoard() }
+        if (!compact) SmartBoardPill { actions.onSmartBoard() }
         val layers = stringResource(R.string.editor_layers)
         val export = stringResource(R.string.editor_export)
         Row(Modifier.chromeSurface().padding(horizontal = 2.dp)) {
             actions.pagesMenu()
-            ChromeIconButton(AtelierIcons.Layers, layers, { actions.onComingSoon(layers) }, size = 44.dp)
-            ChromeIconButton(AtelierIcons.Export, export, { actions.onExport() }, size = 44.dp)
-            MoreMenu(dock, leftHanded, actions)
+            // Compact windows keep only Pages and More here: Smart Board, Layers and Export move into More.
+            if (!compact) {
+                ChromeIconButton(AtelierIcons.Layers, layers, { actions.onComingSoon(layers) }, size = 44.dp)
+                ChromeIconButton(AtelierIcons.Export, export, { actions.onExport() }, size = 44.dp)
+            }
+            MoreMenu(dock, leftHanded, actions, compact)
         }
     }
 }
@@ -142,7 +146,7 @@ private fun SmartBoardPill(onClick: () -> Unit) {
 }
 
 @Composable
-private fun MoreMenu(dock: ToolbarDock, leftHanded: Boolean, actions: ChromeActions) {
+private fun MoreMenu(dock: ToolbarDock, leftHanded: Boolean, actions: ChromeActions, compact: Boolean) {
     var open by remember { mutableStateOf(false) }
     Box {
         ChromeIconButton(AtelierIcons.More, stringResource(R.string.editor_more), { open = true }, size = 44.dp)
@@ -152,13 +156,28 @@ private fun MoreMenu(dock: ToolbarDock, leftHanded: Boolean, actions: ChromeActi
             shape = BestNoteShapes.Card,
             containerColor = MaterialTheme.colorScheme.surface,
         ) {
-            Text(
+            if (compact) {
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.editor_smart_board)) },
+                    leadingIcon = { Icon(AtelierIcons.Sparkle, null, tint = BestNoteTheme.colors.aiAccent, modifier = Modifier.size(20.dp)) },
+                    onClick = { actions.onSmartBoard(); open = false },
+                )
+                val layers = stringResource(R.string.editor_layers)
+                DropdownMenuItem(
+                    text = { Text(layers) },
+                    leadingIcon = { Icon(AtelierIcons.Layers, null, modifier = Modifier.size(20.dp)) },
+                    onClick = { actions.onComingSoon(layers); open = false },
+                )
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+            }
+            // The tray sits at the bottom of a compact window: the dock choice only applies to wider ones.
+            if (!compact) Text(
                 stringResource(R.string.toolbar_position),
                 style = BestNoteTheme.type.overline,
                 color = BestNoteTheme.colors.muted,
                 modifier = Modifier.padding(horizontal = Spacing.L, vertical = Spacing.S),
             )
-            listOf(
+            if (!compact) listOf(
                 ToolbarDock.Top to R.string.toolbar_top,
                 ToolbarDock.Left to R.string.toolbar_left,
                 ToolbarDock.Right to R.string.toolbar_right,

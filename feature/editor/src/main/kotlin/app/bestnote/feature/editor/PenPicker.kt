@@ -82,6 +82,7 @@ private class AnchoredPopoverPosition(private val side: TraySide, private val ga
         fun clampY(y: Int) = y.coerceIn(margin, (windowSize.height - h - margin).coerceAtLeast(margin))
         return when (side) {
             TraySide.Top -> IntOffset(clampX(anchorBounds.center.x - w / 2), anchorBounds.bottom + gap) // never over the tray
+            TraySide.Bottom -> IntOffset(clampX(anchorBounds.center.x - w / 2), clampY(anchorBounds.top - gap - h)) // opens upward
             TraySide.Left -> IntOffset(clampX(anchorBounds.right + gap), clampY(anchorBounds.center.y - h / 2))
             TraySide.Right -> IntOffset(clampX(anchorBounds.left - gap - w), clampY(anchorBounds.center.y - h / 2))
         }
@@ -103,6 +104,7 @@ internal fun AnchoredPopover(side: TraySide, onDismissed: () -> Unit, content: @
     }
     val origin = when (side) {
         TraySide.Top -> TransformOrigin(0.5f, 0f)
+        TraySide.Bottom -> TransformOrigin(0.5f, 1f)
         TraySide.Left -> TransformOrigin(0f, 0.5f)
         TraySide.Right -> TransformOrigin(1f, 0.5f)
     }
