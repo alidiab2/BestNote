@@ -18,6 +18,8 @@
  * side   temporary tool for the side button: eraser (default) | none
  * left/top  where the writing starts, in dp from the canvas' corner (default 16; 112 on the paged
  *        notebook, so the words land on the first page's writing lines)
+ * sensitivity / stabilization  override the pen's INK-04/05 tuning for this replay (--ef 0..1 /
+ *        --ei 0..100; default: what the pen picker set)
  *
  * Also: app.bestnote.debug.SEED (--es file, --ei cols, --ei rows) puts a corpus file's handwriting
  * straight onto the current page as finished strokes, to build 5k-stroke pages in a second, and
@@ -249,6 +251,11 @@ class ReplayInstaller : ContentProvider() {
                 val size = intent.getFloatExtra("size", BrushCatalog.DEFAULT_SIZE)
                 val side = intent.getStringExtra("side")
                 val sideTool = if (side == "none") null else Tool.Eraser
+                val tuning = if (intent.hasExtra("sensitivity") || intent.hasExtra("stabilization")) {
+                    app.bestnote.engine.ink.PenTuning(intent.getFloatExtra("sensitivity", 1f), intent.getIntExtra("stabilization", 0))
+                } else {
+                    null
+                }
                 fun applyPen() = when (canvas) {
                     is PagedDocumentView -> {
                         canvas.tool = tool
@@ -256,6 +263,7 @@ class ReplayInstaller : ContentProvider() {
                         canvas.colorArgb = color
                         canvas.brushSize = size
                         canvas.sideButtonTool = sideTool
+                        tuning?.let { canvas.penTuning = it }
                     }
                     is PageCanvasView -> {
                         canvas.tool = tool
