@@ -2,9 +2,12 @@ package app.bestnote.ai.vision.providers
 
 import app.bestnote.ai.vision.AiModel
 import app.bestnote.ai.vision.AiProviderKind
+import app.bestnote.ai.vision.BoardRequest
 import app.bestnote.ai.vision.ModelCatalog
 import app.bestnote.ai.vision.gemini.GeminiSettings
+import app.bestnote.ai.vision.ProviderCredentials
 import app.bestnote.ai.vision.VisionError
+import app.bestnote.ai.vision.VisionImage
 import app.bestnote.ai.vision.VisionProvider
 import app.bestnote.ai.vision.claude.ClaudeKeyChecker
 import app.bestnote.ai.vision.claude.ClaudeVisionProvider
@@ -25,17 +28,52 @@ class AiProviders(private val http: OkHttpClient, val settings: KeystoreAiSettin
         else -> settings.hasKey(kind)
     }
 
-    fun create(kind: AiProviderKind = selected): VisionProvider = when (kind) {
+    /** Models that hit a quota or were unknown this session; an automatic choice skips them. */
+    private val skipped = mutableSetOf<String>()
+
+    /**
+     * The provider for [kind]. With an automatic model choice it falls back through the next-best
+     * candidates when a model is out of quota or unavailable ([FallbackVisionProvider]).
+     */
+    fun create(kind: AiProviderKind = selected): VisionProvider = object : VisionProvider {
+        private suspend fun target(): VisionProvider {
+            val stored = settings.storedModel(kind)
+            if (!ModelCatalog.isAuto(stored) || kind == AiProviderKind.OpenAiCompatible) return createFor(kind) { settings.model(kind) }
+            return FallbackVisionProvider(
+                candidates = {
+                    ModelCatalog.candidates(settings.cachedModels(kind), ModelCatalog.preferenceOf(stored)).map { it.id }
+                        .ifEmpty { listOf(settings.model(kind)) }
+                },
+                providerFor = { id -> createFor(kind) { id } },
+                skipped = skipped,
+            )
+        }
+
+        override suspend fun reconstructBoard(image: VisionImage, request: BoardRequest) = target().reconstructBoard(image, request)
+
+        override suspend fun beautify(selection: VisionImage, widthPt: Float, heightPt: Float) = target().beautify(selection, widthPt, heightPt)
+
+        override suspend fun transcribe(selection: VisionImage, language: String?) = target().transcribe(selection, language)
+    }
+
+    private fun createFor(kind: AiProviderKind, modelId: suspend () -> String): VisionProvider = when (kind) {
         // The Gemini key stays in its own store; the model is resolved like every other provider's.
         AiProviderKind.Gemini -> GeminiVisionProvider(
             http,
             object : GeminiSettings {
                 override suspend fun apiKey() = settings.gemini.apiKey()
-                override suspend fun model() = settings.model(AiProviderKind.Gemini)
+                override suspend fun model() = modelId()
             },
         )
-        AiProviderKind.Claude -> ClaudeVisionProvider(http, settings.credentials(kind))
-        AiProviderKind.OpenAi, AiProviderKind.OpenAiCompatible -> OpenAiVisionProvider(http, settings.credentials(kind))
+        AiProviderKind.Claude, AiProviderKind.OpenAi, AiProviderKind.OpenAiCompatible -> {
+            val base = settings.credentials(kind)
+            val credentials = object : ProviderCredentials {
+                override suspend fun apiKey() = base.apiKey()
+                override suspend fun model() = modelId()
+                override suspend fun baseUrl() = base.baseUrl()
+            }
+            if (kind == AiProviderKind.Claude) ClaudeVisionProvider(http, credentials) else OpenAiVisionProvider(http, credentials)
+        }
     }
 
     /**

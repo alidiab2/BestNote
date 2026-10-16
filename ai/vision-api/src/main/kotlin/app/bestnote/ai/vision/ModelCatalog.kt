@@ -65,18 +65,32 @@ object ModelCatalog {
     }
 
     /** Newest usable model for [preference], or null when [models] has nothing suitable. */
-    fun pick(models: List<AiModel>, preference: Preference): AiModel? {
-        val usable = models.filter { it.vision != false && it.tier != Tier.Frontier }
+    fun pick(models: List<AiModel>, preference: Preference): AiModel? = candidates(models, preference).firstOrNull()
+
+    /**
+     * Every model an automatic choice may use, best first: tier order for [preference], and within a
+     * tier stable models before previews, newest first. Specialist models (deep research, image or
+     * audio generation, embeddings…) and the [Tier.Frontier] tier are never chosen automatically.
+     */
+    fun candidates(models: List<AiModel>, preference: Preference): List<AiModel> {
+        val usable = models.filter { it.vision != false && it.tier != Tier.Frontier && !isSpecialist(it.id) }
         val order = if (preference == Preference.Fast) {
             listOf(Tier.Fast, Tier.Balanced, Tier.Lite, Tier.Quality)
         } else {
             listOf(Tier.Quality, Tier.Balanced, Tier.Fast, Tier.Lite)
         }
-        for (tier in order) {
-            usable.filter { it.tier == tier }.maxWithOrNull(NEWEST)?.let { return it }
+        return order.flatMap { tier ->
+            usable.filter { it.tier == tier }.sortedWith(compareBy<AiModel> { isPreview(it.id) }.then(NEWEST.reversed()))
         }
-        return null
     }
+
+    /** Models built for something other than reading an image into notes. */
+    fun isSpecialist(id: String): Boolean = SPECIALIST.containsMatchIn(id.lowercase().substringAfterLast('/'))
+
+    private val SPECIALIST = Regex(
+        "research|embed|tts|audio|speech|transcri|realtime|live|imagen|image|veo|lyria|robotics|computer-use|" +
+            "aqa|learnlm|banana|moderation|whisper|dall-e|codex|search|gemma",
+    )
 
     /** Newest first: version, then stable before preview, then creation time, then shorter id (an alias over a snapshot). */
     val NEWEST: Comparator<AiModel> = compareBy<AiModel>({ VersionKey(version(it.id)) })
@@ -84,9 +98,9 @@ object ModelCatalog {
         .thenBy { it.created ?: 0L }
         .thenByDescending { it.id.length }
 
-    /** Picker order: newest first within Quality, Balanced, Fast, Lite, Frontier. */
+    /** Picker order: newest first within Quality, Balanced, Fast, Lite, Frontier; specialist models last. */
     fun sorted(models: List<AiModel>): List<AiModel> =
-        models.sortedWith(compareBy<AiModel> { it.tier.pickerRank() }.then(NEWEST.reversed()))
+        models.sortedWith(compareBy<AiModel>({ isSpecialist(it.id) }, { it.tier.pickerRank() }).then(NEWEST.reversed()))
 
     private fun Tier.pickerRank() = when (this) {
         Tier.Quality -> 0

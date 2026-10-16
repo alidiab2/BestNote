@@ -14,7 +14,7 @@ import java.util.Base64
 data class OpenAiConfig(
     /** OpenAI itself; an OpenAI-compatible endpoint passes its own base URL through the credentials. */
     val baseUrl: String = OPENAI_BASE_URL,
-    val timeoutSeconds: Long = 180,
+    val timeoutSeconds: Long = 240,
     val retryDelayMs: Long = 1_500,
     val maxTokens: Int = 16_000,
     /** Sent to compatible endpoints only; OpenAI's reasoning models accept only their default. */

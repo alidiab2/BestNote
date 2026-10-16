@@ -13,7 +13,7 @@ import java.util.Base64
 data class ClaudeConfig(
     val baseUrl: String = "https://api.anthropic.com/",
     /** Non-streaming; a dense board with adaptive thinking can take a while. */
-    val timeoutSeconds: Long = 180,
+    val timeoutSeconds: Long = 240,
     val retryDelayMs: Long = 1_500,
     /** Non-streaming ceiling that stays well inside HTTP timeouts and fits a full board. */
     val maxTokens: Int = 16_000,

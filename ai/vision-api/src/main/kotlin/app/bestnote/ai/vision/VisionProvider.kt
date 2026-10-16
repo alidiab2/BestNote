@@ -11,7 +11,9 @@ data class BoardRequest(val template: LayoutTemplate, val rtl: Boolean = false, 
 sealed class VisionError(message: String, cause: Throwable? = null) : Exception(message, cause) {
     class MissingKey : VisionError("No API key configured")
     class InvalidKey : VisionError("The API key was rejected")
-    class RateLimited(val retryAfterSeconds: Long?) : VisionError("Rate limited")
+    /** [quotaExhausted]: the plan's quota for this model is used up (free tiers: often 0), not a short burst limit. */
+    class RateLimited(val retryAfterSeconds: Long?, val quotaExhausted: Boolean = false) :
+        VisionError(if (quotaExhausted) "Quota exhausted" else "Rate limited")
     class Blocked(reason: String) : VisionError("Response blocked: $reason")
     /**
      * The provider answered but nothing usable came out. [raw] is the model's answer text when there
@@ -27,7 +29,7 @@ sealed class VisionError(message: String, cause: Throwable? = null) : Exception(
 
     /** The answer was cut off by the output limit and nothing complete could be salvaged. */
     class Truncated(val raw: String?) : VisionError("The answer was cut off before any note was complete")
-    class Network(cause: Throwable) : VisionError("Network error", cause)
+    class Network(cause: Throwable) : VisionError("Network error (${cause.javaClass.simpleName}: ${cause.message.orEmpty().take(120)})", cause)
 }
 
 /** The AI providers BestNote can call, all bring-your-own-key. */

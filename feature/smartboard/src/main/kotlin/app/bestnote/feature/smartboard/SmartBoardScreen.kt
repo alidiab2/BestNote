@@ -490,6 +490,7 @@ private fun FailedStage(failed: SmartBoardStage.Failed, onRetry: () -> Unit, onB
         SmartBoardStage.Reason.NoBlocks -> R.string.smartboard_error_empty
         SmartBoardStage.Reason.InvalidKey -> R.string.smartboard_error_key
         SmartBoardStage.Reason.RateLimited -> R.string.smartboard_error_rate
+        SmartBoardStage.Reason.QuotaExhausted -> R.string.smartboard_error_quota
         SmartBoardStage.Reason.Network -> R.string.smartboard_error_network
         SmartBoardStage.Reason.ModelUnavailable -> R.string.smartboard_error_model
         SmartBoardStage.Reason.ServerBusy -> R.string.smartboard_error_busy

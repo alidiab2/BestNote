@@ -60,7 +60,7 @@ sealed interface SmartBoardStage {
     /** [diagnostics]: provider, error, drop reasons and raw answer, for "Copy raw AI response" (debug / verbose only). */
     data class Failed(val reason: Reason, val detail: String? = null, val diagnostics: String? = null) : SmartBoardStage
 
-    enum class Reason { NoBlocks, InvalidKey, RateLimited, Network, ModelUnavailable, ServerBusy, Blocked, Truncated, Other }
+    enum class Reason { NoBlocks, InvalidKey, RateLimited, QuotaExhausted, Network, ModelUnavailable, ServerBusy, Blocked, Truncated, Other }
 }
 
 data class SmartBoardUiState(
@@ -212,6 +212,7 @@ class SmartBoardViewModel @Inject constructor(
         job?.cancel()
         job = viewModelScope.launch {
             val started = SystemClock.elapsedRealtime()
+            val startedAt = System.currentTimeMillis()
             val ticker = launch {
                 for (i in 0 until STEPS - 1) {
                     state.update { it.copy(stage = SmartBoardStage.Reading(i)) }
@@ -232,7 +233,7 @@ class SmartBoardViewModel @Inject constructor(
                 throw e
             } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
                 ticker.cancel()
-                if (!demo) VisionDiagnostics.recordOutcome(error = e)
+                if (!demo) VisionDiagnostics.recordOutcome(error = e, since = startedAt)
                 val last = VisionDiagnostics.latest()
                 // Content-free: error class + provider message (redacted) + per-block drop reasons. Never the key.
                 Log.w(TAG, "Smart Board failed (${s.provider.id}): ${e.javaClass.simpleName}: ${Redactor.redact(e.message.orEmpty())}")
@@ -241,7 +242,7 @@ class SmartBoardViewModel @Inject constructor(
                 val reason = when (e) {
                     is VisionError.BadResponse -> SmartBoardStage.Reason.NoBlocks
                     is VisionError.InvalidKey, is VisionError.MissingKey -> SmartBoardStage.Reason.InvalidKey
-                    is VisionError.RateLimited -> SmartBoardStage.Reason.RateLimited
+                    is VisionError.RateLimited -> if (e.quotaExhausted) SmartBoardStage.Reason.QuotaExhausted else SmartBoardStage.Reason.RateLimited
                     is VisionError.Network -> SmartBoardStage.Reason.Network
                     is VisionError.ModelUnavailable -> SmartBoardStage.Reason.ModelUnavailable
                     is VisionError.ServiceUnavailable -> SmartBoardStage.Reason.ServerBusy

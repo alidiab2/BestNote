@@ -44,6 +44,7 @@
     <string name="smartboard_error_empty">تعذرت قراءة أي شيء في هذه الصورة. جرّب صورة أقرب وأوضح.</string>
     <string name="smartboard_error_key">رُفض مفتاح API. تحقق منه بزر المفتاح.</string>
     <string name="smartboard_error_rate">مزود الذكاء مشغول. حاول بعد دقيقة.</string>
+    <string name="smartboard_error_quota">انتهت الحصة المتاحة لهذا الموديل. اختر موديلًا آخر من الأعلى، أو راجع خطتك عند المزود.</string>
     <string name="smartboard_error_network">لا اتصال بمزود الذكاء.</string>
     <string name="smartboard_error_other">حدث خطأ أثناء قراءة هذه الصورة.</string>
     <string name="smartboard_error_model">نموذج الذكاء هذا غير متاح لمفتاحك. اختر نموذجًا آخر من الإعدادات ← السبورة الذكية.</string>

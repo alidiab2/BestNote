@@ -44,6 +44,7 @@
     <string name="smartboard_error_empty">Nothing on this photo could be read. Try a closer, sharper photo.</string>
     <string name="smartboard_error_key">The API key was rejected. Check it with the key button.</string>
     <string name="smartboard_error_rate">The AI provider is busy. Try again in a minute.</string>
+    <string name="smartboard_error_quota">Your quota for this model is used up. Pick another model in the header, or check your plan with the provider.</string>
     <string name="smartboard_error_network">No connection to the AI provider.</string>
     <string name="smartboard_error_other">Something went wrong reading this photo.</string>
     <string name="smartboard_error_model">This AI model is not available for your key. Pick another model in Settings → Smart Board AI.</string>

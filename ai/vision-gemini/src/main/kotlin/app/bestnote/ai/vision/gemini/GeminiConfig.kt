@@ -4,7 +4,7 @@ package app.bestnote.ai.vision.gemini
 data class GeminiConfig(
     val baseUrl: String = "https://generativelanguage.googleapis.com/",
     /** Reasoning over a dense board can take a while. */
-    val timeoutSeconds: Long = 120,
+    val timeoutSeconds: Long = 240,
     /** Delay before the single retry of a 5xx / overloaded response. */
     val retryDelayMs: Long = 1_500,
     /** Faithful transcription, not creativity. */
