@@ -27,10 +27,10 @@ notebook.bnote
 On disk inside the app, a notebook lives **unpacked** as a directory with the same layout, which makes partial writes cheap. The `.bnote` zip is produced for export, share and backup.
 
 ## Versioning
-- `manifest.json` and every `pages/<id>.json` carry `"format": N` (current: **3**). Readers refuse versions newer than they know and offer "update the app".
+- `manifest.json` and every `pages/<id>.json` carry `"format": N` (current: **4**). Readers refuse versions newer than they know and offer "update the app".
 - Older versions are upgraded in memory on read by `FormatMigrations` (one step per version, on the JSON tree); the next save writes the current version.
 - v1 → v2: page metadata always states `paper` (v1 drafts could omit it, meaning White).
-- v2 → v3: the manifest may list `recordings` (MEDIA-04): `{id, title?, startedAtMillis, durationMillis}`; each one's audio is `assets/audio/<id>.m4a` (AAC, mono). Absent means none, so the step only stamps the version.
+- v3 → v4: the manifest may list `recordings` (MEDIA-04): `{id, title?, startedAtMillis, durationMillis}`; each one's audio is `assets/audio/<id>.m4a` (AAC, mono). Absent means none, so the step only stamps the version.
 - Every migration ships as a test fixture (`core/storage/src/test/resources/fixtures/v<N>-notebook/`) with a test in `FormatMigrationTest`.
 
 ## Backup (DOC-08)
