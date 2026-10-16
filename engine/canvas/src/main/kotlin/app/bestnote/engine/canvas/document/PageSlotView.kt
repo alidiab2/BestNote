@@ -99,6 +99,15 @@ internal class PageSlotView(context: Context, private val style: SheetStyle) : V
         invalidate()
     }
 
+    /** Strokes drawn faded: ink written after the audio playhead (MEDIA-05). */
+    private var dimmed: Set<Stroke> = emptySet()
+
+    fun setDimmed(strokes: Set<Stroke>) {
+        if (strokes == dimmed) return
+        dimmed = strokes
+        invalidate()
+    }
+
     fun setHidden(strokes: Set<Stroke>) {
         if (strokes === hidden) return
         hidden = strokes
@@ -167,7 +176,8 @@ internal class PageSlotView(context: Context, private val style: SheetStyle) : V
             if (stroke in hidden) continue
             val s = if (stroke === morphTarget) morphFrame ?: stroke else stroke
             val color = s.brush.colorIntArgb
-            val want = PaperInk.colorOn(color, paper)
+            var want = PaperInk.colorOn(color, paper)
+            if (s in dimmed) want = (want and 0x00FFFFFF) or ((want ushr 24) * DIM_ALPHA / 255 shl 24)
             if (want == color) {
                 drawList += s
             } else {
@@ -184,6 +194,9 @@ internal class PageSlotView(context: Context, private val style: SheetStyle) : V
         return drawList
     }
 }
+
+/** Ink written after the audio playhead keeps this share of its opacity. */
+private const val DIM_ALPHA = 56
 
 /** Sheet chrome shared by all slots, in pixels. */
 internal data class SheetStyle(val shadowRadius: Float, val shadowDy: Float, val shadowColor: Int) {

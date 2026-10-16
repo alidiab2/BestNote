@@ -11,6 +11,7 @@ import androidx.core.graphics.createBitmap
 import androidx.ink.strokes.Stroke
 import androidx.ink.strokes.StrokeInput
 import app.bestnote.core.database.NotebookRepository
+import app.bestnote.core.model.AudioSync
 import app.bestnote.core.model.InkBrush
 import app.bestnote.core.model.InkStroke
 import app.bestnote.core.model.Notebook
@@ -29,6 +30,9 @@ import app.bestnote.engine.canvas.document.PagedDocumentView
 import app.bestnote.engine.canvas.document.PaperPainter
 import app.bestnote.engine.pdf.PdfNotebookFiles
 import app.bestnote.engine.pdf.PdfPageBackgrounds
+import app.bestnote.feature.editor.audio.AudioController
+import app.bestnote.feature.editor.audio.InkAudioIndex
+import app.bestnote.feature.editor.audio.InkSyncHost
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -36,6 +40,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.ByteArrayOutputStream
 import java.io.File
+import java.util.Collections
 import java.util.IdentityHashMap
 import kotlin.math.roundToInt
 
@@ -56,6 +61,8 @@ internal class DocumentSession(
     private val document: PagedDocument,
     scope: CoroutineScope,
     private val pdfCacheDir: File,
+    /** Voice recordings of this notebook and their sync with the ink (MEDIA-04/05). */
+    internal val audio: AudioController,
     private val fallback: suspend () -> Notebook?,
 ) : PagedDocument.Listener {
     private var saver: Autosaver? = null
@@ -88,8 +95,56 @@ internal class DocumentSession(
     /** Rasters of the notebook's PDF pages (PDF-01), or null for a plain notebook. */
     private var pdf: PdfPageBackgrounds? = null
 
+    /** Strokes written during a recording (MEDIA-05), rebuilt lazily after the ink changes. */
+    private var syncIndex: InkAudioIndex? = null
+    private var dimKey: Pair<String, Int>? = null
+
     init {
+        audio.host = object : InkSyncHost {
+            override fun syncAt(page: Int, x: Float, y: Float): AudioSync? =
+                index().hit(page, x, y, TAP_SLOP_PT)?.sync
+
+            override fun dim(recordingId: String?, playheadMs: Long) = dimInk(recordingId, playheadMs)
+        }
         scope.launch { load() }
+    }
+
+    private fun index(): InkAudioIndex = syncIndex ?: buildIndex().also { syncIndex = it }
+
+    private fun buildIndex(): InkAudioIndex {
+        val entries = ArrayList<InkAudioIndex.Entry>()
+        val input = StrokeInput()
+        document.pages.forEachIndexed { pageIndex, page ->
+            for (stroke in page.strokes) {
+                val sync = models[stroke]?.audio ?: view?.brushOf(stroke)?.audio ?: continue
+                val inputs = stroke.inputs
+                val xs = FloatArray(inputs.size)
+                val ys = FloatArray(inputs.size)
+                for (i in 0 until inputs.size) {
+                    inputs.populate(i, input)
+                    xs[i] = input.x
+                    ys[i] = input.y
+                }
+                entries += InkAudioIndex.Entry(pageIndex, sync, xs, ys, stroke.brush.size / 2f, stroke)
+            }
+        }
+        return InkAudioIndex(entries)
+    }
+
+    private fun dimInk(recordingId: String?, playheadMs: Long) {
+        val view = view
+        if (recordingId == null) {
+            if (dimKey != null) view?.setDimmedStrokes(emptySet())
+            dimKey = null
+            return
+        }
+        val index = index()
+        val key = recordingId to index.dimSignature(recordingId, playheadMs)
+        if (key == dimKey) return
+        dimKey = key
+        val later = Collections.newSetFromMap(IdentityHashMap<Stroke, Boolean>())
+        index.laterThan(recordingId, playheadMs).mapTo(later) { it.ref as Stroke }
+        view?.setDimmedStrokes(later)
     }
 
     private suspend fun load() {
@@ -126,6 +181,7 @@ internal class DocumentSession(
         saver = open.autosaver
         assets.putAll(open.pkg.assets)
         document.images = imageCache
+        audio.attach(open.pkg.recordings, open.pkg.assets, open.autosaver)
         pdf = withContext(Dispatchers.IO) { PdfNotebookFiles.open(open.pkg, pdfCacheDir) }
         document.backgrounds = pdf
         document.reset(savedLayout.map { it.second }, savedLayout.map { it.first }, strokes = { strokes[it] }, elements = { pages[it].elements })
@@ -140,9 +196,20 @@ internal class DocumentSession(
     /** The view that draws (for pen-down brushes). Call again after a configuration change. */
     fun attach(view: PagedDocumentView) {
         this.view = view
+        view.audioStamper = audio::stamp
+        view.inkTapListener = if (audio.state.value.playFromInk) PagedDocumentView.InkTapListener(audio::onInkTap) else null
+        dimKey = null
+    }
+
+    /** "Play from ink" on or off: while on, taps on the page seek the audio instead of inking. */
+    fun setPlayFromInk(on: Boolean) {
+        audio.setPlayFromInk(on)
+        view?.inkTapListener = if (on) PagedDocumentView.InkTapListener(audio::onInkTap) else null
     }
 
     override fun onPageContentChanged(index: Int) {
+        syncIndex = null
+        dimKey = null
         val saver = saver ?: return
         val page = document.pages.getOrNull(index) ?: return
         saver.updatePage(page.id, modelsOf(page))
@@ -167,6 +234,8 @@ internal class DocumentSession(
      * new order. A page storage doesn't have yet (new, duplicated, or brought back by undo) also gets its ink.
      */
     override fun onPagesChanged() {
+        syncIndex = null
+        dimKey = null
         val saver = saver ?: return
         val layout = document.pages.map { it.id to it.page }
         if (layout == savedLayout) return
@@ -205,6 +274,9 @@ internal class DocumentSession(
     /** The editor closed: final save, then the library thumbnail. */
     fun close() {
         document.removeListener(this)
+        audio.close()
+        view?.audioStamper = null
+        view?.inkTapListener = null
         view = null
         document.images = null
         imageCache.clear()
@@ -268,6 +340,7 @@ internal class DocumentSession(
 
     private companion object {
         const val TAG = "BestNoteAutosave"
+        const val TAP_SLOP_PT = 10f
     }
 }
 

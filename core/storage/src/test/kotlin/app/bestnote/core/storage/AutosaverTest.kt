@@ -1,5 +1,6 @@
 package app.bestnote.core.storage
 
+import app.bestnote.core.model.AudioRecording
 import app.bestnote.core.model.InkStroke
 import app.bestnote.core.model.Notebook
 import app.bestnote.core.model.NotebookId
@@ -108,6 +109,28 @@ class AutosaverTest {
         assertEquals(1, saved.size)
         assertTrue(saved[0].notebook.updatedAtMillis > 1)
         assertEquals(saved[0].notebook, s.notebook)
+    }
+
+    @Test fun recordingsAreSavedWithTheirAudioAndRemovedWithIt() = runTest {
+        val store = RecordingStore()
+        val s = saver(store)
+        val a = AudioRecording("a", null, 100, 5_000)
+        val b = AudioRecording("b", "Second", 200, 7_000)
+        s.updateRecordings(listOf(a), mapOf(a.assetPath to byteArrayOf(1)))
+        s.updateRecordings(listOf(a, b), mapOf(b.assetPath to byteArrayOf(2)))
+        s.flush()
+        var pkg = store.read(nid)!!
+        assertEquals(listOf(a, b), pkg.recordings)
+        assertEquals(setOf(a.assetPath, b.assetPath), pkg.assets.keys)
+        assertEquals(listOf(a, b), s.recordings)
+        // Rename b, delete a: the audio of a goes, b's stays untouched.
+        s.updateRecordings(listOf(b.copy(title = "Renamed")))
+        assertTrue(s.hasUnsavedChanges)
+        s.flush()
+        pkg = store.read(nid)!!
+        assertEquals(listOf(b.copy(title = "Renamed")), pkg.recordings)
+        assertEquals(setOf(b.assetPath), pkg.assets.keys)
+        assertFalse(s.hasUnsavedChanges)
     }
 
     @Test fun flushWithNothingPendingWritesNothing() = runTest {

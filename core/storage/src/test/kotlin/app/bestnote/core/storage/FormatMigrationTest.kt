@@ -1,5 +1,6 @@
 package app.bestnote.core.storage
 
+import app.bestnote.core.model.AudioRecording
 import app.bestnote.core.model.PaperColor
 import app.bestnote.core.model.PaperTemplate
 import kotlinx.serialization.json.Json
@@ -47,7 +48,27 @@ class FormatMigrationTest {
         assertEquals(listOf("page-0", "page-1"), pkg.pages.map { it.id })
         assertTrue(pkg.pages.all { it.elements.isEmpty() })
         val page = Json.parseToJsonElement(BnoteFormat.toEntries(pkg).getValue("pages/page-0.json").decodeToString()).jsonObject
-        assertEquals("3", page["format"]!!.jsonPrimitive.content)
+        assertEquals(BnoteFormat.VERSION.toString(), page["format"]!!.jsonPrimitive.content)
+    }
+
+    @Test fun `v3 fixture migrates to v4 with no recordings`() {
+        val pkg = BnoteFormat.fromEntries { path -> javaClass.getResourceAsStream("/fixtures/v3-notebook/$path")?.readBytes() }
+        assertEquals("Old notebook", pkg.notebook.title)
+        assertEquals(PaperColor.Cream, pkg.pages[0].page.paperColor)
+        assertTrue(pkg.recordings.isEmpty())
+        val manifest = Json.parseToJsonElement(BnoteFormat.toEntries(pkg).getValue(BnoteFormat.MANIFEST).decodeToString()).jsonObject
+        assertEquals(BnoteFormat.VERSION.toString(), manifest["format"]!!.jsonPrimitive.content)
+    }
+
+    @Test fun `recordings and their audio survive a write and read`() {
+        val rec = AudioRecording("r1", "Lecture 1", 5_000, 61_000)
+        val pkg = NotebookPackage(
+            readV1().notebook, readV1().pages, mapOf(rec.assetPath to byteArrayOf(1, 2, 3)), listOf(rec),
+        )
+        val entries = BnoteFormat.toEntries(pkg)
+        val back = BnoteFormat.fromEntries { entries[it] }
+        assertEquals(listOf(rec), back.recordings)
+        assertEquals(listOf<Byte>(1, 2, 3), back.assets.getValue(rec.assetPath).toList())
     }
 
     @Test fun `a newer format is refused not migrated`() {

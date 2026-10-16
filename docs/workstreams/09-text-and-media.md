@@ -12,6 +12,6 @@
 | [ ] MEDIA-01 | Insert image: picker, camera, paste, drag-and-drop | M2 | M | — | Large images downsampled and stored once per notebook |
 | [x] MEDIA-02 | Crop, rotate, resize image; lock image | M2 | M | MEDIA-01 | — |
 | [ ] MEDIA-03 | Local sticker packs (files, importable) | M3 | M | MEDIA-01 | — |
-| [ ] MEDIA-04 | Audio recording in a notebook (foreground service, background-safe) | M3 | L | — | — |
-| [ ] MEDIA-05 | Audio ↔ ink sync: tap a stroke to play from that moment | M3 | L | MEDIA-04 | Strokes carry recording timestamps |
+| [x] MEDIA-04 | Audio recording in a notebook (foreground service, background-safe) | M3 | L | — | — |
+| [x] MEDIA-05 | Audio ↔ ink sync: tap a stroke to play from that moment | M3 | L | MEDIA-04 | Strokes carry recording timestamps |
 | [ ] MEDIA-06 | Document scan to page (edge detect, perspective fix) | M4 | L | — | Must work without Play Services in the F-Droid build |

@@ -27,9 +27,10 @@ notebook.bnote
 On disk inside the app, a notebook lives **unpacked** as a directory with the same layout, which makes partial writes cheap. The `.bnote` zip is produced for export, share and backup.
 
 ## Versioning
-- `manifest.json` and every `pages/<id>.json` carry `"format": N` (current: **2**). Readers refuse versions newer than they know and offer "update the app".
+- `manifest.json` and every `pages/<id>.json` carry `"format": N` (current: **4**). Readers refuse versions newer than they know and offer "update the app".
 - Older versions are upgraded in memory on read by `FormatMigrations` (one step per version, on the JSON tree); the next save writes the current version.
 - v1 → v2: page metadata always states `paper` (v1 drafts could omit it, meaning White).
+- v3 → v4: the manifest may list `recordings` (MEDIA-04): `{id, title?, startedAtMillis, durationMillis}`; each one's audio is `assets/audio/<id>.m4a` (AAC, mono). Absent means none, so the step only stamps the version.
 - Every migration ships as a test fixture (`core/storage/src/test/resources/fixtures/v<N>-notebook/`) with a test in `FormatMigrationTest`.
 
 ## Backup (DOC-08)
@@ -48,19 +49,20 @@ A backup folder holds `backup.json` (written last), `notebooks/<id>-<updatedAt>.
 already oriented, so A5 landscape is 595 x 420), `ink` (the chunk file name) and `paper` (`White`,
 `Cream` or `Dark`; optional, missing or unknown reads as `White`). Ink coordinates are page-local points.
 
-## `.ink` chunk v2 (implemented in `InkChunkCodec`; v1 is still read)
+## `.ink` chunk v3 (implemented in `InkChunkCodec`; v1 and v2 are still read)
 Big-endian; floats are raw IEEE-754 bits, so round-trips are bit-exact. The family key (e.g. `fountain.v1`) is the brush family captured at pen-down, so strokes keep rendering identically after brush tuning.
 ```
 header   "BNIK" | u16 version | u16 flags (0) | u32 payload length | u32 CRC32(payload)
 payload  u32 strokeCount, then per stroke:
            u8 tool (0 Pen, 1 Pencil, 2 Highlighter) | u8 penStyle (0 Fountain, 1 Ball, 2 Brush)
-           i32 colorArgb | f32 size | u8 familyKeyLength | familyKeyLength x UTF-8 (v2 only; 0 = none) | u32 sampleCount
+           i32 colorArgb | f32 size | u8 familyKeyLength | familyKeyLength x UTF-8 (v2+; 0 = none)
+           u8 audioIdLength (v3 only; 0 = none) | audioIdLength x UTF-8 recording id | i64 offsetMillis (only when the id is present)
+           u32 sampleCount
            sampleCount x (f32 x | f32 y | f32 pressure | f32 tiltRad | f32 orientationRad | i64 timeMillis)
 ```
-Versions: writers always write v2. Readers accept v1 (DOC-01 builds: no family key, read as `family = null`, drawn with the tool's current family) and v2. The key maps to `InkBrush.family` in `:core:model`.
+Versions: writers always write v3. The audio stamp (MEDIA-05) says the stroke was written `offsetMillis` after the recording started; strokes written with no recording have none. Readers accept v1 (DOC-01 builds: no family key, read as `family = null`, drawn with the tool's current family) and v2. The key maps to `InkBrush.family` in `:core:model`.
 
 An androidx.ink storage encoding can be added later as a new chunk version behind `StrokeChunkCodec`.
 
 ## Open questions
-- Store per-stroke timestamps relative to an audio recording (needed for MEDIA-05)?
 - Layers as separate `.ink` files or as sections in one chunk?

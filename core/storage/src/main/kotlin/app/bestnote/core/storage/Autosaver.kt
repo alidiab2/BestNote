@@ -1,5 +1,6 @@
 package app.bestnote.core.storage
 
+import app.bestnote.core.model.AudioRecording
 import app.bestnote.core.model.InkStroke
 import app.bestnote.core.model.Page
 import app.bestnote.core.model.PageElement
@@ -81,6 +82,9 @@ class Autosaver(
 
     /** New page order and metadata not yet committed, or null. Guarded by [lock]. */
     private var pendingLayout: List<Pair<String, Page>>? = null
+
+    /** New recording list and audio bytes not yet committed, or null (MEDIA-04). Guarded by [lock]. */
+    private var pendingAudio: PendingAudio? = null
     private var closed = false
 
     private val signal = Channel<Unit>(Channel.CONFLATED)
@@ -95,7 +99,12 @@ class Autosaver(
     /** Page ids in order, as last committed. */
     val pageIds: List<String> get() = synchronized(lock) { saved.pages.map { it.id } }
 
-    val hasUnsavedChanges: Boolean get() = synchronized(lock) { pending.isNotEmpty() || pendingElements.isNotEmpty() || pendingAssets.isNotEmpty() || pendingLayout != null }
+    val hasUnsavedChanges: Boolean get() = synchronized(lock) { pending.isNotEmpty() || pendingElements.isNotEmpty() || pendingAssets.isNotEmpty() || pendingLayout != null || pendingAudio != null }
+
+    /** The recordings as last committed. */
+    val recordings: List<AudioRecording> get() = synchronized(lock) { saved.recordings }
+
+    private class PendingAudio(val recordings: List<AudioRecording>, val added: Map<String, ByteArray>)
 
     private val worker = scope.launch { runWorker() }
 
@@ -162,6 +171,22 @@ class Autosaver(
         signal.trySend(Unit)
     }
 
+    /**
+     * Records the notebook's voice recordings (MEDIA-04) and schedules a save. [added] holds the audio
+     * bytes of recordings the store doesn't have yet, by [AudioRecording.assetPath]; a recording
+     * dropped from [recordings] has its audio removed. Cheap and non-blocking, like [updatePage].
+     */
+    fun updateRecordings(recordings: List<AudioRecording>, added: Map<String, ByteArray> = emptyMap()) {
+        require(recordings.map { it.id }.toSet().size == recordings.size) { "Recording ids must be unique" }
+        synchronized(lock) {
+            check(!closed) { "Autosaver is closed" }
+            val previous = pendingAudio
+            pendingAudio = PendingAudio(recordings, (previous?.added.orEmpty() + added).filterKeys { k -> recordings.any { it.assetPath == k } })
+        }
+        _state.value = SaveState.Dirty
+        signal.trySend(Unit)
+    }
+
     /** Saves pending edits now and returns once they are on disk. @throws on I/O failure. */
     suspend fun flush() {
         saveMutex.withLock { saveLocked() }
@@ -207,8 +232,9 @@ class Autosaver(
         val newAssets: Map<String, ByteArray>
         val layout: List<Pair<String, Page>>?
         val base: NotebookPackage
+        val audio: PendingAudio?
         synchronized(lock) {
-            if (pending.isEmpty() && pendingElements.isEmpty() && pendingAssets.isEmpty() && pendingLayout == null) return
+            if (pending.isEmpty() && pendingElements.isEmpty() && pendingAssets.isEmpty() && pendingLayout == null && pendingAudio == null) return
             batch = LinkedHashMap(pending)
             pending.clear()
             elements = LinkedHashMap(pendingElements)
@@ -217,6 +243,8 @@ class Autosaver(
             pendingAssets.clear()
             layout = pendingLayout
             pendingLayout = null
+            audio = pendingAudio
+            pendingAudio = null
             base = saved
         }
         val pkg = try {
@@ -234,7 +262,13 @@ class Autosaver(
                 updatedAtMillis = maxOf(clock(), base.notebook.updatedAtMillis),
                 pageCount = pages.size,
             )
-            NotebookPackage(notebook, pages, base.assets + newAssets).also { store.writePages(it, changed) }
+            val (assets, recordings) = if (audio == null) {
+                (base.assets + newAssets) to base.recordings
+            } else {
+                val keep = audio.recordings.mapTo(HashSet()) { it.assetPath }
+                (base.assets.filterKeys { !it.startsWith(AudioRecording.ASSET_DIR) || it in keep } + newAssets + audio.added) to audio.recordings
+            }
+            NotebookPackage(notebook, pages, assets, recordings).also { store.writePages(it, changed) }
         } catch (e: Throwable) {
             // Put the batch back unless the page was edited again meanwhile (newer content wins).
             synchronized(lock) {
@@ -242,6 +276,7 @@ class Autosaver(
                 elements.forEach { (id, shapes) -> pendingElements.putIfAbsent(id, shapes) }
                 newAssets.forEach { (path, bytes) -> pendingAssets.putIfAbsent(path, bytes) }
                 if (pendingLayout == null) pendingLayout = layout
+                if (audio != null && pendingAudio == null) pendingAudio = audio
             }
             if (e !is CancellationException) _state.value = SaveState.Failed(e)
             throw e

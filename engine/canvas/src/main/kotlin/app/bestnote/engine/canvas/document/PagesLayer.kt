@@ -85,6 +85,7 @@ internal class PagesLayer(context: Context, private val sheet: SheetStyle, var m
         slot.setHidden(if (index == hiddenPage) hidden else emptySet())
         if (index == morphPage) slot.setMorph(morphTarget, morphFrame) else slot.setMorph(null, null)
         slot.setHiddenElements(if (index == hiddenElementsPage) hiddenElements else emptySet())
+        slot.setDimmed(dimmed)
     }
 
     private var morphPage = -1
@@ -109,6 +110,16 @@ internal class PagesLayer(context: Context, private val sheet: SheetStyle, var m
         hiddenElementsPage = if (ids.isEmpty()) -1 else index
         hiddenElements = ids
         if (index >= 0) window.slotFor(index)?.setHiddenElements(ids)
+    }
+
+    private var dimmed: Set<androidx.ink.strokes.Stroke> = emptySet()
+
+    /** Draws [strokes] faded on every page (ink written after the audio playhead); empty restores. */
+    fun setDimmed(strokes: Set<androidx.ink.strokes.Stroke>) {
+        if (strokes == dimmed) return
+        dimmed = strokes
+        val doc = document ?: return
+        for (i in doc.pages.indices) window.slotFor(i)?.setDimmed(strokes)
     }
 
     private var hiddenPage = -1

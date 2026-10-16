@@ -24,6 +24,7 @@ import androidx.ink.authoring.InProgressStrokesFinishedListener
 import androidx.ink.authoring.InProgressStrokesView
 import androidx.ink.strokes.Stroke
 import androidx.input.motionprediction.MotionEventPredictor
+import app.bestnote.core.model.AudioSync
 import app.bestnote.core.model.InkBrush
 import app.bestnote.core.model.PageElement
 import app.bestnote.core.model.PaperSizes
@@ -168,6 +169,26 @@ class PagedDocumentView(context: Context) : FrameLayout(context), InProgressStro
         set(value) {
             palm.onPenSeen = value
         }
+
+    /**
+     * MEDIA-05: while set, returns the audio sync stamp for a stroke whose pen went down at the given
+     * `uptimeMillis` (null = no recording). The stamp is stored with the stroke's brush.
+     */
+    var audioStamper: ((Long) -> AudioSync?)? = null
+
+    /** MEDIA-05 "play from ink": a tap on a page, in page points (x, y from the page's top-left). */
+    fun interface InkTapListener {
+        fun onInkTap(page: Int, x: Float, y: Float)
+    }
+
+    /**
+     * While non-null, taps (pen or finger) are reported here instead of inking, so the host can seek
+     * audio from the tapped stroke. Finger scrolling and zoom keep working.
+     */
+    var inkTapListener: InkTapListener? = null
+
+    /** Draws [strokes] faded (ink written after the audio playhead, MEDIA-05); empty restores. */
+    fun setDimmedStrokes(strokes: Set<Stroke>) = pages.setDimmed(strokes)
 
     /** CANVAS-04 settings: two-finger tap undoes, three-finger tap redoes. */
     var twoFingerTapUndo: Boolean = true
@@ -655,6 +676,11 @@ class PagedDocumentView(context: Context) : FrameLayout(context), InProgressStro
         }
         if (decision == InputDecision.Draw || decision == InputDecision.Erase) {
             val page = l?.pageAt(x + pages.scrollX, y + pages.scrollY) ?: -1
+            if (page >= 0 && inkTapListener != null) {
+                if (!finger) reportInkTap(page, x, y)
+                else tapCandidate = Triple(x, y, event.eventTime).also { scrolling[id] = x to y }
+                return
+            }
             if (page >= 0) {
                 requestUnbufferedDispatch(event)
                 begin(event, se, sideButton.onDown(se, tool), page)
@@ -672,6 +698,22 @@ class PagedDocumentView(context: Context) : FrameLayout(context), InProgressStro
             if (zoomAnimator != null) settleZoom()
             scrolling[id] = x to y
         }
+    }
+
+    /** Reports a tap at view ([x], [y]) to [inkTapListener]. */
+    private fun reportInkTap(x: Float, y: Float) {
+        val page = pages.layout?.pageAt(x + pages.scrollX, y + pages.scrollY) ?: return
+        reportInkTap(page, x, y)
+    }
+
+    private fun reportInkTap(page: Int, x: Float, y: Float) {
+        val listener = inkTapListener ?: return
+        val toView = Matrix()
+        val toPage = Matrix()
+        if (!pageToView(page, toView) || !toView.invert(toPage)) return
+        val pt = floatArrayOf(x, y)
+        toPage.mapPoints(pt)
+        listener.onInkTap(page, pt[0], pt[1])
     }
 
     /** Applies one frame of finger panning (one finger) or pinching (two or more). */
@@ -717,6 +759,7 @@ class PagedDocumentView(context: Context) : FrameLayout(context), InProgressStro
         tapCandidate = null
         val now = se.latest.timeMillis
         if (now - t0 > ViewConfiguration.getTapTimeout() * 2L) return false
+        reportInkTap(x0, y0)
         val prev = lastTap
         if (prev != null && now - prev.third <= ViewConfiguration.getDoubleTapTimeout() &&
             abs(x0 - prev.first) < doubleTapSlop && abs(y0 - prev.second) < doubleTapSlop
@@ -857,7 +900,14 @@ class PagedDocumentView(context: Context) : FrameLayout(context), InProgressStro
         inking[pointerId] = page to strokeId
         startHold(event, pointerId)
         strokePages[strokeId] = page
-        StrokeBrushes.capture(strokeTool, penStyle, colorArgb, sizePt)?.let { strokeBrushes.begin(strokeId, it) }
+        captureBrush(event, strokeTool, sizePt)?.let { strokeBrushes.begin(strokeId, it) }
+    }
+
+    /** The brush a stroke starting with [event] is stored with, including its audio stamp. */
+    private fun captureBrush(event: MotionEvent, strokeTool: Tool, sizePt: Float): InkBrush? {
+        val brush = StrokeBrushes.capture(strokeTool, penStyle, colorArgb, sizePt) ?: return null
+        val stamp = audioStamper?.invoke(event.downTime) ?: return brush
+        return brush.copy(audio = stamp)
     }
 
     private fun startHighlight(event: MotionEvent, pointerId: Int, strokeTool: Tool, page: Int, brush: androidx.ink.brush.Brush, strokeToView: Matrix, sizePt: Float) {
@@ -865,7 +915,7 @@ class PagedDocumentView(context: Context) : FrameLayout(context), InProgressStro
         val viewToStroke = Matrix().also { strokeToView.invert(it) }
         val h = WetHighlighter(pointerId, brush, event.downTime, viewToStroke)
         highlighting = page to h
-        StrokeBrushes.capture(strokeTool, penStyle, colorArgb, sizePt)?.let { strokeBrushes.begin(h.id, it) }
+        captureBrush(event, strokeTool, sizePt)?.let { strokeBrushes.begin(h.id, it) }
         h.add(event, null)
         pages.setWetHighlight(page, h.stroke, brush.colorIntArgb)
         startHold(event, pointerId)

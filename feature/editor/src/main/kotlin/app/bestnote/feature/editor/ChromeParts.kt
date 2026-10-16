@@ -2,7 +2,7 @@ package app.bestnote.feature.editor
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
@@ -50,17 +50,21 @@ internal fun ChromeIconButton(
     size: Dp = 40.dp,
     shape: Shape = CircleShape,
     tint: Color = LocalContentColor.current,
+    onLongClick: (() -> Unit)? = null,
+    longClickLabel: String? = null,
 ) {
     Box(
         modifier
             .size(size)
             .clip(shape)
-            .clickable(
+            .combinedClickable(
                 enabled = enabled,
                 onClickLabel = label,
                 role = Role.Button,
                 interactionSource = remember { MutableInteractionSource() },
                 indication = ripple(),
+                onLongClick = onLongClick,
+                onLongClickLabel = longClickLabel,
                 onClick = onClick,
             )
             .alpha(if (enabled) 1f else DisabledAlpha),

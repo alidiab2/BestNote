@@ -2,6 +2,7 @@ package app.bestnote.core.storage
 
 import app.bestnote.core.model.CropRect
 import app.bestnote.core.model.ImageElement
+import app.bestnote.core.model.AudioRecording
 import app.bestnote.core.model.Notebook
 import app.bestnote.core.model.NotebookId
 import app.bestnote.core.model.Page
@@ -23,6 +24,16 @@ internal data class ManifestJson(
     val notebook: NotebookJson,
     val pages: List<String>,
     val assets: List<String> = emptyList(),
+    /** Voice recordings (MEDIA-04, format 3); each one's audio is the asset `assets/audio/<id>.m4a`. */
+    val recordings: List<RecordingJson> = emptyList(),
+)
+
+@Serializable
+internal data class RecordingJson(
+    val id: String,
+    val title: String? = null,
+    val startedAtMillis: Long,
+    val durationMillis: Long,
 )
 
 @Serializable
@@ -83,8 +94,8 @@ internal data class ElementJson(
  * Shared by the unpacked directory store and the zip archive so both stay byte-identical.
  */
 object BnoteFormat {
-    /** Current layout. History: 1 = DOC-01 draft, 2 = page metadata always carries `paper` (see [FormatMigrations]). */
-    const val VERSION = 3
+    /** Current layout. History: 1 = DOC-01 draft, 2 = page metadata always carries `paper`, 3 = pages carry `elements`, 4 = manifest lists audio `recordings` (see [FormatMigrations]). */
+    const val VERSION = 4
     const val MANIFEST = "manifest.json"
     const val PAGES_DIR = "pages/"
     const val ASSETS_DIR = "assets/"
@@ -107,6 +118,7 @@ object BnoteFormat {
     /** All entries of [pkg]; [MANIFEST] is the last key so writers can commit it last. */
     fun toEntries(pkg: NotebookPackage): LinkedHashMap<String, ByteArray> {
         pkg.assets.keys.forEach(::requireValidAssetPath)
+        require(pkg.recordings.all { it.assetPath in pkg.assets }) { "Every recording needs its audio asset" }
         val out = LinkedHashMap<String, ByteArray>()
         for (p in pkg.pages) {
             val meta = PageJson(VERSION, p.id, p.page.index, p.page.template.name, p.page.widthPt, p.page.heightPt, "${p.id}.ink", p.page.paperColor.name, p.page.pdf?.asset, p.page.pdf?.pageIndex ?: 0, p.elements.map(::elementJson))
@@ -135,7 +147,11 @@ object BnoteFormat {
             construct("asset") { requireValidAssetPath(path) }
             entry(path) ?: throw CorruptChunkException("Missing asset $path")
         }
-        return construct("notebook") { NotebookPackage(manifest.notebook.toModel(), pages, assets) }
+        // A recording whose audio is gone is dropped rather than failing the whole notebook.
+        val recordings = manifest.recordings.mapNotNull { r ->
+            construct("recording") { AudioRecording(r.id, r.title, r.startedAtMillis, r.durationMillis) }.takeIf { it.assetPath in assets }
+        }
+        return construct("notebook") { NotebookPackage(manifest.notebook.toModel(), pages, assets, recordings) }
     }
 
     /** Notebook metadata from a manifest, for listing without reading pages. */
@@ -166,6 +182,7 @@ object BnoteFormat {
             notebook = NotebookJson(n.id.value, n.title, n.createdAtMillis, n.updatedAtMillis, n.template.name, n.pageCount),
             pages = pkg.pages.map { it.id },
             assets = pkg.assets.keys.toList(),
+            recordings = pkg.recordings.map { RecordingJson(it.id, it.title, it.startedAtMillis, it.durationMillis) },
         )
         return json.encodeToString(ManifestJson.serializer(), m)
     }

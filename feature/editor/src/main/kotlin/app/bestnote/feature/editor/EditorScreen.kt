@@ -6,7 +6,17 @@
  */
 package app.bestnote.feature.editor
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
 import android.view.View
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
+import app.bestnote.feature.editor.audio.AudioController
+import app.bestnote.feature.editor.audio.AudioPill
+import app.bestnote.feature.editor.audio.RecorderHub
+import app.bestnote.feature.editor.audio.RecordingsSheet
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.absoluteOffset
@@ -167,7 +177,8 @@ class EditorViewModel @Inject constructor(
     val document = PagedDocument().apply { blankPage = Page(notebookId, 0) }
 
     /** Loads the pages, autosaves them and keeps the thumbnail fresh (DOC-03, DOC-10, CANVAS-07). */
-    internal val session = DocumentSession(notebookId, repository, document, viewModelScope, File(context.cacheDir, "pdf")) {
+    internal val audio = AudioController(context, notebookId, viewModelScope)
+    internal val session = DocumentSession(notebookId, repository, document, viewModelScope, File(context.cacheDir, "pdf"), audio) {
         dao.observe(notebookId.value).filterNotNull().first().toModel()
     }
 
@@ -254,6 +265,7 @@ private val ChromeGap = 12.dp
 
 /** Below this width the top dock floats the tools capsule on its own, down the end edge. */
 private val WideTopTray = 960.dp
+private val AudioPillBottom = 64.dp
 private const val DeskMidStop = 0.6f
 private const val DeskMidMix = 0.45f
 private const val DeskCenterY = 0.45f
@@ -295,6 +307,9 @@ fun EditorScreen(
         onSelecting = { viewModel.setLasso(true) },
         onMessage = { id -> scope.launch { snackbar.currentSnackbarData?.dismiss(); snackbar.showSnackbar(messages.getValue(id)) } },
     )
+    val audio = viewModel.audio
+    val audioState by audio.state.collectAsStateWithLifecycle()
+    var recordingsOpen by remember { mutableStateOf(false) }
     val reduce = reducedMotion()
     val side = traySide(state.dock, state.leftHanded)
     LifecycleEventEffect(Lifecycle.Event.ON_STOP) { viewModel.session.onStop() }
@@ -323,6 +338,52 @@ fun EditorScreen(
     val trayShown = !collapsed && !autoHidden
     val chromeAlpha by animateFloatAsState(if (writing) Motion.Toolbar.WritingAlpha else 1f, Motion.Toolbar.fadeSpec(), label = "chromeAlpha")
 
+    val micDenied = stringResource(R.string.audio_permission_denied)
+    val micFailed = stringResource(R.string.audio_failed)
+    val micSaved = stringResource(R.string.audio_saved)
+    val micList = stringResource(R.string.audio_recordings)
+    val context = LocalContext.current
+    val micPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { granted ->
+        if (granted[Manifest.permission.RECORD_AUDIO] == true) {
+            audio.startRecording()
+        } else {
+            scope.launch {
+                snackbar.currentSnackbarData?.dismiss()
+                snackbar.showSnackbar(micDenied)
+            }
+        }
+    }
+    fun onMic() {
+        picker = null
+        if (audioState.recording != null || audioState.recordingElsewhere) {
+            audio.stopRecording()
+        } else if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
+            audio.startRecording()
+        } else {
+            // The notification permission is best effort: the recording runs without it, only the notification is hidden.
+            val wanted = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                arrayOf(Manifest.permission.RECORD_AUDIO, Manifest.permission.POST_NOTIFICATIONS)
+            } else {
+                arrayOf(Manifest.permission.RECORD_AUDIO)
+            }
+            micPermission.launch(wanted)
+        }
+    }
+    fun setPlayFromInk(on: Boolean) = viewModel.session.setPlayFromInk(on)
+    LaunchedEffect(audioState.failure) {
+        if (audioState.failure != null) {
+            snackbar.currentSnackbarData?.dismiss()
+            snackbar.showSnackbar(micFailed)
+            audio.dismissFailure()
+        }
+    }
+    LaunchedEffect(audio) {
+        RecorderHub.finished.collect { f ->
+            if (f.notebookId != viewModel.notebookId.value) return@collect
+            snackbar.currentSnackbarData?.dismiss()
+            if (snackbar.showSnackbar(micSaved, actionLabel = micList) == SnackbarResult.ActionPerformed) recordingsOpen = true
+        }
+    }
     val comingSoonFormat = stringResource(R.string.editor_coming_soon)
     val clearedText = stringResource(R.string.editor_page_cleared)
     val undoText = stringResource(R.string.editor_undo)
@@ -550,6 +611,9 @@ fun EditorScreen(
                     onShapes = ::toggleShapes,
                     onText = { picker = null; elements.insertText() },
                     onImage = { picker = null; elements.sourceMenu = true },
+                    audioActive = audioState.recording != null || recordingsOpen,
+                    onAudio = ::onMic,
+                    onAudioLongPress = { picker = null; recordingsOpen = true },
                 )
             }
             AnimatedVisibility(
@@ -618,6 +682,13 @@ fun EditorScreen(
                 })
             }
 
+            AudioPill(
+                audioState,
+                audio,
+                onPlayFromInk = ::setPlayFromInk,
+                onOpenList = { recordingsOpen = true },
+                modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = AudioPillBottom).graphicsLayer { alpha = chromeAlpha },
+            )
             SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).padding(bottom = 16.dp)) { data ->
                 Snackbar(
                     data,
@@ -627,6 +698,11 @@ fun EditorScreen(
                     actionColor = BestNoteTheme.colors.aiAccent,
                 )
             }
+        }
+
+        // ---- recordings (MEDIA-04/05) ----
+        if (recordingsOpen) {
+            RecordingsSheet(audioState, audio, onPlayFromInk = ::setPlayFromInk, onDismiss = { recordingsOpen = false })
         }
 
         // ---- lasso menu (CANVAS-10/11): over the selection, never under the pen ----

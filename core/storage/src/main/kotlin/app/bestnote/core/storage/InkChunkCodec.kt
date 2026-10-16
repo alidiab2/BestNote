@@ -1,5 +1,6 @@
 package app.bestnote.core.storage
 
+import app.bestnote.core.model.AudioSync
 import app.bestnote.core.model.InkBrush
 import app.bestnote.core.model.InkStroke
 import app.bestnote.core.model.PenStyle
@@ -27,7 +28,9 @@ interface StrokeChunkCodec {
 }
 
 /**
- * `.ink` chunk, v2 (v1 is still read). v2 adds the brush-family key after the size:
+ * `.ink` chunk, v3 (v1 and v2 are still read). v3 adds the audio sync stamp after the family key:
+ * `u8 idLength (0 = none) | idLength x UTF-8 recording id | i64 offsetMillis (only when idLength > 0)`.
+ * v2 adds the brush-family key after the size:
  * `u8 keyLength (0 = none) | keyLength x UTF-8`.
  *
  * v1: All integers big-endian, floats as raw IEEE-754 bits (lossless).
@@ -39,7 +42,7 @@ interface StrokeChunkCodec {
  * ```
  */
 object InkChunkCodec : StrokeChunkCodec {
-    const val VERSION = 2
+    const val VERSION = 3
     private const val MAX_FAMILY_BYTES = 255
     const val HEADER_SIZE = 16
     private val MAGIC = byteArrayOf('B'.code.toByte(), 'N'.code.toByte(), 'I'.code.toByte(), 'K'.code.toByte())
@@ -59,8 +62,14 @@ object InkChunkCodec : StrokeChunkCodec {
             require(key.size <= MAX_FAMILY_BYTES) { "Brush family key too long" }
             key
         }
+        val audioIds = strokes.map { s ->
+            val id = s.audio?.recordingId?.encodeToByteArray() ?: EMPTY
+            require(id.size <= MAX_FAMILY_BYTES) { "Recording id too long" }
+            id
+        }
         val payloadSize = 4 + strokes.indices.sumOf { i ->
-            STROKE_HEADER.toLong() + 1 + families[i].size + strokes[i].samples.size.toLong() * SAMPLE_SIZE
+            STROKE_HEADER.toLong() + 1 + families[i].size + 1 + audioIds[i].size + (if (audioIds[i].isEmpty()) 0 else 8) +
+                strokes[i].samples.size.toLong() * SAMPLE_SIZE
         }
         require(payloadSize <= Int.MAX_VALUE - HEADER_SIZE) { "Page too large for one chunk" }
         val buf = ByteBuffer.allocate(HEADER_SIZE + payloadSize.toInt()).order(ByteOrder.BIG_ENDIAN)
@@ -73,6 +82,11 @@ object InkChunkCodec : StrokeChunkCodec {
             buf.putFloat(s.brush.size)
             buf.put(families[i].size.toByte())
             buf.put(families[i])
+            buf.put(audioIds[i].size.toByte())
+            if (audioIds[i].isNotEmpty()) {
+                buf.put(audioIds[i])
+                buf.putLong(s.audio!!.offsetMillis)
+            }
             buf.putInt(s.samples.size)
             for (p in s.samples) {
                 buf.putFloat(p.x); buf.putFloat(p.y); buf.putFloat(p.pressure)
@@ -126,13 +140,19 @@ object InkChunkCodec : StrokeChunkCodec {
             } else {
                 null
             }
+            val audio = if (version >= 3) {
+                val idBytes = ByteArray(buf.get().toInt() and 0xFF).also { buf.get(it) }
+                if (idBytes.isEmpty()) null else AudioSync(idBytes.decodeToString(), buf.long)
+            } else {
+                null
+            }
             val n = buf.int
             if (n < 0 || n.toLong() * SAMPLE_SIZE > buf.remaining()) throw CorruptChunkException("Bad sample count $n")
             val samples = ArrayList<StylusSample>(n)
             repeat(n) {
                 samples += StylusSample(buf.float, buf.float, buf.float, buf.float, buf.float, buf.long)
             }
-            strokes += InkStroke(InkBrush(tool, style, color, size, family), samples)
+            strokes += InkStroke(InkBrush(tool, style, color, size, family, audio), samples)
         }
         if (buf.hasRemaining()) throw CorruptChunkException("${buf.remaining()} trailing bytes")
         return strokes

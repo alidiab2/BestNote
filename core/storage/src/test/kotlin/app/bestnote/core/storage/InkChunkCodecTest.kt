@@ -1,5 +1,6 @@
 package app.bestnote.core.storage
 
+import app.bestnote.core.model.AudioSync
 import app.bestnote.core.model.InkBrush
 import app.bestnote.core.model.InkStroke
 import app.bestnote.core.model.PenStyle
@@ -102,6 +103,19 @@ class InkChunkCodecTest {
         val s = randomStrokes(1)[0]
         val withKey = s.copy(brush = s.brush.copy(family = "brush-pen.v1"))
         assertEquals("brush-pen.v1", InkChunkCodec.decode(InkChunkCodec.encode(listOf(withKey)))[0].brush.family)
+    }
+
+    @Test fun audioSyncRoundTripsAndOtherStrokesStayUnsynced() {
+        val a = randomStrokes(3, seed = 8)
+        val synced = listOf(
+            a[0].copy(brush = a[0].brush.copy(audio = AudioSync("rec-1", 12_345))),
+            a[1].copy(brush = a[1].brush.copy(audio = null)),
+            a[2].copy(brush = a[2].brush.copy(audio = AudioSync("r2", 0))),
+        )
+        val back = InkChunkCodec.decode(InkChunkCodec.encode(synced))
+        assertEquals(synced, back)
+        assertEquals(AudioSync("rec-1", 12_345), back[0].audio)
+        assertEquals(null, back[1].audio)
     }
 
     /** The original v1 layout (no family key), as written by DOC-01 builds. */
