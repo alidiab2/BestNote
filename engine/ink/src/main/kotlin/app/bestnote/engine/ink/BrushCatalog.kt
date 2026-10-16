@@ -85,6 +85,21 @@ object BrushCatalog {
         return (alpha shl 24) or (colorArgb and 0x00FFFFFF)
     }
 
+    private val inkSpecs = Tool.entries.filter { it.inks }.flatMap { t -> PenStyle.entries.map { t to it } }
+
+    /**
+     * Best-effort stored brush for an androidx.ink [brush] (family -> tool and pen style; size and opacity
+     * undone). For strokes with no pen-down record.
+     */
+    fun modelBrush(brush: Brush): app.bestnote.core.model.InkBrush {
+        val family = familyOf(brush)
+        val (tool, style) = inkSpecs.firstOrNull { (t, s) -> spec(t, s)?.family == family } ?: (Tool.Pen to PenStyle.Fountain)
+        val spec = spec(tool, style)!!
+        val alpha = ((brush.colorIntArgb ushr 24) / spec.opacity).toInt().coerceIn(0, 255)
+        val color = (alpha shl 24) or (brush.colorIntArgb and 0x00FFFFFF)
+        return app.bestnote.core.model.InkBrush(tool, style, color, brush.size / spec.sizeScale, family?.key)
+    }
+
     /** An androidx.ink [Brush] for [tool], or null when the tool doesn't ink. */
     fun brush(tool: Tool, penStyle: PenStyle, colorArgb: Int, size: Float = DEFAULT_SIZE): Brush? {
         val spec = spec(tool, penStyle) ?: return null

@@ -27,6 +27,7 @@ internal fun randomStrokes(count: Int, seed: Int = 42, maxSamples: Int = 48): Li
             InkBrush(
                 inkTools.random(r), PenStyle.entries.random(r), r.nextInt(), r.nextFloat() * 40f,
                 family = listOf(null, "fountain.v1", "highlighter-chisel.v1", "قلم.v2").random(r),
+                fillArgb = if (r.nextBoolean()) null else r.nextInt(),
             ),
             List(r.nextInt(1, maxSamples + 1)) {
                 t += r.nextInt(0, 20)
@@ -95,7 +96,7 @@ class InkChunkCodecTest {
     }
 
     @Test fun version1ChunksStillDecodeWithoutFamily() {
-        val strokes = randomStrokes(30, seed = 5).map { it.copy(brush = it.brush.copy(family = null)) }
+        val strokes = randomStrokes(30, seed = 5).map { it.copy(brush = it.brush.copy(family = null, fillArgb = null)) }
         assertEquals(strokes, InkChunkCodec.decode(encodeV1(strokes)))
     }
 
@@ -116,6 +117,22 @@ class InkChunkCodecTest {
         assertEquals(synced, back)
         assertEquals(AudioSync("rec-1", 12_345), back[0].audio)
         assertEquals(null, back[1].audio)
+    }
+
+    @Test fun shapeFillRoundTripsAndOlderChunksHaveNone() {
+        val a = randomStrokes(3, seed = 9).map { it.copy(brush = it.brush.copy(fillArgb = null)) }
+        val filled = listOf(
+            a[0].copy(brush = a[0].brush.copy(fillArgb = 0x80336699.toInt())),
+            a[1],
+            a[2].copy(brush = a[2].brush.copy(fillArgb = 0, audio = AudioSync("r", 5))),
+        )
+        val back = InkChunkCodec.decode(InkChunkCodec.encode(filled))
+        assertEquals(filled, back)
+        assertEquals(0x80336699.toInt(), back[0].brush.fillArgb)
+        assertEquals(null, back[1].brush.fillArgb)
+        assertEquals(0, back[2].brush.fillArgb)
+        val v1 = randomStrokes(5, seed = 6).map { it.copy(brush = it.brush.copy(family = null, fillArgb = null)) }
+        assertEquals(v1, InkChunkCodec.decode(encodeV1(v1)))
     }
 
     /** The original v1 layout (no family key), as written by DOC-01 builds. */

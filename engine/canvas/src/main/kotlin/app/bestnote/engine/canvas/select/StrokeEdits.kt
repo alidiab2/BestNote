@@ -6,6 +6,9 @@ import androidx.ink.strokes.Stroke
 import androidx.ink.strokes.StrokeInput
 import app.bestnote.core.model.InkBrush
 import app.bestnote.core.model.PageElement
+import app.bestnote.core.model.PenStyle
+import app.bestnote.core.model.Tool
+import app.bestnote.engine.ink.BrushCatalog
 import java.util.WeakHashMap
 import kotlin.math.atan2
 
@@ -32,6 +35,15 @@ class StrokeOutlines {
     }
 
     fun boxOf(strokes: Collection<Stroke>): Box? = Box.union(strokes.map { of(it).box })
+}
+
+/** The pen types the selection menu can restyle ink into (CANVAS-10). */
+enum class PenType(val tool: Tool, val style: PenStyle) {
+    Fountain(Tool.Pen, PenStyle.Fountain),
+    Ballpoint(Tool.Pen, PenStyle.Ball),
+    Brush(Tool.Pen, PenStyle.Brush),
+    Pencil(Tool.Pencil, PenStyle.Fountain),
+    Highlighter(Tool.Highlighter, PenStyle.Fountain),
 }
 
 /** New strokes made from existing ones: moved, resized, rotated, recolored, thickened. */
@@ -77,6 +89,23 @@ object StrokeEdits {
 
     /** [stroke] with its brush [factor] times as wide. */
     fun thickened(stroke: Stroke, factor: Float): Stroke = Stroke(resized(stroke.brush, factor), stroke.inputs)
+
+    /** [stroke] as a new object with the same pen and geometry, so the fill set for it is drawn (INK-11). */
+    fun refilled(stroke: Stroke): Stroke = Stroke(stroke.brush, stroke.inputs)
+
+    /**
+     * [brush] drawn with another pen: the new tool, nib and brush family, while color (without the new
+     * pen's opacity), size setting, fill and audio stamp stay. Size is the pen-size setting, so the
+     * stroke is as wide for its new pen as the same setting would draw with it (relative width).
+     */
+    fun restyled(brush: InkBrush, type: PenType): InkBrush {
+        val spec = requireNotNull(BrushCatalog.spec(type.tool, type.style))
+        return brush.copy(tool = type.tool, penStyle = type.style, family = spec.family.key)
+    }
+
+    /** [stroke] with the pen of [brush] (see [restyled]) and the very same inputs. */
+    fun withBrush(stroke: Stroke, brush: InkBrush): Stroke =
+        Stroke(requireNotNull(BrushCatalog.brush(brush.tool, brush.penStyle, brush.colorArgb, brush.size)), stroke.inputs)
 
     /** The stored brush that goes with [recolored]. */
     fun recolored(brush: InkBrush, colorArgb: Int): InkBrush = brush.copy(colorArgb = withRgb(brush.colorArgb, colorArgb))

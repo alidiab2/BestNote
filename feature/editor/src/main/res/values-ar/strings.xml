@@ -149,6 +149,11 @@
     <string name="convert_ai_failed">لم يستجب مزود الذكاء. تحقق من الإعدادات ← السبورة الذكية وحاول مجددًا.</string>
     <string name="convert_ai_key">رُفض مفتاح الذكاء. تحقق منه في الإعدادات ← السبورة الذكية.</string>
     <string name="selection_tidy">ترتيب</string>
+    <string name="selection_pen">القلم</string>
+    <string name="selection_fill">تعبئة</string>
+    <string name="selection_fill_with">تعبئة باللون %1$s</string>
+    <string name="selection_fill_none">بلا تعبئة</string>
+    <string name="selection_back">رجوع</string>
     <string name="tidy_title">ترتيب الخط</string>
     <string name="tidy_working">جارٍ قراءة ملاحظاتك وإعادة كتابتها بخط مرتب…</string>
     <string name="tidy_done">رُتّبت. التراجع يعيد الأصل.</string>

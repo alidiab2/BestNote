@@ -840,6 +840,8 @@ fun EditorScreen(
                     onToggleLock = elements::toggleLock,
                     onConvert = converter::convert,
                     onTidy = tidier::tidy,
+                    onFill = { view?.fillSelection(it) },
+                    onPen = { view?.restyleSelection(it) },
                 ),
             )
         }

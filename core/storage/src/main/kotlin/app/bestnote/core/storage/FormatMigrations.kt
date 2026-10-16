@@ -55,7 +55,13 @@ internal object FormatMigrations {
      */
     private val V5_TO_V6 = Step(from = 5, manifest = { it.withFormat(6) }, page = { it.withFormat(6) })
 
-    val steps: List<Step> = listOf(V1_TO_V2, V2_TO_V3, V3_TO_V4, V4_TO_V5, V5_TO_V6)
+    /**
+     * v6 → v7: a stroke may carry a shape fill (INK-11), stored in the `.ink` chunk (chunk v4). The JSON is unchanged;
+     * the bump makes a v6 app refuse the notebook rather than save over fills it cannot see.
+     */
+    private val V6_TO_V7 = Step(from = 6, manifest = { it.withFormat(7) }, page = { it.withFormat(7) })
+
+    val steps: List<Step> = listOf(V1_TO_V2, V2_TO_V3, V3_TO_V4, V4_TO_V5, V5_TO_V6, V6_TO_V7)
 
     fun formatOf(json: JsonObject): Int = json["format"]?.jsonPrimitive?.int ?: throw CorruptChunkException("Missing format")
 

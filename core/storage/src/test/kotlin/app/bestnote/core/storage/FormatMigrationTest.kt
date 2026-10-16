@@ -60,12 +60,12 @@ class FormatMigrationTest {
         assertEquals(BnoteFormat.VERSION.toString(), manifest["format"]!!.jsonPrimitive.content)
     }
 
-    @Test fun `v5 fixture migrates to v6 unchanged`() {
+    @Test fun `v5 fixture migrates to the current version unchanged`() {
         val pkg = BnoteFormat.fromEntries { path -> javaClass.getResourceAsStream("/fixtures/v5-notebook/$path")?.readBytes() }
         assertEquals(listOf("page-0", "page-1"), pkg.pages.map { it.id })
         assertEquals(1, InkChunkCodec.decode(pkg.pages[0].strokes).size)
         val manifest = Json.parseToJsonElement(BnoteFormat.toEntries(pkg).getValue(BnoteFormat.MANIFEST).decodeToString()).jsonObject
-        assertEquals("6", manifest["format"]!!.jsonPrimitive.content)
+        assertEquals(BnoteFormat.VERSION.toString(), manifest["format"]!!.jsonPrimitive.content)
     }
 
     @Test fun `recordings and their audio survive a write and read`() {

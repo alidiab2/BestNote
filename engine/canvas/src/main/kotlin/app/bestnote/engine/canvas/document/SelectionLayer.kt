@@ -16,17 +16,21 @@ import app.bestnote.core.model.PageElement
 import app.bestnote.core.model.PageRect
 import app.bestnote.core.model.TextElement
 import app.bestnote.engine.canvas.StrokeBrushes
+import app.bestnote.engine.canvas.StrokeFills
 import app.bestnote.engine.canvas.select.Affine
 import app.bestnote.engine.canvas.select.Box
 import app.bestnote.engine.canvas.select.ElementTransforms
 import app.bestnote.engine.canvas.select.Grip
+import app.bestnote.engine.canvas.select.FillGeometry
 import app.bestnote.engine.canvas.select.InkClipboard
+import app.bestnote.engine.canvas.select.PenType
 import app.bestnote.engine.canvas.select.LassoPolygon
 import app.bestnote.engine.canvas.select.PastePlacement
 import app.bestnote.engine.canvas.select.SpatialGrid
 import app.bestnote.engine.canvas.select.StrokeEdits
 import app.bestnote.engine.canvas.select.StrokeOutlines
 import app.bestnote.engine.canvas.select.TransformGesture
+import app.bestnote.engine.ink.BrushCatalog
 import app.bestnote.engine.ink.InkRenderer
 import java.util.Collections
 import java.util.IdentityHashMap
@@ -76,6 +80,7 @@ internal class SelectionLayer(
     private val outlines = StrokeOutlines()
     private val indexes = WeakHashMap<DocumentPage, Pair<Int, SpatialGrid<Stroke>>>()
     private val ink = InkRenderer()
+    private val fills = FillPainter()
 
     private class Draft(val pointerId: Int, val page: DocumentPage) {
         var xs = FloatArray(INITIAL_POINTS)
@@ -406,17 +411,61 @@ internal class SelectionLayer(
         notifyMenu()
     }
 
-    /** Swaps every selected stroke for [make]'s copy as one undo step, and selects the copies. */
+    /**
+     * INK-11: gives the closed shapes among the selected strokes the fill [argb] (alpha = opacity), or
+     * takes their fill away for null. Open strokes stay as they are. One undo step.
+     */
+    fun fill(argb: Int?) {
+        val sel = selection ?: return
+        replace(sel, { s ->
+            if (!isClosed(s)) {
+                s
+            } else {
+                StrokeEdits.refilled(s).also { n -> brushes.put(n, brushFor(s).copy(fillArgb = argb)) }
+            }
+        })
+        notifyMenu()
+    }
+
+    /** CANVAS-10: draws every selected stroke with another pen, keeping geometry, color and size setting. One undo step. */
+    fun restyle(type: PenType) {
+        val sel = selection ?: return
+        replace(sel, { s ->
+            val brush = StrokeEdits.restyled(brushFor(s), type)
+            if (brush == brushFor(s)) s else StrokeEdits.withBrush(s, brush).also { n -> brushes.put(n, brush) }
+        })
+        notifyMenu()
+    }
+
+    /** The stored brush of [stroke]: the one captured at pen-down, else read back from the stroke itself. */
+    private fun brushFor(stroke: Stroke) =
+        (brushes.brushOf(stroke) ?: BrushCatalog.modelBrush(stroke.brush)).let { b -> StrokeFills.of(stroke)?.let { b.copy(fillArgb = it) } ?: b }
+
+    private val closedCache = WeakHashMap<Stroke, Boolean>()
+
+    /** True when [stroke] outlines a closed shape (cached). */
+    private fun isClosed(stroke: Stroke): Boolean = closedCache.getOrPut(stroke) {
+        val o = outlines.of(stroke)
+        FillGeometry.isClosed(o.xs, o.ys, stroke.brush.size)
+    }
+
+    /** Swaps every selected stroke for [make]'s copy as one undo step, and selects the copies. A stroke [make] returns unchanged is left alone. */
     private inline fun replace(sel: Selected, make: (Stroke) -> Stroke, makeElement: (PageElement) -> PageElement = { it }) {
         val index = indexOf(sel.page)
         if (index < 0) return
         val mapping = LinkedHashMap<Stroke, Stroke>()
-        for (s in sel.strokes) mapping[s] = make(s)
+        val after = ArrayList<Stroke>(sel.strokes.size)
+        for (s in sel.strokes) {
+            val n = make(s)
+            if (n !== s) mapping[s] = n
+            after += n
+        }
         val changed = LinkedHashMap<String, PageElement>()
         for (e in sel.elements) changed[e.id] = makeElement(e)
+        if (mapping.isEmpty() && changed.all { (id, e) -> sel.elements.first { it.id == id } === e }) return
         edit { document?.editContent(index, replacements = mapping, elements = sel.page.elements.map { changed[it.id] ?: it }) }
         val shapes = changed.values.toList()
-        selection = Selected(sel.page, mapping.values.toList(), shapes, boxOf(mapping.values, shapes) ?: sel.box)
+        selection = Selected(sel.page, after, shapes, boxOf(after, shapes) ?: sel.box)
         invalidate()
     }
 
@@ -510,6 +559,8 @@ internal class SelectionLayer(
                 PagedDocumentView.SelectionMenu(
                     sel.strokes.size + sel.elements.size, pts[0], pts[1], pts[2], pts[3],
                     strokes = sel.strokes.size, element = singleElement, texts = sel.elements.count { it is TextElement },
+                    fillable = sel.strokes.count { isClosed(it) },
+                    filled = sel.strokes.count { StrokeFills.of(it) != null },
                 ),
             )
         }
@@ -544,7 +595,10 @@ internal class SelectionLayer(
                 // Moving text keeps its size; the final box is re-fitted on release.
                 for (e in previewElements) elementPainter.drawOne(canvas, e, pxPerPt, document?.images, imageReady) { PaperInk.colorOn(it, colors) }
             }
-            if (previewStrokes.isNotEmpty()) ink.draw(canvas, previewStrokes, full)
+            if (previewStrokes.isNotEmpty()) {
+                fills.draw(canvas, previewStrokes, PaperColors.of(sel.page.page.paperColor))
+                ink.draw(canvas, previewStrokes, full)
+            }
             canvas.restore()
         }
         drawBox(canvas, gestureBox.takeIf { g != null } ?: padded(sel.box), m, showHandles = g == null)
@@ -678,7 +732,7 @@ internal class SelectionLayer(
         val paper = PaperColors.of(page.page.paperColor)
         return strokes.map { s ->
             val want = PaperInk.colorOn(s.brush.colorIntArgb, paper)
-            if (want == s.brush.colorIntArgb) s else s.copy(s.brush.copyWithColorIntArgb(want))
+            if (want == s.brush.colorIntArgb) s else s.copy(s.brush.copyWithColorIntArgb(want)).also { StrokeFills.copy(it, s) }
         }
     }
 

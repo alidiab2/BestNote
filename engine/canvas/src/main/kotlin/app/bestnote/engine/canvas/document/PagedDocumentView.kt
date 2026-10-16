@@ -35,6 +35,7 @@ import app.bestnote.core.model.Tool
 import app.bestnote.engine.canvas.EraserMode
 import app.bestnote.engine.canvas.StrokeBrushes
 import app.bestnote.engine.canvas.erase.EraserCapsule
+import app.bestnote.engine.canvas.select.PenType
 import app.bestnote.engine.canvas.shape.HoldDetector
 import app.bestnote.engine.canvas.shape.ShapeSnapper
 import app.bestnote.engine.canvas.erase.InkEraser
@@ -227,6 +228,10 @@ class PagedDocumentView(context: Context) : FrameLayout(context), InProgressStro
         val element: PageElement? = null,
         /** How many selected things are text boxes. */
         val texts: Int = 0,
+        /** How many selected strokes outline a closed shape that can be filled (INK-11). */
+        val fillable: Int = 0,
+        /** How many selected strokes have a fill. */
+        val filled: Int = 0,
     )
 
     var selectionListener: SelectionListener?
@@ -311,6 +316,17 @@ class PagedDocumentView(context: Context) : FrameLayout(context), InProgressStro
 
     /** Gives every selected stroke [colorArgb]'s color (its own opacity stays). One undo step. */
     fun recolorSelection(colorArgb: Int) = selection.recolor(colorArgb)
+
+    /** Fills the closed shapes of the selection with [argb] (alpha = opacity), or clears their fill for null. One undo step. */
+    fun fillSelection(argb: Int?) = selection.fill(argb)
+
+    /** Draws every selected stroke with pen [type], keeping geometry, color and size setting. One undo step. */
+    fun restyleSelection(type: PenType) = selection.restyle(type)
+
+    /** Strokes loaded from disk: remembers each one's stored [brush] (and fill), as if drawn here. */
+    fun adoptBrushes(brushes: Collection<Pair<Stroke, InkBrush>>) {
+        for ((stroke, brush) in brushes) if (strokeBrushes.brushOf(stroke) == null) strokeBrushes.put(stroke, brush)
+    }
 
     /** Makes every selected stroke [factor] times as thick. One undo step. */
     fun thickenSelection(factor: Float) = selection.thicken(factor)
