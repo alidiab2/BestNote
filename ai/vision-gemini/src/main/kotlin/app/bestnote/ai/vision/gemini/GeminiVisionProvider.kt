@@ -2,7 +2,15 @@ package app.bestnote.ai.vision.gemini
 
 import app.bestnote.ai.vision.AiDocument
 import app.bestnote.ai.vision.AiModel
+import app.bestnote.ai.vision.AiSchema
 import app.bestnote.ai.vision.BoardRequest
+import app.bestnote.ai.vision.NoteMerge
+import app.bestnote.ai.vision.NotePrompts
+import app.bestnote.ai.vision.NoteSchema
+import app.bestnote.ai.vision.NoteWire
+import app.bestnote.ai.vision.NotesRequest
+import app.bestnote.engine.layout.NoteDocument
+import kotlinx.serialization.json.JsonObject
 import app.bestnote.ai.vision.Prompts
 import app.bestnote.ai.vision.VisionDiagnostics
 import app.bestnote.ai.vision.VisionError
@@ -29,13 +37,27 @@ class GeminiVisionProvider(
     override suspend fun reconstructBoard(image: VisionImage, request: BoardRequest): AiDocument =
         generate(Prompts.board(request), BOARD_USER_TEXT, image)
 
+    override suspend fun writeNotes(image: VisionImage, request: NotesRequest): NoteDocument =
+        generate(NotePrompts.system(request), NotePrompts.user(request), image, { NoteSchema.document(request.template, it) }) { text, truncated ->
+            NoteWire.answer(text, truncated).let { d -> if (request.current != null) NoteMerge.dedupe(d) else d }
+        }
+
     override suspend fun beautify(selection: VisionImage, widthPt: Float, heightPt: Float, language: String?): AiDocument =
         generate(Prompts.beautify(language), beautifyUserText(widthPt, heightPt), selection)
 
     override suspend fun transcribe(selection: VisionImage, language: String?): AiDocument =
         generate(Prompts.transcribe(language), Prompts.TRANSCRIBE_USER, selection)
 
-    private suspend fun generate(system: String, user: String, image: VisionImage): AiDocument {
+    private suspend fun generate(system: String, user: String, image: VisionImage): AiDocument =
+        generate(system, user, image, { AiSchema.document(it) }) { text, truncated -> GeminiResponses.document(text, truncated) }
+
+    private suspend fun <T> generate(
+        system: String,
+        user: String,
+        image: VisionImage,
+        schema: (AiSchema.Dialect) -> JsonObject,
+        parse: (String, Boolean) -> T,
+    ): T {
         val key = settings.apiKey()?.trim()?.takeIf { it.isNotEmpty() } ?: throw VisionError.MissingKey()
         val model = settings.model().trim().ifEmpty { GeminiConfig.DEFAULT_MODEL }
         val mime = GeminiRequests.sniffMime(image.bytes, image.mimeType)
@@ -43,7 +65,7 @@ class GeminiVisionProvider(
         var thinking = Thinking.Level
         var retriedServer = false
         while (true) {
-            val body = GeminiRequests.generateContent(system, user, image.bytes, mime, config.temperature, schemaField, config.maxOutputTokens, thinking).toString()
+            val body = GeminiRequests.generateContent(system, user, image.bytes, mime, config.temperature, schemaField, config.maxOutputTokens, thinking, schema).toString()
             val response = try {
                 transport.post("v1beta/models/$model:generateContent", key, body)
             } catch (e: IOException) {
@@ -53,7 +75,7 @@ class GeminiVisionProvider(
             when {
                 response.code == 200 -> {
                     val answer = GeminiResponses.answer(response.body)
-                    return GeminiResponses.document(answer.text, answer.truncated)
+                    return parse(answer.text, answer.truncated)
                 }
                 thinking != Thinking.None && GeminiResponses.rejectsThinking(response.code, response.body) ->
                     thinking = Thinking.entries[thinking.ordinal + 1]

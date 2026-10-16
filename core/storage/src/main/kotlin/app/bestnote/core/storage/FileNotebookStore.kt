@@ -68,8 +68,10 @@ class FileNotebookStore internal constructor(
                 // Page and asset renames must be durable before the manifest that points at them.
                 syncDirectory(File(dir, BnoteFormat.PAGES_DIR))
                 syncDirectory(File(dir, BnoteFormat.ASSETS_DIR))
+                syncDirectory(File(dir, BnoteFormat.EXTRAS_DIR))
             }
-            if (changedPaths == null || path == BnoteFormat.MANIFEST || path in changedPaths || !file.isFile) {
+            // Extras are small and change in place, so they are always written.
+            if (changedPaths == null || path == BnoteFormat.MANIFEST || path in changedPaths || !file.isFile || path.startsWith(BnoteFormat.EXTRAS_DIR)) {
                 writeAtomically(file, bytes)
             }
         }

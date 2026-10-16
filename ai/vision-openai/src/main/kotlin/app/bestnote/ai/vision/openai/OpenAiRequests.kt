@@ -69,13 +69,15 @@ object OpenAiRequests {
         /** `reasoning_effort` for thinking models ("low" keeps answers fast and cheap); null = omit. */
         reasoningEffort: String? = null,
         maxTokens: Int = config.maxTokens,
+        schema: JsonObject = AiSchema.document(AiSchema.Dialect.Closed),
+        jsonHint: String = Prompts.JSON_ONLY_HINT,
     ): JsonObject = buildJsonObject {
         put("model", model)
         reasoningEffort?.let { put("reasoning_effort", it) }
         putJsonArray("messages") {
             addJsonObject {
                 put("role", "system")
-                put("content", if (format == ResponseFormat.JsonSchema) system.trim() else system.trim() + "\n\n" + Prompts.JSON_ONLY_HINT)
+                put("content", if (format == ResponseFormat.JsonSchema) system.trim() else system.trim() + "\n\n" + jsonHint)
             }
             addJsonObject {
                 put("role", "user")
@@ -101,7 +103,7 @@ object OpenAiRequests {
                     put("name", "notebook_page")
                     // Not strict: strict mode needs every property required, and most fields are optional.
                     put("strict", false)
-                    put("schema", AiSchema.document(AiSchema.Dialect.Closed))
+                    put("schema", schema)
                 }
             }
             ResponseFormat.JsonObject -> putJsonObject("response_format") { put("type", "json_object") }

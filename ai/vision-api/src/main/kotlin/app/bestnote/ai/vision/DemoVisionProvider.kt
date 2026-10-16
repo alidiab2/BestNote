@@ -1,5 +1,11 @@
 package app.bestnote.ai.vision
 
+import app.bestnote.engine.layout.GlossaryTerm
+import app.bestnote.engine.layout.NoteBlock
+import app.bestnote.engine.layout.NoteDocument
+import app.bestnote.engine.layout.NoteElement
+import app.bestnote.engine.layout.NoteSamples
+import app.bestnote.engine.layout.WritingScript
 import kotlinx.coroutines.delay
 
 /**
@@ -31,7 +37,41 @@ class DemoVisionProvider(private val latencyMs: Long = 900) : VisionProvider {
         return AiDocument(blocks = listOf(AiBlock(type = "paragraph", order = 0, text = line)))
     }
 
+    /**
+     * Template first: answers in the compact element format (encoded and parsed back, exactly like a
+     * real answer): Arabic calculus notes with Hebrew terms and maths, or Hebrew physics study notes
+     * for a template with columns. A follow-up photo adds a second-derivative section and repeats one
+     * element, so the merge's de-duplication shows.
+     */
+    override suspend fun writeNotes(image: VisionImage, request: NotesRequest): NoteDocument {
+        delay(latencyMs)
+        val t = request.template
+        val sample = when {
+            NoteElement.Columns in t.elements -> NoteSamples.hebrewPhysics()
+            else -> NoteSamples.arabicCalculus()
+        }
+        val current = request.current
+        val answer = if (current == null) sample else NoteMerge.merge(current, followUp(current))
+        return NoteWire.answer(NoteWire.encode(answer))
+    }
+
     companion object {
+        /** What a second photo of the same board adds: one repeated element and a new section. */
+        fun followUp(current: NoteDocument): NoteDocument {
+            val rtl = WritingScript.mostlyRtl(current.elements.joinToString(" ") { it.words() })
+            val repeat = current.elements.firstOrNull { it.element != NoteElement.Title }
+            val more = if (rtl) {
+                listOf(
+                    NoteBlock(NoteElement.Heading, text = "المشتقة الثانية (נגזרת שנייה)"),
+                    NoteBlock(NoteElement.KeyResult, math = "f''(x) = (f'(x))'"),
+                    NoteBlock(NoteElement.StarNote, text = "إشارة \\(f''\\) تحدد التقعر"),
+                )
+            } else {
+                listOf(NoteBlock(NoteElement.Heading, text = "Second derivative"), NoteBlock(NoteElement.KeyResult, math = "f''(x) = (f'(x))'"))
+            }
+            return NoteDocument(listOfNotNull(repeat) + more, listOf(GlossaryTerm("التقعر", "קעירות")))
+        }
+
         /** A 30° slope with a block, its weight and the normal force. */
         private val SLOPE = AiDiagram(
             size = listOf(220f, 130f),
