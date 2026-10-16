@@ -54,7 +54,9 @@ internal class PageSlotView(context: Context, private val style: SheetStyle) : V
     }
 
     fun bind(index: Int, page: DocumentPage, rect: PxRect, scale: Float) {
-        if (this.page !== page) content = null
+        // Rebinding the same page (a relayout after a zoom) keeps its content snapshot and tint list.
+        if (lastPage !== page) forgetContent()
+        lastPage = page
         this.index = index
         this.page = page
         this.scale = scale
@@ -124,16 +126,24 @@ internal class PageSlotView(context: Context, private val style: SheetStyle) : V
         wet = null
         morphTarget = null
         morphFrame = null
+        if (hidden.isNotEmpty() || hiddenElements.isNotEmpty()) forgetContent()
         hidden = emptySet()
         hiddenElements = emptySet()
+        recorded.setEmpty()
+        visibility = INVISIBLE
+    }
+
+    /** The page last bound: its content snapshot survives an unbind/rebind of the same page. */
+    private var lastPage: DocumentPage? = null
+
+    private fun forgetContent() {
         drawList.clear()
         readSrc.clear()
         readKey = null
         content = null
+        contentDirty = true
         pictures.clear()
         raster = null
-        recorded.setEmpty()
-        visibility = INVISIBLE
     }
 
     /** Shared dry-ink tile cache (CANVAS-06); set once by the pages layer. */
@@ -153,6 +163,7 @@ internal class PageSlotView(context: Context, private val style: SheetStyle) : V
     private val coverage = Rect()
     private val recorded = Rect()
     private val scratch = Rect()
+    private val pageBounds = Rect()
 
     /** Nanoseconds the last [onDraw] took (the main-thread redraw cost), for the debug STATE dump and benchmarks. */
     var lastDrawNanos = 0L
@@ -180,10 +191,12 @@ internal class PageSlotView(context: Context, private val style: SheetStyle) : V
         }
         source(scratch)
         scratch.offset(-(left + pad), -(top + pad))
-        if (!out.setIntersect(scratch, Rect(0, 0, w, h))) out.setEmpty()
+        if (!out.setIntersect(scratch, pageBounds.apply { set(0, 0, w, h) })) out.setEmpty()
     }
 
-    override fun onDraw(canvas: Canvas) {
+    override fun onDraw(canvas: Canvas) = traced("BN.slotDraw") { drawSlot(canvas) }
+
+    private fun drawSlot(canvas: Canvas) {
         val start = System.nanoTime()
         val p = page ?: return
         val pad = style.shadowPad.toFloat()
@@ -201,7 +214,7 @@ internal class PageSlotView(context: Context, private val style: SheetStyle) : V
             clipRect(0, 0, w, h)
             val c = contentFor(p, colors, s, w)
             if (cache == null) {
-                drawUncached(this, c, s, w, h)
+                drawUncached(this, c ?: placeholderFor(p, colors), s, w, h)
             } else {
                 visibleRect(visible)
                 // Record a margin around what is visible, so scrolling within it never re-records.
@@ -219,7 +232,15 @@ internal class PageSlotView(context: Context, private val style: SheetStyle) : V
                 }
                 if (!coverage.intersect(0, 0, w, h)) coverage.setEmpty()
                 recorded.set(coverage)
-                if (!coverage.isEmpty) cache.draw(this, c, s, w, h, visible, coverage, wet, PaperInk.colorOn(wetColor, colors))
+                if (coverage.isEmpty) {
+                    Unit
+                } else if (c != null) {
+                    cache.draw(this, c, s, w, h, visible, coverage, wet, PaperInk.colorOn(wetColor, colors))
+                } else {
+                    // Strokes still being measured off the main thread: paper and any tiles we have.
+                    recorded.setEmpty()
+                    cache.drawPending(this, placeholderFor(p, colors), s, w, h, visible, coverage)
+                }
             }
         }
         lastDrawNanos = System.nanoTime() - start
@@ -248,12 +269,25 @@ internal class PageSlotView(context: Context, private val style: SheetStyle) : V
      * The page's content as drawn now; rebuilt (and handed to the tile cache, which diffs it) only
      * when strokes, elements, paper, tint/dim/hidden/morph state or a background picture changed.
      */
-    private fun contentFor(p: DocumentPage, colors: PaperColors, s: Float, w: Int): PageContent {
+    private fun contentFor(p: DocumentPage, colors: PaperColors, s: Float, w: Int): PageContent? = traced("BN.contentFor") { contentForNow(p, colors, s, w) }
+
+    private var placeholder: PageContent? = null
+
+    /** The page without strokes (paper, template, elements): drawn while its strokes are measured. */
+    private fun placeholderFor(p: DocumentPage, colors: PaperColors): PageContent {
+        val cached = placeholder
+        if (cached != null && cached.pageId == p.id && cached.page == p.page && cached.colors == colors && cached.elements === p.elements) return cached
+        return PageContent(p.id, p.page, colors, emptyList(), FloatArray(0), BooleanArray(0), p.elements, emptyMap(), raster).also { placeholder = it }
+    }
+
+    private val wanted = HashMap<String, android.graphics.Bitmap>()
+
+    private fun contentForNow(p: DocumentPage, colors: PaperColors, s: Float, w: Int): PageContent? {
         var changed = contentDirty || p.version != contentVersion || p.elements !== contentElements || p.page != contentPaper
         val newRaster = if (p.page.pdf != null) backgrounds?.background(p.page, w, backgroundReady) else null
         if (newRaster !== raster) changed = true
         var picturesChanged = false
-        val wanted = HashMap<String, android.graphics.Bitmap>()
+        wanted.clear()
         forEachImage(p.elements) { e ->
             if (e.id in hiddenElements) return@forEachImage
             val widthPx = (e.width * s / (e.crop.right - e.crop.left)).toInt().coerceAtLeast(1)
@@ -262,6 +296,15 @@ internal class PageSlotView(context: Context, private val style: SheetStyle) : V
         if (wanted.size != pictures.size || wanted.any { (k, v) -> pictures[k] !== v }) picturesChanged = true
         val prev = content
         if (!changed && !picturesChanged && prev != null && prev.pageId == p.id) return prev
+        val elements = if (hiddenElements.isEmpty()) p.elements else p.elements.filter { it.id !in hiddenElements }
+        val strokes = readable(p.strokes, colors)
+        val cache = tiles
+        val next = if (cache != null) {
+            // Null: the page's strokes are being measured off the main thread; try again when it's done.
+            cache.content(p.id, p.page, colors, strokes, elements, HashMap(wanted), newRaster) ?: return null
+        } else {
+            PageContent(p.id, p.page, colors, ArrayList(strokes), boxesOf(strokes), BooleanArray(strokes.size), elements, HashMap(wanted), newRaster)
+        }
         raster = newRaster
         pictures.clear()
         pictures.putAll(wanted)
@@ -269,11 +312,6 @@ internal class PageSlotView(context: Context, private val style: SheetStyle) : V
         contentElements = p.elements
         contentPaper = p.page
         contentDirty = false
-        val elements = if (hiddenElements.isEmpty()) p.elements else p.elements.filter { it.id !in hiddenElements }
-        val strokes = readable(p.strokes, colors)
-        val cache = tiles
-        val next = cache?.content(p.id, p.page, colors, strokes, elements, HashMap(wanted), newRaster)
-            ?: PageContent(p.id, p.page, colors, ArrayList(strokes), boxesOf(strokes), BooleanArray(strokes.size), elements, HashMap(wanted), newRaster)
         cache?.update(next)
         content = next
         return next

@@ -33,19 +33,39 @@ data class PinchStep(val scale: Float, val focusX: Float, val focusY: Float, val
          * Null when no finger is in both.
          */
         fun of(before: Map<Int, Pair<Float, Float>>, after: Map<Int, Pair<Float, Float>>): PinchStep? {
-            val ids = before.keys.filter { it in after }
-            if (ids.isEmpty()) return null
-            val bx = ids.map { before.getValue(it).first }.average().toFloat()
-            val by = ids.map { before.getValue(it).second }.average().toFloat()
-            val ax = ids.map { after.getValue(it).first }.average().toFloat()
-            val ay = ids.map { after.getValue(it).second }.average().toFloat()
-            var scale = 1f
-            if (ids.size >= 2) {
-                val spanBefore = ids.map { val (x, y) = before.getValue(it); hypot(x - bx, y - by) }.average().toFloat()
-                val spanAfter = ids.map { val (x, y) = after.getValue(it); hypot(x - ax, y - ay) }.average().toFloat()
-                if (spanBefore > MIN_SPAN && spanAfter > MIN_SPAN) scale = spanAfter / spanBefore
+            // Plain loops: this runs for every input frame of a pinch and must not allocate.
+            var n = 0
+            var bx = 0.0
+            var by = 0.0
+            var ax = 0.0
+            var ay = 0.0
+            for ((id, b) in before) {
+                val a = after[id] ?: continue
+                n++
+                bx += b.first
+                by += b.second
+                ax += a.first
+                ay += a.second
             }
-            return PinchStep(scale, bx, by, ax - bx, ay - by)
+            if (n == 0) return null
+            val bcx = (bx / n).toFloat()
+            val bcy = (by / n).toFloat()
+            val acx = (ax / n).toFloat()
+            val acy = (ay / n).toFloat()
+            var scale = 1f
+            if (n >= 2) {
+                var spanBefore = 0.0
+                var spanAfter = 0.0
+                for ((id, b) in before) {
+                    val a = after[id] ?: continue
+                    spanBefore += hypot(b.first - bcx, b.second - bcy)
+                    spanAfter += hypot(a.first - acx, a.second - acy)
+                }
+                val sb = (spanBefore / n).toFloat()
+                val sa = (spanAfter / n).toFloat()
+                if (sb > MIN_SPAN && sa > MIN_SPAN) scale = sa / sb
+            }
+            return PinchStep(scale, bcx, bcy, acx - bcx, acy - bcy)
         }
 
         /** Fingers closer together than this (px) give unreliable scale factors. */

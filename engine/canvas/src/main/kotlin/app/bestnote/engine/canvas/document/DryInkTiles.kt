@@ -27,8 +27,14 @@ import kotlin.concurrent.withLock
  *   changed. A tile whose only change is new ink keeps its old bitmap and draws the new strokes
  *   over it until it is re-rendered, so a finished stroke never flickers. Other changes draw the
  *   tile live (vector, culled to the tile) until its new bitmap is ready.
- * - Zoom: a scale with no tiles yet shows the tiles of the previous scale stretched (one frame of
- *   softness, no stall) while sharp tiles render at the exact new scale.
+ * - Zoom (CANVAS-05): a tile with no bitmap at the current scale is never drawn as vectors on the
+ *   main thread. It shows a stand-in instead: the nearest other scale's tiles stretched (any scale,
+ *   even the small per-page overview), else paper and template, while the sharp tile renders on a
+ *   worker. During a pinch ([deferRendering]) nothing but overviews renders; the settled zoom
+ *   renders once the gesture ends, visible tiles first.
+ * - Content: a page seen for the first time has its stroke bounds measured on a background thread
+ *   ([content] returns null meanwhile and the slot draws stand-ins), so pages entering the view
+ *   never stall the main thread.
  * - Memory: a byte-bounded LRU; tiles drawn in the last second are never evicted.
  *
  * Main thread only, except the workers' rendering.
@@ -54,22 +60,44 @@ internal class DryInkTiles(
 
     private val main = Handler(Looper.getMainLooper())
     private val contents = HashMap<String, PageContent>()
-    private val lastScale = HashMap<String, Float>()
-    private val previousScale = HashMap<String, Float>()
+    /** Stroke bounds in page points plus a highlighter flag (left, top, right, bottom, 1/0); guarded by itself. */
     private val bounds = WeakHashMap<Stroke, FloatArray>()
+
+    /**
+     * True while a pinch or zoom animation runs (CANVAS-05): tiles at the in-between scales are not
+     * rendered (stand-ins show instead) and nothing is drawn as vectors on the main thread. Turning it
+     * off doesn't redraw by itself; the pages layer invalidates its slots.
+     */
+    var deferRendering = false
     private val livePainter = PagePainter(density)
     private val region = RectF()
     private val wetBox = BoxAccumulator()
 
     // ---------------------------------------------------------------- content snapshots
 
-    /** Bounds of [stroke] in page points (cached; strokes are immutable). */
-    fun boxOf(stroke: Stroke): FloatArray = bounds.getOrPut(stroke) {
-        val b = stroke.shape.computeBoundingBox()
-        if (b == null) floatArrayOf(0f, 0f, -1f, -1f) else floatArrayOf(b.xMin, b.yMin, b.xMax, b.yMax)
+    /** Bounds of [stroke] in page points, then 1f for a highlighter (cached; strokes are immutable). Any thread. */
+    fun boxOf(stroke: Stroke): FloatArray {
+        synchronized(bounds) { bounds[stroke] }?.let { return it }
+        val box = measure(stroke)
+        synchronized(bounds) { bounds[stroke] = box }
+        return box
     }
 
-    /** A [PageContent] for [strokes] (already in drawing order and color). */
+    private fun measure(stroke: Stroke): FloatArray {
+        val hl = if (BrushCatalog.isHighlighter(stroke.brush)) 1f else 0f
+        val b = try {
+            stroke.shape.computeBoundingBox()
+        } catch (_: RuntimeException) {
+            null
+        }
+        return if (b == null) floatArrayOf(0f, 0f, -1f, -1f, hl) else floatArrayOf(b.xMin, b.yMin, b.xMax, b.yMax, hl)
+    }
+
+    /**
+     * A [PageContent] for [strokes] (already in drawing order and color), or null while more than a
+     * few of their bounds are still unknown: they are being measured on a background thread, and
+     * [onTilesReady] fires for [pageId] when done (draw [drawPending] meanwhile).
+     */
     fun content(
         pageId: String,
         page: app.bestnote.core.model.Page,
@@ -78,7 +106,7 @@ internal class DryInkTiles(
         elements: List<PageElement>,
         images: Map<String, Bitmap>,
         raster: Bitmap?,
-    ): PageContent {
+    ): PageContent? {
         val copy = ArrayList(strokes)
         val n = copy.size
         val boxes = FloatArray(n * 4)
@@ -100,9 +128,16 @@ internal class DryInkTiles(
                 prev.highlighter.copyInto(highlighter, n - tail, ps.size - tail, ps.size)
             }
         }
+        var missing = 0
+        synchronized(bounds) { for (i in head until n - tail) if (bounds[copy[i]] == null) missing++ }
+        if (missing > SYNC_MEASURE) {
+            prepare(pageId, copy)
+            return null
+        }
         for (i in head until n - tail) {
-            boxOf(copy[i]).copyInto(boxes, i * 4)
-            highlighter[i] = BrushCatalog.isHighlighter(copy[i].brush)
+            val b = boxOf(copy[i])
+            b.copyInto(boxes, i * 4, 0, 4)
+            highlighter[i] = b[4] != 0f
         }
         return PageContent(pageId, page, colors, copy, boxes, highlighter, elements, images, raster)
     }
@@ -155,16 +190,12 @@ internal class DryInkTiles(
     fun retain(pageIds: Set<String>) {
         table.retain(pageIds)
         contents.keys.retainAll(pageIds)
-        lastScale.keys.retainAll(pageIds)
-        previousScale.keys.retainAll(pageIds)
         lock.withLock { queue.removeAll { it.key.page !in pageIds } }
     }
 
     fun clear() {
         table.clear()
         contents.clear()
-        lastScale.clear()
-        previousScale.clear()
         lock.withLock { queue.clear() }
     }
 
@@ -193,11 +224,31 @@ internal class DryInkTiles(
         coverage: Rect,
         wet: InProgressStroke?,
         wetColorArgb: Int,
+    ) = traced("BN.tilesDraw") { drawNow(canvas, c, scale, widthPx, heightPx, visible, coverage, wet, wetColorArgb) }
+
+    /**
+     * Draws page [placeholder] (paper, template and elements, no strokes: its content is still being
+     * measured) with whatever tiles of the page exist at any scale over it, requesting nothing.
+     */
+    fun drawPending(canvas: Canvas, placeholder: PageContent, scale: Float, widthPx: Int, heightPx: Int, visible: Rect, coverage: Rect) =
+        traced("BN.tilesPending") { drawNow(canvas, placeholder, scale, widthPx, heightPx, visible, coverage, null, 0, pending = true) }
+
+    private fun drawNow(
+        canvas: Canvas,
+        c: PageContent,
+        scale: Float,
+        widthPx: Int,
+        heightPx: Int,
+        visible: Rect,
+        coverage: Rect,
+        wet: InProgressStroke?,
+        wetColorArgb: Int,
+        pending: Boolean = false,
     ) {
         lastFresh = 0
         lastStale = 0
         lastLive = 0
-        if (!enabled) {
+        if (!enabled && !pending) {
             region.set(0f, 0f, widthPx.toFloat(), heightPx.toFloat())
             livePainter.draw(canvas, c, scale, widthPx, heightPx, region, null, wet, wetColorArgb)
             return
@@ -205,32 +256,30 @@ internal class DryInkTiles(
         val id = c.pageId
         val now = SystemClock.uptimeMillis()
         table.now = now
-        if (lastScale[id] != scale) {
-            lastScale[id]?.let { previousScale[id] = it }
-            lastScale[id] = scale
-        }
         val cov = TileMath.range(coverage.left.toFloat(), coverage.top.toFloat(), coverage.right.toFloat(), coverage.bottom.toFloat(), widthPx, heightPx) ?: return
         val vis = TileMath.range(visible.left.toFloat(), visible.top.toFloat(), visible.right.toFloat(), visible.bottom.toFloat(), widthPx, heightPx)
         val wetRange = wet?.let { wetRange(it, scale, widthPx, heightPx) }
-        val live = ArrayList<TileTable.Entry<Bitmap, Stroke>>()
-        val drawn = ArrayList<TileTable.Entry<Bitmap, Stroke>>(cov.count)
+        val renderNow = !pending && !deferRendering
+        live.clear()
+        drawn.clear()
         // Visible tiles are requested first, then the margin.
         for (pass in 0..1) {
             for (row in cov.r0..cov.r1) for (col in cov.c0..cov.c1) {
                 val inVis = vis?.contains(col, row) == true
                 if ((pass == 0) != inVis) continue
                 val e = table.obtain(TileTable.Key(id, scale, col, row))
-                if (e.needsRender) request(e, c, scale, widthPx, heightPx, if (inVis) 0 else 1)
+                if (renderNow && e.needsRender) request(e, c, scale, widthPx, heightPx, if (inVis) 0 else 1)
                 if (wetRange?.contains(col, row) == true || !e.showable) live += e else drawn += e
             }
         }
-        if (live.isNotEmpty()) drawLive(canvas, c, scale, widthPx, heightPx, live, wet, wetColorArgb)
+        if (!pending) requestOverview(c, scale)
+        if (live.isNotEmpty()) traced("BN.drawLive") { drawLive(canvas, c, scale, widthPx, heightPx, live, wet, wetColorArgb, vectorAllowed = renderNow) }
         for (e in drawn) {
             val x = (e.key.col * TileMath.SIZE).toFloat()
             val y = (e.key.row * TileMath.SIZE).toFloat()
             canvas.drawBitmap(e.bitmap!!, x, y, null)
             val overlay = e.overlay
-            if (!e.fresh && !overlay.isNullOrEmpty()) {
+            if (!e.fresh && !overlay.isNullOrEmpty() && !pending) {
                 val save = canvas.save()
                 canvas.clipRect(x, y, x + TileMath.SIZE, y + TileMath.SIZE)
                 livePainter.drawInk(canvas, overlay, scale)
@@ -238,7 +287,33 @@ internal class DryInkTiles(
             }
             if (e.fresh) lastFresh++ else lastStale++
         }
+        live.clear()
+        drawn.clear()
         table.evict()
+    }
+
+    private val live = ArrayList<TileTable.Entry<Bitmap, Stroke>>()
+    private val drawn = ArrayList<TileTable.Entry<Bitmap, Stroke>>()
+    private val vector = ArrayList<TileTable.Entry<Bitmap, Stroke>>()
+    private val tileBox = RectF()
+
+    /** Scale of page [c]'s overview: [OVERVIEW_PX] wide, a stand-in for any zoom while sharp tiles render. */
+    private fun overviewScale(c: PageContent) = OVERVIEW_PX / c.page.widthPt
+
+    /**
+     * Keeps the page's small overview tiles rendered (lowest priority) and marked as used, so a zoom
+     * or a page entering the view always has something to stretch. While writing, an overview that
+     * exists is left out of date (not re-rendered per stroke); a zoom gesture refreshes it.
+     */
+    private fun requestOverview(c: PageContent, scale: Float) {
+        val ov = overviewScale(c)
+        if (scale <= ov * OVERVIEW_MIN_RATIO) return
+        val ow = OVERVIEW_PX.toInt()
+        val oh = Math.round(c.page.heightPt * ov)
+        for (row in 0 until TileMath.rows(oh)) for (col in 0 until TileMath.cols(ow)) {
+            val e = table.obtain(TileTable.Key(c.pageId, ov, col, row))
+            if (e.needsRender && (e.bitmap == null || deferRendering)) request(e, c, ov, ow, oh, 2)
+        }
     }
 
     private fun wetRange(wet: InProgressStroke, scale: Float, w: Int, h: Int): TileRange? {
@@ -248,7 +323,13 @@ internal class DryInkTiles(
         return TileMath.range(b.xMin * scale - PAD_PX, b.yMin * scale - PAD_PX, b.xMax * scale + PAD_PX, b.yMax * scale + PAD_PX, w, h)
     }
 
-    /** Tiles without a usable bitmap: the previous zoom's tiles stretched if they cover it, else vector ink. */
+    private val scales = FloatArray(MAX_STAND_IN_SCALES)
+
+    /**
+     * Tiles without a usable bitmap. Vector ink only for a tile whose bitmap an edit made wrong (or
+     * under a highlighter in progress), and only when [vectorAllowed] and the ink is small; every other
+     * tile gets a stand-in ([drawStandIn]), so a zoom or a new page never draws strokes here.
+     */
     private fun drawLive(
         canvas: Canvas,
         c: PageContent,
@@ -258,20 +339,23 @@ internal class DryInkTiles(
         tiles: List<TileTable.Entry<Bitmap, Stroke>>,
         wet: InProgressStroke?,
         wetColor: Int,
+        vectorAllowed: Boolean,
     ) {
-        val vector = ArrayList<TileTable.Entry<Bitmap, Stroke>>(tiles.size)
-        val old = previousScale[c.pageId]
+        vector.clear()
+        var nScales = -1
         for (e in tiles) {
-            // The old zoom's tiles may stand in only while they still show the current content (fresh).
-            if (wet == null && old != null && drawFromScale(canvas, c.pageId, e.key, scale, old, w, h)) {
-                lastStale++
-            } else {
+            // Vectors only where an edit made a bitmap wrong (an erase, an undo) or a highlighter is wet.
+            if (vectorAllowed && (wet != null || (e.bitmap != null && e.broken))) {
                 vector += e
+            } else {
+                if (nScales < 0) nScales = table.scalesOf(c.pageId, scale, scales)
+                drawStandIn(canvas, c, e, scale, w, h, nScales)
+                lastStale++
             }
         }
         if (vector.isEmpty()) return
         region.setEmpty()
-        val r = RectF()
+        val r = tileBox
         for (e in vector) {
             tileRect(e.key, w, h, r)
             region.union(r)
@@ -289,6 +373,7 @@ internal class DryInkTiles(
                 canvas.restoreToCount(save)
                 lastStale++
             }
+            vector.clear()
             return
         }
         lastLive += vector.size
@@ -306,26 +391,56 @@ internal class DryInkTiles(
             livePainter.draw(canvas, c, scale, w, h, region, null, wet, wetColor)
             canvas.restoreToCount(save)
         }
+        vector.clear()
     }
 
-    /** Draws tile [key] from the fresh tiles of scale [old], stretched; false if they don't cover it. */
-    private fun drawFromScale(canvas: Canvas, page: String, key: TileTable.Key, scale: Float, old: Float, w: Int, h: Int): Boolean {
+    /**
+     * Tile [e] (no usable bitmap at [scale]) drawn from other scales: the best of [scales] whose tiles
+     * cover it entirely, else its own out-of-date bitmap, else paper and template with whatever pieces
+     * the other scales have stretched over them. Bitmap blits only: cheap however much ink the page has.
+     */
+    private fun drawStandIn(canvas: Canvas, c: PageContent, e: TileTable.Entry<Bitmap, Stroke>, scale: Float, w: Int, h: Int, nScales: Int) {
+        val key = e.key
+        for (i in 0 until nScales) if (drawFromScale(canvas, c.pageId, key, scale, scales[i], w, h, partial = false)) return
+        tileRect(key, w, h, tileBox)
+        val save = canvas.save()
+        canvas.clipRect(tileBox)
+        val own = e.bitmap
+        if (own != null) {
+            canvas.drawBitmap(own, tileBox.left, tileBox.top, null)
+        } else {
+            livePainter.draw(canvas, c, scale, w, h, tileBox, null, withInk = false)
+            // Worst first, so the sharpest piece ends on top.
+            for (i in nScales - 1 downTo 0) drawFromScale(canvas, c.pageId, key, scale, scales[i], w, h, partial = true)
+        }
+        canvas.restoreToCount(save)
+    }
+
+    /**
+     * Draws tile [key] from the tiles of scale [old], stretched. Not [partial]: only if they all exist
+     * (and aren't wrong after an edit), else false and nothing drawn. [partial]: whatever exists.
+     */
+    private fun drawFromScale(canvas: Canvas, page: String, key: TileTable.Key, scale: Float, old: Float, w: Int, h: Int, partial: Boolean): Boolean {
         tileRect(key, w, h, region)
         val k = old / scale
+        // Far sharper tiles would take many blits (and texture reads) per tile: not a stand-in.
+        if (k > MAX_DOWNSCALE) return false
         val ow = (w * k).toInt()
         val oh = (h * k).toInt()
         val range = TileMath.range(region.left * k, region.top * k, region.right * k, region.bottom * k, ow, oh) ?: return false
-        val olds = ArrayList<Bitmap>(range.count)
-        for (row in range.r0..range.r1) for (col in range.c0..range.c1) {
-            val e = table.peek(TileTable.Key(page, old, col, row)) ?: return false
-            if (!e.fresh) return false
-            olds += e.bitmap!!
+        if (!partial) {
+            for (row in range.r0..range.r1) for (col in range.c0..range.c1) {
+                val e = table.peek(TileTable.Key(page, old, col, row)) ?: return false
+                if (!e.showable) return false
+            }
         }
         val save = canvas.save()
         canvas.clipRect(region)
-        var i = 0
         for (row in range.r0..range.r1) for (col in range.c0..range.c1) {
-            val b = olds[i++]
+            val e = table.peek(TileTable.Key(page, old, col, row)) ?: continue
+            val b = e.bitmap ?: continue
+            if (e.broken) continue
+            e.lastUse = table.now // a stand-in on screen is in use: keep it
             val l = col * TileMath.SIZE / k
             val t = row * TileMath.SIZE / k
             livePainter.drawScaled(canvas, b, l, t, l + b.width / k, t + b.height / k)
@@ -364,14 +479,53 @@ internal class DryInkTiles(
     /** Bumped by [close]: workers of an older epoch exit, so the cache can start again after it. */
     private var epoch = 0
 
-    /** Jobs queued or rendering, for tests that wait for the cache to settle. */
-    val busy: Boolean get() = lock.withLock { queue.isNotEmpty() || running > 0 }
+    /** Jobs queued or rendering (or pages being measured), for tests that wait for the cache to settle. */
+    val busy: Boolean get() = measuring.get() > 0 || mainPending.get() > 0 || lock.withLock { queue.isNotEmpty() || running > 0 }
+
+    /** Removes a queued job for [key] without allocating (the request path runs while drawing). */
+    private fun removeQueued(key: TileTable.Key) {
+        for (i in queue.indices.reversed()) if (queue[i].key == key) queue.removeAt(i)
+    }
+
+    // ---------------------------------------------------------------- measuring new pages
+
+    private val measuring = java.util.concurrent.atomic.AtomicInteger()
+    private val mainPending = java.util.concurrent.atomic.AtomicInteger()
+    private val preparing = HashSet<String>()
+    private val measurer by lazy {
+        java.util.concurrent.Executors.newSingleThreadExecutor { r ->
+            Thread(r, "dry-ink-measure").apply {
+                isDaemon = true
+                priority = Thread.NORM_PRIORITY - 1
+            }
+        }
+    }
+
+    /** Measures the bounds of [strokes] (page [pageId]) on a background thread, then redraws the page. */
+    private fun prepare(pageId: String, strokes: List<Stroke>) {
+        if (!preparing.add(pageId)) return
+        measuring.incrementAndGet()
+        measurer.execute {
+            android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_BACKGROUND)
+            try {
+                for (s in strokes) boxOf(s)
+            } finally {
+                mainPending.incrementAndGet()
+                measuring.decrementAndGet()
+                main.post {
+                    mainPending.decrementAndGet()
+                    preparing.remove(pageId)
+                    onTilesReady?.invoke(pageId)
+                }
+            }
+        }
+    }
 
     private fun request(e: TileTable.Entry<Bitmap, Stroke>, c: PageContent, scale: Float, w: Int, h: Int, priority: Int) {
         e.requestedGen = e.gen
         val job = Job(e.key, e.gen, c, w, h, priority, seq++, epoch)
         lock.withLock {
-            queue.removeAll { it.key == e.key }
+            removeQueued(e.key)
             queue += job
             if (queue.size > MAX_QUEUE) {
                 // Drop the oldest margin work first; its tiles are requested again when they are drawn.
@@ -397,6 +551,8 @@ internal class DryInkTiles(
     }
 
     private fun work(mine: Int) {
+        // Below the UI and render threads (nice 10): on a busy device the workers wait, never the frame.
+        android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_BACKGROUND)
         val painter = PagePainter(density)
         val region = RectF()
         while (true) {
@@ -433,6 +589,9 @@ internal class DryInkTiles(
                     canvas.clipRect(region)
                     painter.draw(canvas, c, k.scale, job.widthPx, job.heightPx, region, piece)
                     piece?.recycle()
+                    // Starts the GPU texture upload now, off the frame that first shows the tile
+                    // (otherwise a burst of new tiles uploads on the render thread in one frame).
+                    bitmap.prepareToDraw()
                     result = bitmap
                 }
             } catch (_: OutOfMemoryError) {
@@ -447,7 +606,9 @@ internal class DryInkTiles(
         }
     }
 
-    private fun installed(job: Job, bitmap: Bitmap, placeholder: Boolean) {
+    private fun installed(job: Job, bitmap: Bitmap, placeholder: Boolean) = traced("BN.installTile") { installedNow(job, bitmap, placeholder) }
+
+    private fun installedNow(job: Job, bitmap: Bitmap, placeholder: Boolean) {
         if (closed || job.epoch != epoch || !table.install(job.key, job.gen, bitmap, placeholder)) {
             bitmap.recycle()
             return
@@ -503,6 +664,17 @@ internal class DryInkTiles(
         /** Most strokes drawn as vectors in one redraw (a few ms on a phone); past it tiles wait for the workers. */
         private const val LIVE_STROKES = 600
         private const val READY_MS = 120L
+
+        /** At most this many stroke bounds are measured on the main thread; more go to the background. */
+        private const val SYNC_MEASURE = 64
+
+        /** Width in px of a page's overview tiles (one tile column): the stand-in of last resort. */
+        private const val OVERVIEW_PX = 512f
+
+        /** No overview while the page itself is drawn this close to the overview's size. */
+        private const val OVERVIEW_MIN_RATIO = 1.25f
+        private const val MAX_STAND_IN_SCALES = 4
+        private const val MAX_DOWNSCALE = 3f
         private const val SHARP_ENOUGH = 0.98f
         private const val MIN_BUDGET = 16L shl 20
 
