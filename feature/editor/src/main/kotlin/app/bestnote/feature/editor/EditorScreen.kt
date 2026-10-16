@@ -134,7 +134,11 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
@@ -200,6 +204,8 @@ data class EditorUiState(
     val leftHanded: Boolean = false,
     val quickPalette: Boolean = true,
     val doubleClickUndo: Boolean = false,
+    /** Settings > Stylus pressure feel (soft / normal / firm) as a gamma on raw pressure (INK-04). */
+    val pressureGamma: Float = 1f,
 )
 
 @HiltViewModel
@@ -244,12 +250,33 @@ class EditorViewModel @Inject constructor(
         dao.observe(notebookId.value).filterNotNull().first().toModel()
     }
 
-    override fun onCleared() = session.close()
+    override fun onCleared() {
+        session.close()
+        // A pen change made in the last moments before leaving still gets saved.
+        pendingPens?.let { p -> kotlinx.coroutines.CoroutineScope(Dispatchers.IO).launch { preferences.updatePens { p } } }
+    }
 
     private val toolboxState = MutableStateFlow(Toolbox())
 
     /** Pens, colors and sizes. Lives with the document, so tool switches never reset anything. */
     val toolbox: StateFlow<Toolbox> = toolboxState.asStateFlow()
+
+    /** Pen settings changed but not yet written (INK-04..06). */
+    @Volatile private var pendingPens: app.bestnote.core.datastore.PenPreferences? = null
+
+    init {
+        // INK-04..06: pens, saved colors and favorites persist. Restored once, then saved once changes settle.
+        viewModelScope.launch {
+            val saved = preferences.pens.first()
+            toolboxState.update { PenStore.restore(it, saved) }
+            toolboxState.map(PenStore::toPrefs).distinctUntilChanged().drop(1).collectLatest { p ->
+                pendingPens = p
+                delay(PEN_SAVE_DELAY_MS)
+                preferences.updatePens { p }
+                pendingPens = null
+            }
+        }
+    }
 
     val state: StateFlow<EditorUiState> = combine(
         dao.observe(notebookId.value),
@@ -265,6 +292,7 @@ class EditorViewModel @Inject constructor(
             leftHanded = prefs.leftHanded,
             quickPalette = prefs.hoverButtonAction == HoverButtonAction.QuickPalette,
             doubleClickUndo = prefs.hoverDoubleClickUndo,
+            pressureGamma = prefs.stylus.pressureCurve.gamma,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), EditorUiState())
 
@@ -319,6 +347,9 @@ internal fun dropSide(x: Float, y: Float, width: Float, height: Float): TraySide
 private const val TOP_PULL = 2.5f
 
 private const val INSERT_POLL_MS = 50L
+
+/** Pen settings are written once a slider drag or a run of taps has settled. */
+private const val PEN_SAVE_DELAY_MS = 400L
 
 /** Ctrl+= / Ctrl+- zoom by this factor per press. */
 private const val KEY_ZOOM_STEP = 1.25f
@@ -716,6 +747,7 @@ fun EditorScreen(
                 penStyle = toolbox.active.style,
                 colorArgb = toolbox.current.brushColorArgb,
                 brushSize = toolbox.current.size,
+                penTuning = toolbox.current.tuning(state.pressureGamma),
                 eraserMode = toolbox.eraserMode,
                 shapeTool = toolbox.snapsShapes,
                 input = state.input,
@@ -808,6 +840,7 @@ fun EditorScreen(
                         pickerAnchor = picker,
                         onPen = ::onPen,
                         onColor = { viewModel.updateToolbox(toolbox.withColor(it)) },
+                        onFavorite = { picker = null; viewModel.updateToolbox(toolbox.applyFavorite(it)) },
                         onOpenPicker = { picker = if (picker == it) null else it },
                         onCollapse = { picker = null; collapsed = true },
                         picker = pickerContent,

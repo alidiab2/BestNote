@@ -60,6 +60,16 @@
     <string name="picker_opacity">Opacity</string>
     <string name="picker_preview">Stroke preview</string>
     <string name="picker_preset">Preset %1$d</string>
+    <string name="picker_pressure">Pressure sensitivity</string>
+    <string name="picker_stabilization">Stabilization</string>
+    <string name="picker_percent">%1$d%%</string>
+    <string name="picker_saved_colors">Saved colors</string>
+    <string name="picker_save_color">Save current color</string>
+    <string name="picker_remove_color">Remove saved color</string>
+    <string name="picker_favorite_add">Save as favorite pen</string>
+    <string name="picker_favorite_remove">Remove from favorites</string>
+    <string name="picker_favorites_full">Favorites are full</string>
+    <string name="pen_favorite">Favorite: %1$s, %2$s</string>
 
     <string name="eraser_stroke">Stroke eraser</string>
     <string name="eraser_stroke_hint">Removes every stroke it touches</string>

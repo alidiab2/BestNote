@@ -8,6 +8,7 @@ import app.bestnote.core.model.PenStyle
 import app.bestnote.core.model.Tool
 import app.bestnote.engine.ink.BrushCatalog
 import app.bestnote.engine.ink.InkRenderer
+import app.bestnote.engine.ink.PenTuning
 import kotlin.math.PI
 import kotlin.math.sin
 
@@ -22,9 +23,10 @@ object InkPreview {
 
     /**
      * A gentle S-curve spanning [width] x [height] px (inset by half the stroke width), with a
-     * pressure swell in the middle. Null for tools that don't ink. Meshing is O(48 samples).
+     * pressure swell in the middle, shaped by the pen's [tuning] (INK-04 sensitivity). Null for tools
+     * that don't ink. Meshing is O(48 samples).
      */
-    fun squiggle(tool: Tool, penStyle: PenStyle, colorArgb: Int, size: Float, width: Float, height: Float): Stroke? {
+    fun squiggle(tool: Tool, penStyle: PenStyle, colorArgb: Int, size: Float, width: Float, height: Float, tuning: PenTuning = PenTuning.Default): Stroke? {
         val brush = BrushCatalog.brush(tool, penStyle, colorArgb, size) ?: return null
         val inset = (brush.size / 2f).coerceAtMost(minOf(width, height) / 3f)
         val left = inset
@@ -39,7 +41,7 @@ object InkPreview {
                 x = left + t * length,
                 y = midY - amp * sin(t * 2 * PI).toFloat(),
                 elapsedTimeMillis = i * SAMPLE_MS,
-                pressure = MIN_PRESSURE + (1f - MIN_PRESSURE) * sin(t * PI).toFloat(),
+                pressure = tuning.pressure(MIN_PRESSURE + (1f - MIN_PRESSURE) * sin(t * PI).toFloat()),
                 tiltRadians = 0f,
                 orientationRadians = 0f,
             )

@@ -7,6 +7,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectDragGestures
@@ -52,6 +53,7 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.progressBarRangeInfo
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.setProgress
@@ -219,6 +221,7 @@ internal fun PenPickerContent(
             Text(stringResource(R.string.picker_custom), style = MaterialTheme.typography.labelLarge)
         }
         if (custom) CustomColor(Color(settings.colorArgb)) { onToolbox(toolbox.withColor(it.toArgb(), kind)) }
+        SavedColors(toolbox, kind, onToolbox)
 
         Overline(stringResource(R.string.picker_size))
         WedgeSlider(
@@ -243,6 +246,141 @@ internal fun PenPickerContent(
                 wedge = false,
             )
         }
+        if (kind.inks) PenFeel(kind, settings, toolbox, onToolbox)
+        if (kind.inks) FavoriteButton(toolbox, onToolbox)
+    }
+}
+
+/** INK-04/05: pressure sensitivity (pens with a pressure curve) and stabilization, as percentages. */
+@Composable
+private fun PenFeel(kind: PenKind, settings: PenSettings, toolbox: Toolbox, onToolbox: (Toolbox) -> Unit) {
+    val ink = Color(settings.colorArgb)
+    if (kind != PenKind.Highlighter) {
+        LabeledPercent(stringResource(R.string.picker_pressure), (settings.pressureSensitivity * 100).roundToInt())
+        WedgeSlider(
+            value = settings.pressureSensitivity,
+            range = 0f..1f,
+            onChange = { onToolbox(toolbox.withSensitivity(it, kind)) },
+            color = ink,
+            label = stringResource(R.string.picker_pressure),
+            wedge = false,
+        )
+    }
+    LabeledPercent(stringResource(R.string.picker_stabilization), settings.stabilization)
+    WedgeSlider(
+        value = settings.stabilization.toFloat(),
+        range = 0f..app.bestnote.engine.ink.PenTuning.MAX_STABILIZATION.toFloat(),
+        onChange = { onToolbox(toolbox.withStabilization(it.roundToInt(), kind)) },
+        color = ink,
+        label = stringResource(R.string.picker_stabilization),
+        wedge = false,
+    )
+}
+
+@Composable
+private fun LabeledPercent(label: String, percent: Int) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Overline(label)
+        Spacer(Modifier.weight(1f))
+        Text(stringResource(R.string.picker_percent, percent), style = BestNoteTheme.type.caption, color = BestNoteTheme.colors.muted)
+    }
+}
+
+/** INK-06: the user's saved custom colors. "+" saves the current color; long-press removes one. */
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+@Composable
+private fun SavedColors(toolbox: Toolbox, kind: PenKind, onToolbox: (Toolbox) -> Unit) {
+    val current = toolbox.settingsOf(kind).colorArgb
+    Overline(stringResource(R.string.picker_saved_colors))
+    val removeLabel = stringResource(R.string.picker_remove_color)
+    val saveLabel = stringResource(R.string.picker_save_color)
+    val showAdd = current !in toolbox.savedColors && toolbox.savedColors.size < Toolbox.MAX_SAVED_COLORS
+    // null = the "+" cell.
+    val cells: List<Int?> = toolbox.savedColors + if (showAdd) listOf(null) else emptyList()
+    Column {
+        cells.chunked(GridColumns).forEach { row ->
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Start) {
+                row.forEach { c ->
+                    if (c == null) {
+                        Box(
+                            Modifier
+                                .size(38.dp)
+                                .clip(CircleShape)
+                                .clickable(role = Role.Button, onClickLabel = saveLabel) { onToolbox(toolbox.saveColor(current)) }
+                                .semantics { contentDescription = saveLabel },
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Box(
+                                Modifier.size(30.dp).border(1.5.dp, MaterialTheme.colorScheme.outline, CircleShape),
+                                contentAlignment = Alignment.Center,
+                            ) { Icon(AtelierIcons.Plus, null, tint = BestNoteTheme.colors.muted, modifier = Modifier.size(16.dp)) }
+                        }
+                    } else {
+                        Box(
+                            Modifier
+                                .size(38.dp)
+                                .clip(CircleShape)
+                                .combinedClickable(
+                                    role = Role.RadioButton,
+                                    onLongClickLabel = removeLabel,
+                                    onLongClick = { onToolbox(toolbox.removeSavedColor(c)) },
+                                    onClick = { onToolbox(toolbox.withColor(c, kind)) },
+                                )
+                                .semantics {
+                                    customActions = listOf(androidx.compose.ui.semantics.CustomAccessibilityAction(removeLabel) { onToolbox(toolbox.removeSavedColor(c)); true })
+                                },
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            val selected = c == current
+                            Box(
+                                Modifier
+                                    .size(32.dp)
+                                    .border(if (selected) 2.dp else 0.dp, if (selected) MaterialTheme.colorScheme.onSurface else Color.Transparent, CircleShape)
+                                    .padding(if (selected) 4.dp else 2.dp)
+                                    .clip(CircleShape)
+                                    .background(Color(c))
+                                    .lowContrastRing(Color(c)),
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** INK-06: save the pen in hand (type + color + size + feel) as a favorite, or take it out again. */
+@Composable
+private fun FavoriteButton(toolbox: Toolbox, onToolbox: (Toolbox) -> Unit) {
+    val existing = toolbox.activeFavorite
+    val full = existing == null && !toolbox.canAddFavorite
+    val label = stringResource(
+        when {
+            existing != null -> R.string.picker_favorite_remove
+            full -> R.string.picker_favorites_full
+            else -> R.string.picker_favorite_add
+        },
+    )
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clip(BestNoteShapes.Pill)
+            .background(MaterialTheme.colorScheme.surfaceContainerLow)
+            .clickable(enabled = !full, role = Role.Button) {
+                onToolbox(if (existing != null) toolbox.removeFavorite(existing.id) else toolbox.addFavorite(java.util.UUID.randomUUID().toString()))
+            }
+            .padding(vertical = Spacing.M),
+        horizontalArrangement = Arrangement.Center,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(
+            if (existing != null) AtelierIcons.Close else AtelierIcons.Star,
+            null,
+            tint = if (full) BestNoteTheme.colors.muted else MaterialTheme.colorScheme.primary,
+            modifier = Modifier.size(18.dp),
+        )
+        Spacer(Modifier.width(Spacing.S))
+        Text(label, style = MaterialTheme.typography.labelLarge, color = if (full) BestNoteTheme.colors.muted else MaterialTheme.colorScheme.onSurface)
     }
 }
 

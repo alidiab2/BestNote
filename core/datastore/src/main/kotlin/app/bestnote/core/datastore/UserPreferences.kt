@@ -57,7 +57,7 @@ enum class FingerDrawing {
 }
 
 /** Pressure → width response. [apply] maps raw 0..1 pressure to the brush's 0..1 input. */
-enum class PressureCurve(private val gamma: Float) {
+enum class PressureCurve(val gamma: Float) {
     /** Light touches already give thick lines. */
     Soft(SOFT_GAMMA),
     Normal(1f),
@@ -140,6 +140,60 @@ data class StoragePreferences(
 }
 
 /**
+ * One pen's saved state (INK-04/05/06). [pen] is the editor's pen kind name (e.g. "Fountain").
+ *
+ * @property sizePx brush size in the ink engine's units.
+ * @property pressureSensitivity 0..1 (1 = the pen's own pressure curve, 0 = constant width).
+ * @property stabilization 0..100.
+ */
+@Serializable
+data class PenState(
+    val pen: String,
+    val colorArgb: Int,
+    val sizePx: Float,
+    val opacity: Float = 1f,
+    val pressureSensitivity: Float = 1f,
+    val stabilization: Int = 0,
+)
+
+/** A favorite pen in the tray (INK-06): pen type + color + size (+ feel), picked in one tap. */
+@Serializable
+data class FavoritePen(val id: String, val state: PenState)
+
+/**
+ * The pen tray that outlives the editor (INK-04..06): every pen's settings, the user's saved custom
+ * colors and favorite pens. Sanitized on write by [UserPreferencesRepository.updatePens].
+ */
+@Serializable
+data class PenPreferences(
+    val pens: List<PenState> = emptyList(),
+    val savedColors: List<Int> = emptyList(),
+    val favorites: List<FavoritePen> = emptyList(),
+) {
+    /** Clamps every value into range, drops duplicates and caps the lists. */
+    fun sanitized(): PenPreferences = PenPreferences(
+        pens = pens.distinctBy { it.pen }.map { it.sanitized() },
+        savedColors = savedColors.map { it or OPAQUE }.distinct().take(MAX_SAVED_COLORS),
+        favorites = favorites.distinctBy { it.id }.take(MAX_FAVORITES).map { it.copy(state = it.state.sanitized()) },
+    )
+
+    companion object {
+        const val MAX_SAVED_COLORS = 12
+        const val MAX_FAVORITES = 6
+        private const val OPAQUE = 0xFF000000.toInt()
+        private const val MAX_STABILIZATION = 100
+
+        private fun PenState.sanitized() = copy(
+            colorArgb = colorArgb or OPAQUE,
+            sizePx = if (sizePx.isFinite() && sizePx > 0f) sizePx else WritingPreferences.DEFAULT_PEN_SIZE,
+            opacity = if (opacity.isFinite()) opacity.coerceIn(0f, 1f) else 1f,
+            pressureSensitivity = if (pressureSensitivity.isFinite()) pressureSensitivity.coerceIn(0f, 1f) else 1f,
+            stabilization = stabilization.coerceIn(0, MAX_STABILIZATION),
+        )
+    }
+}
+
+/**
  * All settings. The top-level fields predate the sections and are read directly by the editor
  * and theme (DS-01, DS-03); newer settings live in sections (SET-01).
  */
@@ -163,6 +217,7 @@ data class UserPreferences(
     val storage: StoragePreferences = StoragePreferences(),
     /** ONB-01: the first-run welcome was finished or skipped. Settings → About → "Show welcome again" clears it. */
     val onboardingDone: Boolean = false,
+    val pens: PenPreferences = PenPreferences(),
 ) {
     /**
      * True when fingers must never ink (palm rejection's strongest mode). Derived from
@@ -204,6 +259,7 @@ class UserPreferencesRepository @Inject constructor(private val store: DataStore
     val writing: Flow<WritingPreferences> = section { it.writing }
     val appearance: Flow<AppearancePreferences> = section { it.appearance }
     val storage: Flow<StoragePreferences> = section { it.storage }
+    val pens: Flow<PenPreferences> = section { it.pens }
 
     suspend fun updateStylus(transform: (StylusPreferences) -> StylusPreferences) {
         store.updateData { it.copy(stylus = transform(it.stylus)) }
@@ -229,6 +285,11 @@ class UserPreferencesRepository @Inject constructor(private val store: DataStore
             val next = transform(it.storage)
             it.copy(storage = next.copy(trashRetentionDays = next.trashRetentionDays.coerceAtLeast(0)))
         }
+    }
+
+    /** Pens, saved colors and favorites (INK-04..06); values are clamped and lists capped. */
+    suspend fun updatePens(transform: (PenPreferences) -> PenPreferences) {
+        store.updateData { it.copy(pens = transform(it.pens).sanitized()) }
     }
 
     /** Any top-level field (theme, dock, hover button…). */

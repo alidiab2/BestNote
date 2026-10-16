@@ -34,6 +34,7 @@ import app.bestnote.core.model.PenStyle
 import app.bestnote.core.model.TextElement
 import app.bestnote.core.model.Tool
 import app.bestnote.engine.canvas.EraserMode
+import app.bestnote.engine.canvas.InkInputShaper
 import app.bestnote.engine.canvas.StrokeBrushes
 import app.bestnote.engine.canvas.erase.EraserCapsule
 import app.bestnote.engine.canvas.select.PenType
@@ -43,6 +44,7 @@ import app.bestnote.engine.canvas.erase.InkEraser
 import app.bestnote.engine.canvas.WetHighlighter
 import app.bestnote.engine.ink.BrushCatalog
 import app.bestnote.engine.ink.InkPalette
+import app.bestnote.engine.ink.PenTuning
 import app.bestnote.engine.layout.document.DocumentMetrics
 import app.bestnote.engine.stylus.HoverButtonGestures
 import app.bestnote.engine.stylus.HoverCursorStyle
@@ -107,6 +109,12 @@ class PagedDocumentView(context: Context) : FrameLayout(context), InProgressStro
 
     /** Brush size in the same units as [BrushCatalog.DEFAULT_SIZE]; converted to page points. */
     var brushSize: Float = BrushCatalog.DEFAULT_SIZE
+
+    /**
+     * The active pen's pressure sensitivity and stabilization (INK-04/05). Captured at pen-down and
+     * applied to that stroke's samples only; strokes already on the page never change.
+     */
+    var penTuning: PenTuning = PenTuning.Default
 
     var sideButtonTool: Tool?
         get() = sideButton.temporaryTool
@@ -458,6 +466,9 @@ class PagedDocumentView(context: Context) : FrameLayout(context), InProgressStro
     private val resolveHoverClick = Runnable { hoverGestures.onTick(SystemClock.uptimeMillis())?.let(::onHoverGesture) }
     private var writing = false
     private val predictor = MotionEventPredictor.newInstance(this)
+    private val shaper = InkInputShaper(
+        resources.displayMetrics.let { dm -> (if (dm.xdpi > MIN_PLAUSIBLE_DPI) dm.xdpi else dm.densityDpi.toFloat()) / MM_PER_INCH },
+    )
     private val scroller = OverScroller(context)
     private var velocity: VelocityTracker? = null
     private val touchSlop = ViewConfiguration.get(context).scaledTouchSlop
@@ -699,11 +710,11 @@ class PagedDocumentView(context: Context) : FrameLayout(context), InProgressStro
                         selection.owns(id) -> selectAlong(id, se)
                         id in erasing -> eraseAlong(id, se)
                         id in inking -> {
-                            wet.addToStroke(event, id, inking.getValue(id).second, predicted)
+                            withShaped(event, id, predicted) { e, p -> wet.addToStroke(e, id, inking.getValue(id).second, p) }
                             trackHold(id, se)
                         }
                         highlighting?.second?.pointerId == id -> highlighting?.let { (page, h) ->
-                            h.add(event, predicted)
+                            withShaped(event, id, predicted) { e, p -> h.add(e, p) }
                             pages.invalidatePage(page)
                             trackHold(id, se)
                         }
@@ -720,7 +731,8 @@ class PagedDocumentView(context: Context) : FrameLayout(context), InProgressStro
                     selection.up(id)
                     inking.remove(id)?.let { (_, strokeId) ->
                         if (holds[id]?.held == true || shapeTool) snapRequested += strokeId
-                        wet.finishStroke(event, id, strokeId)
+                        withShaped(event, id, null, last = true) { e, _ -> wet.finishStroke(e, id, strokeId) }
+                        shaper.end(id)
                     }
                     finishHighlight(id, event)
                     holds.remove(id)
@@ -1068,9 +1080,10 @@ class PagedDocumentView(context: Context) : FrameLayout(context), InProgressStro
         val brush = BrushCatalog.brush(strokeTool, penStyle, PaperInk.colorOn(colorArgb, paper), sizePt) ?: return
         val strokeToView = Matrix()
         if (!pageToView(page, strokeToView)) return
+        shaper.begin(pointerId, penTuning)
         if (strokeTool == Tool.Highlighter) return startHighlight(event, pointerId, strokeTool, page, brush, strokeToView, sizePt)
         // World = view pixels; the stroke itself is recorded in page points.
-        val strokeId = wet.startStroke(event, pointerId, brush, IDENTITY, strokeToView)
+        val strokeId = withShaped(event, pointerId, null) { e, _ -> wet.startStroke(e, pointerId, brush, IDENTITY, strokeToView) }
         inking[pointerId] = page to strokeId
         startHold(event, pointerId)
         strokePages[strokeId] = page
@@ -1090,7 +1103,7 @@ class PagedDocumentView(context: Context) : FrameLayout(context), InProgressStro
         val h = WetHighlighter(pointerId, brush, event.downTime, viewToStroke)
         highlighting = page to h
         captureBrush(event, strokeTool, sizePt)?.let { strokeBrushes.begin(h.id, it) }
-        h.add(event, null)
+        withShaped(event, pointerId, null) { e, _ -> h.add(e, null) }
         pages.setWetHighlight(page, h.stroke, brush.colorIntArgb)
         startHold(event, pointerId)
     }
@@ -1098,7 +1111,8 @@ class PagedDocumentView(context: Context) : FrameLayout(context), InProgressStro
     private fun finishHighlight(pointerId: Int, event: MotionEvent) {
         val (page, h) = highlighting?.takeIf { it.second.pointerId == pointerId } ?: return
         highlighting = null
-        val stroke = h.finish(event)
+        val stroke = withShaped(event, pointerId, null, last = true) { e, _ -> h.finish(e) }
+        shaper.end(pointerId)
         strokeBrushes.finish(h.id, stroke)
         pages.setWetHighlight(page, null, 0)
         val snap = holds.remove(pointerId)?.held == true || shapeTool
@@ -1116,7 +1130,20 @@ class PagedDocumentView(context: Context) : FrameLayout(context), InProgressStro
         pages.setWetHighlight(page, null, 0)
     }
 
+    /** Runs [block] with [event] (and [predicted]) shaped by [pointerId]'s pen tuning (INK-04/05), recycling the copies. */
+    private inline fun <T> withShaped(event: MotionEvent, pointerId: Int, predicted: MotionEvent?, last: Boolean = false, block: (MotionEvent, MotionEvent?) -> T): T {
+        val e = shaper.shape(event, pointerId, last = last)
+        val p = predicted?.let { shaper.shape(it, pointerId, predicted = true) }
+        try {
+            return block(e, p)
+        } finally {
+            shaper.release(event, e)
+            shaper.release(predicted, p)
+        }
+    }
+
     private fun cancelInk(pointerId: Int, event: MotionEvent) {
+        shaper.end(pointerId)
         holds.remove(pointerId)
         cancelHighlight(pointerId)
         inking.remove(pointerId)?.let { (_, strokeId) ->
@@ -1342,5 +1369,9 @@ class PagedDocumentView(context: Context) : FrameLayout(context), InProgressStro
         private const val MAX_FOCUS_ZOOM = 3f
         private const val FOCUS_BELOW_TOP = 0.42f
         private val IDENTITY = Matrix()
+
+        /** Some emulators report a bogus xdpi; below this, fall back to densityDpi for px per mm. */
+        private const val MIN_PLAUSIBLE_DPI = 100f
+        private const val MM_PER_INCH = 25.4f
     }
 }
