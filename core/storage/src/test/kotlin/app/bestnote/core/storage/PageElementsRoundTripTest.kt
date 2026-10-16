@@ -64,9 +64,9 @@ class PageElementsRoundTripTest {
 
     @Test fun v7TextWithoutFormattingStillReads() {
         val entries = BnoteFormat.toEntries(pkg(listOf(english))).toMutableMap()
-        val page = entries.getValue("pages/p0.json").decodeToString()
+        val page = entries.getValue(BnoteFormat.pageMetaPath("p0")).decodeToString()
             .replace("\"format\": ${BnoteFormat.VERSION}", "\"format\": 7")
-        entries["pages/p0.json"] = page.encodeToByteArray()
+        entries[BnoteFormat.pageMetaPath("p0")] = page.encodeToByteArray()
         entries[BnoteFormat.MANIFEST] = entries.getValue(BnoteFormat.MANIFEST).decodeToString().replace("\"format\": ${BnoteFormat.VERSION}", "\"format\": 7").encodeToByteArray()
         assertEquals(listOf<PageElement>(english), BnoteFormat.fromEntries { entries[it] }.pages[0].elements)
     }
@@ -85,6 +85,7 @@ class PageElementsRoundTripTest {
     @Test fun filesWithoutElementsStillOpenAndUnknownKindsAreSkipped() {
         val entries = BnoteFormat.toEntries(pkg(emptyList()))
         val meta = BnoteFormat.pageMetaPath("p0")
+        val legacy = entries.getValue(meta).decodeToString().replace(Regex("\"elements\":\\s*\\[\\s*\\]"), "\"x\": 0")
         entries[meta] = legacy.encodeToByteArray()
         assertTrue(BnoteFormat.fromEntries { entries[it] }.pages[0].elements.isEmpty())
 
