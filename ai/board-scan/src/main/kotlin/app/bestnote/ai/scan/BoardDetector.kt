@@ -37,12 +37,14 @@ object BoardDetector {
         val edge = dilate(threshold(grad, otsu(grad, 0f, grad.maxOrNull() ?: 1f)), w, h)
         val split = otsu(luma, 0f, 255f)
         val candidates = ArrayList<BooleanArray>(3)
-        candidates += grow(w, h) { !edge[it] }
-        candidates += grow(w, h) { luma[it] > split }
-        candidates += grow(w, h) { luma[it] <= split }
+        // The region inside the edges stops short of the border by the blur, the Sobel kernel and
+        // the dilation: grow it back by that much so the corners land on the board's edge.
+        candidates += fillHoles(grow(w, h) { !edge[it] }, w, h).let { dilate(dilate(it, w, h), w, h) }
+        candidates += fillHoles(grow(w, h) { luma[it] > split }, w, h)
+        candidates += fillHoles(grow(w, h) { luma[it] <= split }, w, h)
         var best: Result? = null
         for (mask in candidates) {
-            val r = fit(fillHoles(mask, w, h), w, h) ?: continue
+            val r = fit(mask, w, h) ?: continue
             if (best == null || r.confidence > best.confidence) best = r
         }
         return best
