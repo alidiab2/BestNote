@@ -5,6 +5,7 @@ import android.content.Context
 import android.graphics.Canvas
 import android.graphics.DashPathEffect
 import android.graphics.Paint
+import android.graphics.Rect
 import android.graphics.RectF
 import android.graphics.Typeface
 import android.view.ViewGroup
@@ -12,6 +13,8 @@ import androidx.ink.strokes.InProgressStroke
 import app.bestnote.engine.layout.document.DocumentLayout
 import app.bestnote.engine.layout.document.DocumentMetrics
 import app.bestnote.engine.layout.document.PageWindow
+import kotlin.math.ceil
+import kotlin.math.floor
 
 /**
  * The scrolling content of [PagedDocumentView]: recycled [PageSlotView]s for the pages near the
@@ -22,9 +25,31 @@ import app.bestnote.engine.layout.document.PageWindow
 internal class PagesLayer(context: Context, private val sheet: SheetStyle, var metrics: DocumentMetrics) : ViewGroup(context) {
     var document: PagedDocument? = null
         set(value) {
+            if (field !== value) tiles.clear()
             field = value
+            tiles.backgrounds = value?.backgrounds
             relayout()
         }
+
+    /** CANVAS-06: finished ink, paper and backgrounds as cached bitmap tiles per page and zoom. */
+    val tiles: DryInkTiles = DryInkTiles(resources.displayMetrics.density).apply {
+        onTilesReady = { id ->
+            val doc = document
+            if (doc != null) for (i in doc.pages.indices) if (doc.pages[i].id == id) window.slotFor(i)?.invalidate()
+        }
+    }
+
+    /** What can be on screen, in this layer's content coordinates (the pinch preview included). */
+    private val viewportOf: (Rect) -> Unit = { out ->
+        val s = preview.scale
+        if (s == 1f && preview.tx == 0f && preview.ty == 0f) {
+            out.set(scrollX, scrollY, scrollX + width, scrollY + height)
+        } else {
+            val l = scrollX + (-preview.tx / s)
+            val t = scrollY + (-preview.ty / s)
+            out.set(floor(l).toInt(), floor(t).toInt(), ceil(l + width / s).toInt(), ceil(t + height / s).toInt())
+        }
+    }
 
     /** Null until the view has a width. */
     var layout: DocumentLayout? = null
@@ -61,9 +86,15 @@ internal class PagesLayer(context: Context, private val sheet: SheetStyle, var m
     }
     private val cardRect = RectF()
 
-    private val window = PageWindow(
+    private val window: PageWindow<PageSlotView> = PageWindow(
         overscan = 1,
-        create = { PageSlotView(context, sheet).also { addViewInLayout(it, -1, generateDefaultLayoutParams(), true) } },
+        create = {
+            PageSlotView(context, sheet).also {
+                it.tiles = tiles
+                it.viewport = viewportOf
+                addViewInLayout(it, -1, generateDefaultLayoutParams(), true)
+            }
+        },
         bind = { slot, i -> bindSlot(slot, i) },
         unbind = { it.unbind() },
     )
@@ -163,6 +194,8 @@ internal class PagesLayer(context: Context, private val sheet: SheetStyle, var m
             return
         }
         layout = DocumentLayout(doc.pages.map { it.page.size }, width, metrics, zoom)
+        tiles.backgrounds = doc.backgrounds
+        tiles.retain(doc.pages.mapTo(HashSet()) { it.id })
         window.clear()
         clampScroll()
         refreshWindow()
@@ -219,6 +252,7 @@ internal class PagesLayer(context: Context, private val sheet: SheetStyle, var m
             translationX = value.tx
             translationY = value.ty
             if (value.scale < 1f) refreshWindow()
+            viewportMoved()
             onViewportChanged?.invoke()
         }
 
@@ -239,7 +273,32 @@ internal class PagesLayer(context: Context, private val sheet: SheetStyle, var m
     override fun onScrollChanged(l: Int, t: Int, oldl: Int, oldt: Int) {
         super.onScrollChanged(l, t, oldl, oldt)
         refreshWindow()
+        viewportMoved()
         onViewportChanged?.invoke()
+    }
+
+    private fun viewportMoved() {
+        for (i in 0 until childCount) (getChildAt(i) as? PageSlotView)?.onViewportMoved()
+    }
+
+    /** Main-thread time of the last redraw of the slot showing page [index], in ns (0 if not bound). */
+    fun lastDrawNanos(index: Int): Long = window.slotFor(index)?.lastDrawNanos ?: 0L
+
+    /** Median and worst main-thread redraw of page [index]'s slot over its recent redraws, in ns. */
+    fun recentDrawNanos(index: Int): Pair<Long, Long> = window.slotFor(index)?.recentDrawNanos() ?: (0L to 0L)
+
+    /** Hidden (app in the background): give the tile memory back; it re-renders when shown again. */
+    override fun onWindowVisibilityChanged(visibility: Int) {
+        super.onWindowVisibilityChanged(visibility)
+        if (visibility != VISIBLE) {
+            tiles.close()
+            for (i in 0 until childCount) getChildAt(i).invalidate()
+        }
+    }
+
+    override fun onDetachedFromWindow() {
+        super.onDetachedFromWindow()
+        tiles.close()
     }
 
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {

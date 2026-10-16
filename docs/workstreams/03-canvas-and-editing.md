@@ -11,7 +11,7 @@
 | [x] CANVAS-03 | Undo/redo command stack per document (bounded, survives tool switches) | M1 | M | — | 200 operations undo/redo correctly; memory stays bounded |
 | [x] CANVAS-04 | Gestures: two-finger tap undo, three-finger tap redo | M1 | S | SPEN-02 | Gestures don't trigger while writing |
 | [x] CANVAS-05 | Zoom & pan: pinch, fling, double-tap fit-to-width, zoom limits 25%–800% | M1 | L | — | 120 fps pan on a full page; ink sharp at every zoom |
-| [ ] CANVAS-06 | Dry-ink tile cache: rasterize finished strokes into tiles per zoom bucket | M1 | L | CANVAS-05 | Page with 5k strokes redraws in < 8 ms |
+| [x] CANVAS-06 | Dry-ink tile cache: rasterize finished strokes into tiles per zoom bucket (done: 512 px tiles per page and exact zoom scale incl. paper/PDF/elements, two workers, diff-based invalidation, overlay of new ink, previous-zoom stand-in; `TileRedrawBenchmark`: 5,456-stroke page records in 0.07 ms vs 180 ms) | M1 | L | CANVAS-05 | Page with 5k strokes redraws in < 8 ms |
 | [x] CANVAS-07 | Paginated vertical document view with page recycling | M1 | L | DOC-01 | Scrolling a 300-page notebook stays at 120 fps, memory flat |
 | [x] CANVAS-08 | Lasso select (freehand) with spatial index hit-testing | M2 | M | — | Selects partially enclosed strokes (≥ 10% of length or ≥ 24 pt enclosed) |
 | [x] CANVAS-09 | Transform selection: move, resize, rotate with handles and snapping | M2 | L | CANVAS-08 | Handles animate in; rotation snaps at 0/45/90° with a haptic tick |

@@ -1,6 +1,7 @@
 package app.bestnote.engine.pdf
 
 import android.graphics.Bitmap
+import android.graphics.Rect
 import android.os.Handler
 import android.os.Looper
 import app.bestnote.core.model.Page
@@ -62,6 +63,19 @@ class PdfPageBackgrounds(
 
     /** Renders [page] now, [widthPx] wide, bypassing the cache (thumbnails). Call off the main thread. */
     override fun thumbnail(page: Page, widthPx: Int): Bitmap? = renderNow(page, widthPx)
+
+    /** PDF-02: one zoom tile, rendered now at its exact resolution (the tile cache keeps it). */
+    override fun region(page: Page, widthPx: Int, heightPx: Int, region: Rect): Bitmap? {
+        val ref = page.pdf ?: return null
+        if (region.width() <= 0 || region.height() <= 0 || widthPx <= 0) return null
+        lock.withLock { if (closed) return null }
+        val source = sources[ref.asset]?.takeIf { ref.pageIndex < it.pageCount } ?: return null
+        return try {
+            source.renderRegion(ref.pageIndex, widthPx, region.left, region.top, region.width(), region.height())
+        } catch (_: Exception) {
+            null // damaged page or source closed under us: the tile keeps the whole-page raster
+        }
+    }
 
     fun renderNow(page: Page, widthPx: Int): Bitmap? {
         val ref = page.pdf ?: return null

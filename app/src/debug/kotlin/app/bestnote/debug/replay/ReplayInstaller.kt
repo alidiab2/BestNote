@@ -19,6 +19,10 @@
  * left/top  where the writing starts, in dp from the canvas' corner (default 16; 112 on the paged
  *        notebook, so the words land on the first page's writing lines)
  *
+ * Also: app.bestnote.debug.SEED (--es file, --ei cols, --ei rows) puts a corpus file's handwriting
+ * straight onto the current page as finished strokes, to build 5k-stroke pages in a second, and
+ * app.bestnote.debug.STATE --ez tiles false|true switches the CANVAS-06 tile cache for A/B checks.
+ *
  * Progress goes to files/replay/status ("running …" / "done …" / "error …") and logcat tag
  * BestNoteReplay. scripts/agent/replay.sh wraps all of this.
  */
@@ -69,13 +73,15 @@ class ReplayInstaller : ContentProvider() {
                 override fun onReceive(context: Context, intent: Intent) =
                     when (intent.action) {
                         PINCH -> pinch(activity, intent)
-                        STATE -> state(activity)
+                        STATE -> state(activity, intent)
+                        SEED -> seed(activity, intent)
                         else -> replay(activity, intent)
                     }
             }
             val filter = IntentFilter(ACTION).apply {
                 addAction(PINCH)
                 addAction(STATE)
+                addAction(SEED)
             }
             ContextCompat.registerReceiver(activity, r, filter, ContextCompat.RECEIVER_EXPORTED)
             receiver = r
@@ -117,13 +123,57 @@ class ReplayInstaller : ContentProvider() {
          * Logs and writes the notebook view's state, so scripts can check what a gesture did:
          *   adb shell am broadcast -a app.bestnote.debug.STATE -p <pkg>; run-as <pkg> cat files/replay/status
          */
-        private fun state(activity: Activity) {
+        private fun state(activity: Activity, intent: Intent) {
             val status = File(File(activity.filesDir, "replay").apply { mkdirs() }, "status")
             val canvas = findCanvas(activity.window.decorView) as? PagedDocumentView ?: return status.writeText("error no notebook canvas on screen\n")
+            // CANVAS-06 A/B: --ez tiles false draws without the dry-ink tile cache.
+            if (intent.hasExtra("tiles")) canvas.tileCacheEnabled = intent.getBooleanExtra("tiles", true)
             val strokes = canvas.document?.pages?.sumOf { it.strokes.size } ?: -1
-            val line = "done state zoom=${canvas.zoom} page=${canvas.currentPage} scrollX=${canvas.scrollOffsetX} scrollY=${canvas.scrollOffsetY} strokes=$strokes"
+            val line = "done state zoom=${canvas.zoom} page=${canvas.currentPage} scrollX=${canvas.scrollOffsetX} scrollY=${canvas.scrollOffsetY} strokes=$strokes ${canvas.renderStats}"
             Log.i(TAG, line)
             status.writeText(line + "\n")
+        }
+
+        /**
+         * CANVAS-06: puts a corpus file's real handwriting (not lines) straight onto the current page,
+         * repeated on a copiesX x copiesY grid, as finished strokes (one undo step). Fills a page
+         * with thousands of strokes in a second, where a live replay would take minutes:
+         *   am broadcast -a app.bestnote.debug.SEED -p <pkg> --es file lecture_en.json --ei cols 4 --ei rows 11
+         */
+        private fun seed(activity: Activity, intent: Intent) {
+            val dir = File(activity.filesDir, "replay").apply { mkdirs() }
+            val status = File(dir, "status")
+            try {
+                val canvas = findCanvas(activity.window.decorView) as? PagedDocumentView ?: error("no notebook canvas on screen")
+                val doc = canvas.document ?: error("no document")
+                val page = canvas.currentPage.coerceAtLeast(0)
+                val (wPt, hPt) = canvas.pageSize(page) ?: error("no page")
+                val file = StrokeFile.parse(File(dir, intent.getStringExtra("file") ?: "lecture_en.json").readText())
+                val cols = intent.getIntExtra("cols", 4)
+                val rows = intent.getIntExtra("rows", 11)
+                val ptPerMm = minOf(wPt / cols / file.widthMm, hPt / rows / file.heightMm)
+                val brush = BrushCatalog.brush(Tool.Pen, PenStyle.Fountain, InkPalette.BLACK, BrushCatalog.DEFAULT_SIZE * 0.3f * 0.5f) ?: error("no brush")
+                val out = ArrayList<androidx.ink.strokes.Stroke>()
+                for (r in 0 until rows) for (c in 0 until cols) for (st in file.strokes) {
+                    if (st.hover || st.samples.isEmpty()) continue
+                    val batch = androidx.ink.strokes.MutableStrokeInputBatch()
+                    val t0 = st.samples[0].tMs
+                    for (p in st.samples) {
+                        batch.add(
+                            androidx.ink.brush.InputToolType.STYLUS,
+                            c * file.widthMm * ptPerMm + p.x * ptPerMm,
+                            r * file.heightMm * ptPerMm + p.y * ptPerMm,
+                            (p.tMs - t0).toLong(), 2.54f / 72f, p.pressure, p.tiltRad, p.orientationRad,
+                        )
+                    }
+                    out += androidx.ink.strokes.Stroke(brush, batch)
+                }
+                doc.addStrokes(page, out)
+                status.writeText("done seed ${out.size} strokes on page $page\n")
+            } catch (t: Throwable) {
+                status.writeText("error ${t.message}\n")
+                Log.e(TAG, "seed failed", t)
+            }
         }
 
         private fun replay(activity: Activity, intent: Intent) {
@@ -215,6 +265,7 @@ class ReplayInstaller : ContentProvider() {
         const val ACTION = "app.bestnote.debug.REPLAY"
         const val PINCH = "app.bestnote.debug.PINCH"
         const val STATE = "app.bestnote.debug.STATE"
+        const val SEED = "app.bestnote.debug.SEED"
         const val DEFAULT_INSET_DP = 16f
         const val PAGED_INSET_DP = 112f
         val PENS = mapOf(

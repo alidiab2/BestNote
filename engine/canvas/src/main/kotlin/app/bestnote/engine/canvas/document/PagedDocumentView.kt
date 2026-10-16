@@ -377,6 +377,26 @@ class PagedDocumentView(context: Context) : FrameLayout(context), InProgressStro
     val scrollOffsetY: Int get() = pages.scrollY
 
     /** Page slot views currently alive (for tests and diagnostics): stays flat however long the notebook is. */
+    /**
+     * CANVAS-06 diagnostics: main-thread time of the current page's last redraw and the tile cache's
+     * state (tiles drawn from bitmaps / stale with overlay / live, cached tiles and bytes).
+     */
+    /** CANVAS-06: false draws pages as vectors on every redraw (A/B comparisons in debug builds). */
+    var tileCacheEnabled: Boolean
+        get() = pages.tiles.enabled
+        set(value) {
+            pages.tiles.enabled = value
+            for (i in 0 until (document?.size ?: 0)) pages.invalidatePage(i)
+        }
+
+    val renderStats: String
+        get() {
+            val t = pages.tiles
+            val ms = pages.lastDrawNanos(currentPage) / 1e6
+            val (median, worst) = pages.recentDrawNanos(currentPage)
+            return "drawMs=${"%.2f".format(ms)} recentMedianMs=${"%.2f".format(median / 1e6)} recentMaxMs=${"%.2f".format(worst / 1e6)} fresh=${t.lastFresh} stale=${t.lastStale} live=${t.lastLive} cached=${t.table.size} mb=${t.table.bytes shr 20}"
+        }
+
     val pageSlotCount: Int get() = pages.slotCount
 
     private val density = resources.displayMetrics.density
