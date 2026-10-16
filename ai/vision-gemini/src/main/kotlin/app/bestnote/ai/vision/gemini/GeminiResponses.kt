@@ -74,7 +74,7 @@ object GeminiResponses {
             code == 403 && "model" in message.lowercase() -> VisionError.ModelUnavailable(model, message)
             code == 403 -> VisionError.InvalidKey()
             code == 404 -> VisionError.ModelUnavailable(model, message)
-            code == 429 -> VisionError.RateLimited(retryAfterSeconds(retryAfterHeader, error))
+            code == 429 -> VisionError.RateLimited(retryAfterSeconds(retryAfterHeader, error), quotaExhausted = "quota" in message.lowercase())
             code in 500..599 -> VisionError.ServiceUnavailable(code, message)
             else -> VisionError.BadResponse("HTTP $code: $message")
         }

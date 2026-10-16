@@ -25,7 +25,12 @@ import kotlin.coroutines.resumeWithException
 class GeminiHttp(http: OkHttpClient, private val config: GeminiConfig) {
     class Result(val code: Int, val body: String, val retryAfter: String?)
 
-    private val client = http.newBuilder().callTimeout(config.timeoutSeconds, TimeUnit.SECONDS).build()
+    private val client = http.newBuilder()
+        .callTimeout(config.timeoutSeconds, TimeUnit.SECONDS)
+        // Pro and thinking models can take minutes before the first byte; OkHttp's default read timeout is 10 s.
+        .readTimeout(config.timeoutSeconds, TimeUnit.SECONDS)
+        .writeTimeout(WRITE_TIMEOUT_S, TimeUnit.SECONDS)
+        .build()
 
     suspend fun post(path: String, key: String, json: String): Result =
         call(Request.Builder().url(url(path)).header(KEY_HEADER, key).post(json.toRequestBody(JSON)).build())
@@ -56,6 +61,7 @@ class GeminiHttp(http: OkHttpClient, private val config: GeminiConfig) {
     }
 
     companion object {
+        private const val WRITE_TIMEOUT_S = 60L
         const val KEY_HEADER = "x-goog-api-key"
         private val JSON = "application/json; charset=utf-8".toMediaType()
     }

@@ -78,4 +78,20 @@ class ModelCatalogTest {
         val sorted = ModelCatalog.sorted(models("gemini-2.5-flash", "gemini-4-argon", "gemini-3.8-flash", "gemini-2.5-pro"))
         assertEquals(listOf("gemini-4-argon", "gemini-2.5-pro", "gemini-3.8-flash", "gemini-2.5-flash"), sorted.map { it.id })
     }
+
+    @Test fun specialistModelsAreNeverPickedAutomatically() {
+        val list = models("deep-research-pro-preview-12-2025", "gemini-3.8-flash", "gemini-3.6-flash-image", "text-embedding-005", "gemini-3.5-flash-live")
+        assertEquals("gemini-3.8-flash", ModelCatalog.pick(list, Preference.Quality)!!.id)
+        assertEquals(listOf("gemini-3.8-flash"), ModelCatalog.candidates(list, Preference.Quality).map { it.id })
+    }
+
+    @Test fun stableBeatsANewerPreviewInTheSameTier() {
+        val list = models("gemini-3.1-pro-preview", "gemini-2.5-pro", "gemini-3.8-flash")
+        assertEquals(listOf("gemini-2.5-pro", "gemini-3.1-pro-preview", "gemini-3.8-flash"), ModelCatalog.candidates(list, Preference.Quality).map { it.id })
+    }
+
+    @Test fun specialistModelsSortLastInThePicker() {
+        val sorted = ModelCatalog.sorted(models("deep-research-pro-preview-12-2025", "gemini-3.8-flash"))
+        assertEquals("deep-research-pro-preview-12-2025", sorted.last().id)
+    }
 }

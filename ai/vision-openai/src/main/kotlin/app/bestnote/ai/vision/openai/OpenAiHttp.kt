@@ -24,7 +24,12 @@ import kotlin.coroutines.resumeWithException
 internal class OpenAiHttp(http: OkHttpClient, timeoutSeconds: Long) {
     class Result(val code: Int, val body: String, val retryAfter: String?)
 
-    private val client = http.newBuilder().callTimeout(timeoutSeconds, TimeUnit.SECONDS).build()
+    private val client = http.newBuilder()
+        .callTimeout(timeoutSeconds, TimeUnit.SECONDS)
+        // Reasoning models can think for minutes before the first byte; OkHttp's default read timeout is 10 s.
+        .readTimeout(timeoutSeconds, TimeUnit.SECONDS)
+        .writeTimeout(WRITE_TIMEOUT_S, TimeUnit.SECONDS)
+        .build()
 
     suspend fun post(url: HttpUrl, headers: Map<String, String>, json: String): Result =
         call(Request.Builder().url(url).apply { headers.forEach { (k, v) -> header(k, v) } }.post(json.toRequestBody(JSON)).build())
@@ -52,6 +57,7 @@ internal class OpenAiHttp(http: OkHttpClient, timeoutSeconds: Long) {
     }
 
     companion object {
+        private const val WRITE_TIMEOUT_S = 60L
         private val JSON = "application/json; charset=utf-8".toMediaType()
 
         /** [base] + [path], tolerating a missing or doubled slash in a user-typed base URL. */

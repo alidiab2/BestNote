@@ -39,10 +39,15 @@ object VisionDiagnostics {
         update { add(AiExchange(clock(), provider, model, httpCode, raw)) }
     }
 
-    /** Attaches parse notes, drop reasons and the final error to the latest call. */
-    fun recordOutcome(parseNotes: List<String> = emptyList(), dropReasons: List<String> = emptyList(), error: Throwable? = null) {
+    /**
+     * Attaches parse notes, drop reasons and the final error to the latest call. With [since], a call
+     * that failed before any response (offline, timeout) gets its own entry instead of being pinned on
+     * an older exchange.
+     */
+    fun recordOutcome(parseNotes: List<String> = emptyList(), dropReasons: List<String> = emptyList(), error: Throwable? = null, since: Long? = null) {
         update {
-            val last = removeLastOrNull() ?: AiExchange(System.currentTimeMillis(), "?", "?", 0, null)
+            val stale = since != null && (lastOrNull()?.atMillis ?: 0L) < since
+            val last = (if (stale) null else removeLastOrNull()) ?: AiExchange(System.currentTimeMillis(), "?", "?", 0, null)
             add(
                 last.copy(
                     parseNotes = last.parseNotes + parseNotes,
