@@ -21,21 +21,28 @@ import android.view.View
  * # hold / release a stylus touch (toolbar auto-hide)
  * adb shell am broadcast -a app.bestnote.debug.TOUCH --es phase down --ef fx 0.5 --ef fy 0.5
  * ```
+ * # a text box (base64 of the UTF-8 words) or a picture file copied to the app's cache folder
+ * adb shell am broadcast -a app.bestnote.debug.ADD_TEXT --es b64 <base64>
+ * adb shell am broadcast -a app.bestnote.debug.ADD_IMAGE --es name photo.jpg
  * Real handwriting: `scripts/agent/replay.sh` (QA-INK).
  */
 internal object DebugStylusHooks {
     private const val HOVER_CLICK = "app.bestnote.debug.HOVER_CLICK"
     private const val TOUCH = "app.bestnote.debug.TOUCH"
+    private const val ADD_TEXT = "app.bestnote.debug.ADD_TEXT"
+    private const val ADD_IMAGE = "app.bestnote.debug.ADD_IMAGE"
     private const val CLICK_HOLD_MS = 90L
     private const val CLICK_GAP_MS = 160L
 
     @SuppressLint("UnspecifiedRegisterReceiverFlag")
-    fun attach(context: Context, view: View): () -> Unit {
+    fun attach(context: Context, view: View, elements: ElementTools): () -> Unit {
         val receiver = object : BroadcastReceiver() {
             override fun onReceive(c: Context, intent: Intent) {
                 val x = intent.getFloatExtra("fx", 0.5f) * view.width
                 val y = intent.getFloatExtra("fy", 0.5f) * view.height
                 when (intent.action) {
+                    ADD_TEXT -> addText(elements, String(android.util.Base64.decode(intent.getStringExtra("b64").orEmpty(), android.util.Base64.DEFAULT), Charsets.UTF_8))
+                    ADD_IMAGE -> elements.insertImage(android.net.Uri.fromFile(java.io.File(context.cacheDir, intent.getStringExtra("name").orEmpty())))
                     HOVER_CLICK -> hoverClick(view, x, y, intent.getIntExtra("count", 1))
                     TOUCH -> touch(view, x, y, intent.getStringExtra("phase") ?: "down")
                 }
@@ -44,6 +51,8 @@ internal object DebugStylusHooks {
         val filter = IntentFilter().apply {
             addAction(HOVER_CLICK)
             addAction(TOUCH)
+            addAction(ADD_TEXT)
+            addAction(ADD_IMAGE)
         }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             context.registerReceiver(receiver, filter, Context.RECEIVER_EXPORTED)
@@ -81,6 +90,14 @@ internal object DebugStylusHooks {
             view.postDelayed({ hover(view, MotionEvent.ACTION_HOVER_MOVE, x + 1, y, 0) }, t + CLICK_HOLD_MS)
             t += CLICK_HOLD_MS + CLICK_GAP_MS
         }
+    }
+
+    /** Puts a text box with [text] (UTF-8 passed as base64 so Arabic survives the shell) on the page being read. */
+    private fun addText(elements: ElementTools, text: String) {
+        elements.insertText()
+        val (_, box) = elements.newText ?: return
+        elements.newText = elements.newText?.let { (i, b) -> i to b.copy(text = text) }
+        elements.confirmNewText(box.copy(text = text))
     }
 
     private var held: Long? = null

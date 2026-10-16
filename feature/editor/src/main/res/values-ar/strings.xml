@@ -77,4 +77,31 @@
     <string name="quick_palette_size">الحجم %1$s مم. انقر للتغيير</string>
     <string name="editor_pen_detected">تم اكتشاف القلم: الأصابع الآن للتمرير والتكبير.</string>
     <string name="toolbar_move">نقل الأدوات: اسحب إلى الأعلى أو إلى أحد الجانبين</string>
+
+    <string name="selection_edit">تعديل</string>
+    <string name="selection_lock">قفل</string>
+    <string name="selection_unlock">إلغاء القفل</string>
+
+    <string name="dialog_done">تم</string>
+    <string name="dialog_cancel">إلغاء</string>
+
+    <string name="text_title">نص</string>
+    <string name="text_smaller">نص أصغر</string>
+    <string name="text_larger">نص أكبر</string>
+    <string name="text_align_start">البداية</string>
+    <string name="text_align_center">الوسط</string>
+    <string name="text_align_end">النهاية</string>
+
+    <string name="image_add">إضافة صورة</string>
+    <string name="image_photos">الصور</string>
+    <string name="image_camera">الكاميرا</string>
+    <string name="image_paste">لصق</string>
+    <string name="image_crop">قص</string>
+    <string name="image_rotate">تدوير</string>
+    <string name="image_failed">تعذّر فتح هذه الصورة</string>
+    <string name="image_nothing_to_paste">لا توجد صورة للصق</string>
+    <string name="crop_left">الحافة اليسرى</string>
+    <string name="crop_right">الحافة اليمنى</string>
+    <string name="crop_top">الحافة العليا</string>
+    <string name="crop_bottom">الحافة السفلى</string>
 </resources>

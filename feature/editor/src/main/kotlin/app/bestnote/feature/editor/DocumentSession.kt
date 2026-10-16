@@ -16,9 +16,14 @@ import app.bestnote.core.model.InkStroke
 import app.bestnote.core.model.Notebook
 import app.bestnote.core.model.NotebookId
 import app.bestnote.core.model.Page
+import app.bestnote.core.model.PageElement
 import app.bestnote.core.storage.Autosaver
+import app.bestnote.core.storage.ImageAssets
 import app.bestnote.core.storage.InkChunkCodec
+import app.bestnote.engine.canvas.document.AssetImageCache
 import app.bestnote.engine.canvas.document.DocumentPage
+import app.bestnote.engine.canvas.document.ElementImages
+import app.bestnote.engine.canvas.document.ElementPainter
 import app.bestnote.engine.canvas.document.PagedDocument
 import app.bestnote.engine.canvas.document.PagedDocumentView
 import app.bestnote.engine.canvas.document.PaperPainter
@@ -63,6 +68,23 @@ internal class DocumentSession(
     private val models = IdentityHashMap<Stroke, InkStroke>()
     private var view: PagedDocumentView? = null
 
+    /** The notebook's picture files by archive path (MEDIA-01); read by the image cache on its own thread. */
+    private val assets = java.util.concurrent.ConcurrentHashMap<String, ByteArray>()
+    private val imageCache = AssetImageCache(bytesOf = { assets[it] })
+
+    /** The bytes of the stored picture [path] (for the crop preview), or null. */
+    fun assetBytes(path: String): ByteArray? = assets[path]
+
+    /**
+     * Stores an already downsampled picture once per notebook (its path is a hash of its bytes, so the same
+     * picture added again is the same file) and returns its archive path. Call before adding an element that uses it.
+     */
+    fun addImage(bytes: ByteArray, ext: String): String {
+        val path = ImageAssets.pathFor(bytes, ext)
+        if (assets.putIfAbsent(path, bytes) == null) saver?.addAsset(path, bytes)
+        return path
+    }
+
     /** Rasters of the notebook's PDF pages (PDF-01), or null for a plain notebook. */
     private var pdf: PdfPageBackgrounds? = null
 
@@ -102,9 +124,11 @@ internal class DocumentSession(
         savedLayout = pages.mapIndexed { i, content -> content.id to content.page.copy(index = i) }
         val strokes = loaded.map { page -> page.mapNotNull { (model, stroke) -> stroke?.also { models[it] = model } } }
         saver = open.autosaver
+        assets.putAll(open.pkg.assets)
+        document.images = imageCache
         pdf = withContext(Dispatchers.IO) { PdfNotebookFiles.open(open.pkg, pdfCacheDir) }
         document.backgrounds = pdf
-        document.reset(savedLayout.map { it.second }, savedLayout.map { it.first }) { strokes[it] }
+        document.reset(savedLayout.map { it.second }, savedLayout.map { it.first }, strokes = { strokes[it] }, elements = { pages[it].elements })
         document.addListener(this)
     }
 
@@ -122,6 +146,12 @@ internal class DocumentSession(
         val saver = saver ?: return
         val page = document.pages.getOrNull(index) ?: return
         saver.updatePage(page.id, modelsOf(page))
+    }
+
+    override fun onPageElementsChanged(index: Int) {
+        val saver = saver ?: return
+        val page = document.pages.getOrNull(index) ?: return
+        saver.updateElements(page.id, page.elements)
     }
 
     private fun modelsOf(page: DocumentPage): List<InkStroke> {
@@ -143,7 +173,10 @@ internal class DocumentSession(
         val known = savedLayout.mapTo(HashSet()) { it.first }
         savedLayout = layout
         saver.updateLayout(layout)
-        for (page in document.pages) if (page.id !in known && page.strokes.isNotEmpty()) saver.updatePage(page.id, modelsOf(page))
+        for (page in document.pages) if (page.id !in known) {
+            if (page.strokes.isNotEmpty()) saver.updatePage(page.id, modelsOf(page))
+            if (page.elements.isNotEmpty()) saver.updateElements(page.id, page.elements)
+        }
     }
 
     /** Gets every pending edit on disk (before exporting), so a file holds what is on screen. */
@@ -155,6 +188,8 @@ internal class DocumentSession(
     fun onStop() {
         val saver = saver ?: return
         val first = firstPage()
+        val elements = firstElements()
+        val pictures = assets.toMap()
         repository.backgroundScope.launch {
             try {
                 saver.flush()
@@ -163,7 +198,7 @@ internal class DocumentSession(
             } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
                 Log.e(TAG, "Flush failed; autosave keeps retrying", e)
             }
-            refreshThumbnail(saver, first, pdf)
+            refreshThumbnail(saver, first, pdf, elements, pictures)
         }
     }
 
@@ -171,9 +206,13 @@ internal class DocumentSession(
     fun close() {
         document.removeListener(this)
         view = null
+        document.images = null
+        imageCache.clear()
         val saver = saver ?: return
         this.saver = null
         val first = firstPage()
+        val elements = firstElements()
+        val pictures = assets.toMap()
         val pdf = pdf
         this.pdf = null
         val closedAt = SystemClock.elapsedRealtime()
@@ -185,7 +224,7 @@ internal class DocumentSession(
             } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
                 Log.e(TAG, "Final save of $notebookId failed", e)
             }
-            val thumbnailed = refreshThumbnail(saver, first, pdf)
+            val thumbnailed = refreshThumbnail(saver, first, pdf, elements, pictures)
             pdf?.close()
             if (thumbnailed) {
                 Log.i(TAG, "Thumbnail of $notebookId updated ${SystemClock.elapsedRealtime() - closedAt} ms after closing")
@@ -195,6 +234,8 @@ internal class DocumentSession(
 
     private fun firstPage(): Pair<Page, List<Stroke>>? = document.pages.firstOrNull()?.let { it.page to it.strokes.toList() }
 
+    private fun firstElements(): List<PageElement> = document.pages.firstOrNull()?.elements.orEmpty()
+
     /**
      * The brush captured at pen-down for [stroke]. The fallback (a stroke the canvas has no record
      * of) identifies the family from the stroke's own androidx.ink brush, never from the toolbar.
@@ -202,12 +243,18 @@ internal class DocumentSession(
     private fun brushOf(stroke: Stroke): InkBrush = view?.brushOf(stroke) ?: InkConversion.brushFromInk(stroke.brush)
 
     /** Re-renders the thumbnail when the cached one predates the last save. @return true if rendered. */
-    private suspend fun refreshThumbnail(saver: Autosaver, first: Pair<Page, List<Stroke>>?, pdf: PdfPageBackgrounds? = this.pdf): Boolean {
+    private suspend fun refreshThumbnail(
+        saver: Autosaver,
+        first: Pair<Page, List<Stroke>>?,
+        pdf: PdfPageBackgrounds? = this.pdf,
+        elements: List<PageElement> = emptyList(),
+        pictures: Map<String, ByteArray> = emptyMap(),
+    ): Boolean {
         val (page, strokes) = first ?: return false
         val notebook = saver.notebook
         if (!repository.thumbnailIsStale(notebookId, notebook.updatedAtMillis)) return false
         return try {
-            val bytes = withContext(Dispatchers.Default) { renderThumbnail(page, strokes, pdf?.renderNow(page, THUMB_WIDTH)) }
+            val bytes = withContext(Dispatchers.Default) { renderThumbnail(page, strokes, pdf?.renderNow(page, THUMB_WIDTH), elements, pictures) }
             repository.saveThumbnail(notebookId, notebook.updatedAtMillis, bytes)
             Log.i(TAG, "Thumbnail of $notebookId rendered from ${strokes.size} strokes")
             true
@@ -227,13 +274,20 @@ internal class DocumentSession(
 private const val THUMB_WIDTH = 320
 private const val THUMB_QUALITY = 80
 private const val MIN_THUMB_STROKE_PX = 1.5f
+private const val THUMB_PICTURE_SAMPLE = 2
 
 /**
  * Renders [page] (paper, template and [strokes] in page points) [THUMB_WIDTH] px wide as WebP.
  * Strokes are immutable, so this runs off the main thread.
  */
-internal fun renderThumbnail(page: Page, strokes: List<Stroke>, pdfRaster: Bitmap? = null): ByteArray {
-    val bitmap = renderPageBitmap(page, strokes, THUMB_WIDTH, pdfRaster)
+internal fun renderThumbnail(
+    page: Page,
+    strokes: List<Stroke>,
+    pdfRaster: Bitmap? = null,
+    elements: List<PageElement> = emptyList(),
+    pictures: Map<String, ByteArray> = emptyMap(),
+): ByteArray {
+    val bitmap = renderPageBitmap(page, strokes, THUMB_WIDTH, pdfRaster, elements, pictures)
     try {
         val format = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             Bitmap.CompressFormat.WEBP_LOSSY
@@ -248,7 +302,14 @@ internal fun renderThumbnail(page: Page, strokes: List<Stroke>, pdfRaster: Bitma
 }
 
 /** Draws [page] (paper, template and [strokes] in page points) into a new bitmap [widthPx] wide. Caller owns it. */
-internal fun renderPageBitmap(page: Page, strokes: List<Stroke>, widthPx: Int, pdfRaster: Bitmap? = null): Bitmap {
+internal fun renderPageBitmap(
+    page: Page,
+    strokes: List<Stroke>,
+    widthPx: Int,
+    pdfRaster: Bitmap? = null,
+    elements: List<PageElement> = emptyList(),
+    pictures: Map<String, ByteArray> = emptyMap(),
+): Bitmap {
     val scale = widthPx / page.widthPt
     val height = (page.heightPt * scale).roundToInt().coerceAtLeast(1)
     val bitmap = createBitmap(widthPx, height)
@@ -259,6 +320,22 @@ internal fun renderPageBitmap(page: Page, strokes: List<Stroke>, widthPx: Int, p
         if (pdfRaster != null) canvas.drawBitmap(pdfRaster, null, android.graphics.Rect(0, 0, widthPx, height), null)
     } else {
         PaperPainter.draw(canvas, page, scale, widthPx, height)
+    }
+    if (elements.isNotEmpty()) {
+        val decoded = HashMap<String, Bitmap?>()
+        val images = object : ElementImages {
+            override fun bitmap(asset: String, widthPx: Int, onReady: Runnable): Bitmap? = decoded.getOrPut(asset) {
+                pictures[asset]?.let { bytes ->
+                    val opts = android.graphics.BitmapFactory.Options().apply { inSampleSize = THUMB_PICTURE_SAMPLE }
+                    runCatching { android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size, opts) }.getOrNull()
+                }
+            }
+        }
+        canvas.save()
+        canvas.scale(scale, scale)
+        ElementPainter().draw(canvas, elements, scale, images, Runnable { })
+        canvas.restore()
+        decoded.values.forEach { it?.recycle() }
     }
     // Plain polylines: a cover image does not need brush tips, and this works on any (software) canvas.
     val ink = Paint(Paint.ANTI_ALIAS_FLAG).apply {

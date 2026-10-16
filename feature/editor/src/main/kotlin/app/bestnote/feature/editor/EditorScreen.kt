@@ -286,6 +286,15 @@ fun EditorScreen(
     var exporting by remember { mutableStateOf(false) }
     val snackbar = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
+    val elements = rememberElementTools(
+        canvas = { canvas },
+        document = document,
+        session = viewModel.session,
+        colors = { toolbox.quickColors(PenKind.Fountain) },
+        onSelecting = { viewModel.setLasso(true) },
+        onMessage = { id -> scope.launch { snackbar.currentSnackbarData?.dismiss(); snackbar.showSnackbar(context.getString(id)) } },
+    )
     val reduce = reducedMotion()
     val side = traySide(state.dock, state.leftHanded)
     LifecycleEventEffect(Lifecycle.Event.ON_STOP) { viewModel.session.onStop() }
@@ -539,6 +548,8 @@ fun EditorScreen(
                     onLasso = ::toggleLasso,
                     shapesActive = toolbox.shapes && !toolbox.lasso,
                     onShapes = ::toggleShapes,
+                    onText = { picker = null; elements.insertText() },
+                    onImage = { picker = null; elements.sourceMenu = true },
                 )
             }
             AnimatedVisibility(
@@ -635,9 +646,15 @@ fun EditorScreen(
                     onDuplicate = { view?.duplicateSelection() },
                     onDelete = { view?.deleteSelection() },
                     onPaste = { view?.paste() },
+                    onEditText = elements::editSelectedText,
+                    onCrop = elements::cropSelected,
+                    onRotate = elements::rotateSelected,
+                    onToggleLock = elements::toggleLock,
                 ),
             )
         }
+
+        elements.Dialogs()
 
         // ---- page manager (PAGES-03/04/05): zooms out of the page being read ----
         managerPage?.let { open ->
@@ -682,16 +699,16 @@ fun EditorScreen(
         }
     }
 
-    DebugStylusHooksEffect(canvas)
+    DebugStylusHooksEffect(canvas, elements)
 }
 
 /** Debug builds: lets scripts inject hover side-button clicks and handwriting (see src/debug). */
 @Composable
-private fun DebugStylusHooksEffect(canvas: View?) {
+private fun DebugStylusHooksEffect(canvas: View?, elements: ElementTools) {
     val context = LocalContext.current
     DisposableEffect(canvas) {
         val view = canvas ?: return@DisposableEffect onDispose {}
-        val detach = DebugStylusHooks.attach(context, view)
+        val detach = DebugStylusHooks.attach(context, view, elements)
         onDispose { detach() }
     }
 }

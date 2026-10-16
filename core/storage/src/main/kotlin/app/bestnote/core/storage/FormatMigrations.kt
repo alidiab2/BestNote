@@ -30,7 +30,20 @@ internal object FormatMigrations {
         },
     )
 
-    val steps: List<Step> = listOf(V1_TO_V2)
+    /**
+     * v2 → v3: pages may carry `elements` (text boxes and images, TEXT-01/MEDIA-01). v2 pages have none; the
+     * list is stated so v3 readers never guess. An older app refuses v3 files instead of saving over elements it cannot see.
+     */
+    private val V2_TO_V3 = Step(
+        from = 2,
+        manifest = { it.withFormat(3) },
+        page = { page ->
+            val withElements = if ("elements" in page) page else JsonObject(page + ("elements" to kotlinx.serialization.json.JsonArray(emptyList())))
+            withElements.withFormat(3)
+        },
+    )
+
+    val steps: List<Step> = listOf(V1_TO_V2, V2_TO_V3)
 
     fun formatOf(json: JsonObject): Int = json["format"]?.jsonPrimitive?.int ?: throw CorruptChunkException("Missing format")
 

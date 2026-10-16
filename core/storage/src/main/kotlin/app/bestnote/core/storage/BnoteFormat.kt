@@ -84,7 +84,7 @@ internal data class ElementJson(
  */
 object BnoteFormat {
     /** Current layout. History: 1 = DOC-01 draft, 2 = page metadata always carries `paper` (see [FormatMigrations]). */
-    const val VERSION = 2
+    const val VERSION = 3
     const val MANIFEST = "manifest.json"
     const val PAGES_DIR = "pages/"
     const val ASSETS_DIR = "assets/"

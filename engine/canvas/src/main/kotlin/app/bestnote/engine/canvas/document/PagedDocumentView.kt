@@ -25,8 +25,10 @@ import androidx.ink.authoring.InProgressStrokesView
 import androidx.ink.strokes.Stroke
 import androidx.input.motionprediction.MotionEventPredictor
 import app.bestnote.core.model.InkBrush
+import app.bestnote.core.model.PageElement
 import app.bestnote.core.model.PaperSizes
 import app.bestnote.core.model.PenStyle
+import app.bestnote.core.model.TextElement
 import app.bestnote.core.model.Tool
 import app.bestnote.engine.canvas.EraserMode
 import app.bestnote.engine.canvas.StrokeBrushes
@@ -191,7 +193,19 @@ class PagedDocumentView(context: Context) : FrameLayout(context), InProgressStro
     }
 
     /** The selection's box on screen (view px), or a single point for a paste offer. */
-    data class SelectionMenu(val count: Int, val left: Float, val top: Float, val right: Float, val bottom: Float)
+    data class SelectionMenu(
+        val count: Int,
+        val left: Float,
+        val top: Float,
+        val right: Float,
+        val bottom: Float,
+        /** How many of [count] are strokes. */
+        val strokes: Int = count,
+        /** The selected picture or text box when it is the only thing selected (TEXT-01, MEDIA-02). */
+        val element: PageElement? = null,
+        /** How many selected things are text boxes. */
+        val texts: Int = 0,
+    )
 
     var selectionListener: SelectionListener?
         get() = selection.listener
@@ -214,6 +228,21 @@ class PagedDocumentView(context: Context) : FrameLayout(context), InProgressStro
         }
 
     val hasSelection: Boolean get() = selection.hasSelection
+
+    /** The selected picture or text box when it is the only thing selected. */
+    val selectedElement: PageElement? get() = selection.singleElement
+
+    /** Selects the element [id] on page [pageIndex] (e.g. a freshly inserted one). */
+    fun selectElement(pageIndex: Int, id: String) = selection.selectElement(pageIndex, id)
+
+    /** Applies [change] to the single selected element as one undo step (crop, turn, lock, text edit). */
+    fun updateSelectedElement(change: (PageElement) -> PageElement) = selection.updateSingleElement(change)
+
+    /** Page [index]'s size in page points, or null when there is no such page. */
+    fun pageSize(index: Int): Pair<Float, Float>? = document?.pages?.getOrNull(index)?.let { it.page.widthPt to it.page.heightPt }
+
+    /** [element] with its height fitted to its text (text boxes grow with their text). */
+    fun fitted(element: TextElement): TextElement = ElementPainter().fitted(element)
 
     fun clearSelection() = selection.clear()
     fun deleteSelection() = selection.delete()
@@ -340,7 +369,7 @@ class PagedDocumentView(context: Context) : FrameLayout(context), InProgressStro
     private val strokeBrushes = StrokeBrushes<InProgressStrokeId, Stroke>()
 
     /** Lasso, selection and its handles (CANVAS-08..11). */
-    private val selection = SelectionLayer(context, pages, strokeBrushes)
+    private val selection = SelectionLayer(context, pages, strokeBrushes, ElementPainter())
 
     /** INK-08: pointerId -> hold detector of the stroke it is drawing (view px, uptime ms). */
     private val holds = HashMap<Int, HoldDetector>()
@@ -400,6 +429,11 @@ class PagedDocumentView(context: Context) : FrameLayout(context), InProgressStro
         override fun onPageContentChanged(index: Int) {
             pages.invalidatePage(index)
             selection.onPageContentChanged(index)
+        }
+
+        override fun onPageElementsChanged(index: Int) {
+            pages.invalidatePage(index)
+            selection.onPageElementsChanged(index)
         }
     }
 
