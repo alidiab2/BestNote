@@ -78,3 +78,16 @@ fun DocumentMapper.Result.requireBlocks() {
 object RoughMeasurer : BlockMeasurer {
     override fun heightFor(item: FlowItem, width: Float) = 48f
 }
+
+/** A [VisionProvider.transcribe] answer as the lines to type, in reading order. */
+fun AiDocument.transcriptLines(): List<String> {
+    val ordered = blocks.withIndex().sortedWith(compareBy({ it.value.order ?: Int.MAX_VALUE }, { it.index })).map { it.value }
+    return ordered.flatMap { b ->
+        val words = b.text?.takeIf { it.isNotBlank() }
+            ?: b.items?.joinToString("\n")
+            ?: b.latex
+            ?: b.steps?.joinToString("\n") { it.text?.takeIf(String::isNotBlank) ?: it.latex.orEmpty() }
+            ?: b.title
+        words.orEmpty().lines()
+    }.map { it.trim() }.filter { it.isNotEmpty() }
+}

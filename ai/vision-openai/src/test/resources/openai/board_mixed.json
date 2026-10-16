@@ -1,0 +1,23 @@
+{
+ "id": "chatcmpl-abc",
+ "object": "chat.completion",
+ "created": 1760000000,
+ "model": "gpt-5-mini-2025-08-07",
+ "choices": [
+  {
+   "index": 0,
+   "message": {
+    "role": "assistant",
+    "content": "{\"title\":\"المتتاليات الحسابية\",\"blocks\":[\n{\"type\":\"heading\",\"order\":0,\"level\":2,\"text\":\"التعريف\",\"semantic\":\"emphasis\",\"ink_color\":\"yellow\",\"source_box\":[0.62,0.05,0.95,0.12]},\n{\"type\":\"definition\",\"id\":\"def\",\"order\":1,\"title\":\"متتالية حسابية\",\"text\":\"متتالية الفرق بين كل حدين متتاليين فيها ثابت ويسمى \\\\( d \\\\)\",\"source_box\":[0.6,0.13,0.97,0.3]},\n{\"type\":\"math\",\"id\":\"an\",\"order\":2,\"text\":\"a_n = a_1 + (n-1)d\",\"latex\":\"a_n = a_1 + (n-1)d\",\"boxed\":true,\"semantic\":\"essential\",\"ink_color\":\"red\"},\n{\"type\":\"margin_note\",\"order\":3,\"annotates\":\"an\",\"text\":\"n يبدأ من 1\",\"semantic\":\"annotation\",\"ink_color\":\"green\"},\n{\"type\":\"math\",\"id\":\"sn\",\"order\":4,\"text\":\"S_n = n/2 (a_1 + a_n)\",\"latex\":\"S_n = \\\\frac{n}{2}(a_1 + a_n)\",\"boxed\":true,\"semantic\":\"essential\"},\n{\"type\":\"callout\",\"order\":5,\"tone\":\"example\",\"title\":\"مثال\",\"text\":\"2, 5, 8, 11, … حيث \\\\( d = 3 \\\\)\"},\n{\"type\":\"bullets\",\"order\":6,\"text\":\"\",\"items\":[\"if d > 0 the sequence increases\",\"if d < 0 it decreases\"]},\n{\"type\":\"diagram\",\"order\":7,\"text\":\"number line\",\"diagram\":{\"size\":[240,60],\"shapes\":[{\"kind\":\"arrow\",\"points\":[10,30,230,30]},{\"kind\":\"label\",\"points\":[40,50],\"text\":\"a_1\",\"latex\":true},{\"kind\":\"label\",\"points\":[100,50],\"text\":\"a_2\",\"latex\":true}]}}\n]}\n",
+    "refusal": null,
+    "annotations": []
+   },
+   "finish_reason": "stop"
+  }
+ ],
+ "usage": {
+  "prompt_tokens": 1500,
+  "completion_tokens": 900,
+  "total_tokens": 2400
+ }
+}

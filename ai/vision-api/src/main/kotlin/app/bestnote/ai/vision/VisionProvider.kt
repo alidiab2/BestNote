@@ -68,4 +68,11 @@ interface VisionProvider {
      * Coordinates in the result are in the selection's own box.
      */
     suspend fun beautify(selection: VisionImage, widthPt: Float, heightPt: Float): AiDocument
+
+    /**
+     * Rasterised handwriting → its exact words ("Convert with AI"), one paragraph block per line.
+     * [language] is a hint such as "Arabic"; null lets the model decide.
+     */
+    suspend fun transcribe(selection: VisionImage, language: String?): AiDocument =
+        throw VisionError.BadResponse("this provider cannot transcribe handwriting")
 }

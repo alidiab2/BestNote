@@ -19,6 +19,12 @@ class DemoVisionProvider(private val latencyMs: Long = 900) : VisionProvider {
         return AiDocument(blocks = listOf(AiBlock(type = "paragraph", text = "Tidied note (demo)")))
     }
 
+    override suspend fun transcribe(selection: VisionImage, language: String?): AiDocument {
+        delay(latencyMs)
+        val line = if (language?.startsWith("ar", ignoreCase = true) == true || language == "Arabic") "ملاحظة مكتوبة بخط اليد (تجريبي)" else "Handwritten note (demo)"
+        return AiDocument(blocks = listOf(AiBlock(type = "paragraph", order = 0, text = line)))
+    }
+
     companion object {
         /** A 30° slope with a block, its weight and the normal force. */
         private val SLOPE = AiDiagram(

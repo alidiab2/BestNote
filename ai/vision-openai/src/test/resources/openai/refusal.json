@@ -1,0 +1,23 @@
+{
+ "id": "chatcmpl-abc",
+ "object": "chat.completion",
+ "created": 1760000000,
+ "model": "gpt-5-mini-2025-08-07",
+ "choices": [
+  {
+   "index": 0,
+   "message": {
+    "role": "assistant",
+    "content": null,
+    "refusal": "I can't help with that.",
+    "annotations": []
+   },
+   "finish_reason": "stop"
+  }
+ ],
+ "usage": {
+  "prompt_tokens": 1500,
+  "completion_tokens": 900,
+  "total_tokens": 2400
+ }
+}

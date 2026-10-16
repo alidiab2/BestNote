@@ -77,6 +77,20 @@ an exam, so they must be complete, correct and beautifully organised.
 Return ONLY JSON matching the response schema. No commentary.
 """
 
+    /** User turn sent with the board photo (every provider). */
+    const val BOARD_USER = "This is a photo of the board. Copy it into your notebook as JSON matching the response schema."
+
+    /** User turn sent with a lasso selection of the user's own notes. */
+    fun beautifyUser(widthPt: Float, heightPt: Float) =
+        "This is a selection of my handwritten notes, ${fmt(widthPt)} × ${fmt(heightPt)} pt. " +
+            "Rewrite it neatly as JSON matching the response schema; diagram coordinates use this size."
+
+    /** For providers without a schema mode (some OpenAI-compatible servers): the shape, spelled out. */
+    const val JSON_ONLY_HINT = "Answer with one JSON object {\"title\": string, \"blocks\": [...]} only, no prose and no code fences. " +
+        "Every block has \"type\", \"order\" and \"text\" (its words in plain form)."
+
+    private fun fmt(v: Float) = if (v % 1f == 0f) v.toInt().toString() else "%.1f".format(java.util.Locale.ROOT, v)
+
     /** System instruction for reconstructing a board photo into [request]'s template. */
     fun board(request: BoardRequest) = buildString {
         append(EXPERT_STUDENT.trim())
@@ -98,6 +112,29 @@ You are rewriting a selection of YOUR OWN rough notes neatly, not a board.
 - Diagram coordinates use the selection's size so shapes land where they were drawn.
 """,
         )
+    }
+
+    /** User turn for [transcribe]. */
+    const val TRANSCRIBE_USER = "This is a selection of my handwriting. Transcribe it as JSON matching the response schema."
+
+    /**
+     * System instruction for "Convert with AI": the user's own handwriting → its exact words, line
+     * by line. Same persona, but faithful: this replaces the ink with typed text.
+     */
+    fun transcribe(language: String?) = buildString {
+        append(EXPERT_STUDENT.trim())
+        append(
+            """
+
+## This task
+You are typing up a selection of YOUR OWN handwriting, exactly as written. It replaces the ink.
+- One `paragraph` block per handwritten line, in reading order (`order` 0, 1, 2…), words in `text`.
+- Copy the words exactly; fix only obvious slips of the pen. Never summarise, never translate.
+- Keep the language of each line: Arabic stays Arabic (with its own letters, right to left), English stays English.
+- A line that is only mathematics: `math` block with LaTeX in `latex` and the formula as written in `text`.
+""",
+        )
+        language?.let { append("- The handwriting is mostly in: ").append(it).append('\n') }
     }
 
     private fun roleHint(t: LayoutTemplate) = when (t) {

@@ -31,6 +31,9 @@ class GeminiVisionProvider(
     override suspend fun beautify(selection: VisionImage, widthPt: Float, heightPt: Float): AiDocument =
         generate(Prompts.beautify(), beautifyUserText(widthPt, heightPt), selection)
 
+    override suspend fun transcribe(selection: VisionImage, language: String?): AiDocument =
+        generate(Prompts.transcribe(language), Prompts.TRANSCRIBE_USER, selection)
+
     private suspend fun generate(system: String, user: String, image: VisionImage): AiDocument {
         val key = settings.apiKey()?.trim()?.takeIf { it.isNotEmpty() } ?: throw VisionError.MissingKey()
         val model = settings.model().trim().ifEmpty { GeminiConfig.DEFAULT_MODEL }
@@ -64,13 +67,9 @@ class GeminiVisionProvider(
     }
 
     internal companion object {
-        const val BOARD_USER_TEXT = "This is a photo of the board. Copy it into your notebook as JSON matching the response schema."
+        const val BOARD_USER_TEXT = Prompts.BOARD_USER
 
-        fun beautifyUserText(widthPt: Float, heightPt: Float) =
-            "This is a selection of my handwritten notes, ${fmt(widthPt)} × ${fmt(heightPt)} pt. " +
-                "Rewrite it neatly as JSON matching the response schema; diagram coordinates use this size."
-
-        private fun fmt(v: Float) = if (v % 1f == 0f) v.toInt().toString() else "%.1f".format(java.util.Locale.ROOT, v)
+        fun beautifyUserText(widthPt: Float, heightPt: Float) = Prompts.beautifyUser(widthPt, heightPt)
     }
 }
 
