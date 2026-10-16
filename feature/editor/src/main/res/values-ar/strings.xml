@@ -173,4 +173,11 @@
     <string name="editor_smart_board_new_pages">صفحات جديدة</string>
     <string name="text_font">الخط: %1$s</string>
     <string name="text_font_default">الافتراضي</string>
+    <string name="text_align_justify">ضبط</string>
+    <string name="text_list_bullets">• قائمة</string>
+    <string name="text_list_numbers">1. قائمة</string>
+    <string name="text_line_spacing">تباعد الأسطر</string>
+    <string name="text_spacing_tighter">أسطر أضيق</string>
+    <string name="text_spacing_looser">أسطر أوسع</string>
+    <string name="text_applies_selection">تنسيق النص المحدد</string>
 </resources>

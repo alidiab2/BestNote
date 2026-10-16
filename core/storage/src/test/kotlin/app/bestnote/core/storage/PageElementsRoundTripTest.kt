@@ -49,6 +49,28 @@ class PageElementsRoundTripTest {
         assertArrayEquals(jpeg, back.assets.getValue(asset))
     }
 
+    @Test fun styleRunsListsAndSpacingRoundTrip() {
+        val rich = TextElement(
+            "el-9", 50f, 60f, 200f, 80f, "سطر أول\nline two", underline = true, strike = true, align = app.bestnote.core.model.TextAlignment.Justify,
+            runs = listOf(
+                app.bestnote.core.model.TextRun(0, 3, app.bestnote.core.model.RunStyle(bold = true, underline = true, colorArgb = 0xFFAA0000.toInt())),
+                app.bestnote.core.model.TextRun(8, 12, app.bestnote.core.model.RunStyle(italic = true, strike = true, font = "hand", sizePt = 30f)),
+            ),
+            list = app.bestnote.core.model.ListStyle.Numbered, numerals = app.bestnote.core.model.Numerals.ArabicIndic, lineSpacing = 1.6f,
+        )
+        val entries = BnoteFormat.toEntries(pkg(listOf(rich)))
+        assertEquals(listOf<PageElement>(rich), BnoteFormat.fromEntries { entries[it] }.pages[0].elements)
+    }
+
+    @Test fun v7TextWithoutFormattingStillReads() {
+        val entries = BnoteFormat.toEntries(pkg(listOf(english))).toMutableMap()
+        val page = entries.getValue(BnoteFormat.pageMetaPath("p0")).decodeToString()
+            .replace("\"format\": ${BnoteFormat.VERSION}", "\"format\": 7")
+        entries[BnoteFormat.pageMetaPath("p0")] = page.encodeToByteArray()
+        entries[BnoteFormat.MANIFEST] = entries.getValue(BnoteFormat.MANIFEST).decodeToString().replace("\"format\": ${BnoteFormat.VERSION}", "\"format\": 7").encodeToByteArray()
+        assertEquals(listOf<PageElement>(english), BnoteFormat.fromEntries { entries[it] }.pages[0].elements)
+    }
+
     @Test fun survivesTheDirectoryStoreAndPartialSaves() = runTest {
         val store = FileNotebookStore(tmp.root)
         store.write(pkg())

@@ -9,6 +9,7 @@ import android.graphics.Matrix
 import android.graphics.Rect
 import android.graphics.Typeface
 import android.os.SystemClock
+import android.view.DragEvent
 import android.view.HapticFeedbackConstants
 import android.view.InputDevice
 import android.view.MotionEvent
@@ -533,7 +534,43 @@ class PagedDocumentView(context: Context) : FrameLayout(context), InProgressStro
         }
     }
 
+    /** MEDIA-01: something dragged from another app (split screen, DeX) and dropped on the page at ([x], [y]) page points. */
+    fun interface DropListener {
+        /** True if the drop was taken. [event] is only valid during this call (use it to request URI permission). */
+        fun onDrop(page: Int, x: Float, y: Float, event: DragEvent): Boolean
+    }
+
+    /** While non-null the view accepts drags whose clip is a picture or text. */
+    var dropListener: DropListener? = null
+
+    private fun acceptsDrag(event: DragEvent): Boolean {
+        val d = event.clipDescription ?: return false
+        return dropListener != null && (d.hasMimeType("image/*") || d.hasMimeType("text/*"))
+    }
+
+    private val dragListener = View.OnDragListener { _, event ->
+        when (event.action) {
+            DragEvent.ACTION_DRAG_STARTED -> acceptsDrag(event)
+            DragEvent.ACTION_DRAG_ENTERED, DragEvent.ACTION_DRAG_LOCATION, DragEvent.ACTION_DRAG_EXITED, DragEvent.ACTION_DRAG_ENDED -> true
+            DragEvent.ACTION_DROP -> {
+                val listener = dropListener
+                val page = pages.layout?.pageAt(event.x + pages.scrollX, event.y + pages.scrollY)
+                val toView = Matrix()
+                val toPage = Matrix()
+                if (listener == null || page == null || !pageToView(page, toView) || !toView.invert(toPage)) {
+                    false
+                } else {
+                    val pt = floatArrayOf(event.x, event.y)
+                    toPage.mapPoints(pt)
+                    listener.onDrop(page, pt[0], pt[1], event)
+                }
+            }
+            else -> false
+        }
+    }
+
     init {
+        setOnDragListener(dragListener)
         addView(pages, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
         addView(highlights, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
         addView(wet, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))

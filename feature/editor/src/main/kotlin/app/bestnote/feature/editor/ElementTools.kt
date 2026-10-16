@@ -10,6 +10,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -97,20 +98,66 @@ internal class ElementTools(
     }
 
     /** Stores the picture at [uri] (downsampled, once per notebook) and puts it on the page being read. */
-    fun insertImage(uri: Uri) {
+    fun insertImage(uri: Uri, drop: DropPoint? = null) {
         scope.launch {
             val picture = ImageImport.load(context, uri)
             val view = canvas()
             if (picture == null || view == null) return@launch onMessage(R.string.image_failed)
-            val index = view.currentPage.coerceAtLeast(0)
+            val index = drop?.page ?: view.currentPage.coerceAtLeast(0)
             val (pageW, pageH) = view.pageSize(index) ?: return@launch
             val path = session.addImage(picture.bytes, picture.ext)
             val (w, h) = ElementPlacement.pictureFrame(pageW, pageH, picture.width, picture.height)
+            val (cx, cy) = if (drop != null) ElementPlacement.centeredAt(drop.x, drop.y, w, h, pageW, pageH) else (pageW / 2f to pageH * IMAGE_TOP)
             val id = PageElement.newId()
-            document.addElement(index, ImageElement(id, pageW / 2f, pageH * IMAGE_TOP, w, h, path, picture.width, picture.height))
+            document.addElement(index, ImageElement(id, cx, cy, w, h, path, picture.width, picture.height))
             view.selectElement(index, id)
             onSelecting()
         }
+    }
+
+    /** Where something was dropped: page [page], at ([x], [y]) page points. */
+    class DropPoint(val page: Int, val x: Float, val y: Float)
+
+    /** A text box with [words] centered on the drop point, selected so it can be adjusted right away. */
+    fun insertDroppedText(words: String, at: DropPoint) {
+        val view = canvas() ?: return
+        val (pageW, pageH) = view.pageSize(at.page) ?: return
+        val w = pageW * TEXT_WIDTH
+        val h = TextElement.DEFAULT_SIZE_PT * 1.3f
+        val (cx, cy) = ElementPlacement.centeredAt(at.x, at.y, w, h, pageW, pageH)
+        val box = view.fitted(TextElement(PageElement.newId(), cx, cy, w, h, words))
+        document.addElement(at.page, box)
+        view.selectElement(at.page, box.id)
+        onSelecting()
+    }
+
+    /**
+     * Takes what another app dropped (split screen, DeX): pictures and text land at the drop point. Content URIs
+     * need the drop's temporary read permission, held until the pictures are read.
+     */
+    fun onDrop(page: Int, x: Float, y: Float, event: android.view.DragEvent): Boolean {
+        val clip = event.clipData ?: return false
+        val mimes = (0 until (event.clipDescription?.mimeTypeCount ?: 0)).map { event.clipDescription.getMimeType(it) }
+        val items = (0 until clip.itemCount).map { i ->
+            val item = clip.getItemAt(i)
+            val uri = item.uri
+            DropItem(uri?.let { runCatching { context.contentResolver.getType(it) }.getOrNull() }, uri?.toString(), item.text?.toString())
+        }
+        val actions = DropPlan.plan(items, mimes)
+        if (actions.isEmpty()) return false
+        val activity = generateSequence(context) { (it as? android.content.ContextWrapper)?.baseContext }.filterIsInstance<android.app.Activity>().firstOrNull()
+        val permission = if (actions.any { it is DropAction.Picture } && activity != null) androidx.core.app.ActivityCompat.requestDragAndDropPermissions(activity, event) else null
+        actions.forEachIndexed { i, action ->
+            // Several items fan out a little so they do not hide each other.
+            val at = DropPoint(page, x + i * CASCADE_PT / 2f, y + i * CASCADE_PT / 2f)
+            when (action) {
+                is DropAction.Picture -> insertImage(Uri.parse(action.uri), at)
+                is DropAction.Words -> insertDroppedText(action.text, at)
+            }
+        }
+        // Release once the pictures were queued: the reads run on this scope, so wait for them to start.
+        scope.launch { kotlinx.coroutines.delay(PERMISSION_HOLD_MS); permission?.release() }
+        return true
     }
 
     fun pasteImage() {
@@ -158,6 +205,7 @@ internal class ElementTools(
         const val CASCADE_PT = 36f
         const val CASCADE_STEPS = 6
         const val IMAGE_TOP = 0.4f
+        const val PERMISSION_HOLD_MS = 30_000L
     }
 }
 
@@ -175,6 +223,11 @@ internal fun rememberElementTools(
     val tools = remember(document, session) { ElementTools(context, scope, canvas, document, session, colors, onSelecting, onMessage) }
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri -> uri?.let(tools::insertImage) }
     val camera = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { ok -> if (ok) tools.cameraUri?.let(tools::insertImage) }
+    val view = canvas()
+    DisposableEffect(view, tools) {
+        view?.dropListener = PagedDocumentView.DropListener(tools::onDrop)
+        onDispose { view?.dropListener = null }
+    }
     tools.pickPhoto = { picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }
     tools.takePhoto = { camera.launch(tools.cameraTarget()) }
     return tools
