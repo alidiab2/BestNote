@@ -1,5 +1,6 @@
 package app.bestnote
 
+import android.annotation.SuppressLint
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
@@ -29,6 +30,14 @@ import app.bestnote.core.datastore.UserPreferences
 import app.bestnote.core.datastore.UserPreferencesRepository
 import app.bestnote.core.designsystem.theme.BestNoteTheme
 import app.bestnote.core.designsystem.theme.systemReducedMotion
+import app.bestnote.core.ui.keys.LocalShortcutHost
+import app.bestnote.core.ui.keys.ShortcutHost
+import app.bestnote.core.ui.keys.ShortcutOverlay
+import app.bestnote.core.ui.keys.keyboardShortcutGroups
+import androidx.compose.runtime.CompositionLocalProvider
+import android.view.KeyEvent
+import android.view.KeyboardShortcutGroup
+import android.view.Menu
 import app.bestnote.core.updater.UpdateHost
 import app.bestnote.core.updater.UpdateManager
 import app.bestnote.feature.editor.InkInsert
@@ -59,6 +68,9 @@ class MainActivity : ComponentActivity() {
 
     @Inject lateinit var library: LibraryRepository
 
+    /** SPEN-10: hardware-keyboard shortcuts and their help overlay. */
+    private val shortcuts = ShortcutHost()
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
@@ -78,10 +90,27 @@ class MainActivity : ComponentActivity() {
                 reducedMotion = prefs.appearance.reduceMotion || systemReducedMotion(),
                 chromeWarmth = prefs.appearance.chromeWarmth.amount,
             ) {
-                BestNoteNavHost(quicknotes, pdfRequests, library)
-                UpdateHost(updates)
+                CompositionLocalProvider(LocalShortcutHost provides shortcuts) {
+                    BestNoteNavHost(quicknotes, pdfRequests, library)
+                    UpdateHost(updates)
+                    ShortcutOverlay(shortcuts)
+                }
             }
         }
+    }
+
+    // ComponentActivity marks dispatchKeyEvent restricted; overriding it is the documented way to see every key first.
+    @SuppressLint("RestrictedApi")
+    override fun dispatchKeyEvent(event: KeyEvent): Boolean =
+        shortcuts.onKeyEvent(event, focusIsTextEditor = currentFocus?.onCheckIsTextEditor() == true) || super.dispatchKeyEvent(event)
+
+    override fun onProvideKeyboardShortcuts(data: MutableList<KeyboardShortcutGroup>, menu: Menu?, deviceId: Int) {
+        data.addAll(keyboardShortcutGroups(this))
+    }
+
+    override fun onPause() {
+        super.onPause()
+        shortcuts.reset()
     }
 
     override fun onNewIntent(intent: Intent) {

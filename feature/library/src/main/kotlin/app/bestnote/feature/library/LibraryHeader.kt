@@ -50,6 +50,9 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import app.bestnote.core.ui.keys.reportsTextEditing
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -85,6 +88,7 @@ internal fun LibraryHeader(
     compact: Boolean,
     callbacks: LibraryCallbacks,
     modifier: Modifier = Modifier,
+    searchFocus: FocusRequester = remember { FocusRequester() },
 ) {
     val destination = state.controls.destination
     val title = when (destination) {
@@ -130,7 +134,7 @@ internal fun LibraryHeader(
             }
             Spacer(Modifier.width(Spacing.L))
             if (!compact) {
-                SearchField(state.controls.query, callbacks.query, Modifier.width(300.dp))
+                SearchField(state.controls.query, callbacks.query, Modifier.width(300.dp).focusRequester(searchFocus))
                 Spacer(Modifier.width(Spacing.M))
             }
             if (canSelect) {
@@ -142,7 +146,7 @@ internal fun LibraryHeader(
             NewButton(callbacks)
         }
         if (compact) {
-            SearchField(state.controls.query, callbacks.query, Modifier.fillMaxWidth().padding(top = Spacing.L))
+            SearchField(state.controls.query, callbacks.query, Modifier.fillMaxWidth().padding(top = Spacing.L).focusRequester(searchFocus))
         }
     }
 }
@@ -190,7 +194,7 @@ private fun SearchField(query: String, onQuery: (String) -> Unit, modifier: Modi
         textStyle = MaterialTheme.typography.bodyMedium.copy(color = MaterialTheme.colorScheme.onSurface),
         cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-        modifier = modifier.semantics { contentDescription = hint },
+        modifier = modifier.reportsTextEditing().semantics { contentDescription = hint },
         decorationBox = { inner ->
             Row(
                 Modifier

@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="shortcuts_title">اختصارات لوحة المفاتيح</string>
+    <string name="shortcuts_hint">اضغط مطولًا على Meta للعرض، أو Ctrl+/ للتثبيت. Esc للإغلاق.</string>
+    <string name="shortcut_group_general">عام</string>
+    <string name="shortcut_group_edit">تحرير</string>
+    <string name="shortcut_group_tools">الأدوات</string>
+    <string name="shortcut_group_view">العرض</string>
+    <string name="shortcut_group_pages">الصفحات</string>
+    <string name="shortcut_group_selection">التحديد (اللاسو)</string>
+    <string name="shortcut_group_library">المكتبة</string>
+    <string name="shortcut_show">عرض الاختصارات</string>
+    <string name="shortcut_undo">تراجع</string>
+    <string name="shortcut_redo">إعادة</string>
+    <string name="shortcut_tool_pen">القلم</string>
+    <string name="shortcut_tool_highlighter">قلم التمييز</string>
+    <string name="shortcut_tool_eraser">الممحاة</string>
+    <string name="shortcut_tool_lasso">اللاسو</string>
+    <string name="shortcut_tool_text">مربع نص</string>
+    <string name="shortcut_zoom_in">تكبير</string>
+    <string name="shortcut_zoom_out">تصغير</string>
+    <string name="shortcut_zoom_reset">إعادة التكبير</string>
+    <string name="shortcut_next_page">الصفحة التالية</string>
+    <string name="shortcut_previous_page">الصفحة السابقة</string>
+    <string name="shortcut_new_page">صفحة جديدة</string>
+    <string name="shortcut_copy">نسخ</string>
+    <string name="shortcut_cut">قص</string>
+    <string name="shortcut_paste">لصق</string>
+    <string name="shortcut_duplicate">تكرار</string>
+    <string name="shortcut_delete">حذف</string>
+    <string name="shortcut_clear_selection">إلغاء التحديد</string>
+    <string name="shortcut_new_notebook">دفتر جديد</string>
+    <string name="shortcut_search_library">البحث في المكتبة</string>
+</resources>
