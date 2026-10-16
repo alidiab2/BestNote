@@ -24,6 +24,8 @@ import app.bestnote.engine.layout.NoteRole
 import app.bestnote.engine.layout.StyleTemplate
 import app.bestnote.engine.layout.StyleTemplates
 import app.bestnote.ai.vision.providers.WritingMode
+import app.bestnote.ai.vision.NotesLanguage
+import androidx.compose.material.icons.rounded.Translate
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
@@ -272,7 +274,7 @@ private fun CaptureStage(state: SmartBoardUiState, viewModel: SmartBoardViewMode
                 }
                 OutlinedButton(onClick = viewModel::read) { IconLabel(Icons.Rounded.AutoAwesome, stringResource(R.string.smartboard_try_sample)) }
             }
-            ArabicToggle(state.arabic, viewModel::setArabic)
+            LanguagePicker(state.language, viewModel::setLanguage)
             PrivacyNote(state.hasKey)
         }
         return
@@ -307,7 +309,7 @@ private fun CaptureStage(state: SmartBoardUiState, viewModel: SmartBoardViewMode
         ) {
             LabeledSwitch(state.enhance, viewModel::setEnhance, stringResource(R.string.smartboard_enhance))
             LabeledSwitch(state.flatPreview != null, viewModel::showPreview, stringResource(R.string.smartboard_preview))
-            ArabicToggle(state.arabic, viewModel::setArabic)
+            LanguagePicker(state.language, viewModel::setLanguage)
         }
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.M)) {
             OutlinedButton(onClick = viewModel::retake) { IconLabel(Icons.Rounded.Close, stringResource(R.string.smartboard_start_over)) }
@@ -385,8 +387,44 @@ private fun IconLabel(icon: ImageVector, label: String) {
     Text(label)
 }
 
+/** The language's own name, so every user finds theirs. */
+private fun endonym(l: NotesLanguage): String? = when (l) {
+    NotesLanguage.Board -> null
+    NotesLanguage.English -> "English"
+    NotesLanguage.Hebrew -> "עברית"
+    NotesLanguage.Arabic -> "العربية"
+    NotesLanguage.French -> "Français"
+    NotesLanguage.Spanish -> "Español"
+    NotesLanguage.German -> "Deutsch"
+    NotesLanguage.Russian -> "Русский"
+    NotesLanguage.Turkish -> "Türkçe"
+}
+
+/** "Notes in: Same as the board ▾" — or a language the notes are translated into (maths untouched). */
 @Composable
-private fun ArabicToggle(on: Boolean, onChange: (Boolean) -> Unit) = LabeledSwitch(on, onChange, stringResource(R.string.smartboard_arabic_board))
+private fun LanguagePicker(language: NotesLanguage, onLanguage: (NotesLanguage) -> Unit) {
+    var open by remember { mutableStateOf(false) }
+    Box {
+        TextButton(onClick = { open = true }) {
+            Icon(Icons.Rounded.Translate, null, Modifier.size(18.dp))
+            Spacer(Modifier.width(Spacing.XS))
+            Text(stringResource(R.string.smartboard_notes_in, endonym(language) ?: stringResource(R.string.smartboard_language_board)))
+            Icon(Icons.Rounded.ExpandMore, null, Modifier.size(18.dp))
+        }
+        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            NotesLanguage.entries.forEach { l ->
+                DropdownMenuItem(
+                    text = { Text(endonym(l) ?: stringResource(R.string.smartboard_language_board)) },
+                    onClick = {
+                        open = false
+                        onLanguage(l)
+                    },
+                    leadingIcon = { if (l == language) Icon(Icons.Rounded.CheckCircle, null, Modifier.size(18.dp)) else Spacer(Modifier.size(18.dp)) },
+                )
+            }
+        }
+    }
+}
 
 @Composable
 private fun DemoChip() {
@@ -577,6 +615,7 @@ private fun ReviewStage(review: SmartBoardStage.Review, state: SmartBoardUiState
                 afterPage = viewModel.afterPage,
                 onStyle = viewModel::setStyle,
                 onMode = viewModel::setMode,
+                onLanguage = viewModel::setLanguage,
                 onTemplate = viewModel::setTemplate,
                 onReplay = { replay++ },
                 onRetake = viewModel::backToPhotos,
@@ -713,6 +752,7 @@ private fun ReviewPanel(
     afterPage: Int,
     onStyle: (StyleTemplate) -> Unit,
     onMode: (WritingMode) -> Unit,
+    onLanguage: (NotesLanguage) -> Unit,
     onTemplate: (PaperTemplate) -> Unit,
     onReplay: () -> Unit,
     onRetake: () -> Unit,
@@ -728,6 +768,7 @@ private fun ReviewPanel(
         )
         if (review.demo) DemoChip()
         if (review.dropped > 0) Text(stringResource(R.string.smartboard_review_dropped, review.dropped), style = MaterialTheme.typography.bodySmall, color = BestNoteTheme.colors.warning)
+        LanguagePicker(state.language, onLanguage)
         Text(stringResource(R.string.smartboard_style), style = MaterialTheme.typography.labelLarge)
         StylePicker(state.style, onStyle)
         ColorLegend(state.style)

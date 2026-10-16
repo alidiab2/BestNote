@@ -109,4 +109,6 @@
     <string name="smartboard_role_margin">Margin</string>
     <string name="smartboard_role_body">Text</string>
     <string name="smartboard_review_stats_pages">%1$d page(s) · editable text and ink · %2$.1f s</string>
+    <string name="smartboard_notes_in">Notes in: %1$s</string>
+    <string name="smartboard_language_board">Same as the board</string>
 </resources>

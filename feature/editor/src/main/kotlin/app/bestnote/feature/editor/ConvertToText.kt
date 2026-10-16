@@ -123,6 +123,7 @@ internal class InkConverter(
 
     private fun languageName(tag: String?) = when (tag) {
         "ar" -> "Arabic"
+        "he" -> "Hebrew"
         "en-US" -> "English"
         else -> null
     }
@@ -145,6 +146,12 @@ internal class InkConverter(
 
     /** Re-reads the selection in [tag] (null = automatic), e.g. from the language chips in the confirmation. */
     fun readAs(tag: String?) {
+        // Hebrew is read by the AI provider (the on-device models cover Arabic and English).
+        if (tag == "he") {
+            language = tag
+            if (aiAvailable) convertWithAi() else scope.launch { message(R.string.convert_hebrew_needs_ai) }
+            return
+        }
         language = tag
         aiReading = false
         pending?.let(::read)
@@ -246,6 +253,7 @@ internal class InkConverter(
                             LanguageChip(R.string.convert_lang_auto, language == null) { readAs(null) }
                             LanguageChip(R.string.convert_lang_ar, language == "ar") { readAs("ar") }
                             LanguageChip(R.string.convert_lang_en, language == "en-US") { readAs("en-US") }
+                            LanguageChip(R.string.convert_lang_he, language == "he") { readAs("he") }
                         }
                         if (aiAvailable) {
                             androidx.compose.material3.FilterChip(

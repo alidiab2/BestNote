@@ -51,7 +51,7 @@ class AiProviders(private val http: OkHttpClient, val settings: KeystoreAiSettin
 
         override suspend fun reconstructBoard(image: VisionImage, request: BoardRequest) = target().reconstructBoard(image, request)
 
-        override suspend fun beautify(selection: VisionImage, widthPt: Float, heightPt: Float) = target().beautify(selection, widthPt, heightPt)
+        override suspend fun beautify(selection: VisionImage, widthPt: Float, heightPt: Float, language: String?) = target().beautify(selection, widthPt, heightPt, language)
 
         override suspend fun transcribe(selection: VisionImage, language: String?) = target().transcribe(selection, language)
     }

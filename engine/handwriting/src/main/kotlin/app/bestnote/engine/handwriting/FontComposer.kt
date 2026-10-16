@@ -16,6 +16,7 @@ import app.bestnote.engine.layout.NoteRole
 import app.bestnote.engine.layout.RoleStyle
 import app.bestnote.engine.layout.RuledPaper
 import app.bestnote.engine.layout.StyleTemplate
+import app.bestnote.engine.layout.WritingScript
 import kotlin.math.ceil
 import kotlin.math.max
 import kotlin.math.min
@@ -68,11 +69,43 @@ class FontComposer(
     private val paper: RuledPaper,
     private val style: StyleTemplate,
     private val measure: TextMeasure,
-    private val rtl: Boolean = false,
+    /** The page's direction (margin side, maths alignment); each text block also follows its own first letter. */
+    private val pageRtl: Boolean = false,
     private val penColor: Int = INK,
     private val seed: Long = 20_261_016L,
 ) {
     private val gap = paper.lineGap
+
+    /** Direction of the block being laid out: its own first strong letter, else the page's. */
+    private var rtl = pageRtl
+
+    /** Script for words the page adds when a block has none of its own (maths-only proofs). */
+    private val pageScript = if (pageRtl) WritingScript.Arabic else WritingScript.Latin
+
+    /** Script of the block being laid out, for the words a student adds ("Definition:", "Solution:"). */
+    private var script = WritingScript.Latin
+
+    private fun textOf(b: PageBlock): String = when (b) {
+        is PageBlock.Heading -> b.text
+        is PageBlock.Paragraph -> b.text
+        is PageBlock.Bullets -> b.items.joinToString(" ")
+        is PageBlock.Callout -> (b.title ?: "") + " " + b.body
+        is PageBlock.MarginNote -> b.text
+        is PageBlock.Proof -> b.steps.joinToString(" ") { (it.text ?: "") + " " + (it.justification ?: "") }
+        is PageBlock.Math, is PageBlock.Diagram -> ""
+    }
+
+    /**
+     * A block's direction: right to left when it has Hebrew or Arabic letters and either most of its
+     * letters are, or the page is (a Hebrew sentence that starts with an English term stays a Hebrew
+     * line); left to right when it has none; the page's direction when it has no letters (maths).
+     */
+    private fun directionOf(b: PageBlock): Boolean {
+        val text = textOf(b)
+        if (text.none(Char::isLetter)) return pageRtl
+        if (!WritingScript.hasRtl(text)) return false
+        return pageRtl || WritingScript.mostlyRtl(text)
+    }
     private val body = gap * style.bodyScale
     private val inlineTex = ArrayList<String>()
 
@@ -88,7 +121,7 @@ class FontComposer(
         var block: String = ""
 
         fun text(t: String, left: Float, baseline: Float, width: Float, size: Float, color: Int, font: HandFont, rtl: Boolean) {
-            if (t.isNotBlank()) runs += TypeRun(t, left, baseline, width, size, color, font, rtl, block)
+            if (t.isNotBlank()) runs += TypeRun(t, left, baseline, width, size * scaleOf(font), color, font, rtl, block)
         }
 
         fun highlight(x0: Float, x1: Float, baseline: Float, size: Float) {
@@ -121,7 +154,8 @@ class FontComposer(
                 for (b in blocks) {
                     sheet.block = b.id.value
                     var baseline = b.frame.top
-                    for (row in rows(b, b.frame.width)) {
+                    val blockRows = rows(b, b.frame.width)
+                    for (row in blockRows) {
                         baseline += row.lines * gap
                         row.draw(sheet, b.frame.left, b.frame.right, baseline)
                     }
@@ -141,6 +175,8 @@ class FontComposer(
     private fun usable(width: Float) = width * 0.97f
 
     private fun rows(b: PageBlock, width: Float): List<Row> {
+        rtl = directionOf(b)
+        script = WritingScript.dominant(textOf(b)).takeIf { textOf(b).any(Char::isLetter) } ?: if (pageRtl) pageScript else WritingScript.Latin
         val role = style.role(NoteRole.of(b))
         return when (b) {
             is PageBlock.Heading -> textRows(b.text, width, sizeOf(role), colorOf(role), decoration = role.decoration)
@@ -156,7 +192,23 @@ class FontComposer(
         }
     }
 
-    private fun fontFor(text: String): HandFont = if (Arabic.isArabic(text)) style.arabicFont else style.latinFont
+    /** The font for a run by its script: Arabic → the Arabic hand, Hebrew → the Hebrew hand, everything else → the Latin hand. */
+    private fun fontFor(text: String): HandFont = when (WritingScript.dominant(text)) {
+        WritingScript.Arabic -> style.arabicFont
+        WritingScript.Hebrew -> style.hebrewFont
+        else -> style.latinFont
+    }
+
+    private fun isRtlText(text: String) = WritingScript.mostlyRtl(text)
+
+    /**
+     * The device font (Hebrew) is much larger than the handwriting fonts at the same point size, so it is
+     * written smaller to match their letter height.
+     */
+    private fun scaleOf(font: HandFont) = if (font == HandFont.System) SYSTEM_SCALE else 1f
+
+    /** Width of [text] in [font] as it will be written (the font's size scale applied). */
+    private fun widthOf(text: String, font: HandFont, size: Float) = measure.width(text, font, size * scaleOf(font))
 
     /** Lines a row of text at [size] needs: its ascent must fit under the line above. */
     private fun linesForSize(size: Float, font: HandFont = style.latinFont) =
@@ -167,10 +219,10 @@ class FontComposer(
     /** A word (or an inline maths token) and its width at a size. */
     private fun wordWidth(word: String, size: Float): Float =
         InlineMath.segments(word).sumOf { (token, part) ->
-            (if (token != null) mathBox(token, size).width else if (part.isEmpty()) 0f else measure.width(part, fontFor(part), size)).toDouble()
+            (if (token != null) mathBox(token, size).width else if (part.isEmpty()) 0f else widthOf(part, fontFor(part), size)).toDouble()
         }.toFloat()
 
-    private fun space(size: Float) = measure.width(" ", style.latinFont, size).coerceAtLeast(size * 0.22f)
+    private fun space(size: Float) = widthOf(" ", style.latinFont, size).coerceAtLeast(size * 0.22f)
 
     private fun wrap(text: String, width: Float, size: Float, firstIndent: Float = 0f): List<String> {
         val lines = ArrayList<String>()
@@ -270,11 +322,11 @@ class FontComposer(
         return if (rtl) x to start else start to x
     }
 
-    private fun pieceWidth(piece: String, size: Float) = if (InlineMath.hasToken(piece)) wordWidth(piece, size) else measure.width(piece, fontFor(piece), size)
+    private fun pieceWidth(piece: String, size: Float) = if (InlineMath.hasToken(piece)) wordWidth(piece, size) else widthOf(piece, fontFor(piece), size)
 
     private fun writePiece(sheet: Sheet, piece: String, left: Float, baseline: Float, width: Float, size: Float, color: Int, rtl: Boolean) {
         if (!InlineMath.hasToken(piece)) {
-            sheet.text(piece, left, baseline, width, size, color, fontFor(piece), rtl || Arabic.isArabic(piece))
+            sheet.text(piece, left, baseline, width, size, color, fontFor(piece), rtl || isRtlText(piece))
             return
         }
         var x = left
@@ -284,21 +336,21 @@ class FontComposer(
                 box.draw(sheet, x, baseline, color)
                 x += box.width
             } else if (part.isNotEmpty()) {
-                val w = measure.width(part, fontFor(part), size)
-                sheet.text(part, x, baseline, w, size, color, fontFor(part), Arabic.isArabic(part))
+                val w = widthOf(part, fontFor(part), size)
+                sheet.text(part, x, baseline, w, size, color, fontFor(part), isRtlText(part))
                 x += w
             }
         }
     }
 
     private fun bulletRows(item: String, marker: String, width: Float, color: Int): List<Row> {
-        val indent = measure.width("$marker ", style.latinFont, body) + 0.3f * body
+        val indent = widthOf("$marker ", style.latinFont, body) + 0.3f * body
         val rows = textRows(item, width, body, color, indent = indent)
         if (rows.isEmpty()) return rows
         val first = rows[0]
         return listOf(
             Row(first.lines) { left, right, baseline ->
-                val mw = measure.width(marker, style.latinFont, body)
+                val mw = widthOf(marker, style.latinFont, body)
                 val x = if (rtl) right - 0.15f * body - mw else left + 0.15f * body
                 text(marker, x, baseline, mw, body, color, style.latinFont, false)
                 first.draw(this, left, right, baseline)
@@ -308,8 +360,17 @@ class FontComposer(
 
     // ------------------------------------------------------------------ callouts, proofs
 
-    private fun label(tone: CalloutTone): String = if (rtl) {
-        when (tone) {
+    private fun label(tone: CalloutTone): String = when (script) {
+        WritingScript.Hebrew -> when (tone) {
+            CalloutTone.Definition -> "הגדרה"
+            CalloutTone.Theorem -> "משפט"
+            CalloutTone.KeyResult -> "תוצאה"
+            CalloutTone.Warning -> "זהירות"
+            CalloutTone.Example -> "דוגמה"
+            CalloutTone.Summary -> "סיכום"
+            CalloutTone.Info -> "הערה"
+        }
+        WritingScript.Arabic -> when (tone) {
             CalloutTone.Definition -> "تعريف"
             CalloutTone.Theorem -> "مبرهنة"
             CalloutTone.KeyResult -> "نتيجة"
@@ -318,8 +379,7 @@ class FontComposer(
             CalloutTone.Summary -> "خلاصة"
             CalloutTone.Info -> "ملاحظة"
         }
-    } else {
-        when (tone) {
+        else -> when (tone) {
             CalloutTone.Definition -> "Definition"
             CalloutTone.Theorem -> "Theorem"
             CalloutTone.KeyResult -> "Result"
@@ -330,10 +390,16 @@ class FontComposer(
         }
     }
 
+    private fun solutionWord() = when (script) {
+        WritingScript.Hebrew -> "פתרון"
+        WritingScript.Arabic -> "الحل"
+        else -> "Solution"
+    }
+
     private fun calloutRows(b: PageBlock.Callout, role: RoleStyle, width: Float): List<Row> {
         val color = colorOf(role)
         val text = (b.title ?: label(b.tone)).trimEnd(':', '：') + ":"
-        val labelW = wordWidth(InlineMath.encode(text, inlineTex), body).let { measure.width(text, fontFor(text), body).coerceAtLeast(it) }
+        val labelW = wordWidth(InlineMath.encode(text, inlineTex), body).let { widthOf(text, fontFor(text), body).coerceAtLeast(it) }
         val bodyIndent = labelW + space(body) * 1.2f
         val fitsAfter = bodyIndent < usable(width) * 0.45f
         val bodyRows = textRows(b.body, width, body, color, firstIndent = if (fitsAfter) bodyIndent else 0f)
@@ -350,14 +416,14 @@ class FontComposer(
         val stepRole = style.role(NoteRole.Step)
         val note = style.role(NoteRole.Margin)
         val out = ArrayList<Row>()
-        val title = (b.title ?: if (rtl) "الحل" else "Solution").trimEnd(':') + ":"
+        val title = (b.title ?: solutionWord()).trimEnd(':') + ":"
         out += textRows(title, width, body, colorOf(head), decoration = Decoration.Underline)
         val ink = colorOf(stepRole)
         val indent = 0.8f * body
         for (s in b.steps) {
             val why = s.justification?.let { "($it)" }
             val whySize = body * 0.85f
-            val whyW = why?.let { measure.width(it, fontFor(it), whySize) } ?: 0f
+            val whyW = why?.let { widthOf(it, fontFor(it), whySize) } ?: 0f
             val math = s.latex?.let { mathRows(it, width, ink, boxed = false, indent = indent) }.orEmpty()
             val prose = s.text?.let { textRows(it, width, body, ink, indent = indent) }.orEmpty()
             val formula = math.lastOrNull { !it.blank }
@@ -369,7 +435,7 @@ class FontComposer(
                     if (row !== formula) row else Row(row.lines) { left, right, baseline ->
                         row.draw(this, left, right, baseline)
                         val x = if (rtl) left else right - whyW
-                        text(why!!, x, baseline, whyW, whySize, colorOf(note), fontFor(why), Arabic.isArabic(why))
+                        text(why!!, x, baseline, whyW, whySize, colorOf(note), fontFor(why), isRtlText(why))
                     }
                 }
             } else {
@@ -481,8 +547,8 @@ class FontComposer(
     private fun textBox(t: String, size: Float): MBox {
         val text = t.trimEnd()
         val font = fontFor(text)
-        val w = measure.width(text, font, size) + if (t.endsWith(' ')) space(size) else 0f
-        val tw = measure.width(text, font, size)
+        val w = widthOf(text, font, size) + if (t.endsWith(' ')) space(size) else 0f
+        val tw = widthOf(text, font, size)
         return MBox(w, measure.ascent(font) * size * 0.78f, measure.descent(font) * size * 0.6f) { x, baseline, color ->
             text(text, x, baseline, tw, size, color, font, false)
         }
@@ -591,8 +657,8 @@ class FontComposer(
                 if (s.latex) {
                     MathParser.parse(s.text).firstOrNull()?.let { layout(it, size).draw(sheet, at.x, at.y, c) }
                 } else {
-                    val w = measure.width(s.text, fontFor(s.text), size)
-                    sheet.text(s.text, at.x, at.y, w, size, c, fontFor(s.text), Arabic.isArabic(s.text))
+                    val w = widthOf(s.text, fontFor(s.text), size)
+                    sheet.text(s.text, at.x, at.y, w, size, c, fontFor(s.text), isRtlText(s.text))
                 }
             }
         }
@@ -603,7 +669,7 @@ class FontComposer(
         val n = boundsOf(sheet, note.id.value) ?: return
         val y = (a[1] + a[3]) / 2
         val color = colorOf(style.role(NoteRole.Margin))
-        if (!rtl) {
+        if (!pageRtl) {
             val from = P(n[0] - 0.25f * gap, note.frame.top + 0.6f * gap)
             val to = P(min(a[2] + 0.3f * gap, from.x - gap), y)
             if (from.x - to.x > 0.6f * gap) sheet.shapes.curvedArrow(from, to, color, bend = -0.1f)
@@ -636,5 +702,6 @@ class FontComposer(
         const val INK = 0xFF1E2433.toInt()
         private const val DISPLAY_SCALE = 1.1f
         private const val HANG = 0.3f
+        private const val SYSTEM_SCALE = 0.78f
     }
 }

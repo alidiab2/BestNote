@@ -11,10 +11,16 @@ import kotlinx.coroutines.delay
 class DemoVisionProvider(private val latencyMs: Long = 900) : VisionProvider {
     override suspend fun reconstructBoard(image: VisionImage, request: BoardRequest): AiDocument {
         delay(latencyMs)
-        return if (request.rtl || request.language == "ar") ARABIC else ENGLISH
+        return when {
+            request.language == "Hebrew" -> HEBREW
+            request.language == "Arabic" || request.language == "ar" -> ARABIC
+            request.language == "English" -> ENGLISH
+            request.rtl -> ARABIC
+            else -> ENGLISH
+        }
     }
 
-    override suspend fun beautify(selection: VisionImage, widthPt: Float, heightPt: Float): AiDocument {
+    override suspend fun beautify(selection: VisionImage, widthPt: Float, heightPt: Float, language: String?): AiDocument {
         delay(latencyMs)
         return AiDocument(blocks = listOf(AiBlock(type = "paragraph", text = "Tidied note (demo)")))
     }
@@ -65,6 +71,23 @@ class DemoVisionProvider(private val latencyMs: Long = 900) : VisionProvider {
                 AiBlock(type = "math", id = "key", order = 2, latex = "a = g\\sin\\theta", boxed = true, semantic = "essential"),
                 AiBlock(type = "margin_note", order = 3, annotates = "key", text = "الكتلة لا تؤثر", inkColor = "green"),
                 AiBlock(type = "bullets", order = 4, items = listOf("كل الأجسام تنزلق بنفس التسارع", "الاحتكاك يعاكس الحركة")),
+            ),
+        )
+
+        /** A Hebrew lecture with English and maths mixed in, the way Israeli boards often are. */
+        val HEBREW = AiDocument(
+            title = "מישור משופע",
+            blocks = listOf(
+                AiBlock(type = "definition", id = "def", order = 0, title = "כוח נורמלי", text = "הכוח שמשטח מפעיל על גוף, בניצב למשטח.", lang = "he"),
+                AiBlock(type = "diagram", id = "fig", order = 1, diagram = SLOPE),
+                AiBlock(type = "heading", order = 2, level = 2, text = "כוחות לאורך המדרון", lang = "he"),
+                AiBlock(type = "proof", id = "der", order = 3, steps = listOf(
+                    AiProofStep(latex = "F_{\\parallel} = mg\\sin\\theta", because = "רכיב המשקל"),
+                    AiProofStep(latex = "N = mg\\cos\\theta", because = "אין תנועה בניצב למדרון"),
+                ), lang = "he"),
+                AiBlock(type = "math", id = "key", order = 4, latex = "a = g\\sin\\theta", boxed = true, semantic = "essential"),
+                AiBlock(type = "margin_note", order = 5, annotates = "key", text = "בדיקה: ב־30° מקבלים g/2", lang = "he"),
+                AiBlock(type = "bullets", order = 6, items = listOf("המסה מצטמצמת: כל הגופים מחליקים באותה תאוצה", "the friction force μN acts up the slope"), lang = "he"),
             ),
         )
     }

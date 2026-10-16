@@ -16,6 +16,7 @@ import app.bestnote.engine.layout.RuledFlow
 import app.bestnote.engine.layout.RuledPaper
 import app.bestnote.engine.layout.StyleTemplate
 import app.bestnote.engine.layout.StyleTemplates
+import app.bestnote.engine.layout.WritingScript
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -47,17 +48,27 @@ class FontComposerTest {
         )
     }
 
+    /** Hebrew with English terms and maths, like the owner's lectures. */
+    private fun hebrewLecture(): List<PageBlock> = listOf(
+        PageBlock.Heading(BlockId("title"), zero, 1, "גבולות באינסוף"),
+        PageBlock.Callout(BlockId("def"), zero, CalloutTone.Definition, "גבול", "נכתוב \\( \\lim_{x \\to \\infty} f(x) = L \\) כאשר f מתקרבת ל־L"),
+        PageBlock.Math(BlockId("law"), zero, "\\lim_{x \\to \\infty} \\frac{x^{30}}{e^x} = 0", boxed = true, semantic = InkSemantic.Essential),
+        PageBlock.MarginNote(BlockId("note"), zero, "אקספוננט מנצח כל חזקה", BlockId("law")),
+        PageBlock.Callout(BlockId("ex"), zero, CalloutTone.Example, null, "the ratio test: מנה של איברים עוקבים"),
+        PageBlock.Bullets(BlockId("list"), zero, listOf("פולינום < אקספוננט", "log grows slowly")),
+    )
+
     private class Out(val paper: RuledPaper, val placed: List<Pair<Int, PageBlock>>, val pages: TypesetPages)
 
-    private fun write(style: StyleTemplate, arabic: Boolean = false, template: PaperTemplate = style.paper ?: PaperTemplate.Ruled): Out {
+    private fun write(style: StyleTemplate, arabic: Boolean = false, template: PaperTemplate = style.paper ?: PaperTemplate.Ruled, hebrew: Boolean = false): Out {
         val paper = RuledPaper.of(template, PageSize.A4)
-        val composer = FontComposer(paper, style, AwtMeasure, rtl = arabic)
-        val blocks = lecture(arabic)
+        val composer = FontComposer(paper, style, AwtMeasure, pageRtl = arabic || hebrew)
+        val blocks = if (hebrew) hebrewLecture() else lecture(arabic)
         val byKey = blocks.associateBy { it.id.value }
         val items = blocks.map {
             FlowItem(it.id.value, if (it is PageBlock.MarginNote) RegionRole.Margin else RegionRole.Main, keepWithNext = it is PageBlock.Heading, anchorKey = (it as? PageBlock.MarginNote)?.anchor?.value)
         }
-        val slots = RuledFlow(paper, composer.measurer { byKey[it] }, arabic) { if (byKey[it.key] is PageBlock.Heading) style.spaceBeforeHeading else 0 }.place(items)
+        val slots = RuledFlow(paper, composer.measurer { byKey[it] }, arabic || hebrew) { if (byKey[it.key] is PageBlock.Heading) style.spaceBeforeHeading else 0 }.place(items)
         val placed = slots.map { s -> s.placement.pageIndex to reframe(byKey.getValue(s.placement.key), s.placement.frame) }
         return Out(paper, placed, composer.compose(placed))
     }
@@ -124,5 +135,23 @@ class FontComposerTest {
         assertTrue(runs.none { '↑' in it.text || "\\frac" in it.text || "rac{" in it.text })
         // The fraction's numerator is written smaller than the body, above the line.
         assertTrue(runs.any { it.text.contains("30") && it.sizePt < runs.first { r -> r.block == "def" }.sizePt })
+    }
+
+    @Test fun `hebrew lecture reads right to left with english and maths inside`() {
+        val out = write(StyleTemplates.Classic, hebrew = true)
+        out.pages.pages.forEachIndexed { i, p -> FontPreview.png(out.paper, p, "classic-he-$i") }
+        val runs = out.pages.pages.flatMap { it.runs }
+        val title = runs.first { it.block == "title" }
+        assertTrue(title.rtl && title.left + title.width > out.paper.width * 0.6f)
+        // Labels a student adds are in Hebrew on a Hebrew page.
+        assertTrue(runs.any { it.text.startsWith("גבול") || it.text.startsWith("הגדרה") })
+        assertTrue(runs.any { it.text.startsWith("דוגמה") })
+        // An English item inside the Hebrew list stays one left-to-right run, words in order.
+        val english = runs.first { it.text.startsWith("log grows") }
+        assertTrue(!english.rtl && english.text == "log grows slowly")
+        // An English example inside a Hebrew page: "the ratio test:" keeps its word order.
+        assertTrue(runs.any { it.text.startsWith("the ratio test") && !it.rtl })
+        // Hebrew text is written with the Hebrew font slot.
+        assertTrue(runs.filter { WritingScript.dominant(it.text) == WritingScript.Hebrew }.all { it.font == StyleTemplates.Classic.hebrewFont })
     }
 }

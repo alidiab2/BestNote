@@ -269,6 +269,7 @@ object AiDocumentParser {
             inkColor = s("ink_color", "inkColor", "color", "colour"),
             diagram = (o["diagram"] as? JsonObject)?.let(::diagram),
             sourceBox = floats(o["source_box"] ?: o["sourceBox"] ?: o["bbox"] ?: o["box"]),
+            lang = s("lang", "language", "locale"),
         )
     }
 

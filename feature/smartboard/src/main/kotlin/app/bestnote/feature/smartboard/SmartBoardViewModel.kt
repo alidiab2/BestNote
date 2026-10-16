@@ -15,6 +15,7 @@ import androidx.navigation.toRoute
 import app.bestnote.ai.scan.Quad
 import app.bestnote.ai.vision.AiDocument
 import app.bestnote.ai.vision.BoardRequest
+import app.bestnote.ai.vision.NotesLanguage
 import app.bestnote.ai.vision.DemoVisionProvider
 import app.bestnote.ai.vision.VisionError
 import app.bestnote.ai.vision.VisionImage
@@ -105,7 +106,8 @@ data class SmartBoardUiState(
     val modelId: String = "",
     val modelLabel: String = "",
     val switcher: ModelSwitcher = ModelSwitcher(),
-    val arabic: Boolean = false,
+    /** The language the notes are written in ([NotesLanguage.Board] = the board's own), saved per notebook. */
+    val language: NotesLanguage = NotesLanguage.Board,
 )
 
 /** One choice in the header's quick switcher. [model] is an id, "" (automatic best) or [ModelCatalog.AUTO_FAST]. */
@@ -156,23 +158,30 @@ class SmartBoardViewModel @Inject constructor(
 
     private val settings = providers.settings
     private val startStyle = styles.styleFor(route.notebookId)
-    private val state = MutableStateFlow(SmartBoardUiState(template = startStyle.paper ?: startTemplate, style = startStyle, mode = styles.writingMode))
+    private val state = MutableStateFlow(
+        SmartBoardUiState(
+            template = startStyle.paper ?: startTemplate,
+            style = startStyle,
+            mode = styles.writingMode,
+            language = styles.languageFor(route.notebookId),
+        ),
+    )
     private val measure by lazy {
         HandwritingTypefaces.init(context)
         PaintMeasure()
     }
 
     /** Writes [doc] in the current mode, style and paper (off the main thread). */
-    private suspend fun render(doc: AiDocument, arabic: Boolean): Pair<BoardInk?, BoardText?> = withContext(Dispatchers.Default) {
+    private suspend fun render(doc: AiDocument, rtl: Boolean): Pair<BoardInk?, BoardText?> = withContext(Dispatchers.Default) {
         val s = state.value
         val paper = paperFor(s.template)
-        if (s.mode == WritingMode.Strokes) pipeline.write(doc, arabic, paper) to null else null to pipeline.typeset(doc, arabic, paper, s.style, measure)
+        if (s.mode == WritingMode.Strokes && BoardToInk.strokesCanWrite(doc)) pipeline.write(doc, rtl, paper) to null else null to pipeline.typeset(doc, rtl, paper, s.style, measure)
     }
 
     private fun rerender() {
         val review = state.value.stage as? SmartBoardStage.Review ?: return
         viewModelScope.launch {
-            val (ink, text) = runCatching { render(review.doc, state.value.arabic) }.getOrNull() ?: return@launch
+            val (ink, text) = runCatching { render(review.doc, state.value.language.rtl) }.getOrNull() ?: return@launch
             state.update { s -> if (s.stage === review) s.copy(stage = review.copy(ink = ink, text = text)) else s }
         }
     }
@@ -335,7 +344,16 @@ class SmartBoardViewModel @Inject constructor(
         }
     }
 
-    fun setArabic(arabic: Boolean) = state.update { it.copy(arabic = arabic) }
+    /**
+     * Picks the notes language (saved for this notebook). On the review screen the notes are read again
+     * so they come back written in it.
+     */
+    fun setLanguage(language: NotesLanguage) {
+        if (language == state.value.language) return
+        styles.setLanguageFor(route.notebookId, language)
+        state.update { it.copy(language = language) }
+        if (state.value.stage is SmartBoardStage.Review) read()
+    }
 
     /** Back to the photos (they are kept, so the corners can be fixed and read again). */
     fun backToPhotos() {
@@ -390,7 +408,7 @@ class SmartBoardViewModel @Inject constructor(
                         withContext(Dispatchers.Default) { VisionImage(BoardScan.jpeg(BoardScan.flatten(photos[i].bitmap, photos[i].quad, s.enhance)), "image/jpeg") }
                     }
                     val provider: VisionProvider = if (demo) DemoVisionProvider() else providers.create(s.provider)
-                    val request = BoardRequest(LayoutTemplate.LectureSummary, rtl = s.arabic, language = if (s.arabic) "ar" else null)
+                    val request = BoardRequest(LayoutTemplate.LectureSummary, rtl = s.language.rtl, language = s.language.promptName)
                     try {
                         docs += provider.reconstructBoard(image, request)
                     } finally {
@@ -399,7 +417,7 @@ class SmartBoardViewModel @Inject constructor(
                 }
                 state.update { it.copy(stage = SmartBoardStage.Reading(STEPS - 1, count, count)) }
                 val doc = BoardMerge.merge(docs)
-                val (ink, text) = render(doc, s.arabic)
+                val (ink, text) = render(doc, s.language.rtl)
                 (text?.dropReasons ?: ink?.dropReasons).orEmpty().forEach { Log.i(TAG, "dropped $it") }
                 state.update { it.copy(stage = SmartBoardStage.Review(ink, text, demo, SystemClock.elapsedRealtime() - started, doc)) }
             } catch (e: CancellationException) {

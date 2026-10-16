@@ -13,6 +13,7 @@ import app.bestnote.engine.handwriting.HandwritingStyle
 import app.bestnote.engine.handwriting.TextMeasure
 import app.bestnote.engine.handwriting.TypesetPages
 import app.bestnote.engine.layout.StyleTemplate
+import app.bestnote.engine.layout.WritingScript
 import app.bestnote.engine.handwriting.HandwrittenPages
 import app.bestnote.engine.handwriting.PageComposer
 import app.bestnote.engine.layout.LectureFlow
@@ -54,7 +55,7 @@ class BoardToInk(private val newId: () -> String) {
         val mapper = DocumentMapper(newId)
         val mapped = mapper.map(doc)
         mapped.requireBlocks()
-        val rtl = rtlHint || mostlyArabic(doc)
+        val rtl = rtlHint || mostlyRtl(doc)
         val byKey = mapped.blocks.associateBy { it.item.key }
         val ordered = LectureFlow.order(mapped.blocks.map { it.item }, rtl).map { byKey.getValue(it.key) }
         // Built once with an empty frame, only to measure and to know each block's kind.
@@ -75,7 +76,7 @@ class BoardToInk(private val newId: () -> String) {
         val mapper = DocumentMapper(newId)
         val mapped = mapper.map(doc)
         mapped.requireBlocks()
-        val rtl = rtlHint || mostlyArabic(doc)
+        val rtl = rtlHint || mostlyRtl(doc)
         val byKey = mapped.blocks.associateBy { it.item.key }
         val ordered = LectureFlow.order(mapped.blocks.map { it.item }, rtl).map { byKey.getValue(it.key) }
         val drafts = ordered.associate { it.item.key to it.build(EMPTY) }
@@ -91,17 +92,21 @@ class BoardToInk(private val newId: () -> String) {
         return BoardText(paper, style, composer.compose(placed), mapped.dropped, rtl, mapped.dropReasons)
     }
 
-    private fun mostlyArabic(doc: AiDocument): Boolean {
-        val text = buildString {
-            doc.title?.let(::append)
-            doc.blocks.forEach { b -> b.text?.let(::append); b.items?.forEach(::append) }
-        }
-        val arabic = text.count { it in '؀'..'ۿ' }
-        val latin = text.count { it in 'a'..'z' || it in 'A'..'Z' }
-        return arabic > latin
-    }
+    /** Right to left when most letters are Hebrew or Arabic (any mix of scripts, not just Arabic vs Latin). */
+    private fun mostlyRtl(doc: AiDocument): Boolean = WritingScript.mostlyRtl(textOf(doc))
 
-    private companion object {
+    internal companion object {
         val EMPTY = RectPt(0f, 0f, 0f, 0f)
+
+        fun textOf(doc: AiDocument): String = buildString {
+            doc.title?.let(::append)
+            doc.blocks.forEach { b -> b.text?.let(::append); b.items?.forEach(::append); b.title?.let(::append) }
+        }
+
+        /** The stroke hand has Latin and Arabic letters only; anything else must be written with fonts. */
+        fun strokesCanWrite(doc: AiDocument): Boolean = textOf(doc).none { c ->
+            val sc = WritingScript.of(c)
+            sc != null && sc != WritingScript.Latin && sc != WritingScript.Arabic
+        }
     }
 }

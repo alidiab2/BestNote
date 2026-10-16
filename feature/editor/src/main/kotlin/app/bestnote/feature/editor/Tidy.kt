@@ -56,12 +56,16 @@ internal class InkTidier(
     private val ai: AiProviders?,
     private val adopt: (List<Pair<app.bestnote.core.model.InkStroke, androidx.ink.strokes.Stroke>>) -> Unit,
     private val debuggable: Boolean,
+    /** The notebook's Smart Board notes language (null = keep the handwriting's own). */
+    private val language: () -> String?,
     private val message: (Int) -> Unit,
 ) {
     var working by mutableStateOf(false)
         private set
 
     private var job: Job? = null
+
+    private val measure by lazy { PaintMeasure() }
 
     fun tidy() {
         val selected = canvas()?.selectedInk() ?: return
@@ -73,18 +77,24 @@ internal class InkTidier(
                 val page = document.pages.getOrNull(selected.pageIndex) ?: return@launch
                 val color = selected.strokes.groupingBy { InkConversion.brushFromInk(it.brush).colorArgb }.eachCount().maxByOrNull { it.value }?.key
                     ?: app.bestnote.engine.handwriting.PenChoice.INK
-                val pairs = withContext(Dispatchers.Default) {
+                val (written, pairs) = withContext(Dispatchers.Default) {
                     val paper = page.page
-                    TidyWriter.write(doc, selected.box, paper.template, PageSize(paper.widthPt, paper.heightPt), color or OPAQUE) { UUID.randomUUID().toString() }
-                        .mapNotNull { model -> runCatching { model to InkConversion.toInk(model) }.getOrNull() }
+                    val out = TidyWriter.write(doc, selected.box, paper.template, PageSize(paper.widthPt, paper.heightPt), color or OPAQUE, measure) { UUID.randomUUID().toString() }
+                    out to out.strokes.mapNotNull { model -> runCatching { model to InkConversion.toInk(model) }.getOrNull() }
                 }
-                if (pairs.isEmpty()) {
+                if (written.elements.isEmpty() && pairs.isEmpty()) {
                     message(R.string.tidy_nothing)
                     return@launch
                 }
                 canvas()?.clearSelection()
                 adopt(pairs)
-                document.editContent(selected.pageIndex, removedStrokes = selected.strokes, addedStrokes = pairs.map { it.second })
+                // Ink out, neat text (and its pen marks) in: one undo step.
+                document.editContent(
+                    selected.pageIndex,
+                    removedStrokes = selected.strokes,
+                    addedStrokes = pairs.map { it.second },
+                    elements = page.elements + written.elements,
+                )
                 message(R.string.tidy_done)
             } catch (e: CancellationException) {
                 throw e
@@ -115,7 +125,7 @@ internal class InkTidier(
         val providers = ai
         if (providers != null && runCatching { providers.isConfigured() }.getOrDefault(false)) {
             val png = withContext(Dispatchers.Default) { InkSnapshot.png(selected.strokes) } ?: return null.also { message(R.string.tidy_nothing) }
-            return providers.create().beautify(VisionImage(png, "image/png"), selected.box.width, selected.box.height)
+            return providers.create().beautify(VisionImage(png, "image/png"), selected.box.width, selected.box.height, language())
         }
         if (models.state.value.isReady) {
             val samples = withContext(Dispatchers.Default) { selected.strokes.map(InkConversion::samplesOf) }
@@ -160,12 +170,15 @@ internal fun rememberInkTidier(
     ai: AiProviders?,
     adopt: (List<Pair<app.bestnote.core.model.InkStroke, androidx.ink.strokes.Stroke>>) -> Unit,
     snackbar: SnackbarHostState,
+    language: () -> String? = { null },
 ): InkTidier {
     val scope = rememberCoroutineScope()
     val resources = LocalResources.current
-    val debuggable = (LocalContext.current.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
+    val context = LocalContext.current
+    val debuggable = (context.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
     return remember(document, models, recognizer) {
-        InkTidier(scope, canvas, document, models, recognizer, ai, adopt, debuggable) { id ->
+        app.bestnote.core.designsystem.font.HandwritingTypefaces.init(context)
+        InkTidier(scope, canvas, document, models, recognizer, ai, adopt, debuggable, language) { id ->
             scope.launch {
                 snackbar.currentSnackbarData?.dismiss()
                 snackbar.showSnackbar(resources.getString(id))

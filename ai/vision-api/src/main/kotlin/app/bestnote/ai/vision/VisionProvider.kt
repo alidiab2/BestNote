@@ -69,7 +69,7 @@ interface VisionProvider {
      * Rasterised lasso selection of the user's own handwriting → the same content, tidied.
      * Coordinates in the result are in the selection's own box.
      */
-    suspend fun beautify(selection: VisionImage, widthPt: Float, heightPt: Float): AiDocument
+    suspend fun beautify(selection: VisionImage, widthPt: Float, heightPt: Float, language: String? = null): AiDocument
 
     /**
      * Rasterised handwriting → its exact words ("Convert with AI"), one paragraph block per line.

@@ -2,6 +2,7 @@ package app.bestnote.ai.vision.providers
 
 import android.content.Context
 import android.content.SharedPreferences
+import app.bestnote.ai.vision.NotesLanguage
 import app.bestnote.engine.layout.StyleTemplate
 import app.bestnote.engine.layout.StyleTemplates
 
@@ -30,6 +31,17 @@ class SmartBoardStyles(private val storage: StyleStorage) {
 
     fun setStyleFor(notebookId: String, style: StyleTemplate) = storage.put(KEY_NOTEBOOK + notebookId, style.id)
 
+    /** Notes language for new notebooks: "same as the board" unless set in Settings. */
+    var defaultLanguage: NotesLanguage
+        get() = NotesLanguage.of(storage.get(KEY_LANGUAGE))
+        set(value) = storage.put(KEY_LANGUAGE, value.code)
+
+    /** The notes language last used in a notebook, saved with its style. */
+    fun languageFor(notebookId: String): NotesLanguage =
+        storage.get(KEY_NOTEBOOK_LANGUAGE + notebookId)?.let { if (it == BOARD) NotesLanguage.Board else NotesLanguage.of(it) } ?: defaultLanguage
+
+    fun setLanguageFor(notebookId: String, language: NotesLanguage) = storage.put(KEY_NOTEBOOK_LANGUAGE + notebookId, language.code ?: BOARD)
+
     var writingMode: WritingMode
         get() = WritingMode.entries.firstOrNull { it.name == storage.get(KEY_MODE) } ?: WritingMode.Font
         set(value) = storage.put(KEY_MODE, value.name)
@@ -44,5 +56,8 @@ class SmartBoardStyles(private val storage: StyleStorage) {
         const val KEY_DEFAULT = "default_style"
         const val KEY_MODE = "writing_mode"
         const val KEY_NOTEBOOK = "notebook:"
+        const val KEY_LANGUAGE = "default_language"
+        const val KEY_NOTEBOOK_LANGUAGE = "notebook_language:"
+        const val BOARD = "board"
     }
 }

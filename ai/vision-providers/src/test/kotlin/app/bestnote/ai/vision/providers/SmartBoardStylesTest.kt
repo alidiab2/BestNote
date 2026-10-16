@@ -1,5 +1,6 @@
 package app.bestnote.ai.vision.providers
 
+import app.bestnote.ai.vision.NotesLanguage
 import app.bestnote.engine.layout.StyleTemplates
 import org.junit.Assert.assertEquals
 import org.junit.Test
@@ -29,6 +30,20 @@ class SmartBoardStylesTest {
         assertEquals(WritingMode.Font, again.writingMode)
         again.writingMode = WritingMode.Strokes
         assertEquals(WritingMode.Strokes, SmartBoardStyles(storage).writingMode)
+    }
+
+    @Test fun `notes language is saved per notebook, default same as the board`() {
+        val storage = Memory()
+        val styles = SmartBoardStyles(storage)
+        assertEquals(NotesLanguage.Board, styles.languageFor("physics"))
+        styles.defaultLanguage = NotesLanguage.Hebrew
+        assertEquals(NotesLanguage.Hebrew, styles.languageFor("physics"))
+        styles.setLanguageFor("physics", NotesLanguage.Board)
+        styles.setLanguageFor("chem", NotesLanguage.Arabic)
+        val again = SmartBoardStyles(storage)
+        assertEquals(NotesLanguage.Board, again.languageFor("physics"))
+        assertEquals(NotesLanguage.Arabic, again.languageFor("chem"))
+        assertEquals(NotesLanguage.Hebrew, again.languageFor("maths"))
     }
 
     @Test fun `an unknown stored style falls back to classic`() {

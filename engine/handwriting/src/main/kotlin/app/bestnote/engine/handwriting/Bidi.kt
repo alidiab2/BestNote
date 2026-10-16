@@ -1,8 +1,10 @@
 package app.bestnote.engine.handwriting
 
+import app.bestnote.engine.layout.WritingScript
+
 /**
  * Word-level bidirectional ordering for handwritten lines (a small, predictable subset of UAX #9):
- * every word is right-to-left (Arabic letters), left-to-right (Latin, Greek, digits, inline maths)
+ * every word is right-to-left (Hebrew or Arabic letters), left-to-right (Latin, Greek, Cyrillic, digits, inline maths)
  * or neutral (punctuation and operators on their own). Neutrals between two runs of the same
  * direction join them; otherwise they take the line's direction.
  */
@@ -12,12 +14,10 @@ internal object Bidi {
     private enum class Kind { R, L, N }
 
     private fun kind(word: String): Kind = when {
-        Arabic.isArabic(word) && !InlineMath.hasToken(word) && word.none { it.isLatinLetter() } -> Kind.R
+        !InlineMath.hasToken(word) && WritingScript.hasRtl(word) && word.none { WritingScript.of(it)?.rtl == false } -> Kind.R
         InlineMath.hasToken(word) || word.any { it.isLetterOrDigit() } -> Kind.L
         else -> Kind.N
     }
-
-    private fun Char.isLatinLetter() = this in 'a'..'z' || this in 'A'..'Z'
 
     /** [words] in reading order → runs in reading order. */
     fun runs(words: List<String>, rtl: Boolean): List<Run> {

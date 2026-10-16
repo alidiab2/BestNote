@@ -70,8 +70,10 @@ an exam, so they must be complete, correct and beautifully organised.
   text uses `\( … \)`.
 - Turn rough scribbles and fragments into clean, parallel bullet points. Expand the lecturer's
   shorthand only when it's unambiguous ("w/" → "with", "eq." → "equation").
-- Keep the lecture's language. Arabic boards produce Arabic notes; mathematical notation stays
-  standard LaTeX.
+- Keep the lecture's language unless told otherwise: Hebrew boards produce Hebrew notes, Arabic
+  boards Arabic notes, English boards English notes. A board that mixes languages (Hebrew or Arabic
+  with English terms and maths) keeps each block in its own language; set `lang` on every block
+  ("he", "ar", "en", …). Mathematical notation stays standard LaTeX in every language.
 
 ## 5. Give every block its role
 The notes are coloured BY ROLE (one fixed colour per role in the student's notebook), so every block
@@ -109,11 +111,23 @@ Return ONLY JSON matching the response schema. No commentary.
         append("\n\n## This notebook page\n")
         append("- Layout: ").append(roleHint(request.template)).append('\n')
         if (request.rtl) append("- The board reads right-to-left; panels go from right to left.\n")
-        request.language?.let { append("- Write the notes in: ").append(it).append('\n') }
+        append(languageRule(request.language))
+    }
+
+    /**
+     * The notes language: null keeps each block in the board's own language; a language name means
+     * the notes are written (translated) in it, with maths untouched.
+     */
+    fun languageRule(language: String?): String = if (language == null) {
+        "- Notes language: the same as the board, block by block. Never translate.\n"
+    } else {
+        "- Notes language: write ALL the notes in $language, translating from the board where needed. " +
+            "Keep every formula and LaTeX exactly as it is. Keep technical terms correct; the first time a term " +
+            "appears, add the board's original term in parentheses when it helps. Set `lang` to the code of $language.\n"
     }
 
     /** System instruction for tidying a selection of the user's own handwriting. */
-    fun beautify() = buildString {
+    fun beautify(language: String? = null) = buildString {
         append(EXPERT_STUDENT.trim())
         append(
             """
@@ -124,6 +138,7 @@ You are rewriting a selection of YOUR OWN rough notes neatly, not a board.
 - Diagram coordinates use the selection's size so shapes land where they were drawn.
 """,
         )
+        append(languageRule(language))
     }
 
     /** User turn for [transcribe]. */
@@ -142,7 +157,7 @@ You are rewriting a selection of YOUR OWN rough notes neatly, not a board.
 You are typing up a selection of YOUR OWN handwriting, exactly as written. It replaces the ink.
 - One `paragraph` block per handwritten line, in reading order (`order` 0, 1, 2…), words in `text`.
 - Copy the words exactly; fix only obvious slips of the pen. Never summarise, never translate.
-- Keep the language of each line: Arabic stays Arabic (with its own letters, right to left), English stays English.
+- Keep the language of each line: Hebrew stays Hebrew, Arabic stays Arabic (with their own letters, right to left), English stays English.
 - A line that is only mathematics: `math` block with LaTeX in `latex` and the formula as written in `text`.
 """,
         )

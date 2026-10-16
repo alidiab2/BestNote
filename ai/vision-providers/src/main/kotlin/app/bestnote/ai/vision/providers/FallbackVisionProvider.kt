@@ -18,7 +18,7 @@ internal class FallbackVisionProvider(
 ) : VisionProvider {
     override suspend fun reconstructBoard(image: VisionImage, request: BoardRequest) = attempt { it.reconstructBoard(image, request) }
 
-    override suspend fun beautify(selection: VisionImage, widthPt: Float, heightPt: Float) = attempt { it.beautify(selection, widthPt, heightPt) }
+    override suspend fun beautify(selection: VisionImage, widthPt: Float, heightPt: Float, language: String?) = attempt { it.beautify(selection, widthPt, heightPt, language) }
 
     override suspend fun transcribe(selection: VisionImage, language: String?) = attempt { it.transcribe(selection, language) }
 

@@ -7,17 +7,18 @@ import java.io.File
 
 /** [TextMeasure] with the real bundled fonts through java.awt, so tests measure what Android draws. */
 internal object AwtMeasure : TextMeasure {
-    private fun file(f: HandFont): File {
+    private fun file(f: HandFont): File? {
         val root = generateSequence(File("").absoluteFile) { it.parentFile }.first { File(it, "settings.gradle.kts").exists() }
         return when (f) {
             HandFont.Caveat -> File(root, "core/designsystem/src/main/res/font/caveat.ttf")
             HandFont.ArefRuqaa -> File(root, "core/designsystem/src/main/res/font/aref_ruqaa.ttf")
+            HandFont.System -> null
         }
     }
 
     private val fonts = HashMap<HandFont, Font>()
 
-    fun font(f: HandFont): Font = fonts.getOrPut(f) { Font.createFont(Font.TRUETYPE_FONT, file(f)) }
+    fun font(f: HandFont): Font = fonts.getOrPut(f) { file(f)?.let { Font.createFont(Font.TRUETYPE_FONT, it) } ?: Font(Font.SANS_SERIF, Font.PLAIN, 1) }
 
     private val frc = FontRenderContext(null, true, true)
 

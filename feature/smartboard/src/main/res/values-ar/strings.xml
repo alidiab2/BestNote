@@ -109,4 +109,6 @@
     <string name="smartboard_role_margin">الهامش</string>
     <string name="smartboard_role_body">النص</string>
     <string name="smartboard_review_stats_pages">%1$d صفحة · نص وحبر قابلان للتعديل · %2$.1f ث</string>
+    <string name="smartboard_notes_in">لغة الملاحظات: %1$s</string>
+    <string name="smartboard_language_board">مثل السبورة</string>
 </resources>

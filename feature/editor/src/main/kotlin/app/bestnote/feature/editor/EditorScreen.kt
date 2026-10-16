@@ -202,9 +202,14 @@ class EditorViewModel @Inject constructor(
     val recognizer: HandwritingRecognizer,
     /** Smart Board AI providers, for "Convert with AI" (REC-05). */
     val aiProviders: AiProviders,
+    /** Smart Board per-notebook settings (notes language for Tidy). */
+    private val smartBoardStyles: app.bestnote.ai.vision.providers.SmartBoardStyles,
 ) : ViewModel() {
     private val route = savedStateHandle.toRoute<EditorRoute>()
     val notebookId = NotebookId(route.notebookId)
+
+    /** The language Tidy writes in: the notebook's Smart Board notes language, or the handwriting's own. */
+    fun tidyLanguage(): String? = smartBoardStyles.languageFor(notebookId.value).promptName
 
     /**
      * Where a search result asked to land: the page's index and the boxes to mark (REC-03). Waits for the notebook to
@@ -373,6 +378,7 @@ fun EditorScreen(
         ai = viewModel.aiProviders,
         adopt = viewModel.session::adopt,
         snackbar = snackbar,
+        language = viewModel::tidyLanguage,
     )
     val reduce = reducedMotion()
     val side = traySide(state.dock, state.leftHanded)

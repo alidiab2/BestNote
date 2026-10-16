@@ -15,6 +15,9 @@ object HandwritingTypefaces {
     const val LATIN_FIRST = "hand"
     const val ARABIC_FIRST = "hand-ar"
 
+    /** The device font: Hebrew and scripts without a bundled hand (no OFL Hebrew handwriting font is bundled yet). */
+    const val SYSTEM = "system"
+
     @Volatile private var latin: Typeface? = null
     @Volatile private var arabic: Typeface? = null
 
@@ -31,6 +34,7 @@ object HandwritingTypefaces {
     fun of(id: String?): Typeface? = when (id) {
         LATIN_FIRST -> latin
         ARABIC_FIRST -> arabic
+        SYSTEM -> Typeface.SANS_SERIF
         else -> null
     }
 }

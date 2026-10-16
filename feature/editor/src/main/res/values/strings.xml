@@ -159,4 +159,6 @@
     <string name="tidy_error_network">Could not reach the AI provider. Check your connection.</string>
     <string name="tidy_error_busy">The AI provider is overloaded. Try again in a moment.</string>
     <string name="tidy_error_other">Could not tidy this selection.</string>
+    <string name="convert_lang_he">עברית</string>
+    <string name="convert_hebrew_needs_ai">Hebrew handwriting is read by your AI provider. Add a key in Settings → Smart Board AI.</string>
 </resources>

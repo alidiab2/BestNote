@@ -26,7 +26,7 @@ class FallbackVisionProviderTest {
                     return AiDocument(title = model, blocks = emptyList())
                 }
 
-                override suspend fun beautify(selection: VisionImage, widthPt: Float, heightPt: Float) = error("unused")
+                override suspend fun beautify(selection: VisionImage, widthPt: Float, heightPt: Float, language: String?) = error("unused")
             }
         },
         skipped = skipped,
