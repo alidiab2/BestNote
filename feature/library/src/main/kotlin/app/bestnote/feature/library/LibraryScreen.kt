@@ -100,14 +100,19 @@ import java.util.Date
 @Serializable
 data object LibraryRoute
 
-fun NavGraphBuilder.libraryScreen(onOpenNotebook: (NotebookId) -> Unit, onOpenSettings: () -> Unit) {
-    composable<LibraryRoute> { LibraryScreen(onOpenNotebook, onOpenSettings) }
+fun NavGraphBuilder.libraryScreen(
+    onOpenNotebook: (NotebookId) -> Unit,
+    onOpenSettings: () -> Unit,
+    onOpenPage: (NotebookId, pageId: String, query: String) -> Unit = { id, _, _ -> onOpenNotebook(id) },
+) {
+    composable<LibraryRoute> { LibraryScreen(onOpenNotebook, onOpenSettings, onOpenPage) }
 }
 
 @Composable
 fun LibraryScreen(
     onOpenNotebook: (NotebookId) -> Unit,
     onOpenSettings: () -> Unit,
+    onOpenPage: (NotebookId, pageId: String, query: String) -> Unit = { id, _, _ -> onOpenNotebook(id) },
     viewModel: LibraryViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -126,6 +131,7 @@ fun LibraryScreen(
         viewModel.eventFlow.collect { event ->
             when (event) {
                 is LibraryEvent.Open -> onOpenNotebook(event.id)
+                is LibraryEvent.OpenPage -> onOpenPage(event.id, event.pageId, event.query)
                 is LibraryEvent.Trashed -> launch {
                     snackbar.currentSnackbarData?.dismiss()
                     val message = if (event.ids.size == 1) {
@@ -159,6 +165,8 @@ fun LibraryScreen(
             importPdf = { pickPdf.launch(arrayOf(PDF_MIME)) },
             create = viewModel::create,
             open = viewModel::open,
+            openPage = viewModel::openPage,
+            downloadModels = viewModel::downloadModels,
             rename = viewModel::rename,
             setCover = viewModel::setCover,
             duplicate = viewModel::duplicate,
@@ -222,6 +230,8 @@ internal data class LibraryCallbacks(
     val importPdf: () -> Unit = {},
     val create: (NewNotebookSpec) -> Unit = {},
     val open: (NotebookId) -> Unit = {},
+    val openPage: (NotebookId, pageId: String, query: String) -> Unit = { _, _, _ -> },
+    val downloadModels: () -> Unit = {},
     val rename: (NotebookId, String) -> Unit = { _, _ -> },
     val setCover: (Collection<NotebookId>, CoverChoice) -> Unit = { _, _ -> },
     val duplicate: (NotebookId, String) -> Unit = { _, _ -> },
@@ -546,31 +556,36 @@ private fun LazyListScope.notebooksSection(
         NotebooksHeader(state, callbacks, Modifier.padding(top = Spacing.XXL, bottom = Spacing.XL))
     }
     if (state.loading) return
+    handwritingModelsPrompt(state, callbacks)
     if (state.items.isEmpty()) {
-        item(key = "empty") {
-            NotebooksEmpty(state.emptyKind, state.controls.query, state.breadcrumb.lastOrNull()?.name, callbacks)
-        }
-        return
-    }
-    // Search results always use the list, which shows where each notebook lives.
-    val layout = if (state.searching) LibraryLayout.List else state.controls.layout
-    when (layout) {
-        LibraryLayout.Shelf -> {
-            val rows = state.items.chunked(shelfColumns)
-            itemsIndexed(rows, key = { _, row -> "s-" + row.first().id.value }, contentType = { _, _ -> "shelf" }) { _, row ->
-                ShelfRow(row, now, actions, Modifier.padding(bottom = Spacing.XXL).animateItem(placementSpec = Motion.Spring.offsetGentle()))
+        if (!state.searching || state.pageResults.isEmpty()) {
+            item(key = "empty") {
+                NotebooksEmpty(state.emptyKind, state.controls.query, state.breadcrumb.lastOrNull()?.name, callbacks)
             }
         }
-        LibraryLayout.Grid -> {
-            val rows = state.items.chunked(gridColumns)
-            itemsIndexed(rows, key = { _, row -> "g-" + row.first().id.value }, contentType = { _, _ -> "grid" }) { _, row ->
-                GridRow(row, gridColumns, now, actions, Modifier.padding(bottom = Spacing.L).animateItem(placementSpec = Motion.Spring.offsetGentle()))
+    } else {
+        // Search results always use the list, which shows where each notebook lives.
+        val layout = if (state.searching) LibraryLayout.List else state.controls.layout
+        when (layout) {
+            LibraryLayout.Shelf -> {
+                val rows = state.items.chunked(shelfColumns)
+                itemsIndexed(rows, key = { _, row -> "s-" + row.first().id.value }, contentType = { _, _ -> "shelf" }) { _, row ->
+                    ShelfRow(row, now, actions, Modifier.padding(bottom = Spacing.XXL).animateItem(placementSpec = Motion.Spring.offsetGentle()))
+                }
+            }
+            LibraryLayout.Grid -> {
+                val rows = state.items.chunked(gridColumns)
+                itemsIndexed(rows, key = { _, row -> "g-" + row.first().id.value }, contentType = { _, _ -> "grid" }) { _, row ->
+                    GridRow(row, gridColumns, now, actions, Modifier.padding(bottom = Spacing.L).animateItem(placementSpec = Motion.Spring.offsetGentle()))
+                }
+            }
+            LibraryLayout.List -> items(state.items, key = { "l-" + it.id.value }, contentType = { "list" }) { item ->
+                ListRow(item, now, actions, Modifier.animateItem(placementSpec = Motion.Spring.offsetGentle()))
             }
         }
-        LibraryLayout.List -> items(state.items, key = { "l-" + it.id.value }, contentType = { "list" }) { item ->
-            ListRow(item, now, actions, Modifier.animateItem(placementSpec = Motion.Spring.offsetGentle()))
-        }
     }
+    // Handwriting, typed text and PDF text on pages (REC-03).
+    if (state.searching) pageSearchSection(state, gridColumns, callbacks)
 }
 
 /** Subfolders of the open folder as pills, plus "New subfolder". */

@@ -19,6 +19,10 @@ import dagger.hilt.components.SingletonComponent
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.channels.BufferOverflow
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import java.io.File
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -43,6 +47,11 @@ class NotebookRepository @Inject constructor(
      */
     val backgroundScope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
+    private val savedNotebooks = MutableSharedFlow<NotebookId>(extraBufferCapacity = SAVED_BUFFER, onBufferOverflow = BufferOverflow.DROP_OLDEST)
+
+    /** A notebook was saved to disk (every autosave commit), e.g. for the search index to catch up with it (REC-02). */
+    val saved: SharedFlow<NotebookId> = savedNotebooks.asSharedFlow()
+
     /**
      * Opens [id] for editing: reads its package, or creates one from the index entry for a notebook
      * that has never been saved, and records it as last opened. The returned [Autosaver] mirrors
@@ -53,7 +62,10 @@ class NotebookRepository @Inject constructor(
             .also { store.write(it) }
         dao.syncFromPackage(pkg.notebook)
         dao.markOpened(id.value, now)
-        return OpenNotebook(pkg, Autosaver(pkg, store, backgroundScope, onSaved = { dao.syncFromPackage(it.notebook) }))
+        return OpenNotebook(pkg, Autosaver(pkg, store, backgroundScope, onSaved = {
+            dao.syncFromPackage(it.notebook)
+            savedNotebooks.tryEmit(it.notebook.id)
+        }))
     }
 
     /** True when [id]'s thumbnail is missing or was rendered before [updatedAtMillis]. */
@@ -82,6 +94,8 @@ class NotebookRepository @Inject constructor(
         },
     )
 }
+
+private const val SAVED_BUFFER = 8
 
 @Module
 @InstallIn(SingletonComponent::class)

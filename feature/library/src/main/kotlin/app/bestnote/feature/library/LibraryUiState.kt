@@ -1,9 +1,11 @@
 package app.bestnote.feature.library
 
+import app.bestnote.core.common.SearchText
 import app.bestnote.core.model.Notebook
 import app.bestnote.core.model.NotebookId
+import app.bestnote.core.model.PageSearchHit
+import app.bestnote.engine.recognition.ModelsState
 import java.text.Collator
-import java.text.Normalizer
 import java.util.Calendar
 import java.util.Locale
 import java.util.TimeZone
@@ -56,6 +58,9 @@ data class NotebookItem(
     val progress: Float get() = (lastPageIndex + 1f) / pageCount
 }
 
+/** A page found by the content search, with the notebook it belongs to. */
+data class PageResult(val hit: PageSearchHit, val notebookTitle: String)
+
 /** A folder with its notebook count and nesting depth (0 = top level), in sidebar order. */
 data class FolderItem(val folder: Folder, val count: Int, val depth: Int = 0)
 
@@ -99,6 +104,10 @@ data class LibraryUiState(
     /** Folder colors in use, for the color filter. */
     val folderColors: List<Int> = emptyList(),
     val emptyKind: EmptyKind = EmptyKind.NoNotebooks,
+    /** Pages whose handwriting, typed text or PDF text match the query (REC-03). */
+    val pageResults: List<PageResult> = emptyList(),
+    /** Whether the handwriting models are on the device (REC-01); until then handwriting is not searchable. */
+    val models: ModelsState = ModelsState(),
 ) {
     val searching: Boolean get() = controls.query.isNotBlank()
 
@@ -247,22 +256,8 @@ internal fun folderTree(folders: List<Folder>, counts: Map<String?, Int>): List<
     return out
 }
 
-private val ARABIC_MARKS = Regex("[\\u0610-\\u061A\\u064B-\\u065F\\u0670\\u06D6-\\u06ED\\u0640]")
-private val LATIN_MARKS = Regex("\\p{Mn}+")
-private val SPACES = Regex("\\s+")
-
-/**
- * Folds a title or query for matching: case, Latin accents, Arabic diacritics and tatweel are ignored;
- * أ/إ/آ/ٱ → ا, ة → ه and ى → ي, so "مكتبة" finds "مكتبه" and "أحمد" finds "احمد".
- */
-fun normalizeForSearch(text: String): String {
-    val arabic = ARABIC_MARKS.replace(text, "")
-        .replace('أ', 'ا').replace('إ', 'ا').replace('آ', 'ا').replace('ٱ', 'ا')
-        .replace('ة', 'ه').replace('ى', 'ي')
-    val latin = LATIN_MARKS.replace(Normalizer.normalize(arabic, Normalizer.Form.NFD), "")
-    // NFD splits آ into ا + madda, which LATIN_MARKS removes; recompose the rest.
-    return SPACES.replace(Normalizer.normalize(latin, Normalizer.Form.NFC).lowercase(Locale.ROOT), " ").trim()
-}
+/** Folds a title or query for matching (see [SearchText.fold]). */
+fun normalizeForSearch(text: String): String = SearchText.fold(text)
 
 /** True if [a] and [b] fall on the same calendar day in [timeZone]. */
 internal fun sameDay(a: Long, b: Long, timeZone: TimeZone): Boolean {

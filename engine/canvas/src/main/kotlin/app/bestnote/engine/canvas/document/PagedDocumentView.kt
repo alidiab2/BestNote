@@ -27,6 +27,7 @@ import androidx.input.motionprediction.MotionEventPredictor
 import app.bestnote.core.model.AudioSync
 import app.bestnote.core.model.InkBrush
 import app.bestnote.core.model.PageElement
+import app.bestnote.core.model.PageRect
 import app.bestnote.core.model.PaperSizes
 import app.bestnote.core.model.PenStyle
 import app.bestnote.core.model.TextElement
@@ -259,6 +260,40 @@ class PagedDocumentView(context: Context) : FrameLayout(context), InProgressStro
     /** Applies [change] to the single selected element as one undo step (crop, turn, lock, text edit). */
     fun updateSelectedElement(change: (PageElement) -> PageElement) = selection.updateSingleElement(change)
 
+    /** What the lasso holds: [strokes] and the page they are on, for recognizing or exporting them. Null without a selection. */
+    class SelectedInk(val pageIndex: Int, val strokes: List<Stroke>, val box: PageRect)
+
+    /** The selected strokes of one page (REC-05), or null when nothing is selected or the selection holds no ink. */
+    fun selectedInk(): SelectedInk? = selection.selectedInk()
+
+    /** Marker color of search highlights (ARGB); the host passes a theme color. */
+    var highlightColor: Int
+        get() = highlights.color
+        set(value) {
+            highlights.color = value
+        }
+
+    /** Marks [rects] (page points) on page [pageIndex] as search matches, until [clearHighlights] or the next stroke. */
+    fun showHighlights(pageIndex: Int, rects: List<PageRect>) = highlights.show(pageIndex, rects)
+
+    fun clearHighlights() = highlights.clear()
+
+    /**
+     * Brings [rect] on page [pageIndex] into the middle of the view, zoomed in so a small match is easy to see
+     * (never zoomed out below fit-to-width, never past 3x). Jumps; no animation.
+     */
+    fun focusOn(pageIndex: Int, rect: PageRect) {
+        val layout = pages.layout ?: return
+        if (pageIndex !in 0 until layout.pageCount || width == 0) return
+        settleZoom()
+        val fit = pages.layoutAt(1f)?.scale ?: return
+        val z = (FOCUS_SPAN * width / (rect.width.coerceAtLeast(MIN_FOCUS_PT) * fit)).coerceIn(1f, MAX_FOCUS_ZOOM)
+        if (abs(z - pages.zoom) > 1e-3f) pages.applyZoom(z, width / 2f, height / 2f, width / 2f, height / 2f)
+        val l = pages.layout ?: return
+        val (vx, vy) = ZoomMath.pageToView(l, pages.scrollX, pages.scrollY, pageIndex, rect.centerX, rect.centerY)
+        pages.scrollToXY(Math.round(pages.scrollX + vx - width / 2f), Math.round(pages.scrollY + vy - height * FOCUS_BELOW_TOP))
+    }
+
     /** Page [index]'s size in page points, or null when there is no such page. */
     fun pageSize(index: Int): Pair<Float, Float>? = document?.pages?.getOrNull(index)?.let { it.page.widthPt to it.page.heightPt }
 
@@ -389,6 +424,9 @@ class PagedDocumentView(context: Context) : FrameLayout(context), InProgressStro
     /** The brush each stroke was started with (sizes in page points, canonical ink colors). */
     private val strokeBrushes = StrokeBrushes<InProgressStrokeId, Stroke>()
 
+    /** Search matches on a page (REC-03). */
+    private val highlights = HighlightLayer(context, pages)
+
     /** Lasso, selection and its handles (CANVAS-08..11). */
     private val selection = SelectionLayer(context, pages, strokeBrushes, ElementPainter())
 
@@ -460,6 +498,7 @@ class PagedDocumentView(context: Context) : FrameLayout(context), InProgressStro
 
     init {
         addView(pages, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
+        addView(highlights, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
         addView(wet, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
         addView(selection, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
         addView(cursor, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
@@ -469,6 +508,7 @@ class PagedDocumentView(context: Context) : FrameLayout(context), InProgressStro
         pages.onViewportChanged = {
             reportIndicator()
             selection.onViewportChanged()
+            highlights.invalidate()
         }
         // The pinch preview may draw pages beyond the pages layer's own bounds; clip to ours instead.
         clipChildren = false
@@ -865,6 +905,7 @@ class PagedDocumentView(context: Context) : FrameLayout(context), InProgressStro
 
     /** Start a stroke for [se]'s pointer with [strokeTool] on page [page]. */
     private fun begin(event: MotionEvent, se: StylusEvent, strokeTool: Tool, page: Int) {
+        highlights.clear()
         val id = se.pointerId
         selection.touched(page, se.latest.x, se.latest.y)
         when {
@@ -1160,6 +1201,10 @@ class PagedDocumentView(context: Context) : FrameLayout(context), InProgressStro
         /** The pinch preview re-lays out the pages once it has scaled them beyond this range. */
         private const val PREVIEW_MIN = 0.67f
         private const val PREVIEW_MAX = 1.5f
+        private const val FOCUS_SPAN = 0.55f
+        private const val MIN_FOCUS_PT = 40f
+        private const val MAX_FOCUS_ZOOM = 3f
+        private const val FOCUS_BELOW_TOP = 0.42f
         private val IDENTITY = Matrix()
     }
 }

@@ -51,6 +51,7 @@ internal class SelectionActions(
     val onCrop: () -> Unit = {},
     val onRotate: () -> Unit = {},
     val onToggleLock: () -> Unit = {},
+    val onConvert: () -> Unit = {},
 )
 
 /** Thicker/thinner step for a selection's ink. */
@@ -102,6 +103,10 @@ internal fun SelectionMenu(
                 if (menu.strokes > 0) {
                     ChromeIconButton(AtelierIcons.Minus, stringResource(R.string.selection_thinner), actions.onThinner, size = 36.dp)
                     ChromeIconButton(AtelierIcons.Plus, stringResource(R.string.selection_thicker), actions.onThicker, size = 36.dp)
+                    MenuDivider()
+                }
+                if (menu.strokes > 0) {
+                    MenuText(stringResource(R.string.selection_convert), onClick = actions.onConvert)
                     MenuDivider()
                 }
                 if (element is TextElement) MenuText(stringResource(R.string.selection_edit), onClick = actions.onEditText)

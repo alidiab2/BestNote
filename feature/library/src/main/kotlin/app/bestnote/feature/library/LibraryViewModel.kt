@@ -6,7 +6,19 @@ import app.bestnote.core.designsystem.theme.CoverPalette
 import app.bestnote.core.model.Notebook
 import app.bestnote.core.model.NotebookId
 import dagger.hilt.android.lifecycle.HiltViewModel
+import app.bestnote.core.model.PageSearchHit
+import app.bestnote.engine.recognition.HandwritingModels
+import app.bestnote.engine.recognition.NoOpHandwritingModels
+import app.bestnote.engine.recognition.NoOpPageSearch
+import app.bestnote.engine.recognition.PageSearch
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.mapLatest
+import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -59,6 +71,9 @@ enum class Notice { ImportingPdf, ImportPdfFailed, Duplicated, Moved, FolderCrea
 sealed interface LibraryEvent {
     data class Open(val id: NotebookId) : LibraryEvent
 
+    /** A page found by search: open [pageId] of [id] and mark what matches [query]. */
+    data class OpenPage(val id: NotebookId, val pageId: String, val query: String) : LibraryEvent
+
     /** Undo snackbar for [ids] just moved to the Trash; [title] names the first one. */
     data class Trashed(val ids: List<NotebookId>, val title: String) : LibraryEvent
     data class Message(val notice: Notice, val count: Int = 1, val name: String = "") : LibraryEvent
@@ -73,6 +88,8 @@ class LibraryViewModel @Inject constructor(
     private val quicknotes: QuicknoteRequests,
     private val pdfImporter: PdfImporting,
     private val pdfRequests: PdfOpenRequests,
+    private val pageSearch: PageSearch = NoOpPageSearch,
+    private val models: HandwritingModels = NoOpHandwritingModels,
 ) : ViewModel() {
     private val notebooks = MutableStateFlow<List<Notebook>?>(null)
     private val trash = MutableStateFlow<List<TrashedNotebook>>(emptyList())
@@ -83,8 +100,20 @@ class LibraryViewModel @Inject constructor(
     private val metaVersion = MutableStateFlow(0)
     private val events = Channel<LibraryEvent>(Channel.BUFFERED)
 
-    val state: StateFlow<LibraryUiState> = combine(notebooks, trash, controls, thumbnails, metaVersion) { list, bin, c, thumbs, _ ->
+    /** Pages matching the typed query (REC-03); searched shortly after typing stops, and again when the models arrive. */
+    @OptIn(FlowPreview::class, ExperimentalCoroutinesApi::class)
+    private val pageHits: Flow<List<PageSearchHit>> = combine(controls.map { it.query.trim() }.distinctUntilChanged().debounce(SEARCH_DEBOUNCE_MS), models.state) { q, _ -> q }
+        .mapLatest { q -> if (q.isEmpty()) emptyList() else runCatching { pageSearch.search(q) }.getOrDefault(emptyList()) }
+        .onStart { emit(emptyList()) }
+
+    private val base = combine(notebooks, trash, controls, thumbnails, metaVersion) { list, bin, c, thumbs, _ ->
         buildLibraryState(list, bin, c, metadata, CoverPalette.All.size, clock.now(), thumbnails = thumbs)
+    }
+
+    val state: StateFlow<LibraryUiState> = combine(base, pageHits, models.state) { state, hits, modelState ->
+        val titles = notebooks.value.orEmpty().associate { it.id to it.title }
+        val results = if (state.searching) hits.mapNotNull { h -> titles[h.notebookId]?.let { PageResult(h, it) } } else emptyList()
+        state.copy(pageResults = results, models = modelState)
     }.stateIn(viewModelScope, SharingStarted.Eagerly, LibraryUiState())
 
     /** One-shot UI events: navigation, the undo snackbar and notices. */
@@ -152,6 +181,14 @@ class LibraryViewModel @Inject constructor(
     fun open(id: NotebookId) {
         events.trySend(LibraryEvent.Open(id))
     }
+
+    /** Opens the page a content search found, showing what matched [query]. */
+    fun openPage(id: NotebookId, pageId: String, query: String) {
+        events.trySend(LibraryEvent.OpenPage(id, pageId, query))
+    }
+
+    /** Fetches the handwriting models (after the user agreed in the search prompt). */
+    fun downloadModels() = models.download()
 
     /** Creates a notebook from the new-notebook sheet, in the open folder if there is one, and opens it. */
     fun create(spec: NewNotebookSpec) {
@@ -357,3 +394,5 @@ class LibraryViewModel @Inject constructor(
         const val QUICKNOTE_COVER = 3
     }
 }
+
+private const val SEARCH_DEBOUNCE_MS = 250L

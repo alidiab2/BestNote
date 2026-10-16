@@ -50,6 +50,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -107,6 +108,10 @@ import app.bestnote.core.designsystem.theme.softShadow
 import app.bestnote.core.model.InkStroke
 import app.bestnote.core.model.NotebookId
 import app.bestnote.core.model.Page
+import app.bestnote.core.model.PageRect
+import app.bestnote.engine.recognition.HandwritingModels
+import app.bestnote.engine.recognition.HandwritingRecognizer
+import app.bestnote.engine.recognition.PageSearch
 import app.bestnote.core.model.PaperTemplate
 import app.bestnote.core.model.Tool
 import app.bestnote.engine.canvas.document.PagedDocument
@@ -131,9 +136,17 @@ import kotlinx.serialization.Serializable
 import javax.inject.Inject
 
 @Serializable
-data class EditorRoute(val notebookId: String)
+data class EditorRoute(val notebookId: String, val pageId: String? = null, val query: String? = null)
 
 fun NavController.navigateToEditor(id: NotebookId) = navigate(EditorRoute(id.value))
+
+/** Opens [id] at page [pageId], with what matches [query] marked (REC-03). */
+fun NavController.navigateToEditor(id: NotebookId, pageId: String, query: String) = navigate(EditorRoute(id.value, pageId, query))
+
+/** A search result to show: [rects] on page [pageIndex], in page points. */
+class SearchTarget(val pageIndex: Int, val rects: List<PageRect>)
+
+private const val LOAD_POLL_MS = 50L
 
 /** Ink written elsewhere (Smart Board), waiting to be inserted as new pages of the open notebook. */
 class InkInsert(val template: PaperTemplate, val pages: List<List<InkStroke>>)
@@ -170,8 +183,24 @@ class EditorViewModel @Inject constructor(
     private val preferences: UserPreferencesRepository,
     repository: NotebookRepository,
     @ApplicationContext context: Context,
+    private val pageSearch: PageSearch,
+    val models: HandwritingModels,
+    val recognizer: HandwritingRecognizer,
 ) : ViewModel() {
-    val notebookId = NotebookId(savedStateHandle.toRoute<EditorRoute>().notebookId)
+    private val route = savedStateHandle.toRoute<EditorRoute>()
+    val notebookId = NotebookId(route.notebookId)
+
+    /**
+     * Where a search result asked to land: the page's index and the boxes to mark (REC-03). Waits for the notebook to
+     * load; null when the editor was opened normally or the page is gone.
+     */
+    suspend fun searchTarget(): SearchTarget? {
+        val pageId = route.pageId ?: return null
+        val query = route.query ?: return null
+        while (!document.isLoaded) delay(LOAD_POLL_MS)
+        val index = document.pages.indexOfFirst { it.id == pageId }.takeIf { it >= 0 } ?: return null
+        return SearchTarget(index, runCatching { pageSearch.highlights(notebookId, pageId, query) }.getOrDefault(emptyList()))
+    }
 
     /** The notebook's pages and ink; outlives the view across configuration changes. */
     val document = PagedDocument().apply { blankPage = Page(notebookId, 0) }
@@ -257,6 +286,7 @@ internal fun dropSide(x: Float, y: Float, width: Float, height: Float): TraySide
 private const val TOP_PULL = 2.5f
 
 private const val INSERT_POLL_MS = 50L
+private const val SEARCH_SETTLE_MS = 150L
 private val ChromeEdge = 20.dp
 private val TopRowTop = 12.dp
 private val TopRowHeight = 64.dp
@@ -310,6 +340,14 @@ fun EditorScreen(
     val audio = viewModel.audio
     val audioState by audio.state.collectAsStateWithLifecycle()
     var recordingsOpen by remember { mutableStateOf(false) }
+    val converter = rememberInkConverter(
+        canvas = { canvas },
+        document = document,
+        models = viewModel.models,
+        recognizer = viewModel.recognizer,
+        onSelecting = { viewModel.setLasso(true) },
+        snackbar = snackbar,
+    )
     val reduce = reducedMotion()
     val side = traySide(state.dock, state.leftHanded)
     LifecycleEventEffect(Lifecycle.Event.ON_STOP) { viewModel.session.onStop() }
@@ -468,6 +506,18 @@ fun EditorScreen(
         byPage.keys.firstOrNull()?.let { first -> canvas?.scrollToPage(first) }
         snackbar.currentSnackbarData?.dismiss()
         if (snackbar.showSnackbar(insertedFormat.format(byPage.size), actionLabel = undoText) == SnackbarResult.ActionPerformed) document.undo()
+    }
+
+    // REC-03: arriving from a search result, jump to the page and mark what matched.
+    val highlightColor = BestNoteTheme.colors.warning.toArgb()
+    LaunchedEffect(canvas) {
+        val view = canvas ?: return@LaunchedEffect
+        val target = viewModel.searchTarget() ?: return@LaunchedEffect
+        delay(SEARCH_SETTLE_MS) // the pages lay out after the notebook loads
+        view.highlightColor = highlightColor
+        if (target.rects.isEmpty()) return@LaunchedEffect view.scrollToPage(target.pageIndex)
+        view.showHighlights(target.pageIndex, target.rects)
+        view.focusOn(target.pageIndex, target.rects.reduce { a, b -> a.union(b) })
     }
 
     // SPEN-02: the first pen event switches fingers to scroll/zoom for good; say so once.
@@ -726,11 +776,13 @@ fun EditorScreen(
                     onCrop = elements::cropSelected,
                     onRotate = elements::rotateSelected,
                     onToggleLock = elements::toggleLock,
+                    onConvert = converter::convert,
                 ),
             )
         }
 
         elements.Dialogs()
+        converter.Dialogs()
 
         // ---- page manager (PAGES-03/04/05): zooms out of the page being read ----
         managerPage?.let { open ->

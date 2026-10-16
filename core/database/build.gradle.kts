@@ -17,6 +17,7 @@ room {
 dependencies {
     api(projects.core.model)
     api(projects.core.storage)
+    implementation(projects.core.common)
     api(libs.androidx.room.runtime)
     // One modern SQLite (with FTS5) on every device instead of whatever the OEM ships.
     implementation(libs.androidx.sqlite.bundled)

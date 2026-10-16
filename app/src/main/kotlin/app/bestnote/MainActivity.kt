@@ -125,6 +125,7 @@ private fun BestNoteNavHost(quicknotes: QuicknoteRequests, pdfRequests: PdfOpenR
         libraryScreen(
             onOpenNotebook = { nav.navigateToEditor(it) },
             onOpenSettings = { nav.navigate(SettingsRoute) },
+            onOpenPage = { id, pageId, query -> nav.navigateToEditor(id, pageId, query) },
         )
         editorScreen(
             onBack = nav::popBackStack,

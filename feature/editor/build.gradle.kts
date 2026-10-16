@@ -8,6 +8,7 @@ dependencies {
     implementation(projects.core.datastore)
     implementation(projects.engine.canvas)
     implementation(projects.engine.pdf)
+    implementation(projects.engine.recognition)
     implementation(projects.engine.export)
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.compose.material.icons.extended)

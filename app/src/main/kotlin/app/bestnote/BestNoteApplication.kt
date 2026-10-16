@@ -9,6 +9,7 @@ import android.util.Log
 import app.bestnote.core.common.DefaultDispatcherProvider
 import app.bestnote.core.common.DispatcherProvider
 import app.bestnote.core.database.NotebookRepository
+import app.bestnote.engine.recognition.mlkit.IndexScheduler
 import dagger.Binds
 import dagger.Module
 import dagger.hilt.InstallIn
@@ -21,12 +22,16 @@ import javax.inject.Inject
 class BestNoteApplication : Application() {
     @Inject lateinit var notebooks: NotebookRepository
 
+    @Inject lateinit var searchIndexing: IndexScheduler
+
     override fun onCreate() {
         super.onCreate()
         // The Room index is a cache of the notebook packages: refresh it in the background (ADR-0004).
         notebooks.backgroundScope.launch {
             runCatching { notebooks.reconcileIndex() }.onFailure { Log.w("BestNote", "Index reconcile failed", it) }
         }
+        // Handwriting and text search (REC-02): index pages in the background, battery-aware.
+        searchIndexing.start(notebooks.backgroundScope)
     }
 }
 

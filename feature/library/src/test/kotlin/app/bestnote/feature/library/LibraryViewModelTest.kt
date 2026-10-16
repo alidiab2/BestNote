@@ -1,12 +1,17 @@
 package app.bestnote.feature.library
 
 import app.bestnote.core.model.NotebookId
+import app.bestnote.core.model.PageRect
+import app.bestnote.core.model.PageSearchHit
+import app.bestnote.core.model.SegmentKind
+import app.bestnote.engine.recognition.PageSearch
 import app.bestnote.core.storage.InMemoryNotebookStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
@@ -68,6 +73,27 @@ class LibraryViewModelTest {
         assertFalse(vm.state.value.showContinueWriting)
         vm.setQuery("المحاضرة")
         assertEquals(listOf("ملاحظات المحاضرة"), vm.state.value.items.map { it.title })
+    }
+
+    @Test
+    fun `content search lists pages with their notebook title and clears with the query`() = runTest {
+        val nb = repo.create("Physics")
+        val gone = PageSearchHit(NotebookId("trashed"), "p9", 9, "x", SegmentKind.Ink, emptyList(), null, 595f, 842f)
+        val hit = PageSearchHit(nb.id, "p0", 0, "second law", SegmentKind.Ink, listOf(PageRect(1f, 2f, 3f, 4f)), null, 595f, 842f)
+        val asked = mutableListOf<String>()
+        val search = object : PageSearch {
+            override suspend fun search(query: String, limit: Int): List<PageSearchHit> = listOf(hit, gone).also { asked += query }
+            override suspend fun highlights(notebookId: NotebookId, pageId: String, query: String) = emptyList<PageRect>()
+        }
+        val vm = LibraryViewModel(repo, metadata, { }, clock, QuicknoteRequests(), PdfImporting { error("no import") }, PdfOpenRequests(), search)
+        assertTrue(vm.state.value.pageResults.isEmpty())
+        vm.setQuery(" second ")
+        advanceTimeBy(1_000)
+        assertEquals(listOf("second"), asked)
+        assertEquals(listOf("Physics"), vm.state.value.pageResults.map { it.notebookTitle }) // the trashed notebook's page is dropped
+        vm.setQuery("")
+        advanceTimeBy(1_000)
+        assertTrue(vm.state.value.pageResults.isEmpty())
     }
 
     @Test

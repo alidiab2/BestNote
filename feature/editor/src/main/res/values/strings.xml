@@ -129,4 +129,19 @@
     <string name="audio_failed">Could not start recording. Another app may be using the microphone.</string>
     <string name="audio_saved">Recording saved</string>
     <string name="audio_list">Show recordings</string>
+
+    <string name="selection_convert">Convert to text</string>
+    <string name="convert_title">Convert to text</string>
+    <string name="convert_models_needed">Reading handwriting needs the Arabic and English models. Download them once (about 50 MB); after that this works offline.</string>
+    <string name="convert_download">Download</string>
+    <string name="convert_retry">Try again</string>
+    <string name="convert_failed">The download didn\'t finish. Check your connection and try again.</string>
+    <string name="convert_downloading">Downloading handwriting models…</string>
+    <string name="convert_reading">Reading your handwriting…</string>
+    <string name="convert_nothing">Couldn\'t read that handwriting. Try selecting fewer lines.</string>
+    <string name="convert_lang_auto">Auto</string>
+    <string name="convert_lang_ar">العربية</string>
+    <string name="convert_lang_en">English</string>
+    <string name="convert_review">Check the text</string>
+    <string name="convert_insert">Insert</string>
 </resources>
