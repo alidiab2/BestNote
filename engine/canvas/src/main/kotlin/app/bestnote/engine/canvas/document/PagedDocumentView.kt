@@ -482,6 +482,7 @@ class PagedDocumentView(context: Context) : FrameLayout(context), InProgressStro
 
     /** Panning/zooming fingers -> last (x, y). */
     private val scrolling = HashMap<Int, Pair<Float, Float>>()
+    private val fingersBefore = HashMap<Int, Pair<Float, Float>>()
 
     /** A lone finger that may become a tap: (down x, down y, down time). */
     private var tapCandidate: Triple<Float, Float, Long>? = null
@@ -594,7 +595,11 @@ class PagedDocumentView(context: Context) : FrameLayout(context), InProgressStro
     }
 
     private fun handle(event: MotionEvent, predicted: MotionEvent?) {
-        val fingersBefore = if (scrolling.isEmpty()) emptyMap() else HashMap(scrolling)
+        // Reused every event: the pinch path allocates nothing per frame (CANVAS-05).
+        val fingersBefore = this.fingersBefore.apply {
+            clear()
+            putAll(scrolling)
+        }
         var scrollMoves = 0
         for (se in StylusEventMapper.map(event)) {
             val id = se.pointerId
