@@ -217,6 +217,9 @@ internal fun ToolsCapsule(
     onShapes: () -> Unit = {},
     onText: () -> Unit = {},
     onImage: () -> Unit = {},
+    audioActive: Boolean = false,
+    onAudio: () -> Unit = {},
+    onAudioLongPress: () -> Unit = {},
 ) {
     val content: @Composable () -> Unit = {
         Tools.forEach { tool ->
@@ -225,6 +228,8 @@ internal fun ToolsCapsule(
             val isShapes = tool.label == R.string.tool_shapes
             val toggle = isLasso || isShapes
             val selected = (isLasso && lassoActive) || (isShapes && shapesActive)
+            val isAudio = tool.label == R.string.tool_audio
+            val selected = (isLasso && lassoActive) || (isShapes && shapesActive) || (isAudio && audioActive)
             val shape = androidx.compose.foundation.shape.RoundedCornerShape(13.dp)
             ChromeIconButton(
                 tool.icon,
@@ -235,17 +240,20 @@ internal fun ToolsCapsule(
                         isShapes -> onShapes()
                         tool.label == R.string.tool_text -> onText()
                         tool.label == R.string.tool_image -> onImage()
+                        isAudio -> onAudio()
                         else -> onComingSoon(label)
                     }
                 },
                 size = 44.dp,
+                onLongClick = if (isAudio) onAudioLongPress else null,
+                longClickLabel = if (isAudio) stringResource(R.string.audio_list) else null,
                 shape = shape,
                 tint = if (selected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier
                     .then(if (selected) Modifier.background(MaterialTheme.colorScheme.primaryContainer, shape) else Modifier)
                     .semantics {
                         contentDescription = label
-                        if (toggle) this.selected = selected
+                        if (toggle || isAudio) this.selected = selected
                     },
             )
         }
