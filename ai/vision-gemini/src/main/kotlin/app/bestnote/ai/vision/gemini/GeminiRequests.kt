@@ -17,6 +17,13 @@ enum class SchemaField {
     None,
 }
 
+/**
+ * How much the model may think before answering. Low thinking reads a board almost as well, much
+ * faster and with far fewer tokens. Newer models take `thinkingLevel`, 2.5 models a token budget;
+ * the provider steps down on a 400.
+ */
+enum class Thinking { Level, Budget, None }
+
 /** Builds `generateContent` request bodies. Pure: no key, no I/O. */
 object GeminiRequests {
     fun generateContent(
@@ -27,6 +34,7 @@ object GeminiRequests {
         temperature: Double,
         schemaField: SchemaField = SchemaField.JsonSchema,
         maxOutputTokens: Int = GeminiConfig.MAX_OUTPUT_TOKENS,
+        thinking: Thinking = Thinking.None,
     ): JsonObject = buildJsonObject {
         putJsonObject("systemInstruction") {
             putJsonArray("parts") { addJsonObject { put("text", system.trim()) } }
@@ -55,8 +63,16 @@ object GeminiRequests {
             put("temperature", temperature)
             // Explicit, so a dense board is not cut off by a lower server default; thinking shares it.
             put("maxOutputTokens", maxOutputTokens)
+            when (thinking) {
+                Thinking.Level -> putJsonObject("thinkingConfig") { put("thinkingLevel", "low") }
+                Thinking.Budget -> putJsonObject("thinkingConfig") { put("thinkingBudget", LOW_THINKING_BUDGET) }
+                Thinking.None -> Unit
+            }
         }
     }
+
+    /** Tokens of thinking for 2.5-style models: enough to lay out a board, not to over-think it. */
+    const val LOW_THINKING_BUDGET = 1_024
 
     /** JPEG / PNG / WebP by magic number, so a PNG from the scanner is labelled correctly. */
     fun sniffMime(bytes: ByteArray, fallback: String): String = when {

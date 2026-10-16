@@ -55,6 +55,9 @@ object GeminiResponses {
     /** The model's JSON → [AiDocument] through the shared, forgiving [AiDocumentParser]. */
     fun document(text: String, truncated: Boolean = false): AiDocument = AiDocumentParser.answer(text, truncated)
 
+    /** True when a 400 rejects the `thinkingConfig` we sent (unknown field, or not for this model). */
+    fun rejectsThinking(code: Int, body: String) = code == 400 && "thinking" in body.lowercase()
+
     /** True when a 400 says the endpoint does not know `responseJsonSchema` (retry with `responseSchema`). */
     fun rejectsJsonSchema(code: Int, body: String) = code == 400 && "responseJsonSchema" in body
 

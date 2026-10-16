@@ -40,6 +40,20 @@ object OpenAiResponses {
         return Answer(text, truncated)
     }
 
+    /** True when a 400 says the model or server does not take `reasoning_effort` (send without it). */
+    fun rejectsReasoningEffort(code: Int, body: String): Boolean {
+        if (code != 400 && code != 422) return false
+        val m = message(body).lowercase()
+        return "reasoning_effort" in m || "reasoning effort" in m
+    }
+
+    /** True when a 400 says the requested output budget is above the model's limit. */
+    fun rejectsMaxTokens(code: Int, body: String): Boolean {
+        if (code != 400 && code != 422) return false
+        val m = message(body).lowercase()
+        return "max_tokens" in m || "max_completion_tokens" in m || "maximum" in m && "token" in m
+    }
+
     /** True when a 400 says the server does not support this `response_format` (step down a level). */
     fun rejectsResponseFormat(code: Int, body: String): Boolean {
         if (code != 400 && code != 422) return false

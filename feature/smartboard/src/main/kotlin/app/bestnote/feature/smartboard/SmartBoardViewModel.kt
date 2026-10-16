@@ -301,7 +301,8 @@ class SmartBoardViewModel @Inject constructor(
         /** Reading steps shown while the provider works (the last one is the handwriting). */
         const val STEPS = 6
         private const val STEP_MS = 380L
-        private const val MAX_SIDE = 2048
+        /** Board text stays legible; fewer image tiles = fewer tokens and a faster answer. */
+        private const val MAX_SIDE = 1600
         private const val JPEG_QUALITY = 88
         private const val TAG = "BestNoteSmartBoard"
         private const val DETAIL_CHARS = 400

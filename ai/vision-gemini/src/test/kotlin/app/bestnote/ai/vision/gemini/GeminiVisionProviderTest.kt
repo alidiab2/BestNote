@@ -124,6 +124,17 @@ class GeminiVisionProviderTest {
     }
 
     @Test
+    fun asksForLowThinkingAndStepsDownWhenRejected() = runTest {
+        server.enqueue(respond(400, Fixtures.error(400, "Invalid JSON payload received. Unknown name \\\"thinkingLevel\\\" at 'generation_config.thinking_config'")))
+        server.enqueue(respond(400, Fixtures.error(400, "Thinking budget is not supported for this model.")))
+        server.enqueue(respond(200, Fixtures.ok(Fixtures.NOTES)))
+        provider.reconstructBoard(jpeg, request)
+        assertEquals("low", takeJson()["generationConfig"]!!.jsonObject["thinkingConfig"]!!.jsonObject["thinkingLevel"]!!.jsonPrimitive.content)
+        assertEquals(GeminiRequests.LOW_THINKING_BUDGET, takeJson()["generationConfig"]!!.jsonObject["thinkingConfig"]!!.jsonObject["thinkingBudget"]!!.jsonPrimitive.content.toInt())
+        assertFalse("thinkingConfig" in takeJson()["generationConfig"]!!.jsonObject)
+    }
+
+    @Test
     fun fallsBackToResponseSchemaWhenJsonSchemaIsRejected() = runTest {
         server.enqueue(respond(400, Fixtures.error(400, "Invalid JSON payload received. Unknown name \\\"responseJsonSchema\\\"")))
         server.enqueue(respond(200, Fixtures.ok(Fixtures.NOTES)))

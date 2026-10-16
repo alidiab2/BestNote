@@ -40,9 +40,10 @@ class GeminiVisionProvider(
         val model = settings.model().trim().ifEmpty { GeminiConfig.DEFAULT_MODEL }
         val mime = GeminiRequests.sniffMime(image.bytes, image.mimeType)
         var schemaField = SchemaField.JsonSchema
+        var thinking = Thinking.Level
         var retriedServer = false
         while (true) {
-            val body = GeminiRequests.generateContent(system, user, image.bytes, mime, config.temperature, schemaField, config.maxOutputTokens).toString()
+            val body = GeminiRequests.generateContent(system, user, image.bytes, mime, config.temperature, schemaField, config.maxOutputTokens, thinking).toString()
             val response = try {
                 transport.post("v1beta/models/$model:generateContent", key, body)
             } catch (e: IOException) {
@@ -54,6 +55,8 @@ class GeminiVisionProvider(
                     val answer = GeminiResponses.answer(response.body)
                     return GeminiResponses.document(answer.text, answer.truncated)
                 }
+                thinking != Thinking.None && GeminiResponses.rejectsThinking(response.code, response.body) ->
+                    thinking = Thinking.entries[thinking.ordinal + 1]
                 schemaField == SchemaField.JsonSchema && GeminiResponses.rejectsJsonSchema(response.code, response.body) ->
                     schemaField = SchemaField.OpenApi
                 schemaField == SchemaField.OpenApi && GeminiResponses.rejectsResponseSchema(response.code, response.body) ->

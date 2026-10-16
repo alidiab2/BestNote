@@ -115,6 +115,26 @@ class OpenAiVisionProviderTest {
     fun tearDown() = server.close()
 
     @Test
+    fun sendsLowReasoningEffortAndDropsItWhenRejected() = runTest {
+        server.enqueue(respond(400, """{"error":{"message":"Unrecognized request argument supplied: reasoning_effort"}}"""))
+        server.enqueue(respond(200, fixture("ollama_fenced.json")))
+        provider.reconstructBoard(jpeg, request)
+        assertEquals("low", takeJson().getValue("reasoning_effort").jsonPrimitive.content)
+        assertNull(takeJson()["reasoning_effort"])
+    }
+
+    @Test
+    fun answerLostToThinkingIsRetriedOnceWithMoreRoom() = runTest {
+        val allThinking = """{"choices":[{"index":0,"message":{"role":"assistant","content":"","reasoning_content":"Let me analyze..."},"finish_reason":"length"}]}"""
+        server.enqueue(respond(200, allThinking))
+        server.enqueue(respond(200, fixture("ollama_fenced.json")))
+        val doc = provider.reconstructBoard(jpeg, request)
+        assertEquals("Newton's second law", doc.title)
+        assertEquals(16_000, takeJson().getValue("max_tokens").jsonPrimitive.content.toInt())
+        assertEquals(32_000, takeJson().getValue("max_tokens").jsonPrimitive.content.toInt())
+    }
+
+    @Test
     fun compatibleServerStepsDownTheResponseFormat() = runTest {
         server.enqueue(respond(400, fixture("format_rejected.json")))
         server.enqueue(respond(400, """{"error":{"message":"response_format json_object is not supported"}}"""))
