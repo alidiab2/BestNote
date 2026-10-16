@@ -9,6 +9,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.media.MediaRecorder
+import android.os.Build
 import android.os.IBinder
 import android.os.SystemClock
 import android.util.Log
@@ -46,7 +47,8 @@ class AudioRecorderService : Service() {
         val file = AudioFiles.partOf(this, notebookId, recordingId)
         try {
             file.parentFile?.mkdirs()
-            val r = MediaRecorder(this)
+            @Suppress("DEPRECATION")
+            val r = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) MediaRecorder(this) else MediaRecorder()
             recorder = r
             r.setAudioSource(MediaRecorder.AudioSource.MIC)
             r.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
