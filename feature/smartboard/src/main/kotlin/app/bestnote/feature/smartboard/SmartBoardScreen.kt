@@ -124,7 +124,20 @@ import kotlin.math.roundToInt
 
 /** AI-04/AI-07: capture a board region, read it, review the page writing itself, insert it. */
 @Composable
-fun SmartBoardScreen(onClose: () -> Unit, onInsert: (SmartBoardResult) -> Unit, viewModel: SmartBoardViewModel = hiltViewModel()) {
+fun SmartBoardScreen(onClose: () -> Unit, onInsert: (SmartBoardResult) -> Unit, onManageTemplates: () -> Unit = {}, viewModel: SmartBoardViewModel = hiltViewModel()) {
+    androidx.lifecycle.compose.LifecycleResumeEffect(Unit) {
+        viewModel.refreshTemplates()
+        onPauseOrDispose { }
+    }
+    androidx.compose.runtime.CompositionLocalProvider(LocalManageTemplates provides onManageTemplates) {
+        SmartBoardContent(onClose, onInsert, viewModel)
+    }
+}
+
+private val LocalManageTemplates = androidx.compose.runtime.staticCompositionLocalOf<() -> Unit> { {} }
+
+@Composable
+private fun SmartBoardContent(onClose: () -> Unit, onInsert: (SmartBoardResult) -> Unit, viewModel: SmartBoardViewModel) {
     val state by viewModel.ui.collectAsStateWithLifecycle()
     var keyDialog by remember { mutableStateOf(false) }
     Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
@@ -694,6 +707,8 @@ private fun TemplateChips(state: SmartBoardUiState, onTemplate: (NoteTemplate) -
                 },
             )
         }
+        val manage = LocalManageTemplates.current
+        androidx.compose.material3.AssistChip(onClick = manage, label = { Text(stringResource(R.string.smartboard_manage_templates)) })
     }
 }
 

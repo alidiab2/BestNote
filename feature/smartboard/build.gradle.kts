@@ -13,6 +13,7 @@ dependencies {
     // Font output: TextElements drawn by the page renderer (preview uses the same painter).
     implementation(projects.engine.canvas)
     implementation(projects.engine.layout)
+    implementation(projects.engine.templates)
     implementation(projects.engine.handwriting)
     implementation(libs.androidx.compose.material.icons.extended)
     implementation(libs.androidx.activity.compose)

@@ -42,6 +42,8 @@ import app.bestnote.feature.settings.SettingsRoute
 import app.bestnote.feature.settings.settingsScreen
 import app.bestnote.feature.smartboard.navigateToSmartBoard
 import app.bestnote.feature.smartboard.smartBoardScreen
+import app.bestnote.feature.templates.navigateToTemplates
+import app.bestnote.feature.templates.templatesScreen
 import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
 
@@ -150,6 +152,7 @@ private fun BestNoteNavHost(quicknotes: QuicknoteRequests, pdfRequests: PdfOpenR
         )
         smartBoardScreen(
             onClose = nav::popBackStack,
+            onManageTemplates = { nav.navigateToTemplates() },
             onInsert = { result ->
                 if (!result.newNotebook) {
                     inbox.pending = InkInsert(
@@ -173,7 +176,8 @@ private fun BestNoteNavHost(quicknotes: QuicknoteRequests, pdfRequests: PdfOpenR
                 }
             },
         )
-        settingsScreen(onBack = nav::popBackStack)
+        settingsScreen(onBack = nav::popBackStack, onOpenTemplates = { nav.navigateToTemplates() })
+        templatesScreen(onBack = nav::popBackStack)
     }
 }
 

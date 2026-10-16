@@ -56,6 +56,9 @@ internal fun TextEditorDialog(
     var bold by remember { mutableStateOf(initial.bold) }
     var italic by remember { mutableStateOf(initial.italic) }
     var align by remember { mutableStateOf(initial.align) }
+    var font by remember { mutableStateOf(initial.font) }
+    var pickFont by remember { mutableStateOf(false) }
+    val fontFamily = app.bestnote.core.fonts.rememberFontFamily(font)
     val focus = remember { FocusRequester() }
     LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
     AlertDialog(
@@ -70,6 +73,7 @@ internal fun TextEditorDialog(
                     textStyle = MaterialTheme.typography.bodyLarge.copy(
                         fontWeight = if (bold) FontWeight.Bold else FontWeight.Normal,
                         fontStyle = if (italic) FontStyle.Italic else FontStyle.Normal,
+                        fontFamily = fontFamily ?: MaterialTheme.typography.bodyLarge.fontFamily,
                         textAlign = TextAlign.Start,
                     ),
                     minLines = 2,
@@ -81,6 +85,9 @@ internal fun TextEditorDialog(
                     SmallButton("+", stringResource(R.string.text_larger)) { size = (size + SIZE_STEP).coerceAtMost(TextElement.MAX_SIZE_PT) }
                     FilterChip(bold, { bold = !bold }, label = { Text("B", fontWeight = FontWeight.Bold) })
                     FilterChip(italic, { italic = !italic }, label = { Text("I", fontStyle = FontStyle.Italic) })
+                }
+                androidx.compose.material3.OutlinedButton(onClick = { pickFont = true }, modifier = Modifier.semantics { contentDescription = "text-font" }) {
+                    Text(stringResource(R.string.text_font, app.bestnote.core.fonts.FontRegistry.get(androidx.compose.ui.platform.LocalContext.current).let { r -> font?.let(r::nameOf) ?: stringResource(R.string.text_font_default) }))
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     FilterChip(align == TextAlignment.Start, { align = TextAlignment.Start }, label = { Text(stringResource(R.string.text_align_start)) })
@@ -107,12 +114,15 @@ internal fun TextEditorDialog(
         },
         confirmButton = {
             TextButton(
-                onClick = { onConfirm(initial.copy(text = text.trimEnd(), sizePt = size, colorArgb = color, bold = bold, italic = italic, align = align)) },
+                onClick = { onConfirm(initial.copy(text = text.trimEnd(), sizePt = size, colorArgb = color, bold = bold, italic = italic, align = align, font = font)) },
                 enabled = text.isNotBlank(),
             ) { Text(stringResource(R.string.dialog_done)) }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.dialog_cancel)) } },
     )
+    if (pickFont) {
+        app.bestnote.core.fonts.FontPickerDialog(null, font, onSelect = { font = it; pickFont = false }, onDismiss = { pickFont = false }, allowDefault = true)
+    }
 }
 
 @Composable

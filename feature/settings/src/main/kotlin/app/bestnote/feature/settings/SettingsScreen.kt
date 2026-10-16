@@ -94,8 +94,8 @@ import kotlinx.serialization.Serializable
 @Serializable
 data object SettingsRoute
 
-fun NavGraphBuilder.settingsScreen(onBack: () -> Unit) {
-    composable<SettingsRoute> { SettingsScreen(onBack) }
+fun NavGraphBuilder.settingsScreen(onBack: () -> Unit, onOpenTemplates: () -> Unit = {}) {
+    composable<SettingsRoute> { SettingsScreen(onBack, onOpenTemplates) }
 }
 
 /** Width from which Settings shows categories and details side by side. */
@@ -104,7 +104,7 @@ private val NavPaneWidth = 320.dp
 private val DetailMaxWidth = 760.dp
 
 @Composable
-fun SettingsScreen(onBack: () -> Unit, viewModel: SettingsViewModel = hiltViewModel()) {
+fun SettingsScreen(onBack: () -> Unit, onOpenTemplates: () -> Unit = {}, viewModel: SettingsViewModel = hiltViewModel()) {
     val prefs by viewModel.preferences.collectAsStateWithLifecycle()
     val selected by viewModel.selected.collectAsStateWithLifecycle()
     val storage by viewModel.storage.collectAsStateWithLifecycle()
@@ -117,7 +117,7 @@ fun SettingsScreen(onBack: () -> Unit, viewModel: SettingsViewModel = hiltViewMo
             SettingsCategory.Stylus -> StylusSection(prefs, viewModel::updateStylus, viewModel::update)
             SettingsCategory.Gestures -> GesturesSection(prefs.gestures, viewModel::updateGestures)
             SettingsCategory.Writing -> WritingSection(prefs, viewModel::updateWriting, viewModel::update)
-            SettingsCategory.SmartBoard -> SmartBoardSection(hiltViewModel())
+            SettingsCategory.SmartBoard -> SmartBoardSection(hiltViewModel(), onOpenTemplates)
             SettingsCategory.Appearance -> AppearanceSection(
                 prefs,
                 language,

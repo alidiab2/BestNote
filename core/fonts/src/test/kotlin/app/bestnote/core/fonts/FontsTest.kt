@@ -163,9 +163,9 @@ class FontLibraryTest {
         val installer = FontInstaller(lib) { url, max ->
             asked += url
             assertTrue(max > 0)
-            if (url.endsWith("OFL.txt")) "licence".toByteArray() else repoFont("gveret_levin.ttf")
+            if (url.endsWith("OFL.txt")) "licence".toByteArray() else repoFont("caveat.ttf")
         }
-        // gveret_levin has Hebrew only; Solitreo promises Hebrew + Latin, so it is refused and nothing is stored.
+        // caveat has no Hebrew; Solitreo promises Hebrew + Latin, so it is refused and nothing is stored.
         assertThrows(FontRejected::class.java) { installer.install(FontCatalogue.byId("gf:solitreo")!!) }
         assertTrue(lib.list().isEmpty())
         assertTrue(asked.first().startsWith("https://raw.githubusercontent.com/google/fonts/main/ofl/solitreo/"))

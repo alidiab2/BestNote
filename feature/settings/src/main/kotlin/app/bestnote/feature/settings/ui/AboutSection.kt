@@ -147,6 +147,9 @@ private fun LicensesPage(onBack: () -> Unit) {
             row { LicenseRow(name, stringResource(R.string.settings_license_ofl), asset, context) }
         }
     }
+    SettingsGroup(stringResource(R.string.settings_licenses_downloaded_fonts)) {
+        row { app.bestnote.core.fonts.DownloadedFontLicenses(Modifier.padding(Spacing.L)) }
+    }
     SettingsGroup(stringResource(R.string.settings_licenses_libraries)) {
         ApacheLibraries.forEach { name ->
             row {
