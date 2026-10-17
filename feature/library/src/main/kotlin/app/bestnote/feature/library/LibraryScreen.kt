@@ -735,7 +735,7 @@ private fun SelectionBar(
 @Composable
 private fun BarButton(icon: ImageVector, label: String, onClick: () -> Unit, enabled: Boolean = true, destructive: Boolean = false, showLabel: Boolean = true) {
     val tint = when {
-        !enabled -> BestNoteTheme.colors.muted.copy(alpha = 0.5f)
+        !enabled -> MaterialTheme.colorScheme.onSurface.copy(alpha = DISABLED_ALPHA)
         destructive -> MaterialTheme.colorScheme.error
         else -> MaterialTheme.colorScheme.onSurface
     }
@@ -769,3 +769,4 @@ private fun PhoneBar(onMenu: () -> Unit, onSettings: () -> Unit) {
         }
     }
 }
+private const val DISABLED_ALPHA = 0.38f

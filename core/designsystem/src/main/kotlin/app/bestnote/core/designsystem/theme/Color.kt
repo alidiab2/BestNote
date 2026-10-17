@@ -36,23 +36,26 @@ object AtelierPalette {
     val AiAccent = Color(0xFFA9B6FF)
     val Highlighter = Color(0xFFF7D84A)
 
-    // Chrome (dark: graphite)
-    val Graphite = Color(0xFF121417)
-    val GraphiteRaised = Color(0xFF1C1F24)
-    val GraphiteHigh = Color(0xFF252931)
-    val GraphiteHighest = Color(0xFF2E333C)
-    val GraphiteOutline = Color(0xFF353A44)
-    val GraphiteOutlineVariant = Color(0xFF2A2E36)
-    val DeskDarkCenter = Color(0xFF1E2127)
-    val DeskDarkEdge = Color(0xFF0E1013)
-    val InkOnDark = Color(0xFFE9E7E1)
-    val InkVariantOnDark = Color(0xFFC3C6CF)
-    val MutedOnDark = Color(0xFF8E939E)
+    // Chrome (dark: warm graphite). DS-11 contrast pass: a warm-brown ladder (never pure #000), text
+    // and icons >= 4.5:1 on every surface, outline >= 3:1 on surface. Checked by DarkContrastTest.
+    val Graphite = Color(0xFF161412)
+    val GraphiteRaised = Color(0xFF201D1A)
+    val GraphiteHigh = Color(0xFF2A2723)
+    val GraphiteHighest = Color(0xFF35312C)
+    val GraphiteLowest = Color(0xFF0F0E0C)
+    val GraphiteOutline = Color(0xFF746C62)
+    val GraphiteOutlineVariant = Color(0xFF45403A)
+    val DeskDarkCenter = Color(0xFF24211E)
+    val DeskDarkEdge = Color(0xFF100E0C)
+    val InkOnDark = Color(0xFFEEEBE4)
+    val InkVariantOnDark = Color(0xFFCEC8BD)
+    val MutedOnDark = Color(0xFFA79F94)
+    val SwatchOutlineOnDark = Color(0xFFA39B90)
     val FountainBlueOnDark = Color(0xFFA9B6FF)
-    val FountainBlueContainerDark = Color(0xFF263572)
+    val FountainBlueContainerDark = Color(0xFF2B3A78)
     val VermilionOnDark = Color(0xFFFF8A70)
     val SageOnDark = Color(0xFF7CC39C)
-    val QuickNoteDark = Color(0xFF3A3320)
+    val QuickNoteDark = Color(0xFF3D3420)
     val OnQuickNoteDark = Color(0xFFF3DFA2)
 
     // Paper (never follows the theme or dynamic color)
@@ -88,6 +91,11 @@ data class PaperColors(
     val page: Color = AtelierPalette.Page,
     val ruledLine: Color = AtelierPalette.RuledLine,
     val marginLine: Color = AtelierPalette.MarginLine,
+    /** Chrome drawn ON the page (lasso selection, add-card hints, search marks): page-relative, so it
+     *  keeps its contrast on the light page in dark mode instead of following the dark-theme roles. */
+    val accent: Color = AtelierPalette.FountainBlue,
+    val muted: Color = AtelierPalette.Muted,
+    val searchMark: Color = AtelierPalette.QuickNote,
 )
 
 /** Roles Material 3 has no slot for. Read via [BestNoteTheme.colors]. */
@@ -107,6 +115,18 @@ data class BestNoteColors(
     val onStrongButton: Color,
     /** Tint of the soft long shadow under cards, covers and the tool tray. */
     val shadowTint: Color,
+    /**
+     * Ring around a color swatch (ink dot, folder color) that would otherwise vanish on the chrome:
+     * navy/black ink on dark chrome, yellow/white on light. See [swatchOutline].
+     */
+    val swatchOutline: Color,
+    /**
+     * Light catch on the edge of floating chrome (tray, pills, cards) where shadows don't read: dark
+     * theme only, [Color.Transparent] in light. Drawn by [softShadow].
+     */
+    val chromeRim: Color = Color.Transparent,
+    /** Multiplier on [ShadowToken.alpha]: shadows need more weight to show on a dark desk. */
+    val shadowStrength: Float = 1f,
     val paper: PaperColors = PaperColors(),
 ) {
     /** Editor background: a soft radial "desk" behind the page. */
@@ -126,6 +146,7 @@ internal val LightBestNoteColors = BestNoteColors(
     strongButton = AtelierPalette.Ink,
     onStrongButton = AtelierPalette.Paper,
     shadowTint = Color(0x73503C28), // warm brown at ~45%
+    swatchOutline = Color(0xFFCFC9BE),
 )
 
 internal val DarkBestNoteColors = BestNoteColors(
@@ -141,6 +162,9 @@ internal val DarkBestNoteColors = BestNoteColors(
     strongButton = AtelierPalette.InkOnDark,
     onStrongButton = AtelierPalette.Graphite,
     shadowTint = Color(0x99000000),
+    swatchOutline = AtelierPalette.SwatchOutlineOnDark,
+    chromeRim = Color(0x1AFFF4E6), // warm white at 10%
+    shadowStrength = 1.8f,
 )
 
 internal val LightAtelierScheme: ColorScheme = lightColorScheme(
@@ -214,7 +238,7 @@ internal val DarkAtelierScheme: ColorScheme = darkColorScheme(
     scrim = Color(0xFF000000),
     surfaceBright = AtelierPalette.GraphiteHighest,
     surfaceDim = AtelierPalette.Graphite,
-    surfaceContainerLowest = Color(0xFF0D0F12),
+    surfaceContainerLowest = AtelierPalette.GraphiteLowest,
     surfaceContainerLow = AtelierPalette.Graphite,
     surfaceContainer = AtelierPalette.GraphiteRaised,
     surfaceContainerHigh = AtelierPalette.GraphiteHigh,

@@ -49,6 +49,7 @@ import app.bestnote.core.designsystem.theme.BestNoteTheme
 import app.bestnote.core.designsystem.theme.Elevation
 import app.bestnote.core.designsystem.theme.Motion
 import app.bestnote.core.designsystem.theme.Spacing
+import app.bestnote.core.designsystem.theme.legibleOn
 import app.bestnote.core.designsystem.theme.reducedMotion
 import app.bestnote.core.designsystem.theme.softShadow
 import app.bestnote.feature.editor.PenArt.drawPen
@@ -286,6 +287,8 @@ private fun PenSlot(kind: PenKind, ink: Color, active: Boolean, side: TraySide, 
 @Composable
 private fun ColorDot(color: Color, selected: Boolean, enabled: Boolean, onClick: () -> Unit) {
     val ringWidth by animateDpAsState(if (selected) 2.dp else 0.dp, Motion.Spring.snappy(), label = "ring")
+    // The selected ring is the ink itself, lifted where it would vanish on the tray (navy on graphite).
+    val ringColor = color.legibleOn(MaterialTheme.colorScheme.surface)
     val hex = "#%06X".format(color.value.toLong().ushr(32).toInt() and 0xFFFFFF)
     val label = if (selected) stringResource(R.string.pen_color_selected, hex) else stringResource(R.string.pen_color, hex)
     Box(
@@ -299,7 +302,7 @@ private fun ColorDot(color: Color, selected: Boolean, enabled: Boolean, onClick:
         Box(
             Modifier
                 .size(if (selected) 28.dp else 22.dp)
-                .then(if (ringWidth > 0.dp) Modifier.border(ringWidth, color, CircleShape) else Modifier)
+                .then(if (ringWidth > 0.dp) Modifier.border(ringWidth, ringColor, CircleShape) else Modifier)
                 .padding(if (selected) 4.5.dp else 0.dp)
                 .clip(CircleShape)
                 .background(color)
@@ -327,7 +330,7 @@ private fun FavoriteSlot(favorite: PenFavorite, selected: Boolean, onClick: () -
             .clickable(onClickLabel = label, role = Role.Button, onClick = onClick)
             .semantics { contentDescription = label },
     ) {
-        Spacer(Modifier.size(46.dp, 36.dp).padding(horizontal = 7.dp, vertical = 8.dp).inkSquiggle(favorite.kind, favorite.settings, maxWidthPx = maxPx))
+        Spacer(Modifier.size(46.dp, 36.dp).padding(horizontal = 7.dp, vertical = 8.dp).inkSquiggle(favorite.kind, favorite.settings, maxWidthPx = maxPx, legibleOn = MaterialTheme.colorScheme.surfaceContainerLow))
     }
 }
 
@@ -367,7 +370,10 @@ private fun WidthButton(toolbox: Toolbox, vertical: Boolean, enabled: Boolean, o
             .then(if (vertical) Modifier.width(48.dp) else Modifier.height(40.dp)),
         spacing = 8.dp,
     ) {
-        Spacer(Modifier.size(34.dp, 14.dp).inkSquiggle(previewKind, preview, maxWidthPx = maxPx))
+        Spacer(
+            Modifier.size(34.dp, 14.dp)
+                .inkSquiggle(previewKind, preview, maxWidthPx = maxPx, legibleOn = MaterialTheme.colorScheme.surfaceContainerLow),
+        )
         Text(
             mm,
             style = BestNoteTheme.type.caption,
@@ -385,6 +391,7 @@ private fun WidthButton(toolbox: Toolbox, vertical: Boolean, enabled: Boolean, o
 internal fun CollapsedTrayPill(toolbox: Toolbox, temporary: PenKind?, onRestore: () -> Unit, modifier: Modifier = Modifier) {
     val kind = temporary ?: toolbox.active
     val label = stringResource(R.string.toolbar_show)
+    val rim = penRim()
     Row(
         modifier
             .chromeSurface()
@@ -404,7 +411,7 @@ internal fun CollapsedTrayPill(toolbox: Toolbox, temporary: PenKind?, onRestore:
     ) {
         Box(Modifier.size(32.dp).clipToBounds(), contentAlignment = Alignment.Center) {
             Canvas(Modifier.requiredSize(11.dp, 33.dp).graphicsLayer { rotationZ = 40f }) {
-                drawPen(kind, Color(toolbox.settingsOf(kind).colorArgb))
+                drawPen(kind, Color(toolbox.settingsOf(kind).colorArgb), rim)
             }
         }
         if (kind.inks) {

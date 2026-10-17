@@ -38,6 +38,8 @@ import app.bestnote.core.designsystem.theme.BestNoteTheme
 import app.bestnote.core.designsystem.theme.CoverPalette
 import app.bestnote.core.designsystem.theme.Elevation
 import app.bestnote.core.designsystem.theme.InkPalette
+import app.bestnote.core.designsystem.theme.isDarkChrome
+import app.bestnote.core.designsystem.theme.legibleOn
 import app.bestnote.core.designsystem.theme.softShadow
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -50,8 +52,19 @@ private const val SPINE_SHADE = 0.24f
 private const val SPINE_HIGHLIGHT = 0.16f
 private const val LABEL_WARMTH = 0.10f
 private const val EDGE_LIGHTEN = 0.12f
+private const val EDGE_LIGHTEN_DARK = 0.30f
 
 internal fun coverColor(index: Int): Color = CoverPalette.All[index.mod(CoverPalette.All.size)]
+
+/**
+ * [coverColor] for small marks in the chrome (folder glyphs, folder squares): on dark chrome a navy
+ * or black folder is lifted just enough to stay visible (>= 3:1), keeping its hue. Light theme: as is.
+ */
+@Composable
+internal fun coverMarkColor(index: Int): Color {
+    val scheme = MaterialTheme.colorScheme
+    return if (isDarkChrome(scheme.surface)) coverColor(index).legibleOn(scheme.surfaceContainerHigh) else coverColor(index)
+}
 
 /**
  * A physical notebook cover: cover cloth in a [CoverPalette] color, a darker inset spine on the start
@@ -70,6 +83,7 @@ internal fun NotebookCover(
 ) {
     val cover = coverColor(coverIndex)
     val paper = BestNoteTheme.colors.paper.page
+    val edge = if (isDarkChrome(MaterialTheme.colorScheme.surface)) EDGE_LIGHTEN_DARK else EDGE_LIGHTEN
     val shape = BestNoteShapes.NotebookCover
     val spineWidth = 14.dp * scale
     Box(
@@ -79,7 +93,7 @@ internal fun NotebookCover(
             .background(cover)
             .coverPattern(style, cover, paper, scale)
             // A faint edge, so dark covers (black, navy) still read on the graphite theme.
-            .border(Elevation.Hairline, lerp(cover, paper, EDGE_LIGHTEN), shape),
+            .border(Elevation.Hairline, lerp(cover, paper, edge), shape),
     ) {
         // Inset spine: a darker band with a thin light crease where it meets the cover board.
         Box(

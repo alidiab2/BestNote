@@ -1,7 +1,6 @@
 package app.bestnote.feature.editor
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
@@ -22,7 +21,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
-import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.Role
@@ -30,7 +29,10 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import app.bestnote.core.designsystem.theme.BestNoteShapes
 import app.bestnote.core.designsystem.theme.Elevation
+import app.bestnote.core.designsystem.theme.isDarkChrome
+import app.bestnote.core.designsystem.theme.legibleOn
 import app.bestnote.core.designsystem.theme.softShadow
+import app.bestnote.core.designsystem.theme.swatchOutline
 import app.bestnote.engine.canvas.InkPreview
 import app.bestnote.engine.ink.InkRenderer
 
@@ -74,25 +76,19 @@ internal fun ChromeIconButton(
     }
 }
 
-internal const val DisabledAlpha = 0.35f
+/** Material's disabled emphasis: ~38% of on-surface, still discernible on dark chrome (>= 3:1 there). */
+internal const val DisabledAlpha = 0.38f
 
-private const val LOW_CONTRAST = 0.12f
-
-/** A hairline ring when [color] would vanish on the chrome surface (navy ink on graphite, white on white). */
+/** A ring when [color] would vanish on the chrome surface (navy ink on graphite, white on white). */
 @Composable
-internal fun Modifier.lowContrastRing(color: Color, shape: Shape = CircleShape): Modifier {
-    val surface = MaterialTheme.colorScheme.surface
-    val close = kotlin.math.abs(color.luminance() - surface.luminance()) < LOW_CONTRAST
-    return if (close) border(1.dp, MaterialTheme.colorScheme.outline, shape) else this
-}
+internal fun Modifier.lowContrastRing(color: Color, shape: Shape = CircleShape): Modifier = swatchOutline(color, shape)
 
 /** Rim drawn around pen bodies on dark chrome, so a black pen still reads as a pen. */
 @Composable
 internal fun penRim(): Color =
-    if (MaterialTheme.colorScheme.surface.luminance() < DARK_SURFACE) Color.White.copy(alpha = PEN_RIM_ALPHA) else Color.Unspecified
+    if (isDarkChrome(MaterialTheme.colorScheme.surface)) Color.White.copy(alpha = PEN_RIM_ALPHA) else Color.Unspecified
 
-private const val DARK_SURFACE = 0.4f
-private const val PEN_RIM_ALPHA = 0.28f
+private const val PEN_RIM_ALPHA = 0.42f
 
 /** The "more colors" dot. */
 internal val ConicBrush = Brush.sweepGradient(
@@ -104,14 +100,27 @@ internal val ConicBrush = Brush.sweepGradient(
  * [maxWidthPx] caps very wide brushes so they stay readable in small buttons.
  */
 @Composable
-internal fun Modifier.inkSquiggle(kind: PenKind, settings: PenSettings, maxWidthPx: Float? = null): Modifier {
+internal fun Modifier.inkSquiggle(
+    kind: PenKind,
+    settings: PenSettings,
+    maxWidthPx: Float? = null,
+    /** The chip behind the stroke when it is chrome, not paper: dark ink is lifted to stay visible on it. */
+    legibleOn: Color = Color.Unspecified,
+): Modifier {
     val renderer = remember { InkRenderer() }
+    val shown = if (legibleOn == Color.Unspecified) {
+        settings
+    } else {
+        val ink = Color(settings.colorArgb)
+        val lifted = ink.legibleOn(legibleOn)
+        if (lifted == ink) settings else settings.copy(colorArgb = lifted.toArgb())
+    }
     return drawWithCache {
         val size = maxWidthPx?.let { cap ->
             val scale = app.bestnote.engine.ink.BrushCatalog.spec(kind.tool, kind.style)?.sizeScale ?: 1f
             settings.size.coerceAtMost(cap / scale)
         } ?: settings.size
-        val stroke = InkPreview.squiggle(kind.tool, kind.style, settings.brushColorArgb, size, this.size.width, this.size.height, settings.tuning())
+        val stroke = InkPreview.squiggle(kind.tool, kind.style, shown.brushColorArgb, size, this.size.width, this.size.height, settings.tuning())
         onDrawBehind {
             if (stroke != null) drawIntoCanvas { InkPreview.draw(it.nativeCanvas, stroke, renderer) }
         }

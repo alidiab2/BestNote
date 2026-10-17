@@ -744,7 +744,7 @@ fun EditorScreen(
     }
 
     // REC-03: arriving from a search result, jump to the page and mark what matched.
-    val highlightColor = BestNoteTheme.colors.warning.toArgb()
+    val highlightColor = BestNoteTheme.colors.paper.searchMark.toArgb()
     LaunchedEffect(canvas) {
         val view = canvas ?: return@LaunchedEffect
         val target = viewModel.searchTarget() ?: return@LaunchedEffect

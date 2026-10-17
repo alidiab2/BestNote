@@ -48,6 +48,7 @@ import androidx.compose.ui.unit.dp
 import app.bestnote.core.designsystem.theme.BestNoteShapes
 import app.bestnote.core.designsystem.theme.Elevation
 import app.bestnote.core.designsystem.theme.Spacing
+import app.bestnote.core.designsystem.theme.swatchOutline
 import app.bestnote.core.designsystem.theme.softShadow
 import app.bestnote.core.model.ListStyle
 import app.bestnote.core.model.ParagraphStyle
@@ -109,7 +110,7 @@ internal fun TextFormatBar(typing: TextTyping, colors: List<Int>, actions: Forma
                         .clip(CircleShape)
                         .background(if (c == box.colorArgb) MaterialTheme.colorScheme.primary else Color.Transparent),
                     contentAlignment = Alignment.Center,
-                ) { Box(Modifier.size(20.dp).clip(CircleShape).background(Color(c))) }
+                ) { Box(Modifier.size(20.dp).clip(CircleShape).background(Color(c)).swatchOutline(Color(c))) }
             }
         }
         Divider()

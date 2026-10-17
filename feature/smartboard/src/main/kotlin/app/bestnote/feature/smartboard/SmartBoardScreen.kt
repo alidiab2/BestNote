@@ -119,6 +119,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.bestnote.core.designsystem.theme.BestNoteShapes
 import app.bestnote.core.designsystem.theme.BestNoteTheme
 import app.bestnote.core.designsystem.theme.Spacing
+import app.bestnote.core.designsystem.theme.isDarkChrome
 import kotlin.math.min
 import kotlin.math.roundToInt
 
@@ -363,7 +364,7 @@ private fun CaptureStage(state: SmartBoardUiState, viewModel: SmartBoardViewMode
 
 @Composable
 private fun EdgeChip(found: Boolean) {
-    Surface(shape = BestNoteShapes.Pill, color = (if (found) BestNoteTheme.colors.success else BestNoteTheme.colors.warning).copy(alpha = 0.16f)) {
+    Surface(shape = BestNoteShapes.Pill, color = chipTint(if (found) BestNoteTheme.colors.success else BestNoteTheme.colors.warning)) {
         Row(Modifier.padding(horizontal = Spacing.M, vertical = Spacing.XS), verticalAlignment = Alignment.CenterVertically) {
             Icon(if (found) Icons.Rounded.CheckCircle else Icons.Rounded.CropFree, null, Modifier.size(16.dp))
             Spacer(Modifier.width(Spacing.XS))
@@ -465,9 +466,23 @@ private fun LanguagePicker(language: NotesLanguage, onLanguage: (NotesLanguage) 
     }
 }
 
+/**
+ * A soft status-chip fill: 16% of [color] in light. On dark chrome a light role (success) gets a
+ * stronger tint and an already-dark container role (warning) is used as is, so the chip still reads.
+ */
+@Composable
+private fun chipTint(color: Color): Color = when {
+    !isDarkChrome(MaterialTheme.colorScheme.surface) -> color.copy(alpha = CHIP_TINT)
+    isDarkChrome(color) -> color
+    else -> color.copy(alpha = CHIP_TINT_DARK)
+}
+
+private const val CHIP_TINT = 0.16f
+private const val CHIP_TINT_DARK = 0.24f
+
 @Composable
 private fun DemoChip() {
-    Surface(shape = BestNoteShapes.Pill, color = BestNoteTheme.colors.warning.copy(alpha = 0.16f)) {
+    Surface(shape = BestNoteShapes.Pill, color = chipTint(BestNoteTheme.colors.warning)) {
         Text(
             stringResource(R.string.smartboard_demo_chip),
             style = MaterialTheme.typography.labelMedium,

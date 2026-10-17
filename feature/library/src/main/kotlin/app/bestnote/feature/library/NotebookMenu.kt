@@ -80,6 +80,7 @@ import app.bestnote.core.designsystem.theme.CoverPalette
 import app.bestnote.core.designsystem.theme.Elevation
 import app.bestnote.core.designsystem.theme.Spacing
 import app.bestnote.core.designsystem.theme.hairline
+import app.bestnote.core.designsystem.theme.swatchOutline
 
 /** Popover look shared by every library menu: white card, 18 dp corners, soft shadow, hairline. */
 @Composable
@@ -395,7 +396,7 @@ private fun MoveRow(colorIndex: Int?, label: String, depth: Int, current: Boolea
 /** A small folder shape in the folder's color. */
 @Composable
 internal fun FolderGlyph(colorIndex: Int, modifier: Modifier = Modifier) {
-    val color = coverColor(colorIndex)
+    val color = coverMarkColor(colorIndex)
     Box(modifier) {
         Box(Modifier.align(Alignment.TopStart).fillMaxWidth(0.45f).height(5.dp).clip(RoundedCornerShape(topStart = 2.dp, topEnd = 2.dp)).background(color))
         Box(Modifier.align(Alignment.BottomStart).fillMaxWidth().fillMaxHeight(0.82f).clip(RoundedCornerShape(3.dp)).background(color))
@@ -449,7 +450,8 @@ internal fun ColorRow(selected: Int, onSelect: (Int) -> Unit) {
                         .size(34.dp)
                         .then(if (i == selected) Modifier.border(2.dp, MaterialTheme.colorScheme.onSurface, BestNoteShapes.Pill).padding(4.dp) else Modifier)
                         .clip(BestNoteShapes.Pill)
-                        .background(coverColor(i)),
+                        .background(coverColor(i))
+                        .swatchOutline(coverColor(i), BestNoteShapes.Pill),
                     contentAlignment = Alignment.Center,
                 ) {
                     if (i == selected) Icon(Icons.Outlined.Check, null, tint = BestNoteTheme.colors.paper.page, modifier = Modifier.size(16.dp))
