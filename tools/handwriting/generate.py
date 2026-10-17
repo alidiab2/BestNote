@@ -193,7 +193,7 @@ def shapes_sloppy():
 
 
 def shapes_glue():
-    """CANVAS-17 device check: boxes that tile, an arrow glued box-to-circle, a star; the last arrow is held 7 s
+    """CANVAS-17 device check: boxes that tile, an arrow glued box-to-circle, a star; the last arrow is held 14 s
     so the ghost (label, glue markers) can be screenshotted before the pen lifts."""
     w = writer(1718, xh=3.4, name="diagram", vmax=120.0)
     d = hwdoc.Document("shapes_glue", "Glue: two boxes edge to edge, a connector arrow, a circle, a star, a held ghost",
@@ -204,8 +204,18 @@ def shapes_glue():
     shapes.circle(d, w, (40, 82), 12, hold_ms=h)
     shapes.arrow_one_stroke(d, w, (40.5, 45), (40, 69), size=4.0, hold_ms=h)   # box bottom middle -> circle top
     shapes.pentagram(d, w, (130, 80), 13, hold_ms=h)
-    shapes.arrow_closed_head(d, w, (93.5, 33), (128, 66), size=4.5, hold_ms=7000.0)  # box right middle -> star
+    shapes.arrow_closed_head(d, w, (93.5, 33), (128, 66), size=4.5, hold_ms=14000.0)  # box right middle -> star
     d.labels = ["Rectangle", "Rectangle", "Circle", "Arrow", "Star", "Arrow"]
+    return d
+
+
+def shapes_ghost():
+    """CANVAS-17 device check, after shapes_glue: one arrow from the second box's bottom middle, held 20 s so the
+    ghost (label, glue marker) can be screenshotted before the pen lifts."""
+    w = writer(1720, xh=3.4, name="diagram", vmax=120.0)
+    d = hwdoc.Document("shapes_ghost", "One held arrow glued to a box, for the ghost screenshot", PAGE_W, 110, w)
+    shapes.arrow_one_stroke(d, w, (77, 46), (96, 86), size=4.5, hold_ms=20000.0)
+    d.labels = ["Arrow"]
     return d
 
 
@@ -359,7 +369,7 @@ def arabic_moved():
 REC = [para_tight, slanted, numbers, arabic_para, mixed, para_moved, arabic_moved]
 
 ALL = [lecture_en, formulas, arabic_text, tiny_fast, slow_large, drawings, scribble, highlight_lecture, hover_erase,
-       shapes_hold, shapes_sloppy, shapes_glue, shapes_move] + REC
+       shapes_hold, shapes_sloppy, shapes_glue, shapes_ghost, shapes_move] + REC
 NAMES = {"arabic": arabic_text}
 
 

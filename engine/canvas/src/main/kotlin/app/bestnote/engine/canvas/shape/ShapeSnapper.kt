@@ -77,17 +77,18 @@ internal class ShapeSnapper(private val host: View, private val pages: Pages) {
 
     /**
      * [stroke] was just added to page [page]; [snap] when it should become a clean shape if it is one. With a
-     * [ghost] (the hold-to-shape preview showed when the pen lifted) it becomes exactly that, now.
+     * [ghost] (the hold-to-shape preview showed when the pen lifted, with the record it is stored as) it becomes
+     * exactly that, now.
      */
-    fun onStrokeFinished(page: Int, stroke: Stroke, snap: Boolean, ghost: ShapePreview.Ghost? = null) {
+    fun onStrokeFinished(page: Int, stroke: Stroke, snap: Boolean, ghost: Pair<ShapePreview.Ghost, ShapeInfo>? = null) {
         val now = SystemClock.uptimeMillis()
         val prev = last
         last = Triple(page, stroke, now)
         if (ghost != null) {
             val strokes = pages.strokes(page) ?: return
             if (strokes.none { it === stroke }) return
-            val clean = ShapeStroke.build(ghost.shape, stroke, ShapeStroke.samplesOf(stroke))
-            pages.commit(page, stroke to clean.stroke, null, ghost.info(ShapeEdits.newId()))
+            val clean = ShapeStroke.build(ghost.first.shape, stroke, ShapeStroke.samplesOf(stroke))
+            pages.commit(page, stroke to clean.stroke, null, ghost.second)
             snapped[stroke] = clean.stroke
             last = Triple(page, clean.stroke, now)
             return

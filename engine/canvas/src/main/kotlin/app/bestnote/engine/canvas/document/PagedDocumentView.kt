@@ -40,6 +40,7 @@ import app.bestnote.engine.canvas.StrokeBrushes
 import app.bestnote.engine.canvas.erase.EraserCapsule
 import app.bestnote.engine.canvas.select.PenType
 import app.bestnote.engine.canvas.shape.HoldDetector
+import app.bestnote.engine.canvas.shape.ShapeEdits
 import app.bestnote.engine.canvas.shape.ShapePreview
 import app.bestnote.engine.canvas.shape.ShapeSnapper
 import app.bestnote.engine.canvas.erase.InkEraser
@@ -560,8 +561,11 @@ class PagedDocumentView(context: Context) : FrameLayout(context), InProgressStro
     private var traceYs = FloatArray(TRACE_INITIAL)
     private var traceCount = 0
 
-    /** Wet strokes lifted while their ghost showed: they become exactly that ghost once dry. */
-    private val ghostCommits = HashMap<InProgressStrokeId, ShapePreview.Ghost>()
+    /**
+     * Wet strokes lifted while their ghost showed: they become exactly that ghost (stored as that record) once
+     * dry. Until androidx.ink hands them over they already count as shapes the next one glues to.
+     */
+    private val ghostCommits = HashMap<InProgressStrokeId, Pair<ShapePreview.Ghost, ShapeInfo>>()
 
     /** Lifted highlighter strokes whose ghost showed (the highlighter is not a wet stroke). */
     private var ghostForHighlight: ShapePreview.Ghost? = null
@@ -801,7 +805,7 @@ class PagedDocumentView(context: Context) : FrameLayout(context), InProgressStro
                     inking.remove(id)?.let { (_, strokeId) ->
                         val ghost = liftGhost(id)
                         when {
-                            ghost != null -> ghostCommits[strokeId] = ghost
+                            ghost != null -> ghostCommits[strokeId] = ghost to ghost.info(ShapeEdits.newId())
                             // A cancelled ghost leaves free ink; the Shapes tool snaps everything else.
                             shapeTool && !(previewPointer == id && preview.cancelled) -> snapRequested += strokeId
                         }
@@ -1214,7 +1218,7 @@ class PagedDocumentView(context: Context) : FrameLayout(context), InProgressStro
         val doc = document
         if (doc != null && page in 0 until doc.size) {
             doc.addStrokes(page, listOf(stroke))
-            snapper.onStrokeFinished(page, stroke, snap, ghost)
+            snapper.onStrokeFinished(page, stroke, snap, ghost?.let { it to it.info(ShapeEdits.newId()) })
         }
     }
 
@@ -1381,9 +1385,12 @@ class PagedDocumentView(context: Context) : FrameLayout(context), InProgressStro
         return ZoomMath.viewToPage(l, pages.scrollX, pages.scrollY, previewPage, x, y)
     }
 
-    /** The clean shapes on page [index]. */
-    private fun shapesOn(index: Int): List<ShapeInfo> =
-        document?.pages?.getOrNull(index)?.strokes?.mapNotNull { strokeBrushes.brushOf(it)?.shape }.orEmpty()
+    /** The clean shapes on page [index], including lifted ones the wet layer hasn't handed over yet. */
+    private fun shapesOn(index: Int): List<ShapeInfo> {
+        val dry = document?.pages?.getOrNull(index)?.strokes?.mapNotNull { strokeBrushes.brushOf(it)?.shape }.orEmpty()
+        val wet = ghostCommits.entries.filter { strokePages[it.key] == index }.map { it.value.second }
+        return if (wet.isEmpty()) dry else dry + wet
+    }
 
     /** Glue distance in page points: the same on screen at every zoom. */
     private fun glueTolerancePt(): Float = GLUE_DP * density / (pages.layout?.scale ?: 1f)
