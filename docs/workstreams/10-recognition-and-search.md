@@ -16,6 +16,7 @@
 | [ ] REC-07 | Handwriting spellcheck (underline + suggestion in the user's handwriting) | M4 | XL | REC-05 | — |
 | [ ] REC-08 | Math Assist: write `=` after an expression to get the result | M4 | L | REC-01 | — |
 | [x] REC-09 | `ShapeRecognizer` implementation for INK-08 | M2 | M | — | Geometric fit, no ML needed |
+| [x] REC-10 | Convert to text accuracy: measure the whole lasso path (lines, language, recognition) on harder ink and fix what is measured to help | M4 | L | REC-05 | Before/after WER/CER per corpus in `docs/research/handwriting-recognition-eval.md`; doubtful words underlined in the confirmation |
 
 > REC-03 status: handwriting and typed-text search with highlight-and-zoom work (device-verified in Arabic and English); results are grouped by notebook and the match marks fade after a few seconds. PDF text is wired through
 > `PdfRenderer`'s text API (Android 15+) but returned no text runs on the API 36 emulator for two test PDFs, so it is unverified (re-check on a real Android 15+ device).

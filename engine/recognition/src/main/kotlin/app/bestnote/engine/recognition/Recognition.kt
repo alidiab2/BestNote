@@ -21,12 +21,18 @@ typealias InkStrokeSamples = List<StylusSample>
 /** One reading of some ink. [score] is a cost: lower is more confident, and scores are comparable across languages. */
 data class TextCandidate(val text: String, val score: Float)
 
+/**
+ * What a recognizer may know about the ink besides the strokes (REC-10).
+ * @property preContext the text written just before this ink (e.g. the end of the previous line), for the language model.
+ */
+data class InkHints(val preContext: String = "")
+
 interface HandwritingRecognizer {
     /** BCP-47 language tags this recognizer can read, e.g. "en-US". */
     val languages: Set<String>
 
     /** Ranked candidates, best first; empty when nothing was recognized. */
-    suspend fun recognize(strokes: List<InkStrokeSamples>, languageTag: String): List<TextCandidate>
+    suspend fun recognize(strokes: List<InkStrokeSamples>, languageTag: String, hints: InkHints = InkHints()): List<TextCandidate>
 }
 
 /** What a [RecognizedShape] is, for UI and tests. */
@@ -123,7 +129,7 @@ interface HandwritingModels {
 /** Recognizes nothing; the default until a real provider is installed. */
 object NoOpHandwritingRecognizer : HandwritingRecognizer {
     override val languages: Set<String> = emptySet()
-    override suspend fun recognize(strokes: List<InkStrokeSamples>, languageTag: String) = emptyList<TextCandidate>()
+    override suspend fun recognize(strokes: List<InkStrokeSamples>, languageTag: String, hints: InkHints) = emptyList<TextCandidate>()
 }
 
 object NoOpShapeRecognizer : ShapeRecognizer {

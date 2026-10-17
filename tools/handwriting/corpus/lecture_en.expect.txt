@@ -1,0 +1,1 @@
+Lecture 7 — Kinematics. Motion with|constant acceleration… When a body|speeds up at a steady rate, its velocity|grows linearly with time. The|displacement after a time t depends on|the initial velocity u and on the|acceleration a. Sketch the graph and|label both axes before you calculate|anything!

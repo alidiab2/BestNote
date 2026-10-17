@@ -402,14 +402,28 @@ def word_strokes(word, size_mm):
     return out_b, out_m, width_mm
 
 
-def write_line(doc, w, text, x_right, baseline, size_mm=None, first_gap="line", speed=1.0):
-    """Writes Arabic words right to left starting at x_right. Returns the x where the line ended."""
+def write_line(doc, w, text, x_right, baseline, size_mm=None, first_gap="line", speed=1.0, spans=None):
+    """Writes Arabic words right to left starting at x_right. Returns the x where the line ended.
+    Latin words and numbers in the line are written left to right in their place (mixed lines).
+    spans: if given, (first, end) item indices of each word are appended."""
     rng = w.rng
     size = size_mm or w.xh * 3.4
     x = x_right
     gap = first_gap
     drift = geom.SmoothNoise(rng, 70.0, 0.1 * w.xh * w.jitter, octaves=2)
     for word in text.split():
+        start = len(doc.items)
+        if word.isascii():
+            from . import latin
+            style = "print" if any(c.isdigit() for c in word) else "cursive"
+            width = latin.measure(word, style, w.xh)
+            pen = latin.Pen(w, x - width, baseline + drift(x))
+            latin.write_word(doc, pen, word, style, first_gap=gap, speed=speed)
+            x -= width + 0.9 * w.xh * rng.uniform(0.85, 1.3)
+            gap = "word"
+            if spans is not None:
+                spans.append((start, len(doc.items)))
+            continue
         bodies, marks, width = word_strokes(word, size * rng.uniform(0.96, 1.04))
         dy = drift(x) + rng.gauss(0, 0.05 * w.xh)
         slant = math.tan(math.radians(rng.gauss(0, 2.0 * w.jitter)))
@@ -432,4 +446,6 @@ def write_line(doc, w, text, x_right, baseline, size_mm=None, first_gap="line", 
                 doc.add(dense, gap="deferred", speed=speed)
         x -= width + 0.9 * w.xh * rng.uniform(0.85, 1.3)
         gap = "word"
+        if spans is not None:
+            spans.append((start, len(doc.items)))
     return x

@@ -1,0 +1,1 @@
+Friction always opposes the motion|of a sliding block. The normal|force is equal to the weight on a flat|table, so the friction force is the|coefficient times the weight. On a|ramp the normal force gets smaller|and the block starts to slide when|the angle is steep enough.

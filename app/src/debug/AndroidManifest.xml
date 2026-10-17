@@ -14,4 +14,8 @@
             </intent-filter>
         </receiver>
     </application>
+    <!-- REC-10: the same evaluation under `am instrument`, which a busy device does not freeze or ANR. -->
+    <instrumentation
+        android:name="app.bestnote.debug.recognition.RecognitionEvalInstrumentation"
+        android:targetPackage="${applicationId}" />
 </manifest>
