@@ -23,6 +23,8 @@ import android.widget.OverScroller
 import androidx.ink.authoring.InProgressStrokeId
 import androidx.ink.authoring.InProgressStrokesFinishedListener
 import androidx.ink.authoring.InProgressStrokesView
+import androidx.ink.brush.InputToolType
+import androidx.ink.strokes.MutableStrokeInputBatch
 import androidx.ink.strokes.Stroke
 import androidx.input.motionprediction.MotionEventPredictor
 import app.bestnote.core.model.AudioSync
@@ -31,6 +33,8 @@ import app.bestnote.core.model.PageElement
 import app.bestnote.core.model.PageRect
 import app.bestnote.core.model.PaperSizes
 import app.bestnote.core.model.PenStyle
+import app.bestnote.core.model.ShapeInfo
+import app.bestnote.core.model.StylusSample
 import app.bestnote.core.model.TextElement
 import app.bestnote.core.model.Tool
 import app.bestnote.engine.canvas.EraserMode
@@ -38,7 +42,10 @@ import app.bestnote.engine.canvas.InkInputShaper
 import app.bestnote.engine.canvas.StrokeBrushes
 import app.bestnote.engine.canvas.erase.EraserCapsule
 import app.bestnote.engine.canvas.select.PenType
+import app.bestnote.engine.canvas.select.StrokeEdits
 import app.bestnote.engine.canvas.shape.HoldDetector
+import app.bestnote.engine.canvas.shape.ShapeEdits
+import app.bestnote.engine.canvas.shape.ShapePreview
 import app.bestnote.engine.canvas.shape.ShapeSnapper
 import app.bestnote.engine.canvas.erase.InkEraser
 import app.bestnote.engine.canvas.WetHighlighter
@@ -304,6 +311,14 @@ class PagedDocumentView(context: Context) : FrameLayout(context), InProgressStro
         get() = selection.color
         set(value) {
             selection.color = value
+            ghosts.accent = value
+        }
+
+    /** CANVAS-17: the words on the hold-to-shape ghost's label; the host passes translated ones. */
+    var shapeGhostText: ShapeGhostText
+        get() = ghosts.text
+        set(value) {
+            ghosts.text = value
         }
 
     /** Duration of the selection handles' entrance; the host passes a Motion token (0 = none). */
@@ -550,15 +565,48 @@ class PagedDocumentView(context: Context) : FrameLayout(context), InProgressStro
 
     /** Wet strokes whose pen was held still at the end (or drawn with the Shapes tool): snap once dry. */
     private val snapRequested = HashSet<InProgressStrokeId>()
+
+    /** CANVAS-17: the hold-to-shape ghost, the pointer and page it belongs to, and that stroke's path in page points. */
+    private val ghosts = ShapeGhostLayer(context)
+    private val preview = ShapePreview()
+    private var previewPointer = -1
+    private var previewPage = -1
+    private var traceXs = FloatArray(TRACE_INITIAL)
+    private var traceYs = FloatArray(TRACE_INITIAL)
+    private var traceCount = 0
+
+    /**
+     * Wet strokes lifted while their ghost showed: they become exactly that ghost (stored as that record) once
+     * dry. Until androidx.ink hands them over they already count as shapes the next one glues to.
+     */
+    private val ghostCommits = HashMap<InProgressStrokeId, Pair<ShapePreview.Ghost, ShapeInfo>>()
+
+    /** A pen stroke under its ghost, taken off the wet layer: page, its wet id (for its brush) and androidx.ink brush. */
+    private class Detached(val page: Int, val strokeId: InProgressStrokeId, val brush: androidx.ink.brush.Brush)
+
+    private val detached = HashMap<Int, Detached>()
+    private val wetBrushes = HashMap<Int, androidx.ink.brush.Brush>()
+    private val traceSamples = ArrayList<StylusSample>()
+
+    /** A pen is laying down ink (on the wet layer, or under a ghost). */
+    private val inkingAny: Boolean get() = inking.isNotEmpty() || detached.isNotEmpty()
+
+    /** Lifted highlighter strokes whose ghost showed (the highlighter is not a wet stroke). */
+    private var ghostForHighlight: ShapePreview.Ghost? = null
     private val holdTick = Runnable { checkHolds() }
 
     private val snapper = ShapeSnapper(this, object : ShapeSnapper.Pages {
         override fun strokes(index: Int) = document?.pages?.getOrNull(index)?.strokes
 
-        override fun commit(index: Int, replace: Pair<Stroke, Stroke>, remove: Stroke?) {
-            strokeBrushes.derive(replace.second, replace.first) { it }
+        override fun commit(index: Int, replace: Pair<Stroke, Stroke>, remove: Stroke?, shape: ShapeInfo) {
+            val brush = strokeBrushes.brushOf(replace.first) ?: BrushCatalog.modelBrush(replace.first.brush)
+            strokeBrushes.put(replace.second, brush.copy(shape = shape))
             document?.replaceStrokes(index, mapOf(replace), listOfNotNull(remove))
         }
+
+        override fun shapes(index: Int): List<ShapeInfo> = shapesOn(index)
+
+        override val glueTolerance: Float get() = glueTolerancePt()
 
         override fun showMorph(index: Int, target: Stroke?, frame: Stroke?) = pages.setMorph(index, target, frame)
 
@@ -652,6 +700,7 @@ class PagedDocumentView(context: Context) : FrameLayout(context), InProgressStro
         addView(pages, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
         addView(highlights, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
         addView(wet, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
+        addView(ghosts, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
         addView(selection, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
         addView(cursor, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
         wet.addFinishedStrokesListener(this)
@@ -737,7 +786,7 @@ class PagedDocumentView(context: Context) : FrameLayout(context), InProgressStro
             val id = se.pointerId
             val decision = palm.decide(se)
             applyPalmCancels(event)
-            if (inking.isNotEmpty() || erasing.isNotEmpty() || highlighting != null || selection.active) fingerTaps.invalidate()
+            if (inkingAny || erasing.isNotEmpty() || highlighting != null || selection.active) fingerTaps.invalidate()
             when (fingerTaps.onEvent(se, decision)) {
                 MultiFingerTap.Gesture.Undo -> if (twoFingerTapUndo) document?.undo()
                 MultiFingerTap.Gesture.Redo -> if (threeFingerTapRedo) document?.redo()
@@ -749,7 +798,7 @@ class PagedDocumentView(context: Context) : FrameLayout(context), InProgressStro
                 StylusAction.Down -> onDown(event, se, decision)
                 StylusAction.Move -> {
                     sideButton.onMove(se)?.let { switch ->
-                        val page = inking[id]?.first ?: erasing[id]?.page ?: highlighting?.takeIf { it.second.pointerId == id }?.first
+                        val page = inking[id]?.first ?: detached[id]?.page ?: erasing[id]?.page ?: highlighting?.takeIf { it.second.pointerId == id }?.first
                         cancelInk(id, event)
                         finishErase(id)
                         if (page != null) begin(event, se, switch.tool, page)
@@ -761,6 +810,8 @@ class PagedDocumentView(context: Context) : FrameLayout(context), InProgressStro
                             withShaped(event, id, predicted) { e, p -> wet.addToStroke(e, id, inking.getValue(id).second, p) }
                             trackHold(id, se)
                         }
+                        // Under a ghost: the raw ink is off the wet layer; its samples keep being recorded.
+                        id in detached -> trackHold(id, se)
                         highlighting?.second?.pointerId == id -> highlighting?.let { (page, h) ->
                             withShaped(event, id, predicted) { e, p -> h.add(e, p) }
                             pages.invalidatePage(page)
@@ -778,18 +829,27 @@ class PagedDocumentView(context: Context) : FrameLayout(context), InProgressStro
                     if (selection.owns(id)) selectAlong(id, se)
                     selection.up(id)
                     inking.remove(id)?.let { (_, strokeId) ->
-                        if (holds[id]?.held == true || shapeTool) snapRequested += strokeId
+                        val ghost = liftGhost(id)
+                        when {
+                            ghost != null -> ghostCommits[strokeId] = ghost to ghost.info(ShapeEdits.newId())
+                            // A cancelled ghost leaves free ink; the Shapes tool snaps everything else.
+                            shapeTool && !(previewPointer == id && preview.cancelled) -> snapRequested += strokeId
+                        }
                         withShaped(event, id, null, last = true) { e, _ -> wet.finishStroke(e, id, strokeId) }
                         shaper.end(id)
                     }
+                    detached.remove(id)?.let { d -> finishDetached(id, d) }
+                    ghostForHighlight = liftGhost(id)
                     finishHighlight(id, event)
+                    ghostForHighlight = null
                     holds.remove(id)
+                    endPreview(id)
                     finishErase(id)
                     sideButton.onEnd(id)
                     cardTaps.remove(id)?.let { (x, y) -> if (isTapOnCard(x, y, se.latest.x, se.latest.y)) addPage() }
                     // The UP may carry movement no MOVE reported (coalesced input): apply it.
                     scrolling[id]?.let { (px, py) ->
-                        if (scrolling.size == 1 && pages.preview.isIdentity && inking.isEmpty() && erasing.isEmpty() && highlighting == null) {
+                        if (scrolling.size == 1 && pages.preview.isIdentity && !inkingAny && erasing.isEmpty() && highlighting == null) {
                             pages.scrollToXY(pages.scrollX - (se.latest.x - px).roundToInt(), pages.scrollY - (se.latest.y - py).roundToInt())
                         }
                     }
@@ -812,7 +872,7 @@ class PagedDocumentView(context: Context) : FrameLayout(context), InProgressStro
                 else -> Unit
             }
         }
-        if (scrollMoves > 0 && inking.isEmpty() && erasing.isEmpty() && highlighting == null && !selection.active) {
+        if (scrollMoves > 0 && !inkingAny && erasing.isEmpty() && highlighting == null && !selection.active) {
             PinchStep.of(fingersBefore, scrolling)?.let(::panZoom)
         }
         notifyTemporaryTool()
@@ -825,7 +885,7 @@ class PagedDocumentView(context: Context) : FrameLayout(context), InProgressStro
      */
     private fun applyPalmCancels(event: MotionEvent) {
         for (cancelled in palm.drainCancels()) {
-            val wasWriting = inking.containsKey(cancelled) || erasing.containsKey(cancelled) ||
+            val wasWriting = inking.containsKey(cancelled) || detached.containsKey(cancelled) || erasing.containsKey(cancelled) ||
                 highlighting?.second?.pointerId == cancelled
             cancelInk(cancelled, event)
             finishErase(cancelled)
@@ -841,7 +901,7 @@ class PagedDocumentView(context: Context) : FrameLayout(context), InProgressStro
     }
 
     private fun notifyWriting() {
-        val now = inking.isNotEmpty() || erasing.isNotEmpty() || highlighting != null || selection.active
+        val now = inkingAny || erasing.isNotEmpty() || highlighting != null || selection.active
         if (now != writing) {
             writing = now
             writingListener?.onWritingChanged(now)
@@ -1093,7 +1153,7 @@ class PagedDocumentView(context: Context) : FrameLayout(context), InProgressStro
 
     override fun onGenericMotionEvent(event: MotionEvent): Boolean {
         if (event.isFromSource(InputDevice.SOURCE_CLASS_POINTER) && event.actionMasked == MotionEvent.ACTION_SCROLL &&
-            inking.isEmpty() && highlighting == null
+            !inkingAny && highlighting == null
         ) {
             val v = event.getAxisValue(MotionEvent.AXIS_VSCROLL)
             if (v != 0f && (event.metaState and android.view.KeyEvent.META_CTRL_ON) != 0) {
@@ -1149,6 +1209,7 @@ class PagedDocumentView(context: Context) : FrameLayout(context), InProgressStro
         // World = view pixels; the stroke itself is recorded in page points.
         val strokeId = withShaped(event, pointerId, null) { e, _ -> wet.startStroke(e, pointerId, brush, IDENTITY, strokeToView) }
         inking[pointerId] = page to strokeId
+        wetBrushes[pointerId] = brush
         startHold(event, pointerId)
         strokePages[strokeId] = page
         captureBrush(event, strokeTool, sizePt)?.let { strokeBrushes.begin(strokeId, it) }
@@ -1179,11 +1240,13 @@ class PagedDocumentView(context: Context) : FrameLayout(context), InProgressStro
         shaper.end(pointerId)
         strokeBrushes.finish(h.id, stroke)
         pages.setWetHighlight(page, null, 0)
-        val snap = holds.remove(pointerId)?.held == true || shapeTool
+        holds.remove(pointerId)
+        val ghost = ghostForHighlight
+        val snap = shapeTool && !(previewPointer == pointerId && preview.cancelled)
         val doc = document
         if (doc != null && page in 0 until doc.size) {
             doc.addStrokes(page, listOf(stroke))
-            snapper.onStrokeFinished(page, stroke, snap)
+            snapper.onStrokeFinished(page, stroke, snap, ghost?.let { it to it.info(ShapeEdits.newId()) })
         }
     }
 
@@ -1209,12 +1272,15 @@ class PagedDocumentView(context: Context) : FrameLayout(context), InProgressStro
     private fun cancelInk(pointerId: Int, event: MotionEvent) {
         shaper.end(pointerId)
         holds.remove(pointerId)
+        endPreview(pointerId)
         cancelHighlight(pointerId)
         inking.remove(pointerId)?.let { (_, strokeId) ->
             wet.cancelStroke(strokeId, event)
             strokePages.remove(strokeId)
             strokeBrushes.cancel(strokeId)
         }
+        detached.remove(pointerId)?.let { strokeBrushes.cancel(it.strokeId) }
+        wetBrushes.remove(pointerId)
     }
 
     private fun cancelAllInput() {
@@ -1224,9 +1290,14 @@ class PagedDocumentView(context: Context) : FrameLayout(context), InProgressStro
             strokeBrushes.cancel(strokeId)
         }
         inking.clear()
+        detached.values.forEach { strokeBrushes.cancel(it.strokeId) }
+        detached.clear()
+        wetBrushes.clear()
         strokePages.clear()
         holds.clear()
         snapRequested.clear()
+        ghostCommits.clear()
+        endPreview(previewPointer)
         erasing.keys.toList().forEach(::finishErase)
         selection.cancelInput()
         scrolling.clear()
@@ -1283,10 +1354,11 @@ class PagedDocumentView(context: Context) : FrameLayout(context), InProgressStro
         strokes.entries.groupBy { strokePages.remove(it.key) ?: -1 }.forEach { (page, entries) ->
             if (doc != null && page in 0 until doc.size) {
                 doc.addStrokes(page, entries.map { it.value })
-                entries.forEach { (id, stroke) -> snapper.onStrokeFinished(page, stroke, snapRequested.remove(id)) }
+                entries.forEach { (id, stroke) -> snapper.onStrokeFinished(page, stroke, snapRequested.remove(id), ghostCommits.remove(id)) }
             }
         }
         strokes.keys.forEach(snapRequested::remove)
+        strokes.keys.forEach(ghostCommits::remove)
         wet.removeFinishedStrokes(strokes.keys)
     }
 
@@ -1297,15 +1369,103 @@ class PagedDocumentView(context: Context) : FrameLayout(context), InProgressStro
         holds[pointerId] = HoldDetector(HOLD_SLOP_DP * density, HOLD_MIN_TRAVEL_DP * density).apply {
             start(event.getX(index), event.getY(index), event.eventTime)
         }
+        // One ghost at a time: the newest pen stroke gets it.
+        endPreview(previewPointer)
+        val page = inking[pointerId]?.first ?: highlighting?.takeIf { it.second.pointerId == pointerId }?.first ?: -1
+        if (page >= 0) {
+            previewPointer = pointerId
+            previewPage = page
+            traceCount = 0
+            traceSamples.clear()
+            preview.reset()
+            trace(
+                StylusSample(
+                    event.getX(index), event.getY(index), event.getPressure(index), event.getAxisValue(MotionEvent.AXIS_TILT, index),
+                    event.getOrientation(index), event.eventTime,
+                ),
+            )
+        }
         scheduleHoldCheck()
     }
 
     private fun trackHold(pointerId: Int, se: StylusEvent) {
         val h = holds[pointerId] ?: return
         var fired = false
-        for (sample in se.samples) fired = h.add(sample.x, sample.y, sample.timeMillis) || fired
-        if (fired) onHeld()
+        for (sample in se.samples) {
+            fired = h.add(sample.x, sample.y, sample.timeMillis) || fired
+            if (pointerId == previewPointer) trace(sample)
+        }
+        if (pointerId == previewPointer && preview.active) {
+            val (px, py) = toPreviewPage(se.latest.x, se.latest.y) ?: return
+            val g = preview.move(px, py, se.latest.timeMillis)
+            showGhost(g)
+            if (g == null) {
+                performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK) // cancelled: back to free ink
+                showRaw(pointerId)
+            }
+        } else if (pointerId in detached) {
+            showRaw(pointerId) // cancelled earlier: the free ink keeps growing
+        } else if (fired) {
+            onHeld(pointerId)
+        }
         scheduleHoldCheck()
+    }
+
+    /** Adds [sample] (view px) to the previewed stroke's path, in its page's points. */
+    private fun trace(sample: StylusSample) {
+        val (px, py) = toPreviewPage(sample.x, sample.y) ?: return
+        traceSamples += sample.copy(x = px, y = py)
+        if (traceCount == traceXs.size) {
+            traceXs = traceXs.copyOf(traceCount * 2)
+            traceYs = traceYs.copyOf(traceCount * 2)
+        }
+        traceXs[traceCount] = px
+        traceYs[traceCount] = py
+        traceCount++
+    }
+
+    private fun toPreviewPage(x: Float, y: Float): Pair<Float, Float>? {
+        val l = pages.layout ?: return null
+        if (previewPage < 0) return null
+        return ZoomMath.viewToPage(l, pages.scrollX, pages.scrollY, previewPage, x, y)
+    }
+
+    /** The clean shapes on page [index], including lifted ones the wet layer hasn't handed over yet. */
+    private fun shapesOn(index: Int): List<ShapeInfo> {
+        val dry = document?.pages?.getOrNull(index)?.strokes?.mapNotNull { strokeBrushes.brushOf(it)?.shape }.orEmpty()
+        val wet = ghostCommits.entries.filter { strokePages[it.key] == index }.map { it.value.second }
+        return if (wet.isEmpty()) dry else dry + wet
+    }
+
+    /** Glue distance in page points: the same on screen at every zoom. */
+    private fun glueTolerancePt(): Float = GLUE_DP * density / (pages.layout?.scale ?: 1f)
+
+    /** The ghost for [g] (null hides it), drawn in the active pen's color and size. */
+    private fun showGhost(g: ShapePreview.Ghost?) {
+        if (g == null) return ghosts.show(null, null, 0, 0f, 0f, 0f)
+        val m = Matrix()
+        if (!pageToView(previewPage, m)) return
+        val color = document?.let { PaperInk.colorOn(colorArgb, PaperColors.of(it.pages[previewPage].page.paperColor)) } ?: colorArgb
+        val tracedX = if (traceCount > 0) traceXs[0] else 0f
+        val tracedY = if (traceCount > 0) traceYs[0] else 0f
+        ghosts.show(g, m, color, brushSize * PT_PER_BRUSH_UNIT, tracedX, tracedY)
+    }
+
+    /** The pen lifts: the ghost it leaves to commit (null when none showed or it was cancelled). */
+    private fun liftGhost(pointerId: Int): ShapePreview.Ghost? {
+        if (pointerId != previewPointer) return null
+        val g = preview.ghost
+        showGhost(null)
+        return g
+    }
+
+    private fun endPreview(pointerId: Int) {
+        if (pointerId < 0 || pointerId != previewPointer) return
+        previewPointer = -1
+        previewPage = -1
+        traceCount = 0
+        traceSamples.clear()
+        showGhost(null)
     }
 
     /** The pen may be perfectly still (no events): check again when the next hold could complete. */
@@ -1317,13 +1477,80 @@ class PagedDocumentView(context: Context) : FrameLayout(context), InProgressStro
 
     private fun checkHolds() {
         val now = SystemClock.uptimeMillis()
-        if (holds.values.map { it.check(now) }.any { it }) onHeld()
+        for ((id, h) in holds.entries.toList()) if (h.check(now)) onHeld(id)
         scheduleHoldCheck()
     }
 
-    /** A hold completed: a light tick, no animation (the pen is still down). The snap happens on lift. */
-    private fun onHeld() {
+    /**
+     * A hold completed: show the ghost of the shape this stroke will become (CANVAS-17), with a light tick, no
+     * animation (the pen is still down). The snap happens on lift; while a ghost shows, later pauses change nothing.
+     */
+    private fun onHeld(pointerId: Int) {
+        if (pointerId == previewPointer && (preview.active || preview.cancelled)) return
         performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+        if (pointerId != previewPointer || traceCount < 2) return
+        val l = pages.layout ?: return
+        val minCancel = GHOST_CANCEL_DP * density / l.scale
+        val g = traced("BN.ghost") {
+            preview.begin(traceXs, traceYs, traceCount, traceXs[traceCount - 1], traceYs[traceCount - 1], shapesOn(previewPage), glueTolerancePt(), minCancel)
+        }
+        if (g != null) detach(pointerId)
+        showGhost(g)
+    }
+
+    /**
+     * The ghost took over: the raw wet stroke recedes (it leaves the front-buffered wet layer, which is always on
+     * top) so only the ghost shows. Its samples stay recorded: lifting turns them into the clean shape, and a
+     * cancelled ghost brings them back as free ink.
+     */
+    private fun detach(pointerId: Int) {
+        val (page, strokeId) = inking.remove(pointerId) ?: return
+        val brush = wetBrushes[pointerId] ?: return run { inking[pointerId] = page to strokeId }
+        wet.cancelStroke(strokeId, null)
+        strokePages.remove(strokeId)
+        detached[pointerId] = Detached(page, strokeId, brush)
+    }
+
+    /** The stroke made of the recorded samples, with the pen's brush (page points), or null when too short. */
+    private fun rawStroke(d: Detached): Stroke? {
+        if (traceSamples.isEmpty()) return null
+        val batch = MutableStrokeInputBatch()
+        val t0 = traceSamples[0].timeMillis
+        var lastT = 0L
+        var lastX = Float.NaN
+        var lastY = Float.NaN
+        for (s in traceSamples) {
+            val t = maxOf(lastT, s.timeMillis - t0)
+            if (s.x == lastX && s.y == lastY) continue
+            batch.add(
+                InputToolType.STYLUS, s.x, s.y, t, STROKE_UNIT_CM,
+                s.pressure.coerceIn(0f, 1f), s.tiltRad.coerceIn(0f, HALF_PI), StrokeEdits.normalizedAngle(s.orientationRad),
+            )
+            lastT = t; lastX = s.x; lastY = s.y
+        }
+        return Stroke(d.brush, batch)
+    }
+
+    /** Shows the recorded raw ink of a detached stroke whose ghost was cancelled (free ink again). */
+    private fun showRaw(pointerId: Int) {
+        val d = detached[pointerId] ?: return
+        val m = Matrix()
+        if (!pageToView(d.page, m)) return
+        ghosts.showRaw(rawStroke(d), m)
+    }
+
+    /** The pen lifted from a detached stroke: it lands on the page, then becomes its ghost (if one still shows). */
+    private fun finishDetached(pointerId: Int, d: Detached) {
+        shaper.end(pointerId)
+        wetBrushes.remove(pointerId)
+        val ghost = liftGhost(pointerId)
+        val stroke = rawStroke(d)
+        ghosts.showRaw(null, null)
+        val doc = document
+        if (stroke == null || doc == null || d.page !in 0 until doc.size) return strokeBrushes.cancel(d.strokeId)
+        strokeBrushes.finish(d.strokeId, stroke)
+        doc.addStrokes(d.page, listOf(stroke))
+        snapper.onStrokeFinished(d.page, stroke, false, ghost?.let { it to it.info(ShapeEdits.newId()) })
     }
 
     // ---------------------------------------------------------------- hover
@@ -1418,6 +1645,15 @@ class PagedDocumentView(context: Context) : FrameLayout(context), InProgressStro
         /** Hold-to-snap: the pen counts as still within this radius, after drawing at least the travel. */
         private const val HOLD_SLOP_DP = 6f
         private const val HOLD_MIN_TRAVEL_DP = 24f
+
+        /** CANVAS-17: shapes glue within this distance on screen; a ghost cancels when the pen goes at least this far. */
+        private const val GLUE_DP = 14f
+        private const val GHOST_CANCEL_DP = 56f
+        private const val TRACE_INITIAL = 512
+
+        /** Recorded strokes are in page points: 1 pt = 2.54 / 72 cm. */
+        private const val STROKE_UNIT_CM = 2.54f / 72f
+        private const val HALF_PI = (Math.PI / 2).toFloat()
 
         private const val WHEEL_STEP_DP = 64f
         private const val WHEEL_ZOOM = 1.1f

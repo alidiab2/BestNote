@@ -25,6 +25,14 @@ object Corpus {
     /** The corpus files that have written text to compare against. */
     val transcribed: List<String> get() = dir.listFiles().orEmpty().map { it.name }.filter { it.endsWith(".expect.txt") }
         .map { it.removeSuffix(".expect.txt") }.sorted()
+    private val labelList = Regex("\"labels\":\\[(.*?)]")
+
+    /** What each ink stroke of corpus file [name] is (the file's "labels"), or empty when it has none. */
+    fun labels(name: String): List<String> {
+        val text = File(dir, "$name.json").readText()
+        val m = labelList.find(text) ?: return emptyList()
+        return Regex("\"([^\"]*)\"").findAll(m.groupValues[1]).map { it.groupValues[1] }.toList()
+    }
 
     /** The ink strokes of corpus file [name] (without .json), in drawing order. */
     fun strokes(name: String): List<List<StylusSample>> {

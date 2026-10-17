@@ -412,4 +412,22 @@
         <item quantity="many">نقل %1$d صفحة</item>
         <item quantity="other">نقل %1$d صفحة</item>
     </plurals>
+    <!-- CANVAS-17: hold-to-shape ghost label -->
+    <string name="shape_line">خط</string>
+    <string name="shape_arrow">سهم</string>
+    <string name="shape_circle">دائرة</string>
+    <string name="shape_ellipse">قطع ناقص</string>
+    <string name="shape_rectangle">مستطيل</string>
+    <string name="shape_square">مربع</string>
+    <string name="shape_triangle">مثلث</string>
+    <string name="shape_polygon">مضلع</string>
+    <string name="shape_diamond">معيّن</string>
+    <string name="shape_star">نجمة</string>
+    <string name="shape_polyline">خط منكسر</string>
+    <string name="shape_hint_perfect">مثالية</string>
+    <string name="shape_hint_right_angles">90°</string>
+    <string name="shape_hint_horizontal">أفقي</string>
+    <string name="shape_hint_vertical">عمودي</string>
+    <string name="shape_hint_diagonal">45°</string>
+    <string name="shape_hint_glued">ملتصق</string>
 </resources>

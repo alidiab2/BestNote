@@ -56,6 +56,7 @@ class Document:
         if tail:
             tail[0].gap = "shape"
         self.items = [it for i, it in enumerate(self.items) if i not in moved] + tail
+        self.labels = None  # optional: what each ink stroke is (accuracy tests)
 
     def add(self, pts, gap="letter", kind="stroke", speed=1.0, pressure=1.0, button=False, hold_ms=0.0):
         """hold_ms: the pen stays down and still that long at the end (hold-to-snap)."""
@@ -100,6 +101,7 @@ class Document:
             "writer": w.as_dict(),
             "durationMs": round(t, 1),
             "strokes": strokes,
+            **({"labels": list(self.labels)} if self.labels else {}),
         }
 
 
