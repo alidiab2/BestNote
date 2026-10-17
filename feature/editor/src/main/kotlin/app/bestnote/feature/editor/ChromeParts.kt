@@ -111,7 +111,7 @@ internal fun Modifier.inkSquiggle(kind: PenKind, settings: PenSettings, maxWidth
             val scale = app.bestnote.engine.ink.BrushCatalog.spec(kind.tool, kind.style)?.sizeScale ?: 1f
             settings.size.coerceAtMost(cap / scale)
         } ?: settings.size
-        val stroke = InkPreview.squiggle(kind.tool, kind.style, settings.brushColorArgb, size, this.size.width, this.size.height)
+        val stroke = InkPreview.squiggle(kind.tool, kind.style, settings.brushColorArgb, size, this.size.width, this.size.height, settings.tuning())
         onDrawBehind {
             if (stroke != null) drawIntoCanvas { InkPreview.draw(it.nativeCanvas, stroke, renderer) }
         }

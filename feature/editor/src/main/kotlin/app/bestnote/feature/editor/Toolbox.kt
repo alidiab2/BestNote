@@ -5,6 +5,7 @@ import app.bestnote.core.model.PenStyle
 import app.bestnote.core.model.Tool
 import app.bestnote.engine.ink.BrushCatalog
 import app.bestnote.engine.ink.InkPalette
+import app.bestnote.engine.ink.PenTuning
 import kotlin.math.roundToInt
 
 /** The pens in the tray, left to right (DS-03). Each remembers its own color, size and opacity. */
@@ -20,14 +21,30 @@ enum class PenKind(val tool: Tool, val style: PenStyle) {
     val inks: Boolean get() = tool.inks
 }
 
-/** One pen's settings. [size] is in stroke units (the canvas brush size), [opacity] 0..1. */
-data class PenSettings(val colorArgb: Int, val size: Float, val opacity: Float = 1f) {
+/**
+ * One pen's settings. [size] is in stroke units (the canvas brush size), [opacity] 0..1,
+ * [pressureSensitivity] 0..1 (INK-04: 1 = the pen's own curve, 0 = constant width) and
+ * [stabilization] 0..100 (INK-05).
+ */
+data class PenSettings(
+    val colorArgb: Int,
+    val size: Float,
+    val opacity: Float = 1f,
+    val pressureSensitivity: Float = 1f,
+    val stabilization: Int = 0,
+) {
     /** Color handed to the brush: the user's opacity goes into alpha (the brush adds its own on top). */
     val brushColorArgb: Int get() = BrushCatalog.applyOpacity(colorArgb or OPAQUE, opacity)
+
+    /** What the canvas applies to this pen's input; [curveGamma] is the global Settings pressure feel. */
+    fun tuning(curveGamma: Float = 1f) = PenTuning(pressureSensitivity, stabilization, curveGamma)
 }
 
 /** A quick preset in the picker. */
 data class PenPreset(val colorArgb: Int, val size: Float)
+
+/** A favorite pen in the tray (INK-06): pen type + its settings, picked in one tap. */
+data class PenFavorite(val id: String, val kind: PenKind, val settings: PenSettings)
 
 private const val OPAQUE = 0xFF000000.toInt()
 private const val QUICK_COLORS = 5
@@ -44,6 +61,10 @@ data class Toolbox(
     val lasso: Boolean = false,
     /** INK-08 Shapes tool: every pen stroke that is a shape snaps to a clean one. Picking the lasso keeps it for later. */
     val shapes: Boolean = false,
+    /** INK-06: custom colors the user saved, newest first. */
+    val savedColors: List<Int> = emptyList(),
+    /** INK-06: favorite pens shown in the tray, in the user's order. */
+    val favorites: List<PenFavorite> = emptyList(),
 ) {
     /** The canvas tool in hand. */
     val tool: Tool get() = if (lasso) Tool.Lasso else active.tool
@@ -84,6 +105,39 @@ data class Toolbox(
     fun withOpacity(opacity: Float, kind: PenKind = active): Toolbox =
         copy(settings = settings + (kind to settingsOf(kind).copy(opacity = opacity.coerceIn(PenDefaults.MIN_OPACITY, 1f))))
 
+    fun withSensitivity(sensitivity: Float, kind: PenKind = active): Toolbox =
+        copy(settings = settings + (kind to settingsOf(kind).copy(pressureSensitivity = sensitivity.coerceIn(0f, 1f))))
+
+    fun withStabilization(stabilization: Int, kind: PenKind = active): Toolbox =
+        copy(settings = settings + (kind to settingsOf(kind).copy(stabilization = stabilization.coerceIn(0, PenTuning.MAX_STABILIZATION))))
+
+    /** Saves [colorArgb] as a custom color (first, no duplicates, at most [MAX_SAVED_COLORS]). */
+    fun saveColor(colorArgb: Int): Toolbox {
+        val color = colorArgb or OPAQUE
+        return copy(savedColors = (listOf(color) + savedColors.filter { it != color }).take(MAX_SAVED_COLORS))
+    }
+
+    fun removeSavedColor(colorArgb: Int): Toolbox = copy(savedColors = savedColors.filter { it != (colorArgb or OPAQUE) })
+
+    /** The favorite that is exactly the pen in hand, if any. */
+    val activeFavorite: PenFavorite? get() = if (lasso) null else favorites.firstOrNull { it.kind == active && it.settings == current }
+
+    /** True when the pen in hand can be saved as a new favorite. */
+    val canAddFavorite: Boolean get() = active.inks && activeFavorite == null && favorites.size < MAX_FAVORITES
+
+    /** Saves the pen in hand as a favorite (appended, so the tray order stays stable). */
+    fun addFavorite(id: String): Toolbox = if (!canAddFavorite) this else copy(favorites = favorites + PenFavorite(id, active, current))
+
+    fun removeFavorite(id: String): Toolbox = copy(favorites = favorites.filter { it.id != id })
+
+    /** One tap on a favorite: that pen in hand with all its settings (its color joins the quick dots). */
+    fun applyFavorite(favorite: PenFavorite): Toolbox {
+        val kind = favorite.kind
+        return select(kind)
+            .withColor(favorite.settings.colorArgb, kind)
+            .let { it.copy(settings = it.settings + (kind to favorite.settings.copy(colorArgb = favorite.settings.colorArgb or OPAQUE))) }
+    }
+
     fun withPreset(preset: PenPreset, kind: PenKind = active): Toolbox = withColor(preset.colorArgb, kind).withSize(preset.size, kind)
 
     /** Quick palette center: the next preset size up, wrapping around to the smallest. */
@@ -94,8 +148,10 @@ data class Toolbox(
         return withSize(sizes.firstOrNull { it > now + SIZE_EPSILON } ?: sizes.first(), kind)
     }
 
-    private companion object {
-        const val SIZE_EPSILON = 0.01f
+    companion object {
+        private const val SIZE_EPSILON = 0.01f
+        const val MAX_SAVED_COLORS = 12
+        const val MAX_FAVORITES = 6
     }
 }
 

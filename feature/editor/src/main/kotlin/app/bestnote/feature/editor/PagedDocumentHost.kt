@@ -30,6 +30,7 @@ import app.bestnote.core.model.Tool
 import app.bestnote.engine.canvas.EraserMode
 import app.bestnote.engine.canvas.document.PagedDocument
 import app.bestnote.engine.canvas.document.PagedDocumentView
+import app.bestnote.engine.ink.PenTuning
 import app.bestnote.core.designsystem.R as DesignR
 
 /**
@@ -60,6 +61,7 @@ internal fun PagedDocumentHost(
     penStyle: PenStyle,
     colorArgb: Int,
     brushSize: Float,
+    penTuning: PenTuning,
     eraserMode: EraserMode,
     shapeTool: Boolean,
     input: FingerInput,
@@ -101,6 +103,7 @@ internal fun PagedDocumentHost(
                 view.penStyle = penStyle
                 view.colorArgb = colorArgb
                 view.brushSize = brushSize
+                view.penTuning = penTuning
                 view.eraserMode = eraserMode
                 view.shapeTool = shapeTool
                 view.quickPaletteEnabled = quickPalette

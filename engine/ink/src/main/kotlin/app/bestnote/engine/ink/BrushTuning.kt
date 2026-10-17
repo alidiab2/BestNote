@@ -27,6 +27,35 @@ object BrushTuning {
         const val EPSILON = 0.05f
     }
 
+    /** Pressure sensitivity (INK-04, [PenTuning.pressureSensitivity]). */
+    object Pressure {
+        /**
+         * The constant pressure a pen gets at sensitivity 0: about normal writing pressure (the
+         * real-writing corpus ramps 0.05 -> 0.55), so a pen at 0 looks like its everyday line.
+         */
+        const val NEUTRAL = 0.5f
+    }
+
+    /**
+     * Stroke stabilization (INK-05, [StrokeStabilizer]): a speed-adaptive low-pass (1-euro filter)
+     * on the pen position. Slow, wobbly movement is smoothed hard; at writing speed the cut-off
+     * rises so the line never trails the pen by more than a frame.
+     */
+    object Stabilization {
+        /** Cut-off (Hz) when the pen is still, at stabilization 1 and at 100. */
+        const val MIN_CUTOFF_LOW_HZ = 12f
+        const val MIN_CUTOFF_HIGH_HZ = 1f
+
+        /**
+         * Cut-off added per mm/s of pen speed. Writing (>= 20 mm/s) gets >= 11 Hz: at most one 60 Hz
+         * frame of lag. Slower than that the line trails the pen by under 1 / (2 pi x 0.5) = 0.32 mm.
+         */
+        const val SPEED_COEFF = 0.5f
+
+        /** Cut-off of the speed estimate itself. */
+        const val SPEED_CUTOFF_HZ = 8f
+    }
+
     /**
      * Taps and very short strokes (i/j dots, periods, Arabic nuqat) must leave a round dot of about
      * the pen's full width in every pen, whatever the pressure ramp or tapers say.

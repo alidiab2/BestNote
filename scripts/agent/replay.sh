@@ -3,6 +3,7 @@
 #   pen:   fountain | ballpoint | brush | pencil | highlighter   (default fountain)
 #   color: #RRGGBB / #AARRGGBB                                    (default: the tool's colour)
 #   extra: e.g. --ez clear true --ef size 8 --ef batch 0 --ef slow 2
+#          --ef sensitivity 0 --ei stabilization 100   (INK-04/05 tuning for this replay)
 # Replays a handwriting stroke file (tools/handwriting) through the debug build's real touch
 # pipeline on the shared emulator, and waits until it has finished. A notebook must be open.
 # PKG=<applicationId> targets a side-by-side debug build (default app.bestnote.debug).

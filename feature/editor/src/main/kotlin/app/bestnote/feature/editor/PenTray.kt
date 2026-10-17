@@ -111,6 +111,7 @@ internal fun PenTray(
     pickerAnchor: PickerAnchor?,
     onPen: (PenKind) -> Unit,
     onColor: (Int) -> Unit,
+    onFavorite: (PenFavorite) -> Unit,
     onOpenPicker: (PickerAnchor) -> Unit,
     onCollapse: () -> Unit,
     picker: @Composable (PickerAnchor) -> Unit,
@@ -142,6 +143,13 @@ internal fun PenTray(
                     side = side,
                     onClick = { onPen(kind) },
                 ) { if (pickerAnchor == PickerAnchor.Pen && kind == toolbox.active) picker(PickerAnchor.Pen) }
+            }
+        }
+        if (toolbox.favorites.isNotEmpty()) {
+            TrayDivider(vertical)
+            TrayLine(vertical, spacing = 4.dp) {
+                val on = toolbox.activeFavorite
+                toolbox.favorites.forEach { f -> FavoriteSlot(f, selected = f == on) { onFavorite(f) } }
             }
         }
         TrayDivider(vertical)
@@ -301,6 +309,27 @@ private fun ColorDot(color: Color, selected: Boolean, enabled: Boolean, onClick:
     }
 }
 
+
+/** INK-06: a favorite pen as a live preview of its stroke (type, color, width). One tap puts it in hand. */
+@Composable
+private fun FavoriteSlot(favorite: PenFavorite, selected: Boolean, onClick: () -> Unit) {
+    val hex = "#%06X".format(favorite.settings.colorArgb and 0xFFFFFF)
+    val label = stringResource(R.string.pen_favorite, penName(favorite.kind), hex)
+    val maxPx = with(androidx.compose.ui.platform.LocalDensity.current) { 6.dp.toPx() }
+    val ring = MaterialTheme.colorScheme.primary
+    Box(
+        Modifier
+            .size(46.dp, 36.dp)
+            .clip(BestNoteShapes.Control)
+            .background(MaterialTheme.colorScheme.surfaceContainerLow)
+            .border(if (selected) 2.dp else 0.dp, if (selected) ring else Color.Transparent, BestNoteShapes.Control)
+            .semantics { this.selected = selected }
+            .clickable(onClickLabel = label, role = Role.Button, onClick = onClick)
+            .semantics { contentDescription = label },
+    ) {
+        Spacer(Modifier.size(46.dp, 36.dp).padding(horizontal = 7.dp, vertical = 8.dp).inkSquiggle(favorite.kind, favorite.settings, maxWidthPx = maxPx))
+    }
+}
 
 @Composable
 private fun MoreColorsDot(enabled: Boolean, onClick: () -> Unit) {

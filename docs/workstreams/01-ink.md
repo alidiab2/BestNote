@@ -10,9 +10,9 @@
 | [x] INK-01 | Brush presets: Fountain (pressure), Ball (constant width), Brush (high pressure range, tapered) | M1 | M | — | Three pens selectable; side-by-side screenshot reviewed by DS |
 | [ ] INK-02 | Pencil: graphite texture, tilt widens and softens the stroke | M1 | L | SPEN-05 | Tilting the S Pen visibly shades; texture doesn't swim when zooming |
 | [x] INK-03 | Highlighter: translucent, drawn *under* ink, no darkening where strokes overlap | M1 | M | — | Overlapping strokes stay the same tone; ink stays crisp on top |
-| [ ] INK-04 | Pressure curve per pen + "pressure sensitivity" slider | M1 | S | SPEN-06 | Slider at 0 gives constant width; at max follows the curve in the spec |
-| [ ] INK-05 | Stroke stabilization (smoothing) setting, 0–100 | M1 | M | — | 100 removes visible hand jitter without lag over 1 frame |
-| [ ] INK-06 | Color + thickness model, saved custom colors, favorite pen presets | M1 | M | DS-04 | Presets persist; switching preset is one tap |
+| [x] INK-04 | Pressure curve per pen + "pressure sensitivity" slider | M1 | S | SPEN-06 | Slider at 0 gives constant width; at max follows the curve in the spec |
+| [x] INK-05 | Stroke stabilization (smoothing) setting, 0–100 | M1 | M | — | 100 removes visible hand jitter without lag over 1 frame |
+| [x] INK-06 | Color + thickness model, saved custom colors, favorite pen presets | M1 | M | DS-04 | Presets persist; switching preset is one tap |
 | [ ] INK-07 | Hold-to-straighten line; dashed line option | M2 | M | — | Holding still for 500 ms snaps the stroke to a straight line with a subtle animation |
 | [x] INK-08 | Shape snap: circle, ellipse, rectangle, triangle, arrow, line | M2 | L | REC interface | Hold-to-snap shapes; recognition runs off the main thread in < 30 ms |
 | [ ] INK-09 | Laser pointer (fading trail, presentation mode) | M3 | S | — | Trail fades over 1 s; never saved to the page |

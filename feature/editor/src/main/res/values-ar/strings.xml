@@ -60,6 +60,16 @@
     <string name="picker_opacity">الشفافية</string>
     <string name="picker_preview">معاينة الخط</string>
     <string name="picker_preset">إعداد جاهز %1$d</string>
+    <string name="picker_pressure">حساسية الضغط</string>
+    <string name="picker_stabilization">تثبيت الخط</string>
+    <string name="picker_percent">%1$d%%</string>
+    <string name="picker_saved_colors">الألوان المحفوظة</string>
+    <string name="picker_save_color">حفظ اللون الحالي</string>
+    <string name="picker_remove_color">إزالة اللون المحفوظ</string>
+    <string name="picker_favorite_add">حفظ كقلم مفضّل</string>
+    <string name="picker_favorite_remove">إزالة من المفضّلة</string>
+    <string name="picker_favorites_full">المفضّلة ممتلئة</string>
+    <string name="pen_favorite">مفضّل: %1$s، %2$s</string>
 
     <string name="eraser_stroke">ممحاة الخطوط</string>
     <string name="eraser_stroke_hint">تمسح كل خط تلمسه</string>
