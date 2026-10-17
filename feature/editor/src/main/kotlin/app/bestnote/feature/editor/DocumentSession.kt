@@ -29,6 +29,8 @@ import app.bestnote.engine.canvas.document.ElementPainter
 import app.bestnote.engine.canvas.document.PagedDocument
 import app.bestnote.engine.canvas.document.PagedDocumentView
 import app.bestnote.engine.canvas.document.PaperPainter
+import app.bestnote.core.storage.PdfAssets
+import app.bestnote.engine.pdf.PdfDocumentSource
 import app.bestnote.engine.pdf.PdfNotebookFiles
 import app.bestnote.engine.pdf.PdfPageBackgrounds
 import app.bestnote.feature.editor.audio.AudioController
@@ -37,10 +39,13 @@ import app.bestnote.feature.editor.audio.InkSyncHost
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.ByteArrayOutputStream
 import java.io.File
+import java.io.IOException
+import java.io.InputStream
 import java.util.Collections
 import java.util.IdentityHashMap
 import java.util.WeakHashMap
@@ -97,6 +102,91 @@ internal class DocumentSession(
         val path = ImageAssets.pathFor(bytes, ext)
         if (assets.putIfAbsent(path, bytes) == null) saver?.addAsset(path, bytes)
         return path
+    }
+
+    /**
+     * Reads the PDF from [open] (PAGES-05) off the main thread, cancellable, and opens it for rendering without
+     * touching the notebook yet. [onProgress] gets 0..1. Finish with [insertPdf] or [discard].
+     * @throws PdfInsertException if it is not a usable PDF.
+     */
+    suspend fun stagePdf(totalBytes: Long, open: () -> InputStream?, onProgress: (Float) -> Unit): StagedPdf = withContext(Dispatchers.IO) {
+        val bytes = try {
+            val input = open() ?: throw PdfInsertException(PdfInsertException.Reason.Unreadable)
+            input.use { src ->
+                val out = ByteArrayOutputStream(if (totalBytes in 1..MAX_PDF_BYTES) totalBytes.toInt() else DEFAULT_BUFFER)
+                val buffer = ByteArray(DEFAULT_BUFFER)
+                while (true) {
+                    ensureActive()
+                    val n = src.read(buffer)
+                    if (n < 0) break
+                    out.write(buffer, 0, n)
+                    if (out.size() > MAX_PDF_BYTES) throw PdfInsertException(PdfInsertException.Reason.TooLarge)
+                    if (totalBytes > 0) onProgress(READ_SHARE * (out.size().toFloat() / totalBytes).coerceAtMost(1f))
+                }
+                out.toByteArray()
+            }
+        } catch (e: IOException) {
+            throw PdfInsertException(PdfInsertException.Reason.Unreadable, e)
+        } catch (e: SecurityException) {
+            throw PdfInsertException(PdfInsertException.Reason.Unreadable, e)
+        }
+        val asset = PdfAssets.pathFor(bytes)
+        val alreadyOpen = pdf?.hasSource(asset) == true
+        val reader = try {
+            PdfNotebookFiles.openAsset(notebookId, asset, bytes, pdfCacheDir)
+        } catch (e: SecurityException) {
+            throw PdfInsertException(PdfInsertException.Reason.Password, e)
+        } catch (e: IOException) {
+            throw PdfInsertException(PdfInsertException.Reason.Unreadable, e)
+        } catch (e: IllegalArgumentException) {
+            throw PdfInsertException(PdfInsertException.Reason.Unreadable, e)
+        }
+        var keep = false
+        try {
+            val count = reader.pageCount
+            if (count <= 0) throw PdfInsertException(PdfInsertException.Reason.Empty)
+            val sizes = ArrayList<Pair<Int, Int>>(count)
+            for (i in 0 until count) {
+                ensureActive()
+                val size = reader.pageSize(i)
+                sizes += size.widthPt to size.heightPt
+                onProgress(READ_SHARE + (1f - READ_SHARE) * (i + 1) / count)
+            }
+            // The same PDF inserted again is the same file: the renderer already open for it keeps serving.
+            keep = !alreadyOpen
+            StagedPdf(asset, bytes, if (alreadyOpen) null else reader, sizes)
+        } finally {
+            if (!keep) runCatching { reader.close() }
+        }
+    }
+
+    /** Puts the pages [indices] of [staged] into the document at [at] as ONE undo step. @return their indices. */
+    fun insertPdf(staged: StagedPdf, indices: List<Int>, at: Int): List<Int> {
+        val path = staged.asset
+        if (assets.putIfAbsent(path, staged.bytes) == null) saver?.addAsset(path, staged.bytes)
+        val backgrounds = pdf ?: PdfPageBackgrounds(emptyMap()).also {
+            pdf = it
+            document.backgrounds = it
+        }
+        staged.source?.let { source -> if (!backgrounds.hasSource(path)) backgrounds.addSource(path, source) else runCatching { source.close() } }
+        staged.source = null
+        val pages = InsertPlan.pdfPageModels(notebookId, path, indices) { staged.sizes[it] }
+        return document.insertPages(at, pages.map { it to emptyList() }, keepPdf = true)
+    }
+
+    /** The user backed out: release a staged PDF that was not inserted. */
+    fun discard(staged: StagedPdf) {
+        staged.source?.let { runCatching { it.close() } }
+        staged.source = null
+    }
+
+    /** Inserts one page per picture at [at] (the picture is a locked full-page image), as ONE undo step. @return the new indices. */
+    fun insertImagePages(pictures: List<ImportedImage>, at: Int): List<Int> {
+        val reference = document.pages.getOrNull((at - 1).coerceAtLeast(0))?.page ?: document.blankPage
+        val built = pictures.map { picture ->
+            InsertPlan.imagePage(notebookId, reference, addImage(picture.bytes, picture.ext), picture.width, picture.height, PageElement.newId())
+        }
+        return document.insertPages(at, built.map { it.first to emptyList() }, built.map { it.second })
     }
 
     /** Rasters of the notebook's PDF pages (PDF-01), or null for a plain notebook. */
@@ -375,6 +465,9 @@ internal class DocumentSession(
     }
 
     private companion object {
+        const val MAX_PDF_BYTES = 200L shl 20
+        const val DEFAULT_BUFFER = 64 * 1024
+        const val READ_SHARE = 0.6f
         const val TAG = "BestNoteAutosave"
         const val TAP_SLOP_PT = 10f
     }
@@ -468,4 +561,14 @@ internal fun renderPageBitmap(
         canvas.drawPath(path, ink)
     }
     return bitmap
+}
+
+/** A PDF read for "Insert from PDF" (PAGES-05) but not yet in the notebook: [sizes] are its pages in points. */
+internal class StagedPdf(val asset: String, val bytes: ByteArray, var source: PdfDocumentSource?, val sizes: List<Pair<Int, Int>>) {
+    val pageCount: Int get() = sizes.size
+}
+
+/** The picked file cannot become pages. */
+internal class PdfInsertException(val reason: Reason, cause: Throwable? = null) : Exception(reason.name, cause) {
+    enum class Reason { Unreadable, Password, Empty, TooLarge }
 }

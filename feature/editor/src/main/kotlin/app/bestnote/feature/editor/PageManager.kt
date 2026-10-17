@@ -39,6 +39,8 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.res.stringResource
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -113,6 +115,7 @@ internal fun PageManager(
     currentPage: Int,
     onClose: (openPage: Int?) -> Unit,
     modifier: Modifier = Modifier,
+    insert: PageInsertFlow? = null,
 ) {
     val scope = rememberCoroutineScope()
     val reduce = reducedMotion()
@@ -160,6 +163,24 @@ internal fun PageManager(
             snackbar.currentSnackbarData?.dismiss()
             val result = snackbar.showSnackbar(text, actionLabel = if (undoable) "Undo" else null)
             if (result == androidx.compose.material3.SnackbarResult.ActionPerformed) document.undo()
+        }
+    }
+
+    // Pages inserted from a PDF or image: report with the Undo snackbar, select and scroll to the first one.
+    DisposableEffect(insert) {
+        val previousNotify = insert?.notify
+        val previousInserted = insert?.onInserted
+        insert?.notify = { say(it) }
+        insert?.onInserted = { first ->
+            selection.clear()
+            document.pages.getOrNull(first)?.let { selection[it.id] = Unit }
+            scope.launch { grid.animateScrollToItem(first) }
+        }
+        onDispose {
+            if (insert != null) {
+                insert.notify = previousNotify ?: { }
+                insert.onInserted = previousInserted ?: { }
+            }
         }
     }
 
@@ -260,6 +281,8 @@ internal fun PageManager(
         InsertPageDialog(
             initial = base,
             onDismiss = { inserting = false },
+            onFromPdf = insert?.let { flow -> { inserting = false; flow.startPdf(selectedIndices.lastOrNull() ?: currentPage) } },
+            onFromImage = insert?.let { flow -> { inserting = false; flow.startImage(selectedIndices.lastOrNull() ?: currentPage) } },
         ) { template, color ->
             inserting = false
             val at = (selectedIndices.lastOrNull() ?: currentPage.coerceIn(0, pages.size - 1)) + 1
@@ -551,6 +574,8 @@ private val pickerTemplates = listOf(
 private fun InsertPageDialog(
     initial: Page?,
     onDismiss: () -> Unit,
+    onFromPdf: (() -> Unit)? = null,
+    onFromImage: (() -> Unit)? = null,
     onInsert: (PaperTemplate, PaperColor) -> Unit,
 ) {
     var template by remember { mutableStateOf(initial?.template ?: PaperTemplate.Ruled) }
@@ -559,6 +584,12 @@ private fun InsertPageDialog(
         Surface(shape = BestNoteShapes.Sheet, color = MaterialTheme.colorScheme.surface, tonalElevation = 0.dp) {
             Column(Modifier.padding(Spacing.XL), verticalArrangement = Arrangement.spacedBy(Spacing.L)) {
                 Text("Insert page", style = MaterialTheme.typography.titleLarge)
+                if (onFromPdf != null || onFromImage != null) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(Spacing.S)) {
+                        onFromPdf?.let { OutlinedButton(onClick = it) { Text(stringResource(R.string.insert_from_pdf)) } }
+                        onFromImage?.let { OutlinedButton(onClick = it) { Text(stringResource(R.string.insert_from_image)) } }
+                    }
+                }
                 Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(Spacing.M)) {
                     pickerTemplates.forEach { t ->
                         TemplateTile(t, color, initial, selected = t == template) { template = t }
