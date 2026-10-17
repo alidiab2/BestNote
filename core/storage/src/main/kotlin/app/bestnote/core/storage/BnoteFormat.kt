@@ -157,10 +157,10 @@ object BnoteFormat {
 
     /**
      * Format of a sealed notebook's stub manifest (LIB-11). Sealed notebooks are recognised by their `sealed`
-     * key, not by this number; it only has to be newer than what older apps read, so they refuse the notebook.
+     * key, not by this number; it only has to be newer than what older apps read, so they refuse the notebook. 10, not 9: TEXT-04 gives plain notebooks format 9.
      * Plain notebooks keep [VERSION].
      */
-    const val SEALED_FORMAT = 9
+    const val SEALED_FORMAT = 10
     const val MANIFEST = "manifest.json"
     const val PAGES_DIR = "pages/"
     const val ASSETS_DIR = "assets/"
