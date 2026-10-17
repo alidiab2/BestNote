@@ -10,6 +10,7 @@ package app.bestnote.core.model
  *   strokes keep rendering identically after brush tuning; null for strokes stored without one.
  * @property group id shared by the strokes (and elements) grouped together on the page, or null (CANVAS-14).
  * @property fillArgb packed 0xAARRGGBB fill of the shape a closed stroke outlines (INK-11; alpha is the fill's opacity); null for none.
+ * @property shape what the stroke is when it is a clean shape, and what its ends are glued to (CANVAS-17); null for plain ink.
  */
 data class InkBrush(
     val tool: Tool,
@@ -20,6 +21,7 @@ data class InkBrush(
     val audio: AudioSync? = null,
     val fillArgb: Int? = null,
     val group: String? = null,
+    val shape: ShapeInfo? = null,
 ) {
     init {
         require(tool.inks) { "$tool does not lay down ink" }

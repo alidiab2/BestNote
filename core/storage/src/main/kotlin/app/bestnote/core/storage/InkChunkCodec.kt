@@ -4,6 +4,8 @@ import app.bestnote.core.model.AudioSync
 import app.bestnote.core.model.InkBrush
 import app.bestnote.core.model.InkStroke
 import app.bestnote.core.model.PenStyle
+import app.bestnote.core.model.ShapeInfo
+import app.bestnote.core.model.ShapeLink
 import app.bestnote.core.model.StylusSample
 import app.bestnote.core.model.Tool
 import java.io.IOException
@@ -28,7 +30,12 @@ interface StrokeChunkCodec {
 }
 
 /**
- * `.ink` chunk, v5 (v1..v4 are still read). v5 adds the group id after the fill (CANVAS-14): `u8 idLength (0 = none) | idLength x UTF-8`;
+ * `.ink` chunk, v6 (v1..v5 are still read). v6 adds the clean-shape record after the group id (CANVAS-17):
+ * `u8 hasShape (0 or 1)`, then when 1: `u8 idLength | id | u8 kindLength | kind | u16 floatCount | floatCount x f32 points |
+ * link start | link end`, each link `u8 idLength (0 = none) | id | f32 at (only when idLength > 0)`. A chunk without
+ * shapes is still written as v5 (or v4 without groups), so older apps keep reading notebooks that have none.
+ *
+ * v5 adds the group id after the fill (CANVAS-14): v5 adds the group id after the fill (CANVAS-14): `u8 idLength (0 = none) | idLength x UTF-8`;
  * a chunk with no grouped stroke is still written as v4, so older apps keep reading ungrouped notebooks.
  * v4 adds the shape fill after the audio stamp:
  * `u8 hasFill (0 or 1) | i32 fillArgb (only when hasFill = 1)`. v3 adds the audio sync stamp after the family key:
@@ -45,8 +52,10 @@ interface StrokeChunkCodec {
  * ```
  */
 object InkChunkCodec : StrokeChunkCodec {
-    const val VERSION = 5
+    const val VERSION = 6
+    private const val VERSION_GROUPS = 5
     private const val VERSION_NO_GROUPS = 4
+    private const val MAX_SHAPE_FLOATS = 0xFFFF
     private const val MAX_FAMILY_BYTES = 255
     const val HEADER_SIZE = 16
     private val MAGIC = byteArrayOf('B'.code.toByte(), 'N'.code.toByte(), 'I'.code.toByte(), 'K'.code.toByte())
@@ -76,10 +85,17 @@ object InkChunkCodec : StrokeChunkCodec {
             require(id.size <= MAX_FAMILY_BYTES) { "Group id too long" }
             id
         }
-        val version = if (groups.any { it.isNotEmpty() }) VERSION else VERSION_NO_GROUPS
-        val withGroups = version >= VERSION
+        val shapes = strokes.map { s -> s.brush.shape?.let(::shapeBytes) }
+        val version = when {
+            shapes.any { it != null } -> VERSION
+            groups.any { it.isNotEmpty() } -> VERSION_GROUPS
+            else -> VERSION_NO_GROUPS
+        }
+        val withGroups = version >= VERSION_GROUPS
+        val withShapes = version >= VERSION
         val payloadSize = 4 + strokes.indices.sumOf { i ->
             STROKE_HEADER.toLong() + 1 + families[i].size + 1 + audioIds[i].size + 1 + (if (strokes[i].brush.fillArgb == null) 0 else 4) + (if (withGroups) 1 + groups[i].size else 0) + (if (audioIds[i].isEmpty()) 0 else 8) +
+                (if (withShapes) 1 + (shapes[i]?.size ?: 0) else 0) +
                 strokes[i].samples.size.toLong() * SAMPLE_SIZE
         }
         require(payloadSize <= Int.MAX_VALUE - HEADER_SIZE) { "Page too large for one chunk" }
@@ -104,6 +120,11 @@ object InkChunkCodec : StrokeChunkCodec {
             if (withGroups) {
                 buf.put(groups[i].size.toByte())
                 buf.put(groups[i])
+            }
+            if (withShapes) {
+                val shape = shapes[i]
+                buf.put((if (shape == null) 0 else 1).toByte())
+                if (shape != null) buf.put(shape)
             }
             buf.putInt(s.samples.size)
             for (p in s.samples) {
@@ -165,21 +186,65 @@ object InkChunkCodec : StrokeChunkCodec {
                 null
             }
             val fill = if (version >= 4 && buf.get().toInt() != 0) buf.int else null
-            val group = if (version >= VERSION) {
+            val group = if (version >= VERSION_GROUPS) {
                 val bytes = ByteArray(buf.get().toInt() and 0xFF).also { buf.get(it) }
                 if (bytes.isEmpty()) null else bytes.decodeToString()
             } else {
                 null
             }
+            val shape = if (version >= VERSION && buf.get().toInt() != 0) readShape(buf) else null
             val n = buf.int
             if (n < 0 || n.toLong() * SAMPLE_SIZE > buf.remaining()) throw CorruptChunkException("Bad sample count $n")
             val samples = ArrayList<StylusSample>(n)
             repeat(n) {
                 samples += StylusSample(buf.float, buf.float, buf.float, buf.float, buf.float, buf.long)
             }
-            strokes += InkStroke(InkBrush(tool, style, color, size, family, audio, fill, group), samples)
+            strokes += InkStroke(InkBrush(tool, style, color, size, family, audio, fill, group, shape), samples)
         }
         if (buf.hasRemaining()) throw CorruptChunkException("${buf.remaining()} trailing bytes")
         return strokes
+    }
+
+    private fun shortString(text: String, what: String): ByteArray {
+        val b = text.encodeToByteArray()
+        require(b.size <= MAX_FAMILY_BYTES) { "$what too long" }
+        return b
+    }
+
+    /** The v6 shape record after its `hasShape` byte. */
+    private fun shapeBytes(shape: ShapeInfo): ByteArray {
+        val id = shortString(shape.id, "Shape id")
+        val kind = shortString(shape.kind, "Shape kind")
+        require(shape.points.size <= MAX_SHAPE_FLOATS) { "Too many shape points" }
+        val links = listOf(shape.start, shape.end).map { l -> l?.let { shortString(it.targetId, "Link target") to it.at } }
+        val size = 1 + id.size + 1 + kind.size + 2 + 4 * shape.points.size + links.sumOf { 1 + (it?.first?.size?.plus(4) ?: 0) }
+        val b = ByteBuffer.allocate(size).order(ByteOrder.BIG_ENDIAN)
+        b.put(id.size.toByte()).put(id).put(kind.size.toByte()).put(kind)
+        b.putShort(shape.points.size.toShort())
+        shape.points.forEach(b::putFloat)
+        for (l in links) {
+            if (l == null || l.first.isEmpty()) {
+                b.put(0)
+            } else {
+                b.put(l.first.size.toByte()).put(l.first).putFloat(l.second)
+            }
+        }
+        return b.array()
+    }
+
+    private fun readShape(buf: ByteBuffer): ShapeInfo {
+        fun text() = ByteArray(buf.get().toInt() and 0xFF).also { buf.get(it) }.decodeToString()
+        val id = text()
+        val kind = text()
+        val count = buf.short.toInt() and 0xFFFF
+        if (count % 2 != 0 || count * 4L > buf.remaining()) throw CorruptChunkException("Bad shape point count $count")
+        val points = List(count) { buf.float }
+        fun link(): ShapeLink? {
+            val target = text()
+            return if (target.isEmpty()) null else ShapeLink(target, buf.float)
+        }
+        val start = link()
+        val end = link()
+        return ShapeInfo(id, kind, points, start, end)
     }
 }

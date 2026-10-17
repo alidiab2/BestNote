@@ -4,6 +4,8 @@ import app.bestnote.core.model.AudioSync
 import app.bestnote.core.model.InkBrush
 import app.bestnote.core.model.InkStroke
 import app.bestnote.core.model.PenStyle
+import app.bestnote.core.model.ShapeInfo
+import app.bestnote.core.model.ShapeLink
 import app.bestnote.core.model.StylusSample
 import app.bestnote.core.model.Tool
 import org.junit.Assert.assertEquals
@@ -144,6 +146,33 @@ class InkChunkCodecTest {
         assertEquals(grouped, back)
         assertEquals(listOf("g-abc", null, "g-abc"), back.map { it.brush.group })
         // No grouped stroke: still the v4 layout, so apps from before CANVAS-14 open the notebook.
+        assertEquals(4, java.nio.ByteBuffer.wrap(InkChunkCodec.encode(a)).getShort(4).toInt())
+    }
+
+    @Test fun shapesAndConnectorLinksRoundTripAndShapelessChunksKeepTheOlderLayout() {
+        val a = randomStrokes(3, seed = 17).map { it.copy(brush = it.brush.copy(group = null, shape = null)) }
+        val box = ShapeInfo("s-box", "Rectangle", listOf(10f, 10f, 60f, 10f, 60f, 40f, 10f, 40f))
+        val arrow = ShapeInfo("s-arrow", "Arrow", listOf(0f, 0f, 10f, 25f, 6f, 22f, 12f, 21f), start = null, end = ShapeLink("s-box", 3.5f))
+        val circle = ShapeInfo("s-c", "Circle", listOf(5f, 5f, 9f, 5f, 5f, 9f), start = ShapeLink("x", -1f), end = ShapeLink("s-box", 0f))
+        val shaped = listOf(
+            a[0].copy(brush = a[0].brush.copy(shape = box, group = "g-1")),
+            a[1].copy(brush = a[1].brush.copy(shape = arrow)),
+            a[2].copy(brush = a[2].brush.copy(shape = circle)),
+        )
+        val bytes = InkChunkCodec.encode(shaped)
+        assertEquals(6, java.nio.ByteBuffer.wrap(bytes).getShort(4).toInt())
+        val back = InkChunkCodec.decode(bytes)
+        assertEquals(shaped, back)
+        assertEquals(ShapeLink("s-box", 3.5f), back[1].brush.shape!!.end)
+        assertTrue(back[2].brush.shape!!.start!!.isCenter)
+        // Mixed: shapes next to plain strokes.
+        val mixed = listOf(shaped[0], a[1])
+        assertEquals(mixed, InkChunkCodec.decode(InkChunkCodec.encode(mixed)))
+        // No shape: the v5 (grouped) or v4 layout, which apps from before CANVAS-17 read; they decode with no shape.
+        val grouped = listOf(a[0].copy(brush = a[0].brush.copy(group = "g")), a[1])
+        val v5 = InkChunkCodec.encode(grouped)
+        assertEquals(5, java.nio.ByteBuffer.wrap(v5).getShort(4).toInt())
+        assertEquals(listOf(null, null), InkChunkCodec.decode(v5).map { it.brush.shape })
         assertEquals(4, java.nio.ByteBuffer.wrap(InkChunkCodec.encode(a)).getShort(4).toInt())
     }
 
