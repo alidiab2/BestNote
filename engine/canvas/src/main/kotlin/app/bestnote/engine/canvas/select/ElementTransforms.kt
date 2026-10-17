@@ -1,5 +1,6 @@
 package app.bestnote.engine.canvas.select
 
+import app.bestnote.core.model.EquationElement
 import app.bestnote.core.model.PageElement
 import app.bestnote.core.model.TextElement
 import app.bestnote.core.model.normalizeAngle
@@ -7,7 +8,7 @@ import kotlin.math.atan2
 import kotlin.math.cos
 import kotlin.math.sin
 
-/** Geometry of text boxes and images for selection and the lasso's transforms (TEXT-01, MEDIA-02). Pure Kotlin. */
+/** Geometry of text boxes, images and equations for selection and the lasso's transforms (TEXT-01, MEDIA-02). Pure Kotlin. */
 object ElementTransforms {
     /**
      * [e] after the lasso's move/resize/rotate [m]: a similarity (translate, uniform scale, rotate), so the
@@ -23,10 +24,12 @@ object ElementTransforms {
             height = e.height * k,
             rotation = normalizeAngle(e.rotation + atan2(m.b, m.a)),
         )
-        return if (moved is TextElement && k != 1f) {
-            moved.copy(sizePt = (moved.sizePt * k).coerceIn(TextElement.MIN_SIZE_PT / 2f, TextElement.MAX_SIZE_PT * 2f))
-        } else {
-            moved
+        return when {
+            k == 1f -> moved
+            moved is TextElement -> moved.copy(sizePt = (moved.sizePt * k).coerceIn(TextElement.MIN_SIZE_PT / 2f, TextElement.MAX_SIZE_PT * 2f))
+            // An equation's formula scales with its frame (MATH-01).
+            moved is EquationElement -> moved.copy(sizePt = (moved.sizePt * k).coerceIn(EquationElement.MIN_SIZE_PT, EquationElement.MAX_SIZE_PT))
+            else -> moved
         }
     }
 

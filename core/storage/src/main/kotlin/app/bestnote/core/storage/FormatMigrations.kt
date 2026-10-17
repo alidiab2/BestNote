@@ -74,7 +74,13 @@ internal object FormatMigrations {
      */
     private val V8_TO_V9 = Step(from = 8, manifest = { it.withFormat(9) }, page = { it.withFormat(9) })
 
-    val steps: List<Step> = listOf(V1_TO_V2, V2_TO_V3, V3_TO_V4, V4_TO_V5, V5_TO_V6, V6_TO_V7, V7_TO_V8, V8_TO_V9)
+    /**
+     * v9 → v10: pages may carry `equation` elements (MATH-01). v9 pages have none, so only the version changes; the bump
+     * makes a v9 app refuse the notebook rather than drop equations it cannot show and save over them.
+     */
+    private val V9_TO_V10 = Step(from = 9, manifest = { it.withFormat(10) }, page = { it.withFormat(10) })
+
+    val steps: List<Step> = listOf(V1_TO_V2, V2_TO_V3, V3_TO_V4, V4_TO_V5, V5_TO_V6, V6_TO_V7, V7_TO_V8, V8_TO_V9, V9_TO_V10)
 
     fun formatOf(json: JsonObject): Int = json["format"]?.jsonPrimitive?.int ?: throw CorruptChunkException("Missing format")
 

@@ -37,6 +37,7 @@ import androidx.compose.ui.unit.dp
 import app.bestnote.core.designsystem.theme.Motion
 import app.bestnote.core.designsystem.theme.Spacing
 import app.bestnote.core.designsystem.theme.reducedMotion
+import app.bestnote.core.model.EquationElement
 import app.bestnote.core.model.ImageElement
 import app.bestnote.core.model.TextElement
 import app.bestnote.engine.canvas.document.PagedDocumentView
@@ -58,6 +59,10 @@ internal class SelectionActions(
     val onRotate: () -> Unit = {},
     val onToggleLock: () -> Unit = {},
     val onConvert: () -> Unit = {},
+    /** MATH-01: read the selected handwriting as an equation; edit / copy a selected equation. */
+    val onConvertEquation: () -> Unit = {},
+    val onEditEquation: () -> Unit = {},
+    val onCopyLatex: () -> Unit = {},
     val onTidy: () -> Unit = {},
     /** INK-11: fill closed shapes with this ARGB (alpha = opacity); null clears the fill. */
     val onFill: (Int?) -> Unit = {},
@@ -187,9 +192,14 @@ internal fun SelectionMenu(
                     MenuDivider()
                     MenuText(stringResource(R.string.selection_tidy), onClick = actions.onTidy)
                     MenuText(stringResource(R.string.selection_convert), onClick = actions.onConvert)
+                    MenuText(stringResource(R.string.selection_convert_equation), onClick = actions.onConvertEquation)
                     MenuDivider()
                 }
                 if (element is TextElement) MenuText(stringResource(R.string.selection_edit), onClick = actions.onEditText)
+                if (element is EquationElement) {
+                    MenuText(stringResource(R.string.selection_edit), onClick = actions.onEditEquation)
+                    MenuText(stringResource(R.string.selection_copy_latex), onClick = actions.onCopyLatex)
+                }
                 if (element is ImageElement) {
                     MenuText(stringResource(R.string.image_crop), onClick = actions.onCrop)
                     MenuText(stringResource(R.string.image_rotate), onClick = actions.onRotate)

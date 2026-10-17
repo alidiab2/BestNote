@@ -24,6 +24,8 @@ internal class FallbackVisionProvider(
 
     override suspend fun transcribe(selection: VisionImage, language: String?) = attempt { it.transcribe(selection, language) }
 
+    override suspend fun readEquation(selection: VisionImage) = attempt { it.readEquation(selection) }
+
     override suspend fun writeNotes(image: VisionImage, request: NotesRequest) = attempt { it.writeNotes(image, request) }
 
     override suspend fun completeText(system: String, turns: List<app.bestnote.ai.vision.ChatTurn>, json: Boolean) = attempt { it.completeText(system, turns, json) }

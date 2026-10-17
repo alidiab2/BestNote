@@ -18,6 +18,7 @@ import android.text.style.LeadingMarginSpan
 import android.text.style.LineBackgroundSpan
 import android.text.style.MetricAffectingSpan
 import android.util.LruCache
+import app.bestnote.core.model.EquationElement
 import app.bestnote.core.model.ImageElement
 import app.bestnote.core.model.ListStyle
 import app.bestnote.core.model.PageElement
@@ -28,7 +29,7 @@ import app.bestnote.core.model.TextAlignment
 import app.bestnote.core.model.TextElement
 
 /**
- * Draws text boxes and images (TEXT-01/02, MEDIA-01) in page points. Text is laid out by Android's text
+ * Draws text boxes, images and equations (TEXT-01/02, MEDIA-01, MATH-01) in page points. Text is laid out by Android's text
  * engine with the first strong character deciding the paragraph direction, so Arabic is shaped, runs
  * right to left and aligns [TextAlignment.Start] on the right, while English stays left.
  */
@@ -82,6 +83,7 @@ class ElementPainter {
                 canvas.scale(1f / SCALE, 1f / SCALE)
                 layout.draw(canvas)
             }
+            is EquationElement -> EquationRendering.drawElement(canvas, e, colorOf(e.colorArgb))
         }
         canvas.restore()
     }

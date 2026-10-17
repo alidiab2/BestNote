@@ -143,6 +143,32 @@ You are rewriting a selection of YOUR OWN rough notes neatly, not a board.
         append(languageRule(language))
     }
 
+    /** User turn for [equation]. */
+    const val EQUATION_USER = "This is a selection of my handwritten mathematics. Return its LaTeX as JSON matching the response schema."
+
+    /**
+     * System instruction for "Convert to equation" (MATH-01): the user's own handwritten maths → strict LaTeX
+     * in ONE `math` block, copied exactly (never solved or corrected). The app sanitises and typesets it.
+     */
+    fun equation() = buildString {
+        append(EXPERT_STUDENT.trim())
+        append(
+            """
+
+## This task
+You are reading a selection of YOUR OWN handwritten MATHEMATICS. It will be replaced by a typeset equation.
+- Answer with exactly ONE block: `type` "math", `order` 0, the whole selection as LaTeX in `latex`, `text` "".
+- `latex` is LaTeX maths ONLY: no ${'$'} or \[ \] delimiters, no equation environment, no explanation, no comments, no Markdown.
+- Copy exactly what is written. Never solve, simplify, complete or correct the maths; fix only obvious slips of the pen.
+- Standard commands only: \frac, \sqrt, ^{…}, _{…}, \sum, \int, \lim, \left( … \right), \begin{pmatrix}, \begin{cases},
+  Greek letters, \le, \ge, \ne, \to, \infty, \cdot, \times, \vec. No \newcommand, no packages.
+- Several lines (the steps of a calculation): one `aligned` environment, lines separated by \\ and aligned at the = sign with &.
+- Words written beside the maths go in \text{…}, in their own language and script (Arabic stays Arabic).
+- If the selection contains no mathematics, return no blocks.
+""",
+        )
+    }
+
     /** User turn for [transcribe]. */
     const val TRANSCRIBE_USER = "This is a selection of my handwriting. Transcribe it as JSON matching the response schema."
 

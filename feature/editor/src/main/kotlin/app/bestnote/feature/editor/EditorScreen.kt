@@ -75,6 +75,7 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
 import android.content.Context
 import androidx.compose.ui.platform.LocalContext
+import app.bestnote.feature.editor.math.EquationDialogs
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.io.File
 import androidx.compose.ui.platform.LocalLayoutDirection
@@ -465,6 +466,19 @@ fun EditorScreen(
         snackbar = snackbar,
         ai = viewModel.aiProviders,
     )
+    // MATH-01: handwriting → typeset equations; a tap on an equation opens its editor.
+    val equations = app.bestnote.feature.editor.math.rememberEquationTools(
+        canvas = { canvas },
+        document = document,
+        recognizer = remember(viewModel.aiProviders) { app.bestnote.feature.editor.math.AiEquationRecognizer(viewModel.aiProviders) },
+        onSelecting = { viewModel.setLasso(true) },
+        snackbar = snackbar,
+    )
+    DisposableEffect(canvas) {
+        val view = canvas
+        view?.elementTapListener = { e -> if (e is app.bestnote.core.model.EquationElement) equations.edit(e) }
+        onDispose { view?.elementTapListener = null }
+    }
     val tidier = rememberInkTidier(
         canvas = { canvas },
         document = document,
@@ -1090,6 +1104,9 @@ fun EditorScreen(
                     onRotate = elements::rotateSelected,
                     onToggleLock = elements::toggleLock,
                     onConvert = converter::convert,
+                    onConvertEquation = equations::convert,
+                    onEditEquation = equations::editSelected,
+                    onCopyLatex = equations::copySelectedLatex,
                     onTidy = tidier::tidy,
                     onFill = { view?.fillSelection(it) },
                     onPen = { view?.restyleSelection(it) },
@@ -1103,6 +1120,7 @@ fun EditorScreen(
 
         elements.Dialogs()
         converter.Dialogs()
+        equations.EquationDialogs(onOpenSettings)
         tidier.Dialogs()
 
         // ---- page manager (PAGES-03/04/05): zooms out of the page being read ----

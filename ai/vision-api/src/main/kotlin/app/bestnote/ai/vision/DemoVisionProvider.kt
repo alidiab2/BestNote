@@ -37,6 +37,11 @@ class DemoVisionProvider(private val latencyMs: Long = 900) : VisionProvider {
         return AiDocument(blocks = listOf(AiBlock(type = "paragraph", order = 0, text = line)))
     }
 
+    override suspend fun readEquation(selection: VisionImage): AiDocument {
+        delay(latencyMs)
+        return AiDocument(blocks = listOf(AiBlock(type = "math", order = 0, latex = "x = \\frac{-b \\pm \\sqrt{b^2 - 4ac}}{2a}", text = "")))
+    }
+
     /**
      * Template first: answers in the compact element format (encoded and parsed back, exactly like a
      * real answer): Arabic calculus notes with Hebrew terms and maths, or Hebrew physics study notes

@@ -64,6 +64,8 @@ class AiProviders(private val http: OkHttpClient, val settings: KeystoreAiSettin
 
         override suspend fun transcribe(selection: VisionImage, language: String?) = remembering { target().transcribe(selection, language) }
 
+        override suspend fun readEquation(selection: VisionImage) = remembering { target().readEquation(selection) }
+
         override suspend fun writeNotes(image: VisionImage, request: app.bestnote.ai.vision.NotesRequest) = remembering { target().writeNotes(image, request) }
 
         override suspend fun completeText(system: String, turns: List<app.bestnote.ai.vision.ChatTurn>, json: Boolean) = target().completeText(system, turns, json)

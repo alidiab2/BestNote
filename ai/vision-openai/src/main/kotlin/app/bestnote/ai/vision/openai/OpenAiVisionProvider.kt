@@ -50,6 +50,9 @@ class OpenAiVisionProvider(
     override suspend fun transcribe(selection: VisionImage, language: String?): AiDocument =
         generate(Prompts.transcribe(language), Prompts.TRANSCRIBE_USER, selection)
 
+    override suspend fun readEquation(selection: VisionImage): AiDocument =
+        generate(Prompts.equation(), Prompts.EQUATION_USER, selection)
+
     override suspend fun completeText(system: String, turns: List<app.bestnote.ai.vision.ChatTurn>, json: Boolean): String {
         val base = credentials.baseUrl()?.trim()?.takeIf { it.isNotEmpty() } ?: config.baseUrl
         val official = isOfficial(base)
