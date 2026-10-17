@@ -75,7 +75,7 @@ private val PaperSizePreset.label: String
  * apply to that page; "+ New page" then continues with the last page's paper.
  */
 @Composable
-internal fun PaperMenuButton(view: PagedDocumentView?, onManage: () -> Unit = {}) {
+internal fun PaperMenuButton(view: PagedDocumentView?, onManage: () -> Unit = {}, insert: PageInsertFlow? = null) {
     var open by remember { mutableStateOf(false) }
     var custom by remember { mutableStateOf<Page?>(null) }
     Box {
@@ -91,6 +91,16 @@ internal fun PaperMenuButton(view: PagedDocumentView?, onManage: () -> Unit = {}
                 Choice("All pages…", false) {
                     open = false
                     onManage()
+                }
+                if (insert != null) {
+                    Choice(stringResource(R.string.insert_pdf_menu), false) {
+                        open = false
+                        insert.startPdf(index)
+                    }
+                    Choice(stringResource(R.string.insert_image_menu), false) {
+                        open = false
+                        insert.startImage(index)
+                    }
                 }
                 HorizontalDivider()
                 Section("Page ${index + 1} · template")

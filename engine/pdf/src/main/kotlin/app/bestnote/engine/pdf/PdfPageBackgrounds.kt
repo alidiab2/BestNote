@@ -20,10 +20,12 @@ import kotlin.math.sqrt
  * [sources] maps a PDF asset path to its document. Closing this closes them.
  */
 class PdfPageBackgrounds(
-    private val sources: Map<String, PdfDocumentSource>,
+    sources: Map<String, PdfDocumentSource>,
     cacheBytes: Long = defaultCacheBytes(),
     private val main: Handler = Handler(Looper.getMainLooper()),
 ) : PageBackgrounds, Closeable {
+    private val sources = java.util.concurrent.ConcurrentHashMap<String, PdfDocumentSource>(sources)
+
     private data class Key(val asset: String, val page: Int, val width: Int)
 
     private class Job(val key: Key, val heightPx: Int) {
@@ -48,7 +50,7 @@ class PdfPageBackgrounds(
         val key = Key(ref.asset, ref.pageIndex, width)
         lock.withLock {
             cache[key]?.let { return it }
-            if (!closed && key !in failed && ref.asset in sources) {
+            if (!closed && key !in failed && sources.containsKey(ref.asset)) {
                 val job = pending.remove(key) ?: Job(key, (width * aspect).toInt().coerceAtLeast(1))
                 job.listeners += onReady
                 pending[key] = job // newest last
@@ -59,6 +61,16 @@ class PdfPageBackgrounds(
                 .filter { it.key.asset == key.asset && it.key.page == key.page }
                 .maxByOrNull { it.key.width }?.value
         }
+    }
+
+    /** True if the PDF at [asset] can already be drawn. */
+    fun hasSource(asset: String): Boolean = sources.containsKey(asset)
+
+    /** Makes the PDF at [asset] drawable (pages inserted from a PDF while the notebook is open, PAGES-05). Closing this closes it. */
+    fun addSource(asset: String, source: PdfDocumentSource) {
+        val old = sources.put(asset, source)
+        if (old != null && old !== source) runCatching { old.close() }
+        lock.withLock { failed.removeAll { it.asset == asset } }
     }
 
     /** Renders [page] now, [widthPx] wide, bypassing the cache (thumbnails). Call off the main thread. */

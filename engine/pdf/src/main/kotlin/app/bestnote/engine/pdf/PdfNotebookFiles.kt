@@ -33,6 +33,22 @@ object PdfNotebookFiles {
         return if (sources.isEmpty()) null else PdfPageBackgrounds(sources)
     }
 
+    /**
+     * Copies [bytes] (the PDF stored at [asset]) to [cacheDir] like [open] does and opens it, for a PDF
+     * added while the notebook is open (PAGES-05). Does file I/O: call off the main thread.
+     * @throws java.io.IOException, SecurityException (password protected) or IllegalArgumentException if it is not a usable PDF.
+     */
+    fun openAsset(id: NotebookId, asset: String, bytes: ByteArray, cacheDir: File): PdfDocumentSource {
+        val dir = File(cacheDir, dirName(id)).apply { mkdirs() }
+        val file = File(dir, asset.substringAfterLast('/'))
+        if (!file.isFile || file.length() != bytes.size.toLong()) {
+            val tmp = File(dir, file.name + ".tmp")
+            tmp.writeBytes(bytes)
+            check(tmp.renameTo(file)) { "Cannot move $tmp" }
+        }
+        return PdfRendererDocumentSource.open(file)
+    }
+
     /** Deletes the copies [open] made for notebook [id] (LIB-11: a locked notebook's PDFs never stay in the cache). */
     fun forget(id: NotebookId, cacheDir: File) {
         File(cacheDir, dirName(id)).deleteRecursively()
