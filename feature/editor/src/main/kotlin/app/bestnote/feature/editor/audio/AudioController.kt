@@ -77,6 +77,9 @@ internal class AudioController(
     private val storeLock = Mutex()
     private var player: MediaPlayer? = null
 
+    /** Length of the recording loaded in [player]. */
+    private var loadedDuration = 0L
+
     /** True while [player] decrypts an encrypted working copy. */
     private var sealedPlayer = false
     private var ticker: Job? = null
@@ -265,7 +268,7 @@ internal class AudioController(
 
     fun seekTo(ms: Long) {
         val p = player ?: return
-        val to = ms.coerceIn(0, p.duration.toLong().coerceAtLeast(0))
+        val to = ms.coerceIn(0, loadedDuration.coerceAtLeast(0))
         p.seekTo(to, MediaPlayer.SEEK_CLOSEST)
         mutable.update { it.copy(positionMs = to) }
         syncDim()
@@ -305,11 +308,20 @@ internal class AudioController(
                 p.setDataSource(AudioFiles.fileOf(context, notebookId.value, rec.id).path)
             }
             p.prepare()
+            val length = p.duration.toLong().takeIf { it > 0 } ?: rec.durationMillis
             p.setOnCompletionListener {
+                // No player call here: after an error the player is unusable and MediaPlayer would report every call
+                // as a new error (and, with no error listener, call this again).
                 ticker?.cancel()
-                mutable.update { s -> s.copy(playing = false, positionMs = p.duration.toLong()) }
+                mutable.update { s -> s.copy(playing = false, positionMs = length) }
                 syncDim()
             }
+            p.setOnErrorListener { _, what, extra ->
+                Log.w(TAG, "Playback of ${rec.id} failed ($what, $extra)")
+                scope.launch { closePlayer() }
+                true
+            }
+            loadedDuration = length
             player = p
             sealedPlayer = keys != null
             mutable.update { it.copy(current = rec.id, positionMs = 0, playing = false) }
