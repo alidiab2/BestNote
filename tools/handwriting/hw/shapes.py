@@ -191,3 +191,162 @@ def _clip(a, b, x, y, sw, sh):
     if t0 >= t1:
         return None
     return (a[0] + dx * t0, a[1] + dy * t0), (a[0] + dx * t1, a[1] + dy * t1)
+
+
+# ---------------------------------------------------------------- CANVAS-17: sloppier shapes for the accuracy corpus
+
+def _rounded(corners, w, r_mm, closed=True, bow=0.025):
+    """Straight-ish sides through corners whose corners are cut by a small hand-drawn curve of about r_mm."""
+    rng = w.rng
+    pts = []
+    m = len(corners)
+    n = m if closed else m - 1
+    for i in range(n):
+        a, b = corners[i], corners[(i + 1) % m]
+        L = geom.dist(a, b) or 1.0
+        ra = min(r_mm * rng.uniform(0.6, 1.4), 0.3 * L) if (closed or i > 0) else 0.0
+        rb = min(r_mm * rng.uniform(0.6, 1.4), 0.3 * L) if (closed or i < n - 1) else 0.0
+        ux, uy = (b[0] - a[0]) / L, (b[1] - a[1]) / L
+        s = (a[0] + ux * ra, a[1] + uy * ra)
+        e = (b[0] - ux * rb, b[1] - uy * rb)
+        seg = _line(s, e, w, bow=bow)
+        if pts:
+            # the corner: a short curve from the previous side's end through near the corner
+            c = (a[0] + rng.gauss(0, 0.15), a[1] + rng.gauss(0, 0.15))
+            curve = geom.catmull_rom([pts[-1], ((pts[-1][0] + c[0]) / 2, (pts[-1][1] + c[1]) / 2),
+                                      ((c[0] + s[0]) / 2, (c[1] + s[1]) / 2), s], step=0.08)
+            pts += curve[1:] + seg[1:]
+        else:
+            pts += seg
+    return pts
+
+
+def sloppy_box(doc, w, cx, cy, bw, bh, rot_deg=0.0, corner_mm=1.5, close="overshoot", hold_ms=0.0, gap="shape"):
+    """A quickly drawn box: rounded corners, uneven sides, slightly turned; closes with an overshoot or a gap."""
+    rng = w.rng
+    j = lambda: rng.gauss(0, 0.04 * min(bw, bh))
+    ca, sa = math.cos(math.radians(rot_deg)), math.sin(math.radians(rot_deg))
+    raw = [(-bw / 2, -bh / 2), (bw / 2, -bh / 2), (bw / 2, bh / 2), (-bw / 2, bh / 2)]
+    c = [(cx + (u + j()) * ca - (v + j()) * sa, cy + (u + j()) * sa + (v + j()) * ca) for u, v in raw]
+    pts = _rounded(c, w, corner_mm)
+    a, b = c[0], c[1]
+    if close == "overshoot":
+        k = rng.uniform(0.05, 0.15)
+        pts += _line(pts[-1], (a[0] + (b[0] - a[0]) * k, a[1] + (b[1] - a[1]) * k), w, bow=0.0)[1:]
+    elif close == "gap":
+        # stops short of the first corner by a few percent of the side
+        L = geom.dist(c[3], a)
+        cut = rng.uniform(0.06, 0.14) * L
+        while len(pts) > 2 and geom.dist(pts[-1], a) < cut:
+            pts.pop()
+    doc.add(pts, gap=gap, hold_ms=hold_ms)
+
+
+def open_circle(doc, w, c, r, gap_deg=25.0, squash=1.0, hold_ms=0.0, gap="shape", clockwise=False):
+    """A circle that doesn't quite close (the pen lifts gap_deg short of the start), radius drifting a little."""
+    rng = w.rng
+    start = math.radians(rng.uniform(-150, -30))
+    sweep = 2 * math.pi - math.radians(gap_deg)
+    rn = geom.SmoothNoise(rng, 2 * math.pi, 0.05 * r)
+    n = int(r * sweep / 0.15)
+    sgn = 1 if clockwise else -1
+    pts = []
+    for i in range(n + 1):
+        a = start + sgn * sweep * i / n
+        rr = r + rn(a) - 0.06 * r * (i / n)
+        pts.append((c[0] + math.cos(a) * rr, c[1] + math.sin(a) * rr * squash))
+    doc.add(geom.wobble(pts, rng, 0.05, 8.0), gap=gap, hold_ms=hold_ms)
+
+
+def arrow_closed_head(doc, w, a, b, size=4.0, hold_ms=0.0, gap="shape"):
+    """Shaft, then a closed triangular head drawn without lifting: tip, barb, other barb, back to the tip."""
+    rng = w.rng
+    ang = math.atan2(b[1] - a[1], b[0] - a[0])
+    spread = math.radians(rng.uniform(22, 32))
+    l = size * rng.uniform(0.9, 1.1)
+    p1 = (b[0] - math.cos(ang - spread) * l, b[1] - math.sin(ang - spread) * l)
+    p2 = (b[0] - math.cos(ang + spread) * l, b[1] - math.sin(ang + spread) * l)
+    pts = _line(a, b, w, bow=0.02)
+    pts += _line(b, p1, w, bow=0.0)[1:]
+    pts += _line(p1, p2, w, bow=0.0)[1:]
+    pts += _line(p2, b, w, bow=0.0)[1:]
+    doc.add(pts, gap=gap, hold_ms=hold_ms)
+
+
+def arrow_one_barb_first(doc, w, a, b, size=4.0, hold_ms=0.0, gap="shape"):
+    """Shaft, then the head as one 'V' through the tip: barb, back to the tip, other barb (sloppier barbs)."""
+    rng = w.rng
+    ang = math.atan2(b[1] - a[1], b[0] - a[0])
+    s1, s2 = math.radians(rng.uniform(20, 40)), math.radians(rng.uniform(20, 40))
+    l1, l2 = size * rng.uniform(0.75, 1.25), size * rng.uniform(0.75, 1.25)
+    p1 = (b[0] - math.cos(ang - s1) * l1, b[1] - math.sin(ang - s1) * l1)
+    p2 = (b[0] - math.cos(ang + s2) * l2, b[1] - math.sin(ang + s2) * l2)
+    pts = _line(a, b, w, bow=0.03)
+    pts += geom.catmull_rom([b, p1], 0.08)[1:]
+    pts += geom.catmull_rom([p1, (b[0] + rng.gauss(0, 0.2), b[1] + rng.gauss(0, 0.2))], 0.08)[1:]
+    pts += geom.catmull_rom([pts[-1], p2], 0.08)[1:]
+    doc.add(geom.wobble(pts, rng, 0.03, 8.0), gap=gap, hold_ms=hold_ms)
+
+
+def diamond(doc, w, c, rw, rh, hold_ms=0.0, gap="shape"):
+    """A rhombus: top, right, bottom, left."""
+    corners = [(c[0], c[1] - rh), (c[0] + rw, c[1]), (c[0], c[1] + rh), (c[0] - rw, c[1])]
+    rng = w.rng
+    corners = [(x + rng.gauss(0, 0.4), y + rng.gauss(0, 0.4)) for x, y in corners]
+    pts = _rounded(corners, w, 0.8)
+    pts += _line(pts[-1], corners[0], w, bow=0.0)[1:]
+    a, b = corners[0], corners[1]
+    pts += _line(a, (a[0] + (b[0] - a[0]) * 0.08, a[1] + (b[1] - a[1]) * 0.08), w, bow=0.0)[1:]
+    doc.add(pts, gap=gap, hold_ms=hold_ms)
+
+
+def pentagram(doc, w, c, r, rot_deg=-90.0, hold_ms=0.0, gap="shape"):
+    """The classic one-stroke star: five straight lines through every second point of a pentagon."""
+    rng = w.rng
+    pts5 = [(c[0] + r * math.cos(math.radians(rot_deg) + 2 * math.pi * i / 5) + rng.gauss(0, 0.04 * r),
+             c[1] + r * math.sin(math.radians(rot_deg) + 2 * math.pi * i / 5) + rng.gauss(0, 0.04 * r)) for i in range(5)]
+    order = [0, 2, 4, 1, 3, 0]
+    pts = []
+    for i in range(5):
+        seg = _line(pts5[order[i]], pts5[order[i + 1]], w, bow=0.015)
+        pts += seg if not pts else seg[1:]
+    doc.add(pts, gap=gap, hold_ms=hold_ms)
+
+
+def star_outline(doc, w, c, r_out, r_in, points=5, rot_deg=-90.0, hold_ms=0.0, gap="shape"):
+    """A star drawn as its outline: alternating outer and inner corners."""
+    rng = w.rng
+    corners = []
+    for i in range(2 * points):
+        r = r_out if i % 2 == 0 else r_in
+        a = math.radians(rot_deg) + math.pi * i / points
+        corners.append((c[0] + r * math.cos(a) + rng.gauss(0, 0.03 * r_out), c[1] + r * math.sin(a) + rng.gauss(0, 0.03 * r_out)))
+    polygon(doc, w, corners, hold_ms=hold_ms, gap=gap)
+
+
+def zigzag(doc, w, a, step, n, amp, hold_ms=0.0, gap="shape"):
+    """An open polyline: n segments going right, alternately up and down."""
+    rng = w.rng
+    corners = [a]
+    for i in range(1, n + 1):
+        corners.append((a[0] + step * i + rng.gauss(0, 0.3), a[1] + (amp if i % 2 else 0.0) + rng.gauss(0, 0.3)))
+    pts = []
+    for i in range(n):
+        seg = _line(corners[i], corners[i + 1], w, bow=0.02)
+        pts += seg if not pts else seg[1:]
+    doc.add(pts, gap=gap, hold_ms=hold_ms)
+
+
+def spiral(doc, w, c, r, turns=2.2, hold_ms=0.0, gap="shape"):
+    rng = w.rng
+    n = int(turns * 80)
+    pts = [(c[0] + r * (0.25 + 0.75 * i / n) * math.cos(2 * math.pi * turns * i / n),
+            c[1] + r * (0.25 + 0.75 * i / n) * math.sin(2 * math.pi * turns * i / n)) for i in range(n + 1)]
+    doc.add(geom.wobble(pts, rng, 0.04, 8.0), gap=gap, hold_ms=hold_ms)
+
+
+def wave(doc, w, a, length, amp, periods=2.0, hold_ms=0.0, gap="shape"):
+    rng = w.rng
+    n = int(length / 0.2)
+    pts = [(a[0] + length * i / n, a[1] + amp * math.sin(2 * math.pi * periods * i / n)) for i in range(n + 1)]
+    doc.add(geom.wobble(pts, rng, 0.05, 8.0), gap=gap, hold_ms=hold_ms)

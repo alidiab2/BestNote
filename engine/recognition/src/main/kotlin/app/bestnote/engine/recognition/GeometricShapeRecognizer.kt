@@ -143,7 +143,7 @@ class GeometricShapeRecognizer(private val config: Config = Config()) : ShapeRec
             val dd = dist(r, i, j)
             if (dd < best) { best = dd; bi = i; bj = j }
         }
-        if (best > CLOSE_GAP * d) return null
+        if (best > CLOSE_GAP * d) return openArc(r)
         val loopLen = r.length(bi, bj)
         if (loopLen < 0.6 * r.length()) return null
         val loop = r.slice(bi, bj).resampleClosed(LOOP_POINTS)
@@ -156,6 +156,33 @@ class GeometricShapeRecognizer(private val config: Config = Config()) : ShapeRec
             ellOk -> ShapeMatch(ell!!.first, confidence(ell.second, ELLIPSE_MAX_ERR))
             else -> null
         }
+    }
+
+    /**
+     * CANVAS-17: a circle or ellipse whose ends don't meet (the pen lifted early): the arc must sweep at least
+     * [OPEN_ARC_MIN_SWEEP] round its fitted centre, steadily one way, and fit the ellipse closely. Letters like
+     * "c" or "u" sweep far less; a spiral sweeps more than one turn.
+     */
+    private fun openArc(r: Pts): ShapeMatch? {
+        val d = r.diagonal()
+        if (dist(r, 0, r.size - 1) > OPEN_ARC_MAX_GAP * d) return null
+        val (shape, err) = fitEllipse(r) ?: return null
+        if (err > ELLIPSE_MAX_ERR * OPEN_ARC_ERR_SHARE) return null
+        var sweep = 0.0
+        var back = 0.0
+        var prev = atan2(r.y[0] - shape.cy, r.x[0] - shape.cx)
+        for (i in 1 until r.size) {
+            val a = atan2(r.y[i] - shape.cy, r.x[i] - shape.cx)
+            var da = a - prev
+            while (da > PI) da -= 2 * PI
+            while (da < -PI) da += 2 * PI
+            sweep += da
+            prev = a
+            if (i > 1 && da * sweep < 0) back += abs(da)
+        }
+        val turn = abs(sweep)
+        if (turn < OPEN_ARC_MIN_SWEEP || turn > 2 * PI + OPEN_ARC_MAX_OVERLAP || back > OPEN_ARC_MAX_BACK) return null
+        return ShapeMatch(shape, confidence(err, ELLIPSE_MAX_ERR))
     }
 
     /** Ellipse fit of a closed loop and its mean distance error relative to the loop's diagonal. */
@@ -235,8 +262,8 @@ class GeometricShapeRecognizer(private val config: Config = Config()) : ShapeRec
 
     /** Polygon fit of a closed loop (3..[MAX_VERTICES] corners) and its mean distance error relative to the diagonal. */
     private fun fitPolygon(loop: Pts): Pair<RecognizedShape.Polygon, Double>? {
-        val corners = corners(loop, closed = true)
-        if (corners.size < 3 || corners.size > MAX_VERTICES) return null
+        val corners = mergeNearCorners(loop, corners(loop, closed = true))
+        if (corners.size < 3 || corners.size > MAX_CLOSED_VERTICES) return null
         val n = loop.size
         val m = corners.size
         val fits = Array(m) { k ->
@@ -261,14 +288,50 @@ class GeometricShapeRecognizer(private val config: Config = Config()) : ShapeRec
         verts = dropStraightVertices(verts)
         if (verts.size < 3) return null
         val err = meanDistanceToPolygon(loop, verts) / d
-        val kind = when (verts.size) {
-            3 -> ShapeKind.Triangle
-            4 -> if (isRectangular(verts)) ShapeKind.Rectangle else ShapeKind.Polygon
+        val kind = when {
+            verts.size == 3 -> ShapeKind.Triangle
+            verts.size == 4 && isDiamond(verts) -> ShapeKind.Diamond
+            verts.size == 4 && isRectangular(verts) -> ShapeKind.Rectangle
+            isPentagram(verts) || isStarOutline(verts) -> ShapeKind.Star
+            verts.size > MAX_VERTICES -> return null
             else -> ShapeKind.Polygon
         }
-        if (kind == ShapeKind.Rectangle) verts = regularRectangle(verts)
+        when (kind) {
+            ShapeKind.Rectangle -> verts = regularRectangle(verts)
+            ShapeKind.Diamond -> verts = regularDiamond(verts)
+            ShapeKind.Star -> verts = regularStar(verts)
+            else -> Unit
+        }
         val points = (0 until verts.size).map { verts.x[it].toFloat() to verts.y[it].toFloat() }
         return RecognizedShape.Polygon(points, closed = true, kind = kind) to err
+    }
+
+    /**
+     * A rounded corner can show up as two corners next to each other: keep the sharper of any two that are
+     * closer than [CORNER_MERGE] of the loop (the sides' intersection then finds the real corner).
+     */
+    private fun mergeNearCorners(loop: Pts, cs: List<Int>): List<Int> {
+        if (cs.size < 2) return cs
+        val n = loop.size
+        val gap = max(2, (n * CORNER_MERGE).toInt())
+        val k = cornerWindow(n)
+        val out = ArrayList(cs)
+        var changed = true
+        while (changed && out.size > 1) {
+            changed = false
+            for (i in out.indices) {
+                val a = out[i]
+                val b = out[(i + 1) % out.size]
+                val along = if (b > a) b - a else b + n - a
+                if (along in 1..gap) {
+                    val drop = if (turnAt(loop, a, k, closed = true) >= turnAt(loop, b, k, closed = true)) (i + 1) % out.size else i
+                    out.removeAt(drop)
+                    changed = true
+                    break
+                }
+            }
+        }
+        return out
     }
 
     private fun dropStraightVertices(v: Pts): Pts {
@@ -284,6 +347,94 @@ class GeometricShapeRecognizer(private val config: Config = Config()) : ShapeRec
     private fun isRectangular(v: Pts): Boolean = (0 until 4).all { k ->
         val p = (k + 3) % 4; val q = (k + 1) % 4
         abs(turn(v.x[p], v.y[p], v.x[k], v.y[k], v.x[q], v.y[q]) - QUARTER) <= RIGHT_ANGLE_TOLERANCE
+    }
+
+    /** A rhombus standing on a corner: its diagonals cross near their middles, one upright and one level. */
+    private fun isDiamond(v: Pts): Boolean {
+        val ax = v.x[2] - v.x[0]; val ay = v.y[2] - v.y[0]
+        val bx = v.x[3] - v.x[1]; val by = v.y[3] - v.y[1]
+        val la = hypot(ax, ay); val lb = hypot(bx, by)
+        if (la <= 0 || lb <= 0) return false
+        val tol = DIAMOND_AXIS_TOLERANCE
+        val aLevel = abs(ay) / la <= sin(tol); val aUpright = abs(ax) / la <= sin(tol)
+        val bLevel = abs(by) / lb <= sin(tol); val bUpright = abs(bx) / lb <= sin(tol)
+        if (!((aLevel && bUpright) || (aUpright && bLevel))) return false
+        val mx = (v.x[0] + v.x[2]) / 2 - (v.x[1] + v.x[3]) / 2
+        val my = (v.y[0] + v.y[2]) / 2 - (v.y[1] + v.y[3]) / 2
+        return hypot(mx, my) <= DIAMOND_CENTER_DRIFT * min(la, lb)
+    }
+
+    /** The upright rhombus through [v]'s extremes, corners in [v]'s order. */
+    private fun regularDiamond(v: Pts): Pts {
+        val l = v.x.min(); val r = v.x.max(); val t = v.y.min(); val b = v.y.max()
+        val cx = (l + r) / 2; val cy = (t + b) / 2
+        val ox = DoubleArray(4); val oy = DoubleArray(4)
+        for (k in 0 until 4) {
+            val dx = v.x[k] - cx; val dy = v.y[k] - cy
+            // Each corner goes to the nearest of top, right, bottom, left.
+            if (abs(dx) / (r - l) > abs(dy) / (b - t)) {
+                ox[k] = if (dx > 0) r else l; oy[k] = cy
+            } else {
+                ox[k] = cx; oy[k] = if (dy > 0) b else t
+            }
+        }
+        return Pts(ox, oy)
+    }
+
+    /** Five points joined through every second one: each corner turns sharply back (a convex pentagon's turn far less). */
+    private fun isPentagram(v: Pts): Boolean = v.size == 5 && (0 until 5).all { k ->
+        turn(v.x[(k + 4) % 5], v.y[(k + 4) % 5], v.x[k], v.y[k], v.x[(k + 1) % 5], v.y[(k + 1) % 5]) >= PENTAGRAM_MIN_TURN
+    }
+
+    /** A star's outline: an even number of corners (8..12) alternating far from and near its center. */
+    private fun isStarOutline(v: Pts): Boolean {
+        val m = v.size
+        if (m % 2 != 0 || m < 8 || m > MAX_CLOSED_VERTICES) return false
+        val cx = v.x.average(); val cy = v.y.average()
+        val rr = DoubleArray(m) { hypot(v.x[it] - cx, v.y[it] - cy) }
+        val parity = if (rr[0] > rr[1]) 0 else 1
+        return (0 until m).all { k ->
+            val outer = k % 2 == parity
+            val n1 = rr[(k + 1) % m]; val n2 = rr[(k + m - 1) % m]
+            if (outer) rr[k] * STAR_INNER_RATIO > max(n1, n2) else rr[k] < STAR_INNER_RATIO * min(n1, n2)
+        }
+    }
+
+    /** The regular star closest to [v] (a pentagram or an outline), a point straight up when close; corners in [v]'s order. */
+    private fun regularStar(v: Pts): Pts {
+        val m = v.size
+        val cx = v.x.average(); val cy = v.y.average()
+        val rr = DoubleArray(m) { hypot(v.x[it] - cx, v.y[it] - cy) }
+        val outline = m != 5
+        val points = if (outline) m / 2 else 5
+        val parity = if (!outline || rr[0] > rr[1]) 0 else 1
+        val outer = (0 until m).filter { !outline || it % 2 == parity }
+        val inner = (0 until m).filter { outline && it % 2 != parity }
+        val rOut = outer.sumOf { rr[it] } / outer.size
+        val rIn = if (inner.isEmpty()) 0.0 else inner.sumOf { rr[it] } / inner.size
+        // Rotation of the outer points, modulo one point's step: circular mean of angle × points.
+        var sx = 0.0; var sy = 0.0
+        for (k in outer) {
+            val a = atan2(v.y[k] - cy, v.x[k] - cx) * points
+            sx += cos(a); sy += sin(a)
+        }
+        val step = 2 * PI / points
+        var base = atan2(sy, sx) / points
+        // A point straight up (-90°) when close.
+        val up = -QUARTER
+        val off = Math.IEEEremainder(base - up, step)
+        if (abs(off) <= Math.toRadians(STAR_UPRIGHT_SNAP_DEG)) base = up
+        val ox = DoubleArray(m); val oy = DoubleArray(m)
+        for (k in 0 until m) {
+            val a = atan2(v.y[k] - cy, v.x[k] - cx)
+            val isOuter = !outline || k % 2 == parity
+            val phase = if (isOuter) base else base + step / 2
+            val j = ((a - phase) / step).roundToInt()
+            val t = phase + j * step
+            val radius = if (isOuter) rOut else rIn
+            ox[k] = cx + cos(t) * radius; oy[k] = cy + sin(t) * radius
+        }
+        return Pts(ox, oy)
     }
 
     /** The rectangle closest to quadrilateral [v], snapped upright (or to 45°) when close; corners in [v]'s order. */
@@ -393,6 +544,9 @@ class GeometricShapeRecognizer(private val config: Config = Config()) : ShapeRec
         for (k in 1 until fits.size) {
             val c = idx[k]
             val hit = fits[k - 1].intersect(fits[k])
+            // A wave turns gradually: its sides' lines meet well beyond the curve. A drawn corner stays close to it.
+            val shorter = min(dist(r, idx[k - 1], c), dist(r, c, idx[k + 1]))
+            if (hit != null && hypot(hit[0] - r.x[c], hit[1] - r.y[c]) > POLYLINE_MAX_OVERSHOOT * shorter) return null
             pts += if (hit != null && hypot(hit[0] - r.x[c], hit[1] - r.y[c]) < VERTEX_DRIFT * r.diagonal()) {
                 hit[0].toFloat() to hit[1].toFloat()
             } else {
@@ -597,6 +751,19 @@ class GeometricShapeRecognizer(private val config: Config = Config()) : ShapeRec
         const val POLYGON_PREFERENCE = 0.85
         const val CIRCLE_RATIO = 0.82
         const val MAX_VERTICES = 8
+        const val MAX_CLOSED_VERTICES = 12
+        const val CORNER_MERGE = 0.05
+        val DIAMOND_AXIS_TOLERANCE = Math.toRadians(14.0)
+        const val DIAMOND_CENTER_DRIFT = 0.2
+        val PENTAGRAM_MIN_TURN = Math.toRadians(110.0)
+        const val STAR_INNER_RATIO = 0.75
+        const val STAR_UPRIGHT_SNAP_DEG = 8.0
+        const val OPEN_ARC_MAX_GAP = 0.5
+        const val OPEN_ARC_ERR_SHARE = 0.5
+        val OPEN_ARC_MIN_SWEEP = Math.toRadians(300.0)
+        val OPEN_ARC_MAX_OVERLAP = Math.toRadians(40.0)
+        val OPEN_ARC_MAX_BACK = Math.toRadians(20.0)
+        const val POLYLINE_MAX_OVERSHOOT = 0.14
         const val SIDE_TRIM = 0.18
         const val VERTEX_DRIFT = 0.15
         const val CORNER_WINDOW_DIV = 40

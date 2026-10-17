@@ -35,8 +35,11 @@ interface HandwritingRecognizer {
     suspend fun recognize(strokes: List<InkStrokeSamples>, languageTag: String, hints: InkHints = InkHints()): List<TextCandidate>
 }
 
-/** What a [RecognizedShape] is, for UI and tests. */
-enum class ShapeKind { Line, Arrow, Circle, Ellipse, Rectangle, Triangle, Polygon }
+/**
+ * What a [RecognizedShape] is, for UI and tests. [Diamond] is a rhombus standing on a corner (diagonals upright);
+ * [Star] a regular star, drawn as a pentagram (one line through every second point) or as its outline (CANVAS-17).
+ */
+enum class ShapeKind { Line, Arrow, Circle, Ellipse, Rectangle, Triangle, Polygon, Diamond, Star }
 
 /**
  * A clean shape, in the same coordinates as the samples it was recognized from. Closed outlines

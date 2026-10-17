@@ -18,6 +18,8 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)  # -I drops the script dir from sys.path
 
 from hw import doc as hwdoc  # noqa: E402
+import math  # noqa: E402
+
 from hw import dynamics, latin, shapes  # noqa: E402
 
 CORPUS = os.path.join(HERE, "corpus")
@@ -115,6 +117,78 @@ def shapes_hold():
     shapes.regular_polygon(d, w, (32, 96), 16, 5, hold_ms=h)
     shapes.line(d, w, (66, 84), (110, 112), hold_ms=h)
     shapes.circle(d, w, (146, 98), 8, hold_ms=0.0)  # no hold: stays hand-drawn
+    return d
+
+
+def shapes_sloppy():
+    """CANVAS-17 accuracy corpus: sloppy, quickly drawn shapes, each held ~650 ms (labels = what was drawn)."""
+    w = writer(1717, xh=3.4, name="diagram", vmax=140.0)
+    d = hwdoc.Document("shapes_sloppy", "Sloppy shapes for recognizer accuracy: boxes, open circles, arrows, triangles, "
+                       "diamonds, stars, polylines and a few non-shapes", PAGE_W, 300, w)
+    h = 650.0
+    rng = w.rng
+    labels = []
+    cells = [(15 + 30 * (i % 6), 16 + 30 * (i // 6)) for i in range(60)]
+    k = iter(cells)
+
+    def u(a, b):
+        return rng.uniform(a, b)
+
+    def add(label, fn):
+        cx, cy = next(k)
+        fn(cx, cy)
+        labels.append(label)
+
+    for i in range(7):  # sloppy rectangles: rounded corners, turned a little, overshoot or gap
+        add("Rectangle", lambda cx, cy, i=i: shapes.sloppy_box(d, w, cx, cy, u(16, 24), u(9, 15), rot_deg=u(-4, 4),
+                                                                corner_mm=u(0.8, 2.2), close=("gap" if i % 3 == 1 else "overshoot"), hold_ms=h))
+    for i in range(2):  # sloppy squares
+        add("Rectangle", lambda cx, cy: shapes.sloppy_box(d, w, cx, cy, s := u(14, 20), s * u(0.95, 1.05), rot_deg=u(-3, 3),
+                                                          corner_mm=u(1.0, 2.0), hold_ms=h))
+    for i in range(6):  # open circles
+        add("Circle", lambda cx, cy, i=i: shapes.open_circle(d, w, (cx, cy), u(7, 12), gap_deg=u(12, 40), hold_ms=h, clockwise=i % 2 == 0))
+    for i in range(3):  # circles drawn normally
+        add("Circle", lambda cx, cy: shapes.circle(d, w, (cx, cy), u(6, 12), hold_ms=h))
+    for i in range(3):  # ellipses, some open
+        add("Ellipse", lambda cx, cy, i=i: shapes.open_circle(d, w, (cx, cy), u(10, 13), gap_deg=u(5, 25), squash=u(0.45, 0.62), hold_ms=h))
+    for i in range(4):  # one-stroke arrows, open V heads
+        add("Arrow", lambda cx, cy: (lambda a: shapes.arrow_one_barb_first(
+            d, w, (cx - 11 * math.cos(a), cy - 11 * math.sin(a)), (cx + 11 * math.cos(a), cy + 11 * math.sin(a)), size=u(3.5, 5.5), hold_ms=h))(u(-3.1, 3.1)))
+    for i in range(3):  # one-stroke arrows, closed triangle heads
+        add("Arrow", lambda cx, cy: (lambda a: shapes.arrow_closed_head(
+            d, w, (cx - 11 * math.cos(a), cy - 11 * math.sin(a)), (cx + 11 * math.cos(a), cy + 11 * math.sin(a)), size=u(3.5, 5.0), hold_ms=h))(u(-3.1, 3.1)))
+    for i in range(2):  # the original style, for comparison
+        add("Arrow", lambda cx, cy: (lambda a: shapes.arrow_one_stroke(
+            d, w, (cx - 11 * math.cos(a), cy - 11 * math.sin(a)), (cx + 11 * math.cos(a), cy + 11 * math.sin(a)), size=u(3.5, 5.0), hold_ms=h))(u(-3.1, 3.1)))
+    for i in range(6):  # triangles: equilateral-ish, right, obtuse
+        def tri(cx, cy, i=i):
+            if i % 3 == 0:
+                c = [(cx, cy - 10), (cx + 10, cy + 8), (cx - 10, cy + 8)]
+            elif i % 3 == 1:
+                c = [(cx - 10, cy - 9), (cx - 10, cy + 9), (cx + 11, cy + 9)]
+            else:
+                c = [(cx - 12, cy + 6), (cx + 12, cy + 6), (cx + u(-6, 6), cy - 6)]
+            shapes.polygon(d, w, c, hold_ms=h, overshoot=i % 2 == 0)
+        add("Triangle", tri)
+    for i in range(4):
+        add("Diamond", lambda cx, cy: shapes.diamond(d, w, (cx, cy), u(8, 12), u(10, 13), hold_ms=h))
+    for i in range(3):
+        add("Star", lambda cx, cy: shapes.pentagram(d, w, (cx, cy), u(10, 13), rot_deg=-90 + u(-8, 8), hold_ms=h))
+    for i in range(2):
+        add("Star", lambda cx, cy: shapes.star_outline(d, w, (cx, cy), u(11, 13), u(4.5, 6), hold_ms=h))
+    for i in range(3):  # pentagons/hexagons
+        add("Polygon", lambda cx, cy, i=i: shapes.regular_polygon(d, w, (cx, cy), u(10, 12), 5 + i % 2, hold_ms=h))
+    for i in range(4):  # open polylines: angles and zigzags
+        add("Polyline", lambda cx, cy, i=i: shapes.zigzag(d, w, (cx - 12, cy - 5), 24 / (2 + i), 2 + i, u(8, 11), hold_ms=h))
+    for i in range(4):  # lines, slightly off axis and at odd angles
+        add("Line", lambda cx, cy, i=i: (lambda a: shapes.line(
+            d, w, (cx - 12 * math.cos(a), cy - 12 * math.sin(a)), (cx + 12 * math.cos(a), cy + 12 * math.sin(a)), hold_ms=h))(
+            [0.05, 1.53, 0.6, 2.4][i]))
+    add("None", lambda cx, cy: shapes.spiral(d, w, (cx, cy), 11, hold_ms=h))
+    add("None", lambda cx, cy: shapes.wave(d, w, (cx - 12, cy), 24, 5, hold_ms=h))
+    add("None", lambda cx, cy: shapes.wave(d, w, (cx - 12, cy), 24, 3, periods=3.0, hold_ms=h))
+    d.labels = labels
+    d.height = 30 * ((len(labels) + 5) // 6) + 8
     return d
 
 
@@ -257,7 +331,7 @@ def arabic_moved():
 REC = [para_tight, slanted, numbers, arabic_para, mixed, para_moved, arabic_moved]
 
 ALL = [lecture_en, formulas, arabic_text, tiny_fast, slow_large, drawings, scribble, highlight_lecture, hover_erase,
-       shapes_hold] + REC
+       shapes_hold, shapes_sloppy] + REC
 NAMES = {"arabic": arabic_text}
 
 
