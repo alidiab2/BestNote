@@ -103,6 +103,12 @@ class PagedDocument {
     /** Paper for the first page when "+ New page" is used on an empty document. */
     var blankPage: Page? = null
 
+    /**
+     * Paper (template, color, size) for pages added from now on, chosen in the paper sheet's
+     * "New pages" scope (PAGES-10); null continues the last page's paper.
+     */
+    var newPagePaper: Page? = null
+
     /** True once [reset] has supplied pages (an empty document shows only the add-page card). */
     var isLoaded: Boolean = false
         private set
@@ -137,11 +143,11 @@ class PagedDocument {
     }
 
     /**
-     * Appends a page with the same paper (template, color, size) as the last page, or [template]
-     * when given. Undoable. @return the new page's index, or -1 when there is no paper to copy.
+     * Appends a page with [template]'s paper when given, else [newPagePaper], else the same paper
+     * (template, color, size) as the last page. Undoable. @return the new page's index, or -1 when there is no paper to copy.
      */
     fun addPage(template: Page? = null): Int {
-        val base = template ?: _pages.lastOrNull()?.page ?: blankPage ?: return -1
+        val base = template ?: newPagePaper ?: _pages.lastOrNull()?.page ?: blankPage ?: return -1
         return insertPage(_pages.size, base)
     }
 

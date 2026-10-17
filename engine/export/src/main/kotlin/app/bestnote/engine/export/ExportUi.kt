@@ -67,12 +67,23 @@ fun ExportDialog(
     startWith: ExportFormat? = null,
     fileName: String = "Notebook",
     beforeExport: suspend () -> Unit = {},
+    /** Zero-based pages picked elsewhere (the page manager's selection, PAGES-10): opens on "Range" with them filled in. */
+    selectedPages: List<Int>? = null,
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var format by remember { mutableStateOf(startWith ?: ExportFormat.Pdf) }
-    var scopeChoice by remember { mutableStateOf(if (currentPage != null && pageCount > 1) ScopeChoice.This else ScopeChoice.All) }
-    var rangeText by remember { mutableStateOf("") }
+    val picked = selectedPages?.takeIf { it.isNotEmpty() && pageCount > 1 }
+    var scopeChoice by remember {
+        mutableStateOf(
+            when {
+                picked != null -> ScopeChoice.Range
+                currentPage != null && pageCount > 1 -> ScopeChoice.This
+                else -> ScopeChoice.All
+            },
+        )
+    }
+    var rangeText by remember { mutableStateOf(picked?.let(ExportPlan::formatRange).orEmpty()) }
     var includeTemplate by remember { mutableStateOf(true) }
     var working by remember { mutableStateOf(false) }
     var done by remember { mutableIntStateOf(0) }

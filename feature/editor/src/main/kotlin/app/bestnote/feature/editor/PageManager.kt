@@ -1,8 +1,11 @@
 package app.bestnote.feature.editor
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.VectorConverter
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -11,69 +14,88 @@ import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyGridItemInfo
 import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.res.stringResource
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberUpdatedState
-import androidx.compose.ui.composed
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.composed
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
 import app.bestnote.core.designsystem.theme.BestNoteShapes
 import app.bestnote.core.designsystem.theme.BestNoteTheme
 import app.bestnote.core.designsystem.theme.Elevation
@@ -99,15 +121,21 @@ private const val LIFT_SCALE = 1.06f
 private const val LIFT_DEGREES = -3f
 private const val EDGE_SCROLL_ZONE_DP = 72f
 private const val EDGE_SCROLL_PX_PER_FRAME = 18f
+private const val ADD_CELL_KEY = "add-page"
+
+/** The gap between two thumbnails: it holds the "+" that inserts a page there. */
+private val InsertGap = 36.dp
 
 /**
- * The page manager (PAGES-03/04/05): every page as a thumbnail on the desk. Tap a page to open it,
- * long-press and drag to reorder (neighbours spring out of the way), tick pages to duplicate, rotate
- * or delete them, and insert a page with a template. Every change is one step of the document's
- * undo history, so it can be undone here or from the editor.
+ * The page manager (PAGES-03/04/05/10): every page as a thumbnail on the desk. Tap a page to open it,
+ * long-press and drag to reorder (neighbours spring out of the way), tap "+" between two pages to
+ * insert one there, and switch to Select to duplicate, rotate, move, export or delete several pages
+ * at once. Every change is one step of the document's undo history, offered right away in a snackbar
+ * and on the bar's Undo / Redo.
  *
  * It zooms out of the page being read ([ZOOM_FROM] x) and zooms back into the page you pick.
- * [onClose] receives the page to show, or null to stay where the reader was.
+ * [onClose] receives the page to show, or null to stay where the reader was. [onExport] exports the
+ * chosen pages (zero-based) with the export dialog.
  */
 @Composable
 internal fun PageManager(
@@ -116,16 +144,23 @@ internal fun PageManager(
     onClose: (openPage: Int?) -> Unit,
     modifier: Modifier = Modifier,
     insert: PageInsertFlow? = null,
+    onExport: ((List<Int>) -> Unit)? = null,
 ) {
     val scope = rememberCoroutineScope()
     val reduce = reducedMotion()
     val snackbar = remember { SnackbarHostState() }
     val grid = rememberLazyGridState(initialFirstVisibleItemIndex = (currentPage - 1).coerceAtLeast(0))
     val selection = remember { mutableStateMapOf<String, Unit>() }
+    var selecting by remember { mutableStateOf(false) }
     var rev by remember { mutableIntStateOf(0) }
-    var inserting by remember { mutableStateOf(false) }
+    /** The gap a page is being inserted into: the page index it will get. */
+    var insertingAt by remember { mutableStateOf<Int?>(null) }
+    var moving by remember { mutableStateOf(false) }
     val reorder = remember { ReorderState() }
     val progress = remember { Animatable(if (reduce) 1f else 0f) }
+    val compact = with(LocalDensity.current) { androidx.compose.ui.platform.LocalWindowInfo.current.containerSize.width.toDp() } < COMPACT_WIDTH_DP.dp
+    val res = androidx.compose.ui.platform.LocalResources.current
+    val undoLabel = stringResource(R.string.editor_undo)
 
     DisposableEffect(document) {
         val listener = object : PagedDocument.Listener {
@@ -147,9 +182,11 @@ internal fun PageManager(
     LaunchedEffect(Unit) { if (!reduce) progress.animateTo(1f, Motion.Spring.gentle()) }
 
     val pages: List<DocumentPage> = remember(rev) { document.pages.toList() }
+    // Pages deleted (or undone away) drop out of the selection.
+    LaunchedEffect(pages) { selection.keys.retainAll(pages.map { it.id }.toSet()) }
     EdgeScroller(grid, reorder)
     val shown: List<DocumentPage> = reorder.order?.let { order -> order.mapNotNull { id -> pages.firstOrNull { it.id == id } } } ?: pages
-    val selectedIndices = pages.indices.filter { pages[it].id in selection }
+    val selectedIndices = PageOps.indicesOf(pages.map { it.id }, selection.keys)
 
     fun close(open: Int?) {
         scope.launch {
@@ -161,9 +198,14 @@ internal fun PageManager(
     fun say(text: String, undoable: Boolean = true) {
         scope.launch {
             snackbar.currentSnackbarData?.dismiss()
-            val result = snackbar.showSnackbar(text, actionLabel = if (undoable) "Undo" else null)
-            if (result == androidx.compose.material3.SnackbarResult.ActionPerformed) document.undo()
+            val result = snackbar.showSnackbar(text, actionLabel = if (undoable) undoLabel else null)
+            if (result == SnackbarResult.ActionPerformed) document.undo()
         }
+    }
+
+    fun select(indices: List<Int>) {
+        selection.clear()
+        indices.forEach { i -> document.pages.getOrNull(i)?.let { selection[it.id] = Unit } }
     }
 
     // Pages inserted from a PDF or image: report with the Undo snackbar, select and scroll to the first one.
@@ -172,8 +214,7 @@ internal fun PageManager(
         val previousInserted = insert?.onInserted
         insert?.notify = { say(it) }
         insert?.onInserted = { first ->
-            selection.clear()
-            document.pages.getOrNull(first)?.let { selection[it.id] = Unit }
+            select(listOf(first))
             scope.launch { grid.animateScrollToItem(first) }
         }
         onDispose {
@@ -184,7 +225,14 @@ internal fun PageManager(
         }
     }
 
-    BackHandler { close(null) }
+    BackHandler {
+        if (selecting) {
+            selecting = false
+            selection.clear()
+        } else {
+            close(null)
+        }
+    }
 
     Box(
         modifier
@@ -204,42 +252,41 @@ internal fun PageManager(
             TopBar(
                 count = pages.size,
                 selected = selectedIndices.size,
+                selecting = selecting,
+                allSelected = pages.isNotEmpty() && selectedIndices.size == pages.size,
+                compact = compact,
                 canUndo = document.canUndo,
                 canRedo = document.canRedo,
                 onClose = { close(null) },
                 onUndo = { document.undo() },
                 onRedo = { document.redo() },
+                onSelect = { selecting = true },
+                onDone = {
+                    selecting = false
+                    selection.clear()
+                },
                 onSelectAll = {
-                    if (selectedIndices.size == pages.size) selection.clear() else pages.forEach { selection[it.id] = Unit }
-                },
-                onDuplicate = {
-                    val n = selectedIndices.size
+                    val all = PageOps.selectAll(pages.map { it.id }, selection.keys.toSet())
                     selection.clear()
-                    document.duplicatePages(selectedIndices).forEach { selection[document.pages[it].id] = Unit }
-                    say(if (n == 1) "Page duplicated" else "$n pages duplicated")
+                    all.forEach { selection[it] = Unit }
                 },
-                onRotate = {
-                    document.rotatePages(selectedIndices)
-                    say("Rotated")
-                },
-                onDelete = {
-                    val removed = document.deletePages(selectedIndices)
-                    selection.clear()
-                    say(if (removed == 1) "Page deleted" else "$removed pages deleted")
-                },
-                onInsert = { inserting = true },
+                onInsert = { insertingAt = PageOps.insertIndex(currentPage.coerceIn(-1, pages.size - 1), pages.size) },
             )
+            val minCell = if (compact) 128.dp else 168.dp
             LazyVerticalGrid(
-                columns = GridCells.Adaptive(minSize = 150.dp),
+                columns = GridCells.Adaptive(minSize = minCell + InsertGap),
                 state = grid,
-                contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = Spacing.XL, vertical = Spacing.L),
-                horizontalArrangement = Arrangement.spacedBy(Spacing.XL),
-                verticalArrangement = Arrangement.spacedBy(Spacing.XL),
+                // Each cell carries its own trailing gap (the "+"), so the end padding is a gap shorter.
+                contentPadding = PaddingValues(start = Spacing.XL, end = Spacing.S, top = Spacing.L, bottom = 120.dp),
+                verticalArrangement = Arrangement.spacedBy(Spacing.L),
                 modifier = Modifier
                     .weight(1f)
                     .onSizeChanged { reorder.viewport = it }
-                    .reorderGestures(grid, reorder, shown, scope) { from, to -> document.movePage(from, to) }
-                    .semantics { contentDescription = "Pages" },
+                    .reorderGestures(grid, reorder, shown, scope) { from, to ->
+                        document.movePage(from, to)
+                        say(res.getQuantityString(R.plurals.pages_moved, 1, 1))
+                    }
+                    .semantics { contentDescription = res.getString(R.string.editor_pages) },
             ) {
                 items(shown, key = { it.id }) { page ->
                     val index = pages.indexOf(page)
@@ -249,52 +296,115 @@ internal fun PageManager(
                         number = index + 1,
                         current = index == currentPage,
                         selected = page.id in selection,
-                        selecting = selection.isNotEmpty(),
+                        selecting = selecting,
                         reorder = reorder,
                         grid = grid,
                         onToggle = { if (page.id in selection) selection.remove(page.id) else selection[page.id] = Unit },
                         onOpen = { close(index) },
+                        onInsertAfter = { insertingAt = PageOps.insertIndex(index, pages.size) },
                         modifier = if (reorder.dragId == page.id) Modifier else Modifier.animateItem(placementSpec = Motion.Spring.offsetGentle()),
                     )
                 }
+                item(key = ADD_CELL_KEY, span = { GridItemSpan(1) }) {
+                    AddPageCell(Modifier.animateItem(placementSpec = Motion.Spring.offsetGentle())) { insertingAt = pages.size }
+                }
             }
-            Text(
-                "Tap a page to open it · long-press and drag to reorder · tick pages to duplicate, rotate or delete",
-                style = MaterialTheme.typography.labelMedium,
-                color = BestNoteTheme.colors.muted,
-                modifier = Modifier.padding(horizontal = Spacing.XL, vertical = Spacing.S),
-            )
         }
-        SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).padding(bottom = Spacing.XXL)) { data ->
-            androidx.compose.material3.Snackbar(
-                data,
-                shape = BestNoteShapes.Pill,
-                containerColor = BestNoteTheme.colors.strongButton,
-                contentColor = BestNoteTheme.colors.onStrongButton,
-                actionColor = BestNoteTheme.colors.aiAccent,
-            )
+        Column(
+            Modifier.align(Alignment.BottomCenter).windowInsetsPadding(WindowInsets.safeDrawing).padding(bottom = Spacing.L),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(Spacing.M),
+        ) {
+            SnackbarHost(snackbar) { data ->
+                androidx.compose.material3.Snackbar(
+                    data,
+                    shape = BestNoteShapes.Pill,
+                    containerColor = BestNoteTheme.colors.strongButton,
+                    contentColor = BestNoteTheme.colors.onStrongButton,
+                    actionColor = BestNoteTheme.colors.aiAccent,
+                )
+            }
+            AnimatedVisibility(selecting, enter = Motion.Enter.sheet(reduce), exit = Motion.Exit.sheet(reduce)) {
+                SelectionBar(
+                    enabled = selectedIndices.isNotEmpty(),
+                    compact = compact,
+                    canExport = onExport != null,
+                    onDuplicate = {
+                        val n = selectedIndices.size
+                        select(document.duplicatePages(selectedIndices))
+                        say(res.getQuantityString(R.plurals.pages_duplicated, n, n))
+                    },
+                    onRotate = {
+                        val n = selectedIndices.size
+                        document.rotatePages(selectedIndices)
+                        say(res.getQuantityString(R.plurals.pages_rotated, n, n))
+                    },
+                    onMove = { moving = true },
+                    onExport = { onExport?.invoke(selectedIndices) },
+                    onDelete = {
+                        val removed = document.deletePages(selectedIndices)
+                        selection.clear()
+                        say(res.getQuantityString(R.plurals.pages_deleted, removed, removed))
+                    },
+                )
+            }
+            if (!selecting) {
+                Text(
+                    stringResource(R.string.pages_hint),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = BestNoteTheme.colors.muted,
+                    modifier = Modifier
+                        .padding(horizontal = Spacing.XL)
+                        .chromeSurface(alpha = HINT_ALPHA)
+                        .padding(horizontal = Spacing.L, vertical = Spacing.S),
+                )
+            }
         }
     }
 
-    if (inserting) {
-        val base = (pages.getOrNull(selectedIndices.lastOrNull() ?: currentPage) ?: pages.lastOrNull())?.page
+    insertingAt?.let { at ->
+        val base = (pages.getOrNull(at - 1) ?: pages.getOrNull(at) ?: pages.lastOrNull())?.page
         InsertPageDialog(
-            initial = base,
-            onDismiss = { inserting = false },
-            onFromPdf = insert?.let { flow -> { inserting = false; flow.startPdf(selectedIndices.lastOrNull() ?: currentPage) } },
-            onFromImage = insert?.let { flow -> { inserting = false; flow.startImage(selectedIndices.lastOrNull() ?: currentPage) } },
+            initial = document.newPagePaper ?: base,
+            afterPage = at,
+            onDismiss = { insertingAt = null },
+            onFromPdf = insert?.let { flow -> { insertingAt = null; flow.startPdf((at - 1).coerceAtLeast(0)) } },
+            onFromImage = insert?.let { flow -> { insertingAt = null; flow.startImage((at - 1).coerceAtLeast(0)) } },
         ) { template, color ->
-            inserting = false
-            val at = (selectedIndices.lastOrNull() ?: currentPage.coerceIn(0, pages.size - 1)) + 1
+            insertingAt = null
             val paper = (base ?: document.blankPage ?: return@InsertPageDialog).copy(template = template, paperColor = color)
             val index = document.insertPage(at, paper)
-            selection.clear()
-            selection[document.pages[index].id] = Unit
+            select(listOf(index))
             scope.launch { grid.animateScrollToItem(index) }
-            say("Page added")
+            say(res.getString(R.string.pages_added))
+        }
+    }
+
+    if (moving) {
+        MoveDialog(
+            count = pages.size,
+            selected = selectedIndices,
+            onDismiss = { moving = false },
+        ) { afterPage ->
+            moving = false
+            val order = PageOps.moveBlock(pages.size, selectedIndices, afterPage)
+            val moves = PageOps.movesFor(order)
+            if (moves.isNotEmpty()) {
+                document.asOneStep { moves.forEach { (from, to) -> document.movePage(from, to) } }
+                val n = selectedIndices.size
+                say(res.getQuantityString(R.plurals.pages_moved, n, n))
+                val first = order.indexOf(selectedIndices.first())
+                scope.launch { grid.animateScrollToItem(first.coerceAtLeast(0)) }
+            }
         }
     }
 }
+
+private const val COMPACT_WIDTH_DP = 600
+
+/** Beyond this many pages the Move slider is continuous (ticks would be a dotted blur). */
+private const val MAX_SLIDER_TICKS = 12
+private const val HINT_ALPHA = 0.92f
 
 /** Drag-and-drop bookkeeping shared by the gesture handler and the cells. */
 internal class ReorderState {
@@ -361,7 +471,7 @@ private fun Modifier.reorderGestures(
             val center = topLeft + Offset(dragged.size.width / 2f, dragged.size.height / 2f)
             val target = itemAt(center)
             val order = reorder.order
-            if (target != null && target.key != id && order != null) {
+            if (target != null && target.key != id && order != null && target.key in order) {
                 val moved = order.toMutableList()
                 moved.remove(id)
                 moved.add(order.indexOf(target.key as String).coerceIn(0, moved.size), id)
@@ -415,6 +525,7 @@ private fun EdgeScroller(grid: LazyGridState, reorder: ReorderState) {
     }
 }
 
+
 @Composable
 private fun ThumbnailCell(
     page: DocumentPage,
@@ -427,11 +538,17 @@ private fun ThumbnailCell(
     grid: LazyGridState,
     onToggle: () -> Unit,
     onOpen: () -> Unit,
+    onInsertAfter: () -> Unit,
     modifier: Modifier,
 ) {
     val id = page.id
     val lifting = reorder.dragId == id
     val colors = BestNoteTheme.colors
+    val primary = MaterialTheme.colorScheme.primary
+    val openLabel = stringResource(R.string.pages_open, number)
+    val selectLabel = stringResource(R.string.pages_select_page, number)
+    val pageLabel = stringResource(R.string.pages_page, number)
+    val currentLabel = stringResource(R.string.pages_current)
     Column(
         modifier
             .graphicsLayer {
@@ -448,48 +565,352 @@ private fun ThumbnailCell(
                     scaleY = LIFT_SCALE
                     rotationZ = LIFT_DEGREES
                 }
-            }
-            .semantics { role = Role.Button; this.selected = selected },
-        horizontalAlignment = Alignment.CenterHorizontally,
+            },
     ) {
-        Box(Modifier.fillMaxWidth().aspectRatio(CELL_ASPECT), contentAlignment = Alignment.Center) {
-            val shape = RoundedCornerShape(6.dp)
-            val thumb by rememberThumbnail(page, backgrounds)
-            val aspect = page.page.widthPt / page.page.heightPt
-            Box(
-                Modifier
-                    .then(if (aspect >= CELL_ASPECT) Modifier.fillMaxWidth() else Modifier.fillMaxSize())
-                    .aspectRatio(aspect)
-                    .softShadow(if (lifting) Elevation.High else Elevation.Low, shape)
-                    .clip(shape)
-                    .background(MaterialTheme.colorScheme.surface)
-                    .then(if (selected) Modifier.border(3.dp, MaterialTheme.colorScheme.primary, shape) else Modifier)
-                    .clickable(onClickLabel = if (selecting) "Select page $number" else "Open page $number") {
-                        if (selecting) onToggle() else onOpen()
-                    },
-            ) {
-                thumb?.let { Image(it, contentDescription = "Page $number", contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize()) }
+        Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min)) {
+            Box(Modifier.weight(1f).aspectRatio(CELL_ASPECT), contentAlignment = Alignment.Center) {
+                val shape = RoundedCornerShape(6.dp)
+                val thumb by rememberThumbnail(page, backgrounds)
+                val aspect = page.page.widthPt / page.page.heightPt
+                val ring = when {
+                    selected -> BorderStroke(3.dp, primary)
+                    current -> BorderStroke(2.dp, primary.copy(alpha = CURRENT_RING_ALPHA))
+                    else -> null
+                }
+                Box(
+                    Modifier
+                        .aspectRatio(aspect, matchHeightConstraintsFirst = aspect < CELL_ASPECT)
+                        .softShadow(if (lifting) Elevation.High else Elevation.Low, shape)
+                        .clip(shape)
+                        .background(MaterialTheme.colorScheme.surface)
+                        .clickable(onClickLabel = if (selecting) selectLabel else openLabel) { if (selecting) onToggle() else onOpen() }
+                        .semantics {
+                            role = Role.Button
+                            this.selected = selected
+                            contentDescription = if (current) "$pageLabel, $currentLabel" else pageLabel
+                        },
+                ) {
+                    thumb?.let { Image(it, contentDescription = null, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize()) }
+                    if (ring != null) Box(Modifier.matchParentSize().border(ring, shape))
+                    if (selecting) {
+                        Box(
+                            Modifier
+                                .align(Alignment.TopEnd)
+                                .padding(Spacing.S)
+                                .size(26.dp)
+                                .clip(CircleShape)
+                                .background(if (selected) primary else Color.White.copy(alpha = CHECK_BACKDROP_ALPHA))
+                                .border(1.5.dp, if (selected) primary else Color.Black.copy(alpha = CHECK_RING_ALPHA), CircleShape),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            if (selected) Icon(AtelierIcons.Check, null, tint = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.size(16.dp))
+                        }
+                    }
+                }
             }
-            Box(
-                Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(Spacing.S)
-                    .size(28.dp)
-                    .clip(CircleShape)
-                    .background(if (selected) MaterialTheme.colorScheme.primary else colors.deskCenter.copy(alpha = 0.85f))
-                    .border(1.5.dp, if (selected) MaterialTheme.colorScheme.primary else colors.muted, CircleShape)
-                    .clickable(onClickLabel = "Select page $number") { onToggle() },
-                contentAlignment = Alignment.Center,
-            ) {
-                if (selected) Icon(AtelierIcons.Check, null, tint = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.size(18.dp))
+            // The gap after this page: "+" inserts a page right here (hidden while selecting or dragging).
+            Box(Modifier.width(InsertGap).fillMaxHeight(), contentAlignment = Alignment.Center) {
+                if (!selecting && reorder.dragId == null) InsertGapButton(number, onInsertAfter)
             }
         }
-        Text(
-            "$number",
-            style = MaterialTheme.typography.labelLarge,
-            color = if (current) MaterialTheme.colorScheme.primary else colors.muted,
-            modifier = Modifier.padding(top = Spacing.S),
-        )
+        Box(Modifier.fillMaxWidth().padding(end = InsertGap, top = Spacing.S), contentAlignment = Alignment.Center) {
+            Text(
+                "$number",
+                style = MaterialTheme.typography.labelLarge.copy(fontWeight = if (current) FontWeight.SemiBold else FontWeight.Medium),
+                color = if (current) MaterialTheme.colorScheme.onPrimary else colors.muted,
+                modifier = Modifier
+                    .clip(BestNoteShapes.Pill)
+                    .background(if (current) primary else Color.Transparent)
+                    .padding(horizontal = Spacing.S + 2.dp, vertical = 2.dp),
+            )
+        }
+    }
+}
+
+private const val CURRENT_RING_ALPHA = 0.55f
+private const val GAP_BUTTON_ALPHA = 0.9f
+// An empty ring that reads on white, cream and dark paper alike: a light disc with a soft dark edge.
+private const val CHECK_BACKDROP_ALPHA = 0.85f
+private const val CHECK_RING_ALPHA = 0.35f
+
+@Composable
+private fun InsertGapButton(afterPage: Int, onClick: () -> Unit) {
+    val label = stringResource(R.string.pages_insert_after, afterPage)
+    Box(
+        Modifier
+            .size(28.dp)
+            .clip(CircleShape)
+            .background(MaterialTheme.colorScheme.surface.copy(alpha = GAP_BUTTON_ALPHA))
+            .border(Dp.Hairline, MaterialTheme.colorScheme.outlineVariant, CircleShape)
+            .clickable(onClickLabel = label, role = Role.Button, onClick = onClick)
+            .semantics { contentDescription = label },
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(AtelierIcons.Plus, null, tint = BestNoteTheme.colors.muted, modifier = Modifier.size(15.dp))
+    }
+}
+
+/** The last cell: a dashed page outline that adds a page at the end. */
+@Composable
+private fun AddPageCell(modifier: Modifier, onClick: () -> Unit) {
+    val label = stringResource(R.string.pages_add)
+    val outline = BestNoteTheme.colors.muted
+    Column(modifier.padding(end = InsertGap)) {
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .aspectRatio(CELL_ASPECT)
+                .padding(horizontal = Spacing.S)
+                .clip(RoundedCornerShape(8.dp))
+                .clickable(onClickLabel = label, role = Role.Button, onClick = onClick),
+            contentAlignment = Alignment.Center,
+        ) {
+            val density = LocalDensity.current
+            Canvas(Modifier.matchParentSize()) {
+                val dash = with(density) { 6.dp.toPx() }
+                drawRoundRect(
+                    color = outline.copy(alpha = DASH_ALPHA),
+                    cornerRadius = CornerRadius(with(density) { 8.dp.toPx() }),
+                    style = Stroke(width = with(density) { 1.5.dp.toPx() }, pathEffect = PathEffect.dashPathEffect(floatArrayOf(dash, dash))),
+                )
+            }
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Box(
+                    Modifier.size(44.dp).clip(CircleShape).background(MaterialTheme.colorScheme.surface),
+                    contentAlignment = Alignment.Center,
+                ) { Icon(AtelierIcons.Plus, null, tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(22.dp)) }
+                Text(label, style = MaterialTheme.typography.labelLarge, color = outline, modifier = Modifier.padding(top = Spacing.S))
+            }
+        }
+    }
+}
+
+private const val DASH_ALPHA = 0.7f
+
+@Composable
+private fun TopBar(
+    count: Int,
+    selected: Int,
+    selecting: Boolean,
+    allSelected: Boolean,
+    compact: Boolean,
+    canUndo: Boolean,
+    canRedo: Boolean,
+    onClose: () -> Unit,
+    onUndo: () -> Unit,
+    onRedo: () -> Unit,
+    onSelect: () -> Unit,
+    onDone: () -> Unit,
+    onSelectAll: () -> Unit,
+    onInsert: () -> Unit,
+) {
+    val colors = BestNoteTheme.colors
+    Row(
+        Modifier.fillMaxWidth().padding(horizontal = Spacing.M, vertical = Spacing.S),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(Spacing.S),
+    ) {
+        Row(Modifier.chromeSurface().padding(horizontal = 2.dp)) {
+            ChromeIconButton(AtelierIcons.Back, stringResource(R.string.pages_close), onClose, size = 44.dp)
+        }
+        Column(Modifier.weight(1f).padding(horizontal = Spacing.XS)) {
+            Text(
+                stringResource(R.string.editor_pages),
+                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
+                maxLines = 1,
+            )
+            Text(
+                if (selecting) pluralStringResource(R.plurals.pages_selected, selected, selected) else pluralStringResource(R.plurals.pages_count, count, count),
+                style = MaterialTheme.typography.labelMedium,
+                color = colors.muted,
+                maxLines = 1,
+            )
+        }
+        Row(Modifier.chromeSurface().padding(horizontal = 2.dp)) {
+            ChromeIconButton(AtelierIcons.Undo, stringResource(R.string.editor_undo), onUndo, enabled = canUndo, size = 44.dp)
+            ChromeIconButton(AtelierIcons.Redo, stringResource(R.string.editor_redo), onRedo, enabled = canRedo, size = 44.dp)
+        }
+        if (selecting) {
+            PillButton(stringResource(if (allSelected) R.string.pages_deselect_all else R.string.pages_select_all), null, strong = false, onClick = onSelectAll)
+            PillButton(stringResource(R.string.pages_done), AtelierIcons.Check, strong = true, onClick = onDone)
+        } else {
+            PillButton(stringResource(R.string.pages_select), AtelierIcons.Select, strong = false, iconOnly = false, onClick = onSelect)
+            PillButton(stringResource(R.string.pages_insert), AtelierIcons.Plus, strong = true, iconOnly = compact, onClick = onInsert)
+        }
+    }
+}
+
+@Composable
+private fun PillButton(label: String, icon: ImageVector?, strong: Boolean, iconOnly: Boolean = false, onClick: () -> Unit) {
+    val colors = BestNoteTheme.colors
+    Surface(
+        onClick = onClick,
+        shape = BestNoteShapes.Pill,
+        color = if (strong) colors.strongButton else MaterialTheme.colorScheme.surface,
+        contentColor = if (strong) colors.onStrongButton else MaterialTheme.colorScheme.onSurface,
+        modifier = Modifier.softShadow(Elevation.Low, BestNoteShapes.Pill).semantics { contentDescription = label },
+    ) {
+        Row(
+            Modifier.height(44.dp).padding(horizontal = if (iconOnly) Spacing.M else Spacing.L),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            if (icon != null) Icon(icon, null, Modifier.size(18.dp))
+            if (!iconOnly) {
+                Text(
+                    label,
+                    style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
+                    maxLines = 1,
+                    modifier = Modifier.padding(start = if (icon != null) Spacing.S else 0.dp),
+                )
+            }
+        }
+    }
+}
+
+/** Select mode's floating bar: duplicate, rotate, move, export, delete the selected pages. */
+@Composable
+private fun SelectionBar(
+    enabled: Boolean,
+    compact: Boolean,
+    canExport: Boolean,
+    onDuplicate: () -> Unit,
+    onRotate: () -> Unit,
+    onMove: () -> Unit,
+    onExport: () -> Unit,
+    onDelete: () -> Unit,
+) {
+    Row(
+        Modifier
+            .padding(horizontal = Spacing.L)
+            .softShadow(Elevation.Medium, BestNoteShapes.ToolTray)
+            .background(MaterialTheme.colorScheme.surface, BestNoteShapes.ToolTray)
+            .padding(horizontal = Spacing.S, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(2.dp),
+    ) {
+        BarAction(AtelierIcons.Duplicate, stringResource(R.string.pages_duplicate), enabled, compact, onClick = onDuplicate)
+        BarAction(AtelierIcons.Rotate, stringResource(R.string.pages_rotate), enabled, compact, onClick = onRotate)
+        BarAction(AtelierIcons.Move, stringResource(R.string.pages_move), enabled, compact, onClick = onMove)
+        if (canExport) BarAction(AtelierIcons.Export, stringResource(R.string.pages_export), enabled, compact, onClick = onExport)
+        Box(Modifier.padding(horizontal = Spacing.XS).size(1.dp, 28.dp).background(MaterialTheme.colorScheme.outlineVariant))
+        BarAction(AtelierIcons.Trash, stringResource(R.string.pages_delete), enabled, compact, tint = MaterialTheme.colorScheme.error, onClick = onDelete)
+    }
+}
+
+@Composable
+private fun BarAction(icon: ImageVector, label: String, enabled: Boolean, compact: Boolean, tint: Color = Color.Unspecified, onClick: () -> Unit) {
+    val color = if (tint == Color.Unspecified) MaterialTheme.colorScheme.onSurface else tint
+    Column(
+        Modifier
+            .clip(BestNoteShapes.Control)
+            .clickable(enabled = enabled, onClickLabel = label, role = Role.Button, onClick = onClick)
+            .semantics(mergeDescendants = true) { contentDescription = label }
+            .widthIn(min = 64.dp)
+            .padding(horizontal = Spacing.S, vertical = 6.dp)
+            .graphicsLayer { alpha = if (enabled) 1f else DisabledAlpha },
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Icon(icon, null, tint = color, modifier = Modifier.size(22.dp))
+        if (!compact) {
+            Text(
+                label,
+                style = MaterialTheme.typography.labelMedium,
+                color = color,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(top = 2.dp),
+            )
+        }
+    }
+}
+
+/** "Insert page" (PAGES-05/10): the paper sheet's live previews and colors, or a PDF / an image. */
+@Composable
+private fun InsertPageDialog(
+    initial: Page?,
+    afterPage: Int,
+    onDismiss: () -> Unit,
+    onFromPdf: (() -> Unit)? = null,
+    onFromImage: (() -> Unit)? = null,
+    onInsert: (PaperTemplate, PaperColor) -> Unit,
+) {
+    var template by remember { mutableStateOf(initial?.template ?: PaperTemplate.Ruled) }
+    var color by remember { mutableStateOf(initial?.paperColor ?: PaperColor.White) }
+    var group by remember { mutableStateOf(groupOf(template)) }
+    val base = (initial ?: previewPage()).copy(paperColor = color, pdf = null)
+    Dialog(onDismissRequest = onDismiss) {
+        Surface(shape = BestNoteShapes.Sheet, color = MaterialTheme.colorScheme.surface, tonalElevation = 0.dp) {
+            Column(
+                Modifier.verticalScroll(rememberScrollState()).padding(Spacing.XL),
+                verticalArrangement = Arrangement.spacedBy(Spacing.L),
+            ) {
+                Column {
+                    Text(stringResource(R.string.pages_insert), style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold))
+                    Text(
+                        if (afterPage <= 0) stringResource(R.string.pages_move_start) else stringResource(R.string.insert_after_page, afterPage),
+                        style = BestNoteTheme.type.caption,
+                        color = BestNoteTheme.colors.muted,
+                    )
+                }
+                GroupTabs(group) { group = it }
+                TemplateGrid(PageOps.groups.getValue(group), base.copy(template = template)) { template = it }
+                SheetOverline(stringResource(R.string.paper_color))
+                PaperColorChips(base) { color = it }
+                if (onFromPdf != null || onFromImage != null) {
+                    androidx.compose.material3.HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                    Column {
+                        onFromPdf?.let { SheetAction(AtelierIcons.Pdf, stringResource(R.string.paper_insert_pdf), it) }
+                        onFromImage?.let { SheetAction(AtelierIcons.Image, stringResource(R.string.paper_insert_image), it) }
+                    }
+                }
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                    TextButton(onClick = onDismiss) { Text(stringResource(R.string.insert_cancel)) }
+                    Spacer(Modifier.width(Spacing.S))
+                    PillButton(stringResource(R.string.insert_action), AtelierIcons.Plus, strong = true) { onInsert(template, color) }
+                }
+            }
+        }
+    }
+}
+
+/** "Move to…": where the selected pages go, as a block, in their current order. */
+@Composable
+private fun MoveDialog(count: Int, selected: List<Int>, onDismiss: () -> Unit, onMove: (afterPage: Int) -> Unit) {
+    var after by remember { mutableFloatStateOf((selected.firstOrNull() ?: 0).toFloat()) }
+    val n = selected.size
+    val target = after.toInt().coerceIn(0, count)
+    Dialog(onDismissRequest = onDismiss) {
+        Surface(shape = BestNoteShapes.Sheet, color = MaterialTheme.colorScheme.surface, tonalElevation = 0.dp) {
+            Column(Modifier.widthIn(max = 420.dp).padding(Spacing.XL), verticalArrangement = Arrangement.spacedBy(Spacing.L)) {
+                Text(pluralStringResource(R.plurals.pages_move_title, n, n), style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold))
+                Text(
+                    when (target) {
+                        0 -> stringResource(R.string.pages_move_start)
+                        count -> stringResource(R.string.pages_move_end)
+                        else -> stringResource(R.string.pages_move_after, target)
+                    },
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    ChromeIconButton(AtelierIcons.Minus, stringResource(R.string.pages_move_start), { after = (target - 1).coerceAtLeast(0).toFloat() }, size = 40.dp)
+                    Slider(
+                        value = after,
+                        onValueChange = { after = it },
+                        valueRange = 0f..count.toFloat(),
+                        steps = if (count <= MAX_SLIDER_TICKS) (count - 1).coerceAtLeast(0) else 0,
+                        colors = SliderDefaults.colors(thumbColor = MaterialTheme.colorScheme.primary, activeTrackColor = MaterialTheme.colorScheme.primary),
+                        modifier = Modifier.weight(1f),
+                    )
+                    ChromeIconButton(AtelierIcons.Plus, stringResource(R.string.pages_move_end), { after = (target + 1).coerceAtMost(count).toFloat() }, size = 40.dp)
+                }
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
+                    TextButton(onClick = onDismiss) { Text(stringResource(R.string.insert_cancel)) }
+                    Spacer(Modifier.width(Spacing.S))
+                    PillButton(stringResource(R.string.pages_move_action), AtelierIcons.Move, strong = true) { onMove(target) }
+                }
+            }
+        }
     }
 }
 
@@ -499,146 +920,5 @@ private fun rememberThumbnail(page: DocumentPage, backgrounds: PageBackgrounds?)
     val strokes = page.strokes.toList()
     value = withContext(Dispatchers.Default) {
         renderPageBitmap(paper, strokes, THUMB_PX, backgrounds?.thumbnail(paper, THUMB_PX)).asImageBitmap()
-    }
-}
-
-@Composable
-private fun TopBar(
-    count: Int,
-    selected: Int,
-    canUndo: Boolean,
-    canRedo: Boolean,
-    onClose: () -> Unit,
-    onUndo: () -> Unit,
-    onRedo: () -> Unit,
-    onSelectAll: () -> Unit,
-    onDuplicate: () -> Unit,
-    onRotate: () -> Unit,
-    onDelete: () -> Unit,
-    onInsert: () -> Unit,
-) {
-    val colors = BestNoteTheme.colors
-    Row(
-        Modifier.fillMaxWidth().padding(horizontal = Spacing.M, vertical = Spacing.S).horizontalScroll(rememberScrollState()),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(Spacing.XS),
-    ) {
-        ChromeIconButton(AtelierIcons.Back, "Close page manager", onClose, size = 44.dp)
-        Column(Modifier.padding(horizontal = Spacing.S)) {
-            Text("Pages", style = MaterialTheme.typography.titleMedium)
-            Text(
-                if (selected > 0) "$count pages · $selected selected" else "$count pages",
-                style = MaterialTheme.typography.labelMedium,
-                color = colors.muted,
-            )
-        }
-        Spacer(Modifier.size(Spacing.L))
-        ChromeIconButton(AtelierIcons.Undo, "Undo", onUndo, enabled = canUndo, size = 44.dp)
-        ChromeIconButton(AtelierIcons.Redo, "Redo", onRedo, enabled = canRedo, size = 44.dp)
-        Spacer(Modifier.size(Spacing.L))
-        BarAction("Select all", null, true, onSelectAll)
-        BarAction("Duplicate", AtelierIcons.Pages, selected > 0, onDuplicate)
-        BarAction("Rotate", null, selected > 0, onRotate)
-        BarAction("Delete", AtelierIcons.Trash, selected > 0, onDelete)
-        Spacer(Modifier.size(Spacing.S))
-        Surface(
-            onClick = onInsert,
-            shape = BestNoteShapes.Pill,
-            color = colors.strongButton,
-            contentColor = colors.onStrongButton,
-        ) {
-            Row(Modifier.padding(horizontal = Spacing.L, vertical = Spacing.S + 2.dp), verticalAlignment = Alignment.CenterVertically) {
-                Icon(AtelierIcons.Plus, null, Modifier.size(18.dp))
-                Text("Insert page", style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(start = Spacing.XS))
-            }
-        }
-    }
-}
-
-@Composable
-private fun BarAction(label: String, icon: ImageVector?, enabled: Boolean, onClick: () -> Unit) {
-    TextButton(onClick = onClick, enabled = enabled) {
-        if (icon != null) Icon(icon, null, Modifier.size(18.dp))
-        Text(label, style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(start = if (icon != null) Spacing.XS else 0.dp))
-    }
-}
-
-private val pickerTemplates = listOf(
-    PaperTemplate.Blank, PaperTemplate.RuledNarrow, PaperTemplate.Ruled, PaperTemplate.RuledWide,
-    PaperTemplate.Grid, PaperTemplate.Dotted, PaperTemplate.Graph, PaperTemplate.Cornell,
-    PaperTemplate.MusicStaff, PaperTemplate.PlannerDaily, PaperTemplate.PlannerWeekly,
-)
-
-/** Template picker for "Insert page" (PAGES-05): live previews of each template on the chosen paper color. */
-@Composable
-private fun InsertPageDialog(
-    initial: Page?,
-    onDismiss: () -> Unit,
-    onFromPdf: (() -> Unit)? = null,
-    onFromImage: (() -> Unit)? = null,
-    onInsert: (PaperTemplate, PaperColor) -> Unit,
-) {
-    var template by remember { mutableStateOf(initial?.template ?: PaperTemplate.Ruled) }
-    var color by remember { mutableStateOf(initial?.paperColor ?: PaperColor.White) }
-    androidx.compose.ui.window.Dialog(onDismissRequest = onDismiss) {
-        Surface(shape = BestNoteShapes.Sheet, color = MaterialTheme.colorScheme.surface, tonalElevation = 0.dp) {
-            Column(Modifier.padding(Spacing.XL), verticalArrangement = Arrangement.spacedBy(Spacing.L)) {
-                Text("Insert page", style = MaterialTheme.typography.titleLarge)
-                if (onFromPdf != null || onFromImage != null) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(Spacing.S)) {
-                        onFromPdf?.let { OutlinedButton(onClick = it) { Text(stringResource(R.string.insert_from_pdf)) } }
-                        onFromImage?.let { OutlinedButton(onClick = it) { Text(stringResource(R.string.insert_from_image)) } }
-                    }
-                }
-                Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(Spacing.M)) {
-                    pickerTemplates.forEach { t ->
-                        TemplateTile(t, color, initial, selected = t == template) { template = t }
-                    }
-                }
-                Row(horizontalArrangement = Arrangement.spacedBy(Spacing.S), verticalAlignment = Alignment.CenterVertically) {
-                    Text("Paper", style = MaterialTheme.typography.labelLarge, color = BestNoteTheme.colors.muted)
-                    PaperColor.entries.forEach { c ->
-                        val label = if (c == PaperColor.Dark) "Dark" else c.name
-                        androidx.compose.material3.FilterChip(
-                            selected = c == color,
-                            onClick = { color = c },
-                            label = { Text(label) },
-                        )
-                    }
-                }
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                    TextButton(onClick = onDismiss) { Text("Cancel") }
-                    TextButton(onClick = { onInsert(template, color) }) { Text("Insert") }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun TemplateTile(template: PaperTemplate, color: PaperColor, base: Page?, selected: Boolean, onClick: () -> Unit) {
-    val preview by produceState<ImageBitmap?>(null, template, color) {
-        val paper = (base ?: Page(app.bestnote.core.model.NotebookId("preview"), 0)).copy(template = template, paperColor = color)
-        value = withContext(Dispatchers.Default) { renderPageBitmap(paper, emptyList(), THUMB_PX).asImageBitmap() }
-    }
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        val shape = RoundedCornerShape(6.dp)
-        Box(
-            Modifier
-                .size(width = 96.dp, height = 124.dp)
-                .softShadow(Elevation.Low, shape)
-                .clip(shape)
-                .then(if (selected) Modifier.border(3.dp, MaterialTheme.colorScheme.primary, shape) else Modifier)
-                .clickable(onClick = onClick)
-                .semantics { this.selected = selected },
-        ) {
-            preview?.let { Image(it, template.label, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize()) }
-        }
-        Text(
-            template.label,
-            style = MaterialTheme.typography.labelMedium,
-            color = if (selected) MaterialTheme.colorScheme.primary else BestNoteTheme.colors.muted,
-            modifier = Modifier.padding(top = Spacing.XS),
-        )
     }
 }

@@ -54,8 +54,10 @@ internal data class ChromeActions(
     val onLeftHanded: (Boolean) -> Unit,
     val onClearPage: () -> Unit,
     val onSmartBoard: () -> Unit,
-    /** The Pages pill: paper template, color and size of the page being read. */
+    /** The Paper button and its sheet: template, color and size (PAGES-10). */
     val pagesMenu: @Composable () -> Unit,
+    /** The Pages button: opens the page manager (PAGES-10). */
+    val onPages: () -> Unit = {},
     val onOpenSettings: () -> Unit = {},
     /** Opens the Export dialog (PDF / PNG / .bnote, then the share sheet). */
     val onExport: () -> Unit = {},
@@ -98,7 +100,7 @@ internal fun TitleCluster(title: String, page: Int, pageCount: Int, onBack: () -
     }
 }
 
-/** Undo/Redo pill, dark Smart Board pill, and the Pages · Layers · Export · More pill. */
+/** Undo/Redo pill, dark Smart Board pill, and the Pages · Paper · Layers · Export · More pill. */
 @Composable
 internal fun ActionPills(
     canUndo: Boolean,
@@ -118,6 +120,7 @@ internal fun ActionPills(
         val layers = stringResource(R.string.editor_layers)
         val export = stringResource(R.string.editor_export)
         Row(Modifier.chromeSurface().padding(horizontal = 2.dp)) {
+            ChromeIconButton(AtelierIcons.Pages, stringResource(R.string.editor_pages), actions.onPages, size = 44.dp)
             actions.pagesMenu()
             // Compact windows keep only Pages and More here: Smart Board, Layers and Export move into More.
             if (!compact) {

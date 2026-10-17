@@ -906,11 +906,22 @@ class PagedDocumentView(context: Context) : FrameLayout(context), InProgressStro
         listener.onInkTap(page, pt[0], pt[1])
     }
 
+    /**
+     * Called when two fingers keep pinching in after the pages reached the smallest zoom (PAGES-10):
+     * the host opens the page overview. Null leaves the pinch alone.
+     */
+    var overviewListener: (() -> Unit)? = null
+
+    /** How much a pinch asked to shrink beyond the smallest zoom (1 = not at all); see [ZoomMath.OVERVIEW_PINCH]. */
+    private var overPinch = 1f
+
     /** Applies one frame of finger panning (one finger) or pinching (two or more). */
     private fun panZoom(step: PinchStep) {
         if (scrolling.size >= 2 || !pages.preview.isIdentity) {
             beginZoomGesture()
             val k = ZoomMath.clampFactor(pages.zoom, pages.preview.scale, step.scale)
+            if (step.scale < 1f && k > step.scale) overPinch *= step.scale / k
+            if (step.scale > 1f) overPinch = (overPinch * step.scale).coerceAtMost(1f)
             pages.preview = pages.preview.scaledBy(k, step.focusX, step.focusY, step.dx, step.dy)
             // Re-lay out (sharp ink, the right pages bound) whenever the preview drifted far from it.
             val s = pages.preview.scale
@@ -970,6 +981,9 @@ class PagedDocumentView(context: Context) : FrameLayout(context), InProgressStro
     /** The pinch ended (fewer than two fingers left): lay out at the final zoom, render it shortly. */
     private fun endPinch() {
         val wasGesture = pages.zoomGesture
+        val overview = overPinch < ZoomMath.OVERVIEW_PINCH
+        overPinch = 1f
+        if (overview) overviewListener?.invoke()
         commitPreview()
         if (wasGesture && zoomAnimator == null) scheduleSettle()
     }
