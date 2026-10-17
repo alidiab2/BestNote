@@ -9,12 +9,14 @@ import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.RectF
 import android.view.View
+import androidx.ink.strokes.Stroke
 import app.bestnote.engine.canvas.shape.AnchorType
 import app.bestnote.engine.canvas.shape.Polyline
 import app.bestnote.engine.canvas.shape.ShapeHint
 import app.bestnote.engine.canvas.shape.ShapeLabel
 import app.bestnote.engine.canvas.shape.ShapeOutline
 import app.bestnote.engine.canvas.shape.ShapePreview
+import app.bestnote.engine.ink.InkRenderer
 import app.bestnote.engine.recognition.RecognizedShape
 import kotlin.math.hypot
 import kotlin.math.max
@@ -33,9 +35,11 @@ class ShapeGhostText(
 )
 
 /**
- * CANVAS-17: draws the hold-to-shape ghost over the wet ink: the clean shape's outline in the pen color at half
- * opacity with a faint fill, its snapping (right-angle ticks, glue markers, alignment guides) and a small label
- * ("Circle · perfect"). No animation: it changes exactly when the pen moves. Never hit-tested.
+ * CANVAS-17: draws the hold-to-shape ghost above the wet ink layer. While it shows, the raw stroke is taken off
+ * the wet layer, so what is on screen is exactly what lifting commits: the clean outline in the full pen color
+ * and width on a soft contrasting halo (readable on light and dark paper), a faint fill, its snapping (right-angle
+ * ticks, glue markers, alignment guides) and a small label ("Circle · perfect"). A cancelled ghost hands back the
+ * raw ink, drawn here until the pen lifts. No animation: it changes exactly when the pen moves. Never hit-tested.
  */
 @SuppressLint("ViewConstructor")
 internal class ShapeGhostLayer(context: Context) : View(context) {
@@ -59,7 +63,20 @@ internal class ShapeGhostLayer(context: Context) : View(context) {
         strokeJoin = Paint.Join.ROUND
         strokeCap = Paint.Cap.ROUND
     }
+    private val halo = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE
+        strokeJoin = Paint.Join.ROUND
+        strokeCap = Paint.Cap.ROUND
+    }
     private val fill = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
+    private val pillEdge = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE
+        strokeWidth = PILL_EDGE_DP * density
+        color = PILL_EDGE
+    }
+    private val ink = InkRenderer()
+    private var raw: Stroke? = null
+    private val rawToView = Matrix()
     private val mark = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE
         strokeWidth = MARK_DP * density
@@ -99,7 +116,16 @@ internal class ShapeGhostLayer(context: Context) : View(context) {
 
     val showing: Boolean get() = ghost != null
 
+    /** Draws [stroke] (page points, through [pageToView]) as the pen's raw ink; null stops. */
+    fun showRaw(stroke: Stroke?, pageToView: Matrix?) {
+        if (stroke == null && raw == null) return
+        raw = stroke
+        if (pageToView != null) rawToView.set(pageToView)
+        invalidate()
+    }
+
     override fun onDraw(canvas: Canvas) {
+        raw?.let { ink.draw(canvas, listOf(it), rawToView) }
         val g = ghost ?: return
         val o = shapeOutline ?: return
         if (o.size < 2) return
@@ -117,8 +143,12 @@ internal class ShapeGhostLayer(context: Context) : View(context) {
             fill.color = withAlpha(color, FILL_ALPHA)
             canvas.drawPath(path, fill)
         }
-        outline.color = withAlpha(color, OUTLINE_ALPHA)
-        outline.strokeWidth = max(MIN_OUTLINE_DP * density, widthPt * toView.mapRadius(1f))
+        val w = max(MIN_OUTLINE_DP * density, widthPt * toView.mapRadius(1f))
+        halo.color = withAlpha(haloFor(color), HALO_ALPHA)
+        halo.strokeWidth = w + 2 * HALO_DP * density
+        canvas.drawPath(path, halo)
+        outline.color = color
+        outline.strokeWidth = w
         canvas.drawPath(path, outline)
         drawRightAngles(canvas, g)
         drawGuides(canvas, g)
@@ -138,7 +168,7 @@ internal class ShapeGhostLayer(context: Context) : View(context) {
         if (ShapeHint.RightAngles !in g.hints) return
         val p = (g.shape as? RecognizedShape.Polygon)?.points ?: return
         if (p.size != 4) return
-        mark.color = withAlpha(color, OUTLINE_ALPHA)
+        mark.color = color
         val s = TICK_DP * density
         for (k in 0 until 4) {
             val (cx, cy) = p[k]; val (ax, ay) = p[(k + 3) % 4]; val (bx, by) = p[(k + 1) % 4]
@@ -186,6 +216,7 @@ internal class ShapeGhostLayer(context: Context) : View(context) {
         rect.set(left, top, left + w, top + h)
         pill.color = LABEL_BACKGROUND
         canvas.drawRoundRect(rect, h / 2, h / 2, pill)
+        canvas.drawRoundRect(rect, h / 2, h / 2, pillEdge)
         canvas.drawText(s, left + pad, top + h / 2 - (label.descent() + label.ascent()) / 2, label)
     }
 
@@ -194,10 +225,22 @@ internal class ShapeGhostLayer(context: Context) : View(context) {
         toView.mapPoints(pts, 0, pts, 0, 1)
     }
 
+    /** White behind dark ink, near-black behind light ink (dark paper). */
+    private fun haloFor(argb: Int): Int {
+        val r = (argb shr 16) and 0xFF; val gr = (argb shr 8) and 0xFF; val b = argb and 0xFF
+        return if (0.299 * r + 0.587 * gr + 0.114 * b < LIGHT_INK) HALO_LIGHT else HALO_DARK
+    }
+
     private fun withAlpha(argb: Int, alpha: Int) = (argb and 0x00FFFFFF) or (alpha.coerceIn(0, 255) shl 24)
 
     private companion object {
-        const val OUTLINE_ALPHA = 0x80
+        const val HALO_ALPHA = 0x99
+        const val HALO_DP = 3f
+        const val HALO_LIGHT = 0xFFFFFFFF.toInt()
+        const val HALO_DARK = 0xFF15171C.toInt()
+        const val LIGHT_INK = 140.0
+        const val PILL_EDGE_DP = 1f
+        const val PILL_EDGE = 0x99FFFFFF.toInt()
         const val FILL_ALPHA = 0x1C
         const val MIN_OUTLINE_DP = 2f
         const val MARK_DP = 1.5f
