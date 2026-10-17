@@ -253,4 +253,51 @@
     <string name="equation_group_greek">يونانية</string>
     <string name="equation_group_relations">العلاقات</string>
     <string name="equation_group_arrows">الأسهم</string>
+
+    <!-- PAGES-05: insert pages from a PDF or an image -->
+    <string name="insert_from_pdf">من PDF</string>
+    <string name="insert_from_image">من صورة</string>
+    <string name="insert_pdf_menu">إدراج من PDF…</string>
+    <string name="insert_image_menu">إدراج من صورة…</string>
+    <string name="insert_files">الملفات</string>
+    <string name="insert_reading_pdf">جارٍ قراءة ملف PDF…</string>
+    <string name="insert_reading_image">جارٍ تجهيز الصور…</string>
+    <string name="insert_cancel">إلغاء</string>
+    <string name="insert_ok">حسنًا</string>
+    <string name="insert_action">إدراج</string>
+    <string name="insert_all_pages">كل الصفحات</string>
+    <string name="insert_page_range">نطاق من الصفحات</string>
+    <string name="insert_range_hint">مثال: 1-3، 5</string>
+    <string name="insert_range_error">صفحة أو نطاق غير صالح: %1$s</string>
+    <string name="insert_where">الإدراج</string>
+    <string name="insert_after_page">بعد الصفحة %1$d</string>
+    <string name="insert_at_end">في النهاية</string>
+    <string name="insert_err_password">ملف PDF هذا محمي بكلمة مرور.</string>
+    <string name="insert_err_empty">ملف PDF هذا لا يحتوي على صفحات.</string>
+    <string name="insert_err_large">ملف PDF كبير جدًا (أكثر من 200 ميغابايت).</string>
+    <string name="insert_err_unreadable">هذا الملف ليس PDF يمكن قراءته.</string>
+    <plurals name="insert_pdf_title">
+        <item quantity="zero">PDF بـ %1$d صفحة</item>
+        <item quantity="one">PDF بصفحة واحدة</item>
+        <item quantity="two">PDF بصفحتين</item>
+        <item quantity="few">PDF بـ %1$d صفحات</item>
+        <item quantity="many">PDF بـ %1$d صفحة</item>
+        <item quantity="other">PDF بـ %1$d صفحة</item>
+    </plurals>
+    <plurals name="insert_image_title">
+        <item quantity="zero">%1$d صورة</item>
+        <item quantity="one">صورة واحدة</item>
+        <item quantity="two">صورتان</item>
+        <item quantity="few">%1$d صور</item>
+        <item quantity="many">%1$d صورة</item>
+        <item quantity="other">%1$d صورة</item>
+    </plurals>
+    <plurals name="insert_done">
+        <item quantity="zero">لم تُدرج صفحات</item>
+        <item quantity="one">أُدرجت صفحة واحدة</item>
+        <item quantity="two">أُدرجت صفحتان</item>
+        <item quantity="few">أُدرجت %1$d صفحات</item>
+        <item quantity="many">أُدرجت %1$d صفحة</item>
+        <item quantity="other">أُدرجت %1$d صفحة</item>
+    </plurals>
 </resources>

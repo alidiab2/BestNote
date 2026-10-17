@@ -155,13 +155,19 @@ class PagedDocument {
 
     /**
      * Inserts [pages] (paper and ink) at [at] (0..size) as ONE undo step: undo removes the pages and
-     * their ink together (a Smart Board insert). @return the new pages' indices.
+     * their ink together (a Smart Board insert). With [keepPdf] the pages keep their [Page.pdf] reference. @return the new pages' indices.
      */
-    fun insertPages(at: Int, pages: List<Pair<Page, Collection<Stroke>>>, elements: List<List<PageElement>> = emptyList()): List<Int> {
+    fun insertPages(
+        at: Int,
+        pages: List<Pair<Page, Collection<Stroke>>>,
+        elements: List<List<PageElement>> = emptyList(),
+        keepPdf: Boolean = false,
+    ): List<Int> {
         if (pages.isEmpty()) return emptyList()
         val index = at.coerceIn(0, _pages.size)
         val added = pages.mapIndexed { i, (paper, strokes) ->
-            DocumentPage(paper.copy(pdf = null)).apply {
+            // keepPdf: pages inserted from a PDF (PAGES-05) keep their PDF background; others are plain paper.
+            DocumentPage(if (keepPdf) paper else paper.copy(pdf = null)).apply {
                 mutableStrokes += strokes
                 elements.getOrNull(i)?.takeIf { it.isNotEmpty() }?.let { this.elements = it }
             }

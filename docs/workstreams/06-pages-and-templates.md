@@ -10,7 +10,7 @@
 | [x] PAGES-02 | Paper sizes: A4, A5, Letter, "fit to screen", custom; portrait/landscape | M1 | S | — | — |
 | [x] PAGES-03 | Page thumbnails sidebar / grid overview | M2 | M | DOC-10 | Opens with a shared-element zoom-out animation |
 | [x] PAGES-04 | Add, delete, reorder (drag), duplicate, rotate pages | M2 | M | PAGES-03 | Reorder by drag with spring physics; undoable |
-| [ ] PAGES-05 | Insert page: template picker (done), from PDF, from image (open) | M2 | M | PDF-01 | — |
+| [x] PAGES-05 | Insert page: template picker, from PDF (all pages or a range), from image | M2 | M | PDF-01 | — |
 | [x] PAGES-06 | Template pack 1: Cornell, music staff, planner (daily/weekly), graph | M2 | M | PAGES-01 | — |
 | [ ] PAGES-07 | Infinite canvas notebook type | M3 | XL | CANVAS-06 | Split before starting |
 | [ ] PAGES-08 | Custom templates from image/PDF, saved for reuse | M3 | M | PAGES-05 | — |
