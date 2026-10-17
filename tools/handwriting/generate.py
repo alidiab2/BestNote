@@ -192,6 +192,34 @@ def shapes_sloppy():
     return d
 
 
+def shapes_glue():
+    """CANVAS-17 device check: boxes that tile, an arrow glued box-to-circle, a star; the last arrow is held 7 s
+    so the ghost (label, glue markers) can be screenshotted before the pen lifts."""
+    w = writer(1718, xh=3.4, name="diagram", vmax=120.0)
+    d = hwdoc.Document("shapes_glue", "Glue: two boxes edge to edge, a connector arrow, a circle, a star, a held ghost",
+                       PAGE_W, 110, w)
+    h = 700.0
+    shapes.sloppy_box(d, w, 40, 32, 40, 24, corner_mm=1.0, hold_ms=h)
+    shapes.sloppy_box(d, w, 76.5, 33, 30, 24, corner_mm=1.0, hold_ms=h)   # left edge ~1.5 mm right of the first box
+    shapes.circle(d, w, (40, 82), 12, hold_ms=h)
+    shapes.arrow_one_stroke(d, w, (40.5, 45), (40, 69), size=4.0, hold_ms=h)   # box bottom middle -> circle top
+    shapes.pentagram(d, w, (130, 80), 13, hold_ms=h)
+    shapes.arrow_closed_head(d, w, (93.5, 33), (128, 66), size=4.5, hold_ms=7000.0)  # box right middle -> star
+    d.labels = ["Rectangle", "Rectangle", "Circle", "Arrow", "Star", "Arrow"]
+    return d
+
+
+def shapes_move():
+    """CANVAS-17 device check, replayed with the lasso: circle the first box of shapes_glue, then drag it down-left."""
+    w = writer(1719, xh=3.4, name="diagram", vmax=90.0)
+    d = hwdoc.Document("shapes_move", "Lasso the first box of shapes_glue and drag it", PAGE_W, 110, w)
+    import math as _m
+    pts = [(36 + 19 * _m.cos(2 * _m.pi * i / 40), 32 + 14 * _m.sin(2 * _m.pi * i / 40)) for i in range(41)]
+    d.add(pts, gap="shape")
+    d.add([(40 + 0.3 * i, 32 + 0.5 * i) for i in range(41)], gap=900.0, speed=0.4)
+    return d
+
+
 def scribble():
     w = writer(44, xh=3.2, vmax=200.0, vcurve=70.0, accel=4000.0, pressure=0.6, name="shader")
     d = hwdoc.Document("scribble", "Scribble shading: fast back-and-forth hatching in two boxes", PAGE_W, 50, w)
@@ -331,7 +359,7 @@ def arabic_moved():
 REC = [para_tight, slanted, numbers, arabic_para, mixed, para_moved, arabic_moved]
 
 ALL = [lecture_en, formulas, arabic_text, tiny_fast, slow_large, drawings, scribble, highlight_lecture, hover_erase,
-       shapes_hold, shapes_sloppy] + REC
+       shapes_hold, shapes_sloppy, shapes_glue, shapes_move] + REC
 NAMES = {"arabic": arabic_text}
 
 
