@@ -68,6 +68,8 @@ internal class DocumentSession(
     private val document: PagedDocument,
     scope: CoroutineScope,
     private val pdfCacheDir: File,
+    /** App-private, no-backup scratch a locked notebook's PDFs are opened from (LIB-11b; nothing stays there). */
+    private val lockedPdfDir: File,
     /** Voice recordings of this notebook and their sync with the ink (MEDIA-04/05). */
     internal val audio: AudioController,
     private val fallback: suspend () -> Notebook?,
@@ -133,7 +135,9 @@ internal class DocumentSession(
         val asset = PdfAssets.pathFor(bytes)
         val alreadyOpen = pdf?.hasSource(asset) == true
         val reader = try {
-            PdfNotebookFiles.openAsset(notebookId, asset, bytes, pdfCacheDir)
+            // A locked notebook's PDFs never get a plaintext copy on disk (LIB-11b).
+            if (repository.isSealed(notebookId)) PdfNotebookFiles.openAssetPrivate(bytes, lockedPdfDir)
+            else PdfNotebookFiles.openAsset(notebookId, asset, bytes, pdfCacheDir)
         } catch (e: SecurityException) {
             throw PdfInsertException(PdfInsertException.Reason.Password, e)
         } catch (e: IOException) {
@@ -280,7 +284,10 @@ internal class DocumentSession(
         assets.putAll(open.pkg.assets)
         document.images = imageCache
         audio.attach(open.pkg.recordings, open.pkg.assets, open.autosaver)
-        pdf = withContext(Dispatchers.IO) { PdfNotebookFiles.open(open.pkg, pdfCacheDir) }
+        val sealed = repository.isSealed(notebookId)
+        pdf = withContext(Dispatchers.IO) {
+            if (sealed) PdfNotebookFiles.openPrivate(open.pkg, lockedPdfDir) else PdfNotebookFiles.open(open.pkg, pdfCacheDir)
+        }
         document.backgrounds = pdf
         document.reset(savedLayout.map { it.second }, savedLayout.map { it.first }, strokes = { strokes[it] }, elements = { pages[it].elements })
         document.addListener(this)
@@ -420,8 +427,14 @@ internal class DocumentSession(
             }
             val thumbnailed = refreshThumbnail(saver, first, pdf, elements, pictures)
             pdf?.close()
-            // A locked notebook's PDF backgrounds were copied in plain for the renderer: remove them (LIB-11).
-            if (pdf != null && repository.isSealed(notebookId)) withContext(Dispatchers.IO) { PdfNotebookFiles.forget(notebookId, pdfCacheDir) }
+            // A locked notebook's PDFs never stay in a cache (LIB-11b): its scratch goes, and a plain copy made before it
+            // was locked from this editor too.
+            if (pdf != null && repository.isSealed(notebookId)) {
+                withContext(Dispatchers.IO) {
+                    PdfNotebookFiles.forget(notebookId, pdfCacheDir)
+                    lockedPdfDir.deleteRecursively()
+                }
+            }
             if (thumbnailed) {
                 Log.i(TAG, "Thumbnail of $notebookId updated ${SystemClock.elapsedRealtime() - closedAt} ms after closing")
             }

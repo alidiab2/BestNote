@@ -34,6 +34,25 @@ object PdfNotebookFiles {
     }
 
     /**
+     * Like [open], but no plaintext copy stays on disk (LIB-11b, locked notebooks and exports): each PDF is handed to
+     * the renderer from an anonymous memory file (Android 11+), or else from a file in [scratchDir] (app-private, no
+     * backup) that is deleted as soon as the renderer holds it open. Off the main thread.
+     */
+    fun openPrivate(pkg: NotebookPackage, scratchDir: File): PdfPageBackgrounds? {
+        val assets = pkg.pages.mapNotNull { it.page.pdf?.asset }.distinct().filter { it in pkg.assets }
+        if (assets.isEmpty()) return null
+        val sources = HashMap<String, PdfDocumentSource>()
+        for (asset in assets) {
+            try {
+                sources[asset] = PdfRendererDocumentSource(PrivateFiles.descriptor(pkg.assets.getValue(asset), scratchDir))
+            } catch (_: Exception) {
+                // IOException, ErrnoException, SecurityException (password) or a damaged file: skip this PDF.
+            }
+        }
+        return if (sources.isEmpty()) null else PdfPageBackgrounds(sources)
+    }
+
+    /**
      * Copies [bytes] (the PDF stored at [asset]) to [cacheDir] like [open] does and opens it, for a PDF
      * added while the notebook is open (PAGES-05). Does file I/O: call off the main thread.
      * @throws java.io.IOException, SecurityException (password protected) or IllegalArgumentException if it is not a usable PDF.
@@ -49,10 +68,21 @@ object PdfNotebookFiles {
         return PdfRendererDocumentSource.open(file)
     }
 
+    /**
+     * Like [openAsset], for a PDF added to a locked notebook: opened from memory (or a scratch file in [scratchDir]
+     * deleted at once), so no plaintext copy stays on disk (LIB-11b). Off the main thread.
+     * @throws java.io.IOException, SecurityException (password protected) or IllegalArgumentException if it is not a usable PDF.
+     */
+    fun openAssetPrivate(bytes: ByteArray, scratchDir: File): PdfDocumentSource =
+        PdfRendererDocumentSource(PrivateFiles.descriptor(bytes, scratchDir))
+
     /** Deletes the copies [open] made for notebook [id] (LIB-11: a locked notebook's PDFs never stay in the cache). */
     fun forget(id: NotebookId, cacheDir: File) {
         File(cacheDir, dirName(id)).deleteRecursively()
     }
+
+    /** The folder [open] copies notebook [id]'s PDFs to (swept at start for locked notebooks). */
+    fun cacheDirOf(id: NotebookId, cacheDir: File): File = File(cacheDir, dirName(id))
 
     internal fun dirName(id: NotebookId): String =
         id.value.map { if (it.isLetterOrDigit() || it == '-' || it == '_') it else '_' }.joinToString("").take(48) +

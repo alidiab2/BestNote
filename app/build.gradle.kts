@@ -71,6 +71,8 @@ dependencies {
     implementation(projects.ai.visionProviders)
 
     implementation(projects.engine.export)
+    // LIB-11b: the start-up sweep removes plain PDF copies older builds cached for locked notebooks.
+    implementation(projects.engine.pdf)
     implementation(projects.engine.recognitionMlkit)
     implementation(projects.feature.library)
     implementation(projects.feature.onboarding)

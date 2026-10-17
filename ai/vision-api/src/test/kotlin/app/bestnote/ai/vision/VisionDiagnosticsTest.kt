@@ -11,6 +11,7 @@ class VisionDiagnosticsTest {
     @After
     fun reset() {
         VisionDiagnostics.captureRaw = false
+        VisionDiagnostics.privateSession = false
         VisionDiagnostics.listener = null
         VisionDiagnostics.clear()
     }
@@ -22,6 +23,14 @@ class VisionDiagnosticsTest {
         VisionDiagnostics.captureRaw = true
         VisionDiagnostics.recordResponse("gemini", "m", 200, "{\"a\":1}")
         assertEquals("{\"a\":1}", VisionDiagnostics.latest()!!.raw)
+    }
+
+    @Test
+    fun `no raw body is kept while a locked notebook is open`() {
+        VisionDiagnostics.captureRaw = true
+        VisionDiagnostics.privateSession = true
+        VisionDiagnostics.recordResponse("gemini", "m", 200, "{\"text\":\"my diary\"}")
+        assertNull(VisionDiagnostics.latest()!!.raw)
     }
 
     @Test

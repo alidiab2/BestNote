@@ -12,7 +12,9 @@ import app.bestnote.core.storage.NotebookPackage
 import app.bestnote.core.storage.PageContent
 import app.bestnote.core.storage.PasswordKeys
 import app.bestnote.core.storage.PinRecord
+import app.bestnote.core.storage.SealCrypto
 import kotlinx.coroutines.test.runTest
+import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -61,6 +63,8 @@ class LockManagerTest {
     private val pins = MemoryPins()
     private var relockAfter = RelockAfter.OneMinute
     private val forgotten = ArrayList<NotebookId>()
+    private val sealedKeys = HashMap<NotebookId, ByteArray>()
+    private val unsealedKeys = HashMap<NotebookId, ByteArray>()
     private val store by lazy { FileNotebookStore(tmp.root, keyring = ring) }
     private val locks by lazy {
         LockManager(
@@ -71,6 +75,14 @@ class LockManagerTest {
             object : LockHooks {
                 override suspend fun forgetDerived(id: NotebookId) {
                     forgotten += id
+                }
+
+                override suspend fun sealedWith(id: NotebookId, dataKey: ByteArray) {
+                    sealedKeys[id] = dataKey
+                }
+
+                override suspend fun unsealed(id: NotebookId, dataKey: ByteArray) {
+                    unsealedKeys[id] = dataKey
                 }
             },
         ) { relockAfter }.also { it.iterations = 1_000 }
@@ -160,6 +172,17 @@ class LockManagerTest {
         assertTrue(locks.sealed.value.isEmpty())
         assertFalse(a in ring)
         assertEquals("Title a", FileNotebookStore(tmp.root).read(a)!!.notebook.title)
+    }
+
+    @Test fun workingFilesFollowTheLockWithTheNotebookKey() = runTest {
+        val a = notebook("a")
+        locks.lock(listOf(a))
+        val key = sealedKeys.getValue(a) // recordings outside the package get encrypted with the same key
+        assertEquals(store.sealHeader(a)!!.keyCheck, SealCrypto.keyCheck(key))
+        vault.authenticated = true
+        locks.tryUnlock(listOf(a))
+        locks.removeLock(listOf(a))
+        assertArrayEquals(key, unsealedKeys.getValue(a))
     }
 
     @Test fun relocksAfterTheChosenTimeInTheBackground() = runTest {

@@ -131,9 +131,10 @@ internal class ElementTools(
     }
 
     /** Stores the picture at [uri] (downsampled, once per notebook) and puts it on the page being read. */
-    fun insertImage(uri: Uri, drop: DropPoint? = null) {
+    fun insertImage(uri: Uri, drop: DropPoint? = null, afterRead: () -> Unit = {}) {
         scope.launch {
             val picture = ImageImport.load(context, uri)
+            afterRead()
             val view = canvas()
             if (picture == null || view == null) return@launch onMessage(R.string.image_failed)
             val index = drop?.page ?: view.currentPage.coerceAtLeast(0)
@@ -200,9 +201,22 @@ internal class ElementTools(
     }
 
     fun cameraTarget(): Uri {
-        val file = File(File(context.cacheDir, "exports/camera").apply { mkdirs() }, "shot.jpg")
+        val file = cameraFile().apply { parentFile?.mkdirs() }
         return FileProvider.getUriForFile(context, "${context.packageName}.exports", file).also { cameraUri = it }
     }
+
+    /** The camera's photo goes into the notebook, then its plain copy in the cache goes (LIB-11b: maybe a locked one). */
+    fun insertCameraShot(taken: Boolean) {
+        val uri = cameraUri
+        if (taken && uri != null) insertImage(uri) { discardCameraShot() } else discardCameraShot()
+    }
+
+    private fun discardCameraShot() {
+        cameraFile().delete()
+        cameraUri = null
+    }
+
+    private fun cameraFile() = File(File(context.cacheDir, "exports/camera"), "shot.jpg")
 
     @Composable
     fun Dialogs() {
@@ -269,7 +283,7 @@ internal fun rememberElementTools(
     val scope = rememberCoroutineScope()
     val tools = remember(document, session) { ElementTools(context, scope, canvas, document, session, colors, onSelecting, onMessage) }
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri -> uri?.let(tools::insertImage) }
-    val camera = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { ok -> if (ok) tools.cameraUri?.let(tools::insertImage) }
+    val camera = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { ok -> tools.insertCameraShot(ok) }
     val view = canvas()
     DisposableEffect(view, tools) {
         view?.dropListener = PagedDocumentView.DropListener(tools::onDrop)

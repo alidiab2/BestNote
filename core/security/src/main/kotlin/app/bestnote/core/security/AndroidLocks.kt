@@ -15,6 +15,7 @@ import androidx.core.content.edit
 import app.bestnote.core.database.NotebookRepository
 import app.bestnote.core.datastore.UserPreferencesRepository
 import app.bestnote.core.model.NotebookId
+import app.bestnote.core.storage.LockedScratch
 import app.bestnote.core.storage.PinRecord
 import dagger.Binds
 import dagger.Module
@@ -25,6 +26,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
 import java.security.GeneralSecurityException
@@ -130,9 +132,14 @@ class PrefsPinStore @Inject constructor(@ApplicationContext context: Context) : 
     }
 }
 
-class RepositoryLockHooks @Inject constructor(private val repository: NotebookRepository) : LockHooks {
+class RepositoryLockHooks @Inject constructor(
+    private val repository: NotebookRepository,
+    private val scratch: LockedScratch,
+) : LockHooks {
     override suspend fun awaitSaves(id: NotebookId) = repository.awaitSaves(id)
     override suspend fun forgetDerived(id: NotebookId) = repository.forgetDerived(id)
+    override suspend fun sealedWith(id: NotebookId, dataKey: ByteArray) = withContext(Dispatchers.IO) { scratch.sealed(id, dataKey) }
+    override suspend fun unsealed(id: NotebookId, dataKey: ByteArray) = withContext(Dispatchers.IO) { scratch.unsealed(id, dataKey) }
 }
 
 /** The relock setting, kept current from the user preferences. */

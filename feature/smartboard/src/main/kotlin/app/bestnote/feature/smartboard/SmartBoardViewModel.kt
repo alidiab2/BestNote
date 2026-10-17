@@ -355,7 +355,7 @@ class SmartBoardViewModel @Inject constructor(
     private val pipeline = BoardToInk { UUID.randomUUID().toString() }
 
     /** A file the camera app writes into (shared through this module's FileProvider). */
-    fun cameraFile(): File = File(context.cacheDir, "smartboard").apply { mkdirs() }.resolve("board.jpg")
+    fun cameraFile(): File = File(context.cacheDir, "smartboard").apply { mkdirs() }.resolve(CAMERA_FILE)
 
     private var nextPhotoId = 0L
 
@@ -371,7 +371,10 @@ class SmartBoardViewModel @Inject constructor(
             var failed = 0
             for (uri in take) {
                 val photo = withContext(Dispatchers.Default) {
-                    val bitmap = runCatching { withContext(Dispatchers.IO) { decode(uri) } }.getOrNull() ?: return@withContext null
+                    val bitmap = runCatching { withContext(Dispatchers.IO) { decode(uri) } }.getOrNull()
+                    // The camera's plain copy goes once decoded (LIB-11b: the board may be for a locked notebook).
+                    withContext(Dispatchers.IO) { if (uri.authority == context.packageName + ".smartboard.files" && uri.lastPathSegment == CAMERA_FILE) cameraFile().delete() }
+                    if (bitmap == null) return@withContext null
                     val found = BoardScan.detect(bitmap)
                     BoardPhoto(nextPhotoId++, bitmap, found?.quad ?: Quad.full(), found != null)
                 }
@@ -596,6 +599,8 @@ class SmartBoardViewModel @Inject constructor(
     }
 
     companion object {
+        private const val CAMERA_FILE = "board.jpg"
+
         /** Reading steps shown while the provider works (the last one is the handwriting). */
         const val STEPS = 6
         private const val STEP_MS = 380L
