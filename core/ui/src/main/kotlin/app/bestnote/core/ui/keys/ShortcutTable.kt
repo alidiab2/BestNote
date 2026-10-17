@@ -2,8 +2,11 @@ package app.bestnote.core.ui.keys
 
 import android.view.KeyEvent
 
-/** Where a shortcut applies: the screen that is up. [Global] works everywhere. */
-enum class ShortcutScope { Global, Editor, Library }
+/**
+ * Where a shortcut applies: the screen that is up. [Global] works everywhere. [Text] works only while a text box is
+ * being typed into on the page (TEXT-04), and is the only scope that does.
+ */
+enum class ShortcutScope { Global, Editor, Library, Text }
 
 /** What a hardware-keyboard shortcut does (SPEN-10). Screens map these to their own behavior. */
 enum class ShortcutAction(val scope: ShortcutScope, val group: ShortcutGroup, val repeatable: Boolean = false) {
@@ -28,19 +31,40 @@ enum class ShortcutAction(val scope: ShortcutScope, val group: ShortcutGroup, va
     Duplicate(ShortcutScope.Editor, ShortcutGroup.Selection),
     Delete(ShortcutScope.Editor, ShortcutGroup.Selection),
     ClearSelection(ShortcutScope.Editor, ShortcutGroup.Selection),
+    NudgeLeft(ShortcutScope.Editor, ShortcutGroup.Selection, repeatable = true),
+    NudgeRight(ShortcutScope.Editor, ShortcutGroup.Selection, repeatable = true),
+    NudgeUp(ShortcutScope.Editor, ShortcutGroup.Selection, repeatable = true),
+    NudgeDown(ShortcutScope.Editor, ShortcutGroup.Selection, repeatable = true),
+    NudgeLeftFar(ShortcutScope.Editor, ShortcutGroup.Selection, repeatable = true),
+    NudgeRightFar(ShortcutScope.Editor, ShortcutGroup.Selection, repeatable = true),
+    NudgeUpFar(ShortcutScope.Editor, ShortcutGroup.Selection, repeatable = true),
+    NudgeDownFar(ShortcutScope.Editor, ShortcutGroup.Selection, repeatable = true),
+
+    TextBold(ShortcutScope.Text, ShortcutGroup.Text),
+    TextItalic(ShortcutScope.Text, ShortcutGroup.Text),
+    TextUnderline(ShortcutScope.Text, ShortcutGroup.Text),
+    TextNumbers(ShortcutScope.Text, ShortcutGroup.Text),
+    TextBullets(ShortcutScope.Text, ShortcutGroup.Text),
+    TextTitle(ShortcutScope.Text, ShortcutGroup.Text),
+    TextHeading(ShortcutScope.Text, ShortcutGroup.Text),
+    TextSubheading(ShortcutScope.Text, ShortcutGroup.Text),
+    TextBody(ShortcutScope.Text, ShortcutGroup.Text),
+    TextIndent(ShortcutScope.Text, ShortcutGroup.Text, repeatable = true),
+    TextOutdent(ShortcutScope.Text, ShortcutGroup.Text, repeatable = true),
+    TextDone(ShortcutScope.Text, ShortcutGroup.Text),
 
     NewNotebook(ShortcutScope.Library, ShortcutGroup.Library),
     SearchLibrary(ShortcutScope.Library, ShortcutGroup.Library),
 }
 
 /** Sections of the help overlay, in display order. */
-enum class ShortcutGroup { General, Edit, Tools, View, Pages, Selection, Library }
+enum class ShortcutGroup { General, Edit, Tools, View, Pages, Selection, Text, Library }
 
 /** One key plus modifiers. [ctrl] means Ctrl (Meta is never part of a binding: holding it shows the help). */
-data class KeyCombo(val keyCode: Int, val ctrl: Boolean = false, val shift: Boolean = false, val alias: Boolean = false) {
+data class KeyCombo(val keyCode: Int, val ctrl: Boolean = false, val shift: Boolean = false, val alias: Boolean = false, val alt: Boolean = false) {
     /** [alias] combos work but the help overlay does not list them. Human label, like "Ctrl+Shift+Z" ([keyName] names the key; defaults to the Android key name). */
     fun label(keyName: (Int) -> String = ::defaultKeyName): String =
-        listOfNotNull("Ctrl".takeIf { ctrl }, "Shift".takeIf { shift }, keyName(keyCode)).joinToString("+")
+        listOfNotNull("Ctrl".takeIf { ctrl }, "Alt".takeIf { alt }, "Shift".takeIf { shift }, keyName(keyCode)).joinToString("+")
 }
 
 private fun defaultKeyName(code: Int): String = when (code) {
@@ -52,6 +76,11 @@ private fun defaultKeyName(code: Int): String = when (code) {
     KeyEvent.KEYCODE_EQUALS -> "="
     KeyEvent.KEYCODE_MINUS -> "-"
     KeyEvent.KEYCODE_SLASH -> "/"
+    KeyEvent.KEYCODE_TAB -> "Tab"
+    KeyEvent.KEYCODE_DPAD_LEFT -> "←"
+    KeyEvent.KEYCODE_DPAD_RIGHT -> "→"
+    KeyEvent.KEYCODE_DPAD_UP -> "↑"
+    KeyEvent.KEYCODE_DPAD_DOWN -> "↓"
     in KeyEvent.KEYCODE_0..KeyEvent.KEYCODE_9 -> (code - KeyEvent.KEYCODE_0).toString()
     in KeyEvent.KEYCODE_A..KeyEvent.KEYCODE_Z -> ('A' + (code - KeyEvent.KEYCODE_A)).toString()
     else -> "?"
@@ -90,13 +119,35 @@ object ShortcutTable {
         ShortcutAction.Delete to KeyCombo(KeyEvent.KEYCODE_FORWARD_DEL),
         ShortcutAction.Delete to KeyCombo(KeyEvent.KEYCODE_DEL),
         ShortcutAction.ClearSelection to KeyCombo(KeyEvent.KEYCODE_ESCAPE),
+        ShortcutAction.NudgeLeft to KeyCombo(KeyEvent.KEYCODE_DPAD_LEFT),
+        ShortcutAction.NudgeRight to KeyCombo(KeyEvent.KEYCODE_DPAD_RIGHT),
+        ShortcutAction.NudgeUp to KeyCombo(KeyEvent.KEYCODE_DPAD_UP),
+        ShortcutAction.NudgeDown to KeyCombo(KeyEvent.KEYCODE_DPAD_DOWN),
+        // Shift = ten times as far; the help shows them in one row ("Nudge, Shift = 10x").
+        ShortcutAction.NudgeLeftFar to KeyCombo(KeyEvent.KEYCODE_DPAD_LEFT, shift = true, alias = true),
+        ShortcutAction.NudgeRightFar to KeyCombo(KeyEvent.KEYCODE_DPAD_RIGHT, shift = true, alias = true),
+        ShortcutAction.NudgeUpFar to KeyCombo(KeyEvent.KEYCODE_DPAD_UP, shift = true, alias = true),
+        ShortcutAction.NudgeDownFar to KeyCombo(KeyEvent.KEYCODE_DPAD_DOWN, shift = true, alias = true),
+        ShortcutAction.TextBold to KeyCombo(KeyEvent.KEYCODE_B, ctrl = true),
+        ShortcutAction.TextItalic to KeyCombo(KeyEvent.KEYCODE_I, ctrl = true),
+        ShortcutAction.TextUnderline to KeyCombo(KeyEvent.KEYCODE_U, ctrl = true),
+        ShortcutAction.TextNumbers to KeyCombo(KeyEvent.KEYCODE_7, ctrl = true, shift = true),
+        ShortcutAction.TextBullets to KeyCombo(KeyEvent.KEYCODE_8, ctrl = true, shift = true),
+        ShortcutAction.TextTitle to KeyCombo(KeyEvent.KEYCODE_1, ctrl = true, alt = true),
+        ShortcutAction.TextHeading to KeyCombo(KeyEvent.KEYCODE_2, ctrl = true, alt = true),
+        ShortcutAction.TextSubheading to KeyCombo(KeyEvent.KEYCODE_3, ctrl = true, alt = true),
+        ShortcutAction.TextBody to KeyCombo(KeyEvent.KEYCODE_0, ctrl = true, alt = true),
+        ShortcutAction.TextIndent to KeyCombo(KeyEvent.KEYCODE_TAB),
+        ShortcutAction.TextOutdent to KeyCombo(KeyEvent.KEYCODE_TAB, shift = true),
+        ShortcutAction.TextDone to KeyCombo(KeyEvent.KEYCODE_ESCAPE),
         ShortcutAction.NewNotebook to KeyCombo(KeyEvent.KEYCODE_N, ctrl = true),
         ShortcutAction.SearchLibrary to KeyCombo(KeyEvent.KEYCODE_F, ctrl = true),
     )
 
     /**
-     * The action for a key press while [scope]'s screen is up, or null. Alt or Meta held means "not ours".
-     * [editingText] (a text field has focus) disables everything, so typing is never hijacked.
+     * The action for a key press while [scope]'s screen is up, or null. Meta held means "not ours", and so does Alt
+     * unless the binding asks for it. [editingText] (a text field has focus) disables everything but the [ShortcutScope.Text]
+     * formatting keys, so typing is never hijacked; those fire only then.
      */
     fun resolve(
         scope: ShortcutScope,
@@ -107,10 +158,14 @@ object ShortcutTable {
         meta: Boolean = false,
         editingText: Boolean = false,
     ): ShortcutAction? {
-        if (editingText || alt || meta) return null
+        if (meta) return null
         return bindings.firstOrNull { (action, combo) ->
-            (action.scope == ShortcutScope.Global || action.scope == scope) &&
-                combo.keyCode == keyCode && combo.ctrl == ctrl && combo.shift == shift
+            val inScope = if (editingText) {
+                action.scope == ShortcutScope.Text && scope == ShortcutScope.Text
+            } else {
+                action.scope == ShortcutScope.Global || (action.scope == scope && scope != ShortcutScope.Text)
+            }
+            inScope && combo.keyCode == keyCode && combo.ctrl == ctrl && combo.shift == shift && combo.alt == alt
         }?.first
     }
 

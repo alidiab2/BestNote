@@ -21,6 +21,7 @@ import app.bestnote.engine.canvas.select.Affine
 import app.bestnote.engine.canvas.select.Box
 import app.bestnote.engine.canvas.select.ElementTransforms
 import app.bestnote.engine.canvas.select.Grip
+import app.bestnote.engine.canvas.select.SnapGuides
 import app.bestnote.engine.canvas.select.FillGeometry
 import app.bestnote.engine.canvas.select.InkClipboard
 import app.bestnote.engine.canvas.select.PenType
@@ -112,6 +113,10 @@ internal class SelectionLayer(
     private val imageReady = Runnable { invalidate() }
     private var lastSnap: Int? = null
 
+    /** TEXT-04: where a moving text box / picture snaps (page lines), and the guides it lines up on right now. */
+    private var snapTargets: SnapGuides.Targets? = null
+    private var guides: SnapGuides.Snap? = null
+
     /** Where the pen last touched a page (page, x, y in page points): where paste lands. */
     private var lastTouch: Triple<DocumentPage, Float, Float>? = null
 
@@ -201,6 +206,14 @@ internal class SelectionLayer(
             gesturePointer = pointerId
             gestureBox = box
             lastSnap = null
+            guides = null
+            // Moving boxes (not plain ink) snap to the page's margins and center and to the other boxes.
+            snapTargets = if (grip == Grip.Move && sel.elements.isNotEmpty()) {
+                val ids = sel.elements.mapTo(HashSet()) { it.id }
+                SnapGuides.targets(sel.page.page.widthPt, sel.page.page.heightPt, sel.page.elements.filter { it.id !in ids }.map { ElementTransforms.bounds(it) })
+            } else {
+                null
+            }
             previewStrokes = readable(sel.page, sel.strokes)
             pages.setHidden(selIndex, identitySet(sel.strokes))
             previewElements = sel.elements.filter { !it.locked }
@@ -244,6 +257,17 @@ internal class SelectionLayer(
         val sel = selection ?: return
         val (px, py) = toPage(indexOf(sel.page), xs[count - 1], ys[count - 1]) ?: return
         g.update(px, py)
+        snapTargets?.let { targets ->
+            val m = g.transform
+            val b = sel.box
+            val scale = pages.layout?.scale ?: 1f
+            val snapped = SnapGuides.snap(Box(b.minX + m.tx, b.minY + m.ty, b.maxX + m.tx, b.maxY + m.ty), targets, SNAP_DP * density / scale)
+            if (snapped.snapped) g.update(px + snapped.dx, py + snapped.dy)
+            // A light tick when the box catches a new line (the same feedback as rotation snapping).
+            val was = guides
+            if (snapped.snapped && (snapped.guideX != was?.guideX || snapped.guideY != was?.guideY)) performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+            guides = snapped.takeIf { it.snapped }
+        }
         val snap = g.snappedDeg
         if (snap != null && snap != lastSnap) performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
         lastSnap = snap
@@ -316,6 +340,8 @@ internal class SelectionLayer(
         gesturePointer = -1
         previewStrokes = emptyList()
         previewElements = emptyList()
+        snapTargets = null
+        guides = null
         val sel = selection
         val m = g.transform
         if (commit && sel != null && !nearlyIdentity(m)) {
@@ -553,6 +579,19 @@ internal class SelectionLayer(
         invalidate()
     }
 
+    /**
+     * Moves the selection by ([dx], [dy]) page points as one undo step (arrow-key nudging, TEXT-04). Nothing moves
+     * when a locked picture or text box is part of it. @return true when something moved.
+     */
+    fun nudge(dx: Float, dy: Float): Boolean {
+        val sel = selection ?: return false
+        if (gesture != null || sel.elements.any { it.locked }) return false
+        val m = Affine.translate(dx, dy)
+        replace(sel, { s -> StrokeEdits.transformed(s, m).also { n -> brushes.derive(n, s) { it } } }) { e -> ElementTransforms.transformed(e, m) }
+        notifyMenu()
+        return true
+    }
+
     /** The selected element when it is the only thing selected (a picture or a text box), else null. */
     val singleElement: PageElement? get() = selection?.takeIf { it.strokes.isEmpty() && it.elements.size == 1 }?.elements?.first()
 
@@ -689,6 +728,25 @@ internal class SelectionLayer(
             canvas.restore()
         }
         drawBox(canvas, gestureBox.takeIf { g != null } ?: padded(sel.box), m, showHandles = g == null)
+        if (g != null) guides?.let { drawGuides(canvas, it, sel.page) }
+    }
+
+    /** The snap guides across the whole page, thin and in the selection color. */
+    private fun drawGuides(canvas: Canvas, snap: SnapGuides.Snap, page: DocumentPage) {
+        val w = page.page.widthPt
+        val h = page.page.heightPt
+        line.color = color
+        val pts = FloatArray(4)
+        snap.guideX?.let { x ->
+            pts[0] = x; pts[1] = 0f; pts[2] = x; pts[3] = h
+            matrix.mapPoints(pts)
+            canvas.drawLine(pts[0], pts[1], pts[2], pts[3], line)
+        }
+        snap.guideY?.let { y ->
+            pts[0] = 0f; pts[1] = y; pts[2] = w; pts[3] = y
+            matrix.mapPoints(pts)
+            canvas.drawLine(pts[0], pts[1], pts[2], pts[3], line)
+        }
     }
 
     private fun drawDraft(canvas: Canvas, d: Draft) {
@@ -839,6 +897,9 @@ internal class SelectionLayer(
         private const val HIT_DP = 22f
         private const val KNOB_DP = 28f
         private const val PAD_DP = 6f
+
+        /** A moving box catches a snap line this close (screen dp, so it feels the same at every zoom). */
+        private const val SNAP_DP = 6f
         private const val MIN_STEP_DP = 1.5f
         private const val TAP_DP = 12f
         private const val MOVE_EPS = 0.5f

@@ -24,6 +24,7 @@ import app.bestnote.core.model.PageElement
 import app.bestnote.core.model.TextElement
 import app.bestnote.engine.canvas.document.PagedDocument
 import app.bestnote.engine.canvas.document.PagedDocumentView
+import app.bestnote.feature.editor.text.TextTyping
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import java.io.File
@@ -44,13 +45,39 @@ internal class ElementTools(
 ) {
     var newText by mutableStateOf<Pair<Int, TextElement>?>(null)
     var editing by mutableStateOf<TextElement?>(null)
+
+    /** TEXT-04: the Text tool and typing right on the page. */
+    val typing = TextTyping(canvas, document)
+
+    /** The "More" formatting dialog for the box being typed into (line spacing, numerals, the classic panel). */
+    var moreFor by mutableStateOf<TextElement?>(null)
+
+    /** The font picker for the box being typed into. */
+    var pickingFont by mutableStateOf(false)
     var cropping by mutableStateOf<ImageElement?>(null)
     var sourceMenu by mutableStateOf(false)
     var pickPhoto: () -> Unit = {}
     var takePhoto: () -> Unit = {}
     var cameraUri: Uri? = null
 
-    /** The Text tool: asks for the words, then puts the box on the page being read and selects it. */
+    /** The Text tool (TEXT-04): on, a tap on the page places a caret; off again ends typing. */
+    fun toggleTextTool() {
+        if (typing.textTool) {
+            typing.commit()
+            typing.textTool = false
+        } else {
+            canvas()?.clearSelection()
+            typing.textTool = true
+        }
+    }
+
+    /** Another tool was picked: typing ends and the Text tool lets go. */
+    fun leaveTextTool() {
+        typing.commit()
+        typing.textTool = false
+    }
+
+    /** The classic Text dialog: asks for the words, then puts the box on the page being read and selects it. */
     fun insertText() {
         val view = canvas() ?: return
         val index = view.currentPage.coerceAtLeast(0)
@@ -70,8 +97,14 @@ internal class ElementTools(
         onSelecting()
     }
 
+    /** "Edit" on a selected text box: types into it right on the page (TEXT-04). */
     fun editSelectedText() {
-        editing = canvas()?.selectedElement as? TextElement
+        typing.editSelected()
+    }
+
+    fun confirmMore(box: TextElement) {
+        moreFor = null
+        typing.act { it.replaceBox(box) }
     }
 
     fun confirmEdit(box: TextElement) {
@@ -193,6 +226,20 @@ internal class ElementTools(
         }
         editing?.let { box ->
             TextEditorDialog(box, colors(), onConfirm = ::confirmEdit, onDismiss = { editing = null })
+        }
+        moreFor?.let { box ->
+            TextEditorDialog(box, colors(), onConfirm = ::confirmMore, onDismiss = { moreFor = null })
+        }
+        if (pickingFont) {
+            val box = typing.editing?.session?.draft?.box
+            app.bestnote.core.fonts.FontPickerDialog(
+                null, box?.font,
+                onSelect = { id ->
+                    pickingFont = false
+                    typing.act { it.setFont(id) }
+                },
+                onDismiss = { pickingFont = false }, allowDefault = true,
+            )
         }
         cropping?.let { image ->
             CropDialog(image, session.assetBytes(image.asset), onConfirm = ::confirmCrop, onDismiss = { cropping = null })

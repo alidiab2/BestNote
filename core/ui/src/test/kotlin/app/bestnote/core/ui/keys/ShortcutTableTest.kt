@@ -83,4 +83,33 @@ class ShortcutTableTest {
         assertEquals("Ctrl+Shift+Z", KeyCombo(KeyEvent.KEYCODE_Z, ctrl = true, shift = true).label())
         assertEquals("PageDown", KeyCombo(KeyEvent.KEYCODE_PAGE_DOWN).label())
     }
+
+    private fun text(code: Int, ctrl: Boolean = false, shift: Boolean = false, alt: Boolean = false) =
+        ShortcutTable.resolve(ShortcutScope.Text, code, ctrl, shift, alt = alt, editingText = true)
+
+    @Test fun textFormattingWorksOnlyWhileTyping() {
+        assertEquals(ShortcutAction.TextBold, text(KeyEvent.KEYCODE_B, ctrl = true))
+        assertEquals(ShortcutAction.TextItalic, text(KeyEvent.KEYCODE_I, ctrl = true))
+        assertEquals(ShortcutAction.TextUnderline, text(KeyEvent.KEYCODE_U, ctrl = true))
+        assertEquals(ShortcutAction.TextNumbers, text(KeyEvent.KEYCODE_7, ctrl = true, shift = true))
+        assertEquals(ShortcutAction.TextBullets, text(KeyEvent.KEYCODE_8, ctrl = true, shift = true))
+        assertEquals(ShortcutAction.TextTitle, text(KeyEvent.KEYCODE_1, ctrl = true, alt = true))
+        assertEquals(ShortcutAction.TextHeading, text(KeyEvent.KEYCODE_2, ctrl = true, alt = true))
+        assertEquals(ShortcutAction.TextSubheading, text(KeyEvent.KEYCODE_3, ctrl = true, alt = true))
+        assertEquals(ShortcutAction.TextIndent, text(KeyEvent.KEYCODE_TAB))
+        assertEquals(ShortcutAction.TextOutdent, text(KeyEvent.KEYCODE_TAB, shift = true))
+        // Not while the page has focus, and Ctrl+1 without Alt is nothing.
+        assertNull(ShortcutTable.resolve(ShortcutScope.Text, KeyEvent.KEYCODE_B, ctrl = true, shift = false))
+        assertNull(editor(KeyEvent.KEYCODE_B, ctrl = true))
+        assertNull(text(KeyEvent.KEYCODE_1, ctrl = true))
+        // Plain letters are typing, never tools.
+        assertNull(text(KeyEvent.KEYCODE_P))
+        assertEquals("Ctrl+Alt+1", KeyCombo(KeyEvent.KEYCODE_1, ctrl = true, alt = true).label())
+    }
+
+    @Test fun arrowsNudgeShiftTenTimes() {
+        assertEquals(ShortcutAction.NudgeLeft, editor(KeyEvent.KEYCODE_DPAD_LEFT))
+        assertEquals(ShortcutAction.NudgeDownFar, editor(KeyEvent.KEYCODE_DPAD_DOWN, shift = true))
+        assertTrue(ShortcutTable.combosOf(ShortcutAction.NudgeUpFar, includeAliases = false).isEmpty())
+    }
 }

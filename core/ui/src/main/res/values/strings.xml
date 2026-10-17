@@ -31,4 +31,21 @@
     <string name="shortcut_clear_selection">Clear selection</string>
     <string name="shortcut_new_notebook">New notebook</string>
     <string name="shortcut_search_library">Search the library</string>
+    <string name="shortcut_group_text">Text (while typing)</string>
+    <string name="shortcut_nudge_left">Nudge left (Shift = 10×)</string>
+    <string name="shortcut_nudge_right">Nudge right (Shift = 10×)</string>
+    <string name="shortcut_nudge_up">Nudge up (Shift = 10×)</string>
+    <string name="shortcut_nudge_down">Nudge down (Shift = 10×)</string>
+    <string name="shortcut_text_bold">Bold</string>
+    <string name="shortcut_text_italic">Italic</string>
+    <string name="shortcut_text_underline">Underline</string>
+    <string name="shortcut_text_numbers">Numbered list</string>
+    <string name="shortcut_text_bullets">Bulleted list</string>
+    <string name="shortcut_text_title">Title</string>
+    <string name="shortcut_text_heading">Heading</string>
+    <string name="shortcut_text_subheading">Subheading</string>
+    <string name="shortcut_text_body">Body text</string>
+    <string name="shortcut_text_indent">Indent list item</string>
+    <string name="shortcut_text_outdent">Outdent list item</string>
+    <string name="shortcut_text_done">Finish typing</string>
 </resources>

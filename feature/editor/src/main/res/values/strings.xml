@@ -206,4 +206,16 @@
     <string name="editor_paper_planner_daily">Planner · daily</string>
     <string name="editor_paper_planner_weekly">Planner · weekly</string>
     <string name="editor_paper_graph">Graph paper</string>
+    <string name="text_style_title">Title</string>
+    <string name="text_style_heading">Heading</string>
+    <string name="text_style_subheading">Subheading</string>
+    <string name="text_style_body">Body</string>
+    <string name="text_style_quote">Quote</string>
+    <string name="text_style_code">Code</string>
+    <string name="text_bold">Bold</string>
+    <string name="text_italic">Italic</string>
+    <string name="text_underline">Underline</string>
+    <string name="text_strike">Strikethrough</string>
+    <string name="text_more">More formatting</string>
+    <string name="text_done_typing">Done typing</string>
 </resources>

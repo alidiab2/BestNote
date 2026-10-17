@@ -198,6 +198,43 @@ class PagedDocumentView(context: Context) : FrameLayout(context), InProgressStro
      */
     var inkTapListener: InkTapListener? = null
 
+    /**
+     * TEXT-04 Text tool: while non-null, taps (pen or finger) on a page are reported here instead of inking, so the
+     * host can place a caret. [inkTapListener] wins while both are set. Scrolling and zoom keep working.
+     */
+    var textTapListener: InkTapListener? = null
+
+    private val tapListener: InkTapListener? get() = inkTapListener ?: textTapListener
+
+    /** Called whenever the pages scroll or zoom (TEXT-04: the on-canvas text editor follows its box). */
+    var viewportListener: (() -> Unit)? = null
+
+    /**
+     * Page [index]'s placement on screen: page point (x, y) shows at view px (left + x * scale, top + y * scale).
+     * Returns [scale, left, top], or null when there is no layout yet.
+     */
+    fun pageTransform(index: Int): FloatArray? {
+        val l = pages.layout ?: return null
+        if (index !in 0 until l.pageCount) return null
+        val r = l.pageRect(index)
+        return floatArrayOf(l.scale, (r.left - pages.scrollX).toFloat(), (r.top - pages.scrollY).toFloat())
+    }
+
+    /** Scrolls the pages by ([dx], [dy]) px at once (clamped), e.g. to keep a caret above the keyboard. */
+    fun scrollByPx(dx: Int, dy: Int) {
+        if (writing) return // nothing moves under the pen
+        scroller.forceFinished(true)
+        pages.scrollToXY(pages.scrollX + dx, pages.scrollY + dy)
+    }
+
+    /** Leaves element [id] of page [index] out of the page drawing while the host edits it in place; null restores. */
+    fun setEditingElement(index: Int, id: String?) {
+        if (id == null) pages.setHiddenElements(-1, emptySet()) else pages.setHiddenElements(index, setOf(id))
+    }
+
+    /** Moves the selection by ([dx], [dy]) page points as one undo step (arrow keys). @return true when it moved. */
+    fun nudgeSelection(dx: Float, dy: Float): Boolean = selection.nudge(dx, dy)
+
     /** Draws [strokes] faded (ink written after the audio playhead, MEDIA-05); empty restores. */
     fun setDimmedStrokes(strokes: Set<Stroke>) = pages.setDimmed(strokes)
 
@@ -614,6 +651,7 @@ class PagedDocumentView(context: Context) : FrameLayout(context), InProgressStro
             reportIndicator()
             selection.onViewportChanged()
             highlights.invalidate()
+            viewportListener?.invoke()
         }
         // The pinch preview may draw pages beyond the pages layer's own bounds; clip to ours instead.
         clipChildren = false
@@ -826,7 +864,7 @@ class PagedDocumentView(context: Context) : FrameLayout(context), InProgressStro
         }
         if (decision == InputDecision.Draw || decision == InputDecision.Erase) {
             val page = l?.pageAt(x + pages.scrollX, y + pages.scrollY) ?: -1
-            if (page >= 0 && inkTapListener != null) {
+            if (page >= 0 && tapListener != null) {
                 if (!finger) reportInkTap(page, x, y)
                 else tapCandidate = Triple(x, y, event.eventTime).also { scrolling[id] = x to y }
                 return
@@ -857,7 +895,9 @@ class PagedDocumentView(context: Context) : FrameLayout(context), InProgressStro
     }
 
     private fun reportInkTap(page: Int, x: Float, y: Float) {
-        val listener = inkTapListener ?: return
+        val listener = tapListener ?: return
+        // Off the pages (the desk, or a document still loading) is no page tap.
+        if (page !in 0 until (pages.layout?.pageCount ?: 0)) return
         val toView = Matrix()
         val toPage = Matrix()
         if (!pageToView(page, toView) || !toView.invert(toPage)) return

@@ -30,6 +30,26 @@ fun ShortcutAction.labelRes(): Int = when (this) {
     ShortcutAction.Duplicate -> R.string.shortcut_duplicate
     ShortcutAction.Delete -> R.string.shortcut_delete
     ShortcutAction.ClearSelection -> R.string.shortcut_clear_selection
+    ShortcutAction.NudgeLeft -> R.string.shortcut_nudge_left
+    ShortcutAction.NudgeRight -> R.string.shortcut_nudge_right
+    ShortcutAction.NudgeUp -> R.string.shortcut_nudge_up
+    ShortcutAction.NudgeDown -> R.string.shortcut_nudge_down
+    ShortcutAction.NudgeLeftFar -> R.string.shortcut_nudge_left
+    ShortcutAction.NudgeRightFar -> R.string.shortcut_nudge_right
+    ShortcutAction.NudgeUpFar -> R.string.shortcut_nudge_up
+    ShortcutAction.NudgeDownFar -> R.string.shortcut_nudge_down
+    ShortcutAction.TextBold -> R.string.shortcut_text_bold
+    ShortcutAction.TextItalic -> R.string.shortcut_text_italic
+    ShortcutAction.TextUnderline -> R.string.shortcut_text_underline
+    ShortcutAction.TextNumbers -> R.string.shortcut_text_numbers
+    ShortcutAction.TextBullets -> R.string.shortcut_text_bullets
+    ShortcutAction.TextTitle -> R.string.shortcut_text_title
+    ShortcutAction.TextHeading -> R.string.shortcut_text_heading
+    ShortcutAction.TextSubheading -> R.string.shortcut_text_subheading
+    ShortcutAction.TextBody -> R.string.shortcut_text_body
+    ShortcutAction.TextIndent -> R.string.shortcut_text_indent
+    ShortcutAction.TextOutdent -> R.string.shortcut_text_outdent
+    ShortcutAction.TextDone -> R.string.shortcut_text_done
     ShortcutAction.NewNotebook -> R.string.shortcut_new_notebook
     ShortcutAction.SearchLibrary -> R.string.shortcut_search_library
 }
@@ -42,6 +62,7 @@ fun ShortcutGroup.labelRes(): Int = when (this) {
     ShortcutGroup.View -> R.string.shortcut_group_view
     ShortcutGroup.Pages -> R.string.shortcut_group_pages
     ShortcutGroup.Selection -> R.string.shortcut_group_selection
+    ShortcutGroup.Text -> R.string.shortcut_group_text
     ShortcutGroup.Library -> R.string.shortcut_group_library
 }
 
@@ -51,7 +72,8 @@ fun keyboardShortcutGroups(context: Context): List<KeyboardShortcutGroup> =
         val infos = ShortcutTable.bindings
             .filter { (action, combo) -> action.group == group && !combo.alias }
             .map { (action, combo) ->
-                val modifiers = (if (combo.ctrl) KeyEvent.META_CTRL_ON else 0) or (if (combo.shift) KeyEvent.META_SHIFT_ON else 0)
+                val modifiers = (if (combo.ctrl) KeyEvent.META_CTRL_ON else 0) or (if (combo.shift) KeyEvent.META_SHIFT_ON else 0) or
+                    (if (combo.alt) KeyEvent.META_ALT_ON else 0)
                 KeyboardShortcutInfo(context.getString(action.labelRes()), combo.keyCode, modifiers)
             }
         if (infos.isEmpty()) null else KeyboardShortcutGroup(context.getString(group.labelRes()), infos)
