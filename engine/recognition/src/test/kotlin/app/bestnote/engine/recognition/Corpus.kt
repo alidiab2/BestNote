@@ -18,6 +18,14 @@ object Corpus {
         File(requireNotNull(d) { "tools/handwriting/corpus not found" }, "tools/handwriting/corpus")
     }
 
+    /** The written text of corpus file [name], one entry per line, or null when the file has no `.expect.txt`. */
+    fun expect(name: String): List<String>? =
+        File(dir, "$name.expect.txt").takeIf { it.isFile }?.readText()?.trim()?.split('|')
+
+    /** The corpus files that have written text to compare against. */
+    val transcribed: List<String> get() = dir.listFiles().orEmpty().map { it.name }.filter { it.endsWith(".expect.txt") }
+        .map { it.removeSuffix(".expect.txt") }.sorted()
+
     /** The ink strokes of corpus file [name] (without .json), in drawing order. */
     fun strokes(name: String): List<List<StylusSample>> {
         val text = File(dir, "$name.json").readText()

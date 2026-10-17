@@ -15,7 +15,7 @@ class PageTextExtractorTest {
     /** English reads "Newlon"/"Newton", Arabic reads garbage with a worse cost. */
     private val recognizer = object : HandwritingRecognizer {
         override val languages = setOf("ar", "en-US")
-        override suspend fun recognize(strokes: List<InkStrokeSamples>, languageTag: String) =
+        override suspend fun recognize(strokes: List<InkStrokeSamples>, languageTag: String, hints: InkHints) =
             if (languageTag == "en-US") listOf(TextCandidate("Newlon", 1f), TextCandidate("Newton", 2f)) else listOf(TextCandidate("xx", 9f))
     }
 

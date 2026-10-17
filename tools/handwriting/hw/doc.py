@@ -41,6 +41,21 @@ class Document:
         self.writer = writer
         self.hover = hover
         self.items = []
+        self.expect = None  # the written text, one entry per line (saved as <name>.expect.txt)
+
+    def move_to_end(self, spans):
+        """Moves the items of [spans] (first, end) to the end, in span order: what the page's stroke list (z-order)
+        looks like after those words were moved with the lasso, or erased and brought back with undo."""
+        moved = set()
+        tail = []
+        for a, b in spans:
+            for i in range(a, b):
+                if i not in moved:
+                    moved.add(i)
+                    tail.append(self.items[i])
+        if tail:
+            tail[0].gap = "shape"
+        self.items = [it for i, it in enumerate(self.items) if i not in moved] + tail
 
     def add(self, pts, gap="letter", kind="stroke", speed=1.0, pressure=1.0, button=False, hold_ms=0.0):
         """hold_ms: the pen stays down and still that long at the end (hold-to-snap)."""

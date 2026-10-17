@@ -162,6 +162,8 @@
     <string name="convert_lang_ar">العربية</string>
     <string name="convert_lang_en">English</string>
     <string name="convert_review">راجع النص</string>
+    <string name="convert_doubtful">الكلمات المسطّرة قد تكون مقروءة خطأ: اضغط عليها لتصحيحها.</string>
+    <string name="convert_doubtful_ai">الكلمات المسطّرة قد تكون مقروءة خطأ: اضغط عليها لتصحيحها، أو جرّب التحويل بالذكاء الاصطناعي.</string>
     <string name="convert_insert">إدراج</string>
     <string name="convert_with_ai">تحويل بالذكاء الاصطناعي</string>
     <string name="convert_ai_nothing">لم يتمكن الذكاء الاصطناعي من قراءة هذا الخط.</string>

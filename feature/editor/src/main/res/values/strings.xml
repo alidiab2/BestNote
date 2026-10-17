@@ -162,6 +162,8 @@
     <string name="convert_lang_ar">العربية</string>
     <string name="convert_lang_en">English</string>
     <string name="convert_review">Check the text</string>
+    <string name="convert_doubtful">Underlined words may be misread: tap one to fix it.</string>
+    <string name="convert_doubtful_ai">Underlined words may be misread: tap one to fix it, or try Convert with AI.</string>
     <string name="convert_insert">Insert</string>
     <string name="convert_with_ai">Convert with AI</string>
     <string name="convert_ai_nothing">The AI couldn\'t read that handwriting.</string>

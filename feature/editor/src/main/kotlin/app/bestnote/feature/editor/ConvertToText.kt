@@ -60,6 +60,17 @@ internal class InkConverter(
 
     /** The reading shown for confirmation; the user may edit it before it becomes a text box. */
     var draft by mutableStateOf("")
+        private set
+
+    /** Ranges of [draft] the recognizer was unsure of (REC-10), underlined so they are quick to find and fix. */
+    var doubtful by mutableStateOf<List<IntRange>>(emptyList())
+        private set
+
+    /** The user's edit of the reading: marks before and after the edit stay on their words, marks the edit touched go. */
+    fun edit(text: String) {
+        doubtful = DoubtMarks.shift(draft, text, doubtful)
+        draft = text
+    }
 
     var step by mutableStateOf(Step.Idle)
         private set
@@ -108,6 +119,7 @@ internal class InkConverter(
                     step = if (before == Step.Confirm) Step.Confirm else before
                 } else {
                     draft = lines.joinToString("\n")
+                    doubtful = emptyList()
                     aiReading = true
                     step = Step.Confirm
                 }
@@ -174,6 +186,7 @@ internal class InkConverter(
                     dismiss()
                 } else {
                     draft = transcript.text
+                    doubtful = transcript.doubtful
                     step = Step.Confirm
                 }
             } catch (e: CancellationException) {
@@ -281,9 +294,16 @@ internal class InkConverter(
                             androidx.compose.ui.platform.LocalLayoutDirection provides
                                 if (rtl) androidx.compose.ui.unit.LayoutDirection.Rtl else androidx.compose.ui.unit.LayoutDirection.Ltr,
                         ) {
+                            val underline = androidx.compose.material3.MaterialTheme.colorScheme.error
                             androidx.compose.material3.OutlinedTextField(
                                 value = draft,
-                                onValueChange = { draft = it },
+                                onValueChange = ::edit,
+                                visualTransformation = DoubtMarks.underline(doubtful, underline),
+                                supportingText = if (doubtful.isEmpty()) {
+                                    null
+                                } else {
+                                    { Text(stringResource(if (aiAvailable) R.string.convert_doubtful_ai else R.string.convert_doubtful)) }
+                                },
                                 label = { Text(stringResource(R.string.convert_review)) },
                                 placeholder = { Text(stringResource(R.string.convert_nothing)) },
                                 textStyle = androidx.compose.material3.LocalTextStyle.current.copy(
@@ -315,6 +335,46 @@ internal class InkConverter(
         const val MIN_WIDTH_PT = 120f
         const val OPAQUE = 0xFF000000.toInt()
     }
+}
+
+/** Underlines for the words of a reading the recognizer doubts (REC-10). */
+internal object DoubtMarks {
+    /** [marks] of [before] moved onto [after]: an edit in the middle drops the marks it touches and shifts the ones behind it. */
+    fun shift(before: String, after: String, marks: List<IntRange>): List<IntRange> {
+        if (before == after || marks.isEmpty()) return marks
+        var head = 0
+        while (head < before.length && head < after.length && before[head] == after[head]) head++
+        var tail = 0
+        while (tail < before.length - head && tail < after.length - head && before[before.length - 1 - tail] == after[after.length - 1 - tail]) tail++
+        val editEnd = before.length - tail // the edit replaced before[head until editEnd]
+        val delta = after.length - before.length
+        return marks.mapNotNull { r ->
+            when {
+                r.last < head -> r
+                r.first >= editEnd -> (r.first + delta)..(r.last + delta)
+                else -> null
+            }
+        }
+    }
+
+    fun underline(marks: List<IntRange>, color: androidx.compose.ui.graphics.Color) =
+        androidx.compose.ui.text.input.VisualTransformation { text ->
+            val styled = androidx.compose.ui.text.buildAnnotatedString {
+                append(text)
+                for (r in marks) {
+                    if (r.first < 0 || r.last >= text.length) continue
+                    addStyle(
+                        androidx.compose.ui.text.SpanStyle(
+                            textDecoration = androidx.compose.ui.text.style.TextDecoration.Underline,
+                            color = color,
+                        ),
+                        r.first,
+                        r.last + 1,
+                    )
+                }
+            }
+            androidx.compose.ui.text.input.TransformedText(styled, androidx.compose.ui.text.input.OffsetMapping.Identity)
+        }
 }
 
 @Composable

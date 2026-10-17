@@ -2,6 +2,7 @@ package app.bestnote.engine.recognition.mlkit
 
 import android.util.Log
 import app.bestnote.engine.recognition.HandwritingRecognizer
+import app.bestnote.engine.recognition.InkHints
 import app.bestnote.engine.recognition.InkStrokeSamples
 import app.bestnote.engine.recognition.TextCandidate
 import com.google.mlkit.vision.digitalink.recognition.DigitalInkRecognition
@@ -26,11 +27,11 @@ class MlKitHandwritingRecognizer @Inject constructor(private val models: MlKitMo
 
     override val languages: Set<String> get() = models.state.value.ready
 
-    override suspend fun recognize(strokes: List<InkStrokeSamples>, languageTag: String): List<TextCandidate> {
+    override suspend fun recognize(strokes: List<InkStrokeSamples>, languageTag: String, hints: InkHints): List<TextCandidate> {
         if (strokes.isEmpty() || languageTag !in languages) return emptyList()
         val client = clients[languageTag] ?: createClient(languageTag) ?: return emptyList()
         return try {
-            client.recognize(ink(strokes), context(strokes)).await().candidates.map { TextCandidate(it.text, it.score ?: 0f) }
+            client.recognize(ink(strokes), context(strokes, hints)).await().candidates.map { TextCandidate(it.text, it.score ?: 0f) }
         } catch (e: CancellationException) {
             throw e
         } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
@@ -46,7 +47,10 @@ class MlKitHandwritingRecognizer @Inject constructor(private val models: MlKitMo
     }
 
     internal companion object {
-        /** Strokes keep their own clock (it restarts at 0 for each), so lay them end to end with a short pause between. */
+        /**
+         * Strokes keep their own clock (it restarts at 0 for each), so lay them end to end with a short pause between.
+         * (REC-10 measured air time from the pen's travel instead: no better.)
+         */
         private const val PAUSE_MS = 100L
 
         fun ink(strokes: List<InkStrokeSamples>): Ink {
@@ -62,11 +66,16 @@ class MlKitHandwritingRecognizer @Inject constructor(private val models: MlKitMo
             return builder.build()
         }
 
-        fun context(strokes: List<InkStrokeSamples>): RecognitionContext {
+        /**
+         * The writing area is the ink's own box (REC-10 measured the line's band instead: no better for English, worse
+         * for Arabic); the pre-context is the text written just before.
+         */
+        fun context(strokes: List<InkStrokeSamples>, hints: InkHints = InkHints()): RecognitionContext {
             val points = strokes.flatten()
             val w = (points.maxOfOrNull { it.x } ?: 0f) - (points.minOfOrNull { it.x } ?: 0f)
             val h = (points.maxOfOrNull { it.y } ?: 0f) - (points.minOfOrNull { it.y } ?: 0f)
-            return RecognitionContext.builder().setPreContext("").setWritingArea(WritingArea(w.coerceAtLeast(1f), h.coerceAtLeast(1f))).build()
+            return RecognitionContext.builder().setPreContext(hints.preContext)
+                .setWritingArea(WritingArea(w.coerceAtLeast(1f), h.coerceAtLeast(1f))).build()
         }
     }
 }

@@ -36,7 +36,8 @@ def writer(seed, **kw):
 def lecture_en():
     w = writer(7, xh=3.2, name="student")
     d = hwdoc.Document("lecture_en", "English lecture paragraph, joined cursive", PAGE_W, 82, w)
-    y = latin.write_paragraph(d, w, LECTURE, 2, 9, 172, line_gap=3.6)
+    d.expect = []
+    y = latin.write_paragraph(d, w, LECTURE, 2, 9, 172, line_gap=3.6, lines=d.expect)
     d.height = y + 8
     return d
 
@@ -59,14 +60,17 @@ def arabic_text():
     arabic.write_line(d, w, "التسارع يتناسب "
                             "طردياً مع القوة",
                       PAGE_W - 6, 36)
+    d.expect = ["قانون نيوتن الثاني", "التسارع يتناسب طردياً مع القوة"]
     return d
 
 
 def tiny_fast():
     w = writer(5, xh=1.5, vmax=170.0, vcurve=55.0, accel=3200.0, pressure=0.45, name="tiny-fast")
     d = hwdoc.Document("tiny_fast", "Tiny, fast margin notes (x-height 1.5 mm)", PAGE_W, 22, w)
+    d.expect = []
     y = latin.write_paragraph(d, w, "note: check units first, then sign of a. if v = 0 at top, the time to rise is "
-                                    "u/g. exam tip: write every step, it is quick.", 2, 4, 120, line_gap=3.4)
+                                    "u/g. exam tip: write every step, it is quick.", 2, 4, 120, line_gap=3.4,
+                              lines=d.expect)
     d.height = y + 4
     return d
 
@@ -76,6 +80,7 @@ def slow_large():
     d = hwdoc.Document("slow_large", "Slow, large headline writing (x-height 9 mm)", PAGE_W, 62, w)
     latin.write_paragraph(d, w, "Newton's law", 4, 22, 176)
     latin.write_paragraph(d, w, "F = ma", 10, 54, 170, first_gap="line")
+    d.expect = ["Newton's law", "F = ma"]
     return d
 
 
@@ -154,8 +159,105 @@ def hover_erase():
     return d
 
 
+# ---------------------------------------------------------------- REC-10: harder, more realistic convert-to-text ink
+
+NOTES = ("Friction always opposes the motion of a sliding block. The normal force is equal to the weight on a flat "
+         "table, so the friction force is the coefficient times the weight. On a ramp the normal force gets smaller "
+         "and the block starts to slide when the angle is steep enough.")
+
+
+def para_tight():
+    """Six lines of notes on tight ruling (line pitch 2.5 x-heights): ascenders and descenders nearly touch."""
+    w = writer(71, xh=3.0, name="student-tight")
+    d = hwdoc.Document("para_tight", "English notes, tight line spacing (2.5 x-heights)", PAGE_W, 60, w)
+    d.expect = []
+    y = latin.write_paragraph(d, w, NOTES, 3, 8, 150, line_gap=2.5, lines=d.expect)
+    d.height = y + 6
+    return d
+
+
+def slanted():
+    """Right-leaning letters on lines that climb ~4 degrees, as on a tablet held at an angle."""
+    w = writer(72, xh=3.4, slant_deg=14.0, name="student-slanted")
+    d = hwdoc.Document("slanted", "English, slanted letters, lines climbing 4 degrees", PAGE_W, 70, w)
+    d.expect = []
+    y = latin.write_paragraph(d, w, "Remember to bring the lab report on Monday and check every unit in your answers "
+                                    "before the quiz starts", 4, 16, 120, line_gap=3.6, lines=d.expect, slope_deg=4.0)
+    d.height = y + 8
+    return d
+
+
+def numbers():
+    """Print-style digits and punctuation: times, ranges, a phone number, a question."""
+    w = writer(73, xh=3.4, name="student-print")
+    d = hwdoc.Document("numbers", "Numbers and punctuation, print style", PAGE_W, 50, w)
+    d.expect = []
+    lines = ["Room 204 at 9:30, pages 12-15.", "Call 555-0142 by Friday!", "Is 3 x 7 = 21?"]
+    for i, text in enumerate(lines):
+        written = []
+        latin.write_paragraph(d, w, text, 4, 10 + i * 13, 170, "print", first_gap="line" if i else "shape",
+                              lines=written)
+        d.expect += written
+    return d
+
+
+ARABIC_PARA = ["درس اليوم عن الطاقة الحركية", "الطاقة تساوي نصف الكتلة", "في مربع السرعة دائما",
+               "راجع الأمثلة في الكتاب"]
+
+
+def _arabic_para(name, description, seed, pitch, spans=None):
+    from hw import arabic
+    w = writer(seed, xh=3.0, name="arabic-ruqaa")
+    d = hwdoc.Document(name, description, PAGE_W, 20 + pitch * len(ARABIC_PARA), w)
+    for i, text in enumerate(ARABIC_PARA):
+        arabic.write_line(d, w, text, PAGE_W - 6, 16 + i * pitch, first_gap="shape" if i == 0 else "line", spans=spans)
+    d.expect = list(ARABIC_PARA)
+    return d
+
+
+def arabic_para():
+    """Four Arabic lines on ~12 mm ruling (dots and marks after each word, as people write them)."""
+    return _arabic_para("arabic_para", "Arabic paragraph, 4 lines, 12 mm line pitch", 74, 12.0)
+
+
+def mixed():
+    """Arabic lines with English words and numbers in them, each written in its own direction."""
+    from hw import arabic
+    w = writer(75, xh=3.0, name="arabic-mixed")
+    d = hwdoc.Document("mixed", "Arabic lines with English words and numbers inside", PAGE_W, 60, w)
+    d.expect = ["قانون Newton الثاني", "السرعة تساوي 20 متر", "راجع chapter 3 في البيت"]
+    for i, text in enumerate(d.expect):
+        arabic.write_line(d, w, text, PAGE_W - 6, 16 + i * 15, first_gap="shape" if i == 0 else "line")
+    return d
+
+
+def para_moved():
+    """para_tight after editing: every fourth word was moved with the lasso (or erased and undone), so its strokes
+    sit at the end of the page's stroke list, out of writing order. A lasso returns strokes in that order."""
+    w = writer(71, xh=3.0, name="student-tight")
+    d = hwdoc.Document("para_moved", "para_tight with every 4th word's strokes at the end (z-order after edits)",
+                       PAGE_W, 60, w)
+    d.expect = []
+    spans = []
+    y = latin.write_paragraph(d, w, NOTES, 3, 8, 150, line_gap=2.5, lines=d.expect, spans=spans)
+    d.move_to_end(spans[1::4])
+    d.height = y + 6
+    return d
+
+
+def arabic_moved():
+    """arabic_para with every third word's strokes moved to the end of the stroke list (z-order after edits)."""
+    spans = []
+    d = _arabic_para("arabic_moved", "arabic_para with every 3rd word's strokes at the end (z-order after edits)",
+                     74, 12.0, spans)
+    d.move_to_end(spans[1::3])
+    return d
+
+
+REC = [para_tight, slanted, numbers, arabic_para, mixed, para_moved, arabic_moved]
+
 ALL = [lecture_en, formulas, arabic_text, tiny_fast, slow_large, drawings, scribble, highlight_lecture, hover_erase,
-       shapes_hold]
+       shapes_hold] + REC
 NAMES = {"arabic": arabic_text}
 
 
@@ -187,6 +289,9 @@ def main():
         data = d.build()
         os.makedirs(os.path.dirname(path), exist_ok=True)
         hwdoc.save(data, path)
+        if d.expect:
+            with open(path[:-len(".json")] + ".expect.txt", "w", encoding="utf-8") as f:
+                f.write("|".join(d.expect) + "\n")
         n = sum(1 for s in data["strokes"] if s["type"] == "ink")
         print("%-22s %4d strokes %6.1f s  %s" % (d.name, n, data["durationMs"] / 1000, path))
         if not a.no_preview:

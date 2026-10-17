@@ -31,9 +31,10 @@ class Pen:
         self.drift = geom.SmoothNoise(rng, 60.0, 0.12 * w.xh * w.jitter, octaves=2)
         self.slope = math.radians(rng.gauss(0, 0.5 * w.jitter))
         self.line_start = x
+        self.extra_slope = 0.0  # radians added to every line (uphill writing is negative: y grows down)
 
     def baseline(self, x):
-        return self.base0 + self.drift(x) + (x - self.line_start) * math.tan(self.slope)
+        return self.base0 + self.drift(x) + (x - self.line_start) * math.tan(self.slope + self.extra_slope)
 
     def newline(self, x, baseline):
         self.x, self.base0, self.line_start = x, baseline, x
@@ -205,9 +206,13 @@ def measure(word, style, xh, scale=1.0):
     return total
 
 
-def write_paragraph(doc, w, text, x, y, width, style="cursive", line_gap=3.4, speed=1.0, first_gap="shape"):
-    """Greedy word wrap. y is the first baseline. Returns the baseline of the last line."""
+def write_paragraph(doc, w, text, x, y, width, style="cursive", line_gap=3.4, speed=1.0, first_gap="shape",
+                    lines=None, spans=None, slope_deg=0.0):
+    """Greedy word wrap. y is the first baseline. Returns the baseline of the last line.
+    lines: if given, the written lines are appended (as text). spans: (first, end) item indices of each word.
+    slope_deg: every line runs uphill (positive) or downhill by this angle."""
     pen = Pen(w, x, y)
+    pen.extra_slope = -math.radians(slope_deg)
     space = 1.0 * w.xh
     first = True
     for word in text.split():
@@ -217,7 +222,16 @@ def write_paragraph(doc, w, text, x, y, width, style="cursive", line_gap=3.4, sp
             y += line_gap * w.xh * w.rng.uniform(0.97, 1.03)
             pen.newline(x + w.rng.gauss(0, 0.25 * w.xh), y)
             gap = "line"
+            if lines is not None:
+                lines.append("")
+        if lines is not None:
+            if not lines:
+                lines.append("")
+            lines[-1] = (lines[-1] + " " + word).strip()
+        start = len(doc.items)
         write_word(doc, pen, word, style, first_gap=gap, speed=speed)
+        if spans is not None:
+            spans.append((start, len(doc.items)))
         pen.x += space * w.rng.uniform(0.85, 1.3)
         first = False
     return y

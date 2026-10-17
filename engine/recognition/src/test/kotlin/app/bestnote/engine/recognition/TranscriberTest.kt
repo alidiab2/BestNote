@@ -12,7 +12,7 @@ class TranscriberTest {
     /** The Arabic model reads Latin ink as gibberish; the English model reads Arabic ink as a few letters. */
     private class Fake : HandwritingRecognizer {
         override val languages = setOf("ar", "en-US")
-        override suspend fun recognize(strokes: List<InkStrokeSamples>, languageTag: String): List<TextCandidate> {
+        override suspend fun recognize(strokes: List<InkStrokeSamples>, languageTag: String, hints: InkHints): List<TextCandidate> {
             val arabicInk = strokes.first().first().x > 0f && strokes.first().first().y < 0f // set by the tests below
             return if (languageTag == "ar") {
                 listOf(TextCandidate(if (arabicInk) "عربي" else "alalam", 0f))
@@ -35,7 +35,7 @@ class TranscriberTest {
         val ltr = (0 until 4).map { i -> stroke(i * 60f, 0f, i * 60f + 40f, 20f) }
         val both = object : HandwritingRecognizer {
             override val languages = setOf("ar", "en-US")
-            override suspend fun recognize(strokes: List<InkStrokeSamples>, languageTag: String) =
+            override suspend fun recognize(strokes: List<InkStrokeSamples>, languageTag: String, hints: InkHints) =
                 listOf(TextCandidate(if (languageTag == "ar") "مممم" else "text", 0f))
         }
         assertEquals("مممم", Transcriber(both).transcribe(rtl).text)
@@ -58,5 +58,32 @@ class TranscriberTest {
         assertEquals(listOf(WritingDirection.Rtl, WritingDirection.Rtl), arabicLines)
         assertEquals(true, englishLines.none { it == WritingDirection.Rtl })
         assertEquals(true, englishLines.count { it == WritingDirection.Ltr } >= englishLines.size - 1) // a one-word last line says nothing
+    }
+
+    @Test fun latinWordsInAnArabicLineAreReadInEnglish() = runTest {
+        // Right to left: two Arabic words around an English one (each word two strokes, written right to left).
+        val ink = listOf(
+            stroke(300f, 0f, 340f, 20f), stroke(260f, 0f, 295f, 20f), // right word
+            stroke(170f, 0f, 220f, 20f), stroke(130f, 0f, 168f, 20f), // middle word (English)
+            stroke(40f, 0f, 80f, 20f), stroke(0f, 0f, 35f, 20f), // left word
+        )
+        val fake = object : HandwritingRecognizer {
+            override val languages = setOf("ar", "en-US")
+            override suspend fun recognize(strokes: List<InkStrokeSamples>, languageTag: String, hints: InkHints) = when {
+                languageTag == "ar" -> listOf(TextCandidate("قانون Analen الثاني", 0f))
+                strokes.size == 2 && strokes.all { it.first().x in 130f..170f } -> listOf(TextCandidate("Newton", 0f))
+                else -> listOf(TextCandidate("junk", 0f))
+            }
+        }
+        val plain = TranscribeOptions(scale = 1f)
+        assertEquals("قانون Newton الثاني", Transcriber(fake, options = plain).transcribe(ink).text)
+        assertEquals("قانون Analen الثاني", Transcriber(fake, options = plain.copy(mixedWords = false)).transcribe(ink).text)
+    }
+
+    @Test fun doubtfulWordsAreTheOnesTheAlternativesDisagreeOn() {
+        val text = "the friction force"
+        val doubtful = Doubt.ranges(text, listOf("the fiction force", "the frichon force", "tho friction force"))
+        assertEquals(listOf(4..11), doubtful)
+        assertEquals(emptyList<IntRange>(), Doubt.ranges(text, emptyList()))
     }
 }
