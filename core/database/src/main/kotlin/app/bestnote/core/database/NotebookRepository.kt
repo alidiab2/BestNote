@@ -7,6 +7,7 @@ import app.bestnote.core.model.Page
 import app.bestnote.core.storage.Autosaver
 import app.bestnote.core.storage.FileNotebookStore
 import app.bestnote.core.storage.InkChunkCodec
+import app.bestnote.core.storage.LockedScratch
 import app.bestnote.core.storage.NotebookKeyring
 import app.bestnote.core.storage.NotebookPackage
 import app.bestnote.core.storage.NotebookSealing
@@ -162,6 +163,12 @@ object StorageModule {
 
     @Provides
     fun sealing(store: FileNotebookStore): NotebookSealing = store
+
+    /** Working files of locked notebooks outside their package: PDF scratch (no backup) and recordings (LIB-11b). */
+    @Provides
+    @Singleton
+    fun lockedScratch(@ApplicationContext context: Context): LockedScratch =
+        LockedScratch(File(context.noBackupFilesDir, "locked-pdf"), File(context.filesDir, "audio"))
 
     @Provides
     @Singleton

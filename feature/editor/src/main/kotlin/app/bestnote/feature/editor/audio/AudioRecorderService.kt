@@ -15,6 +15,8 @@ import android.os.SystemClock
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
+import app.bestnote.core.model.NotebookId
+import app.bestnote.core.storage.AudioWorkFiles
 import app.bestnote.feature.editor.R
 import java.io.File
 
@@ -22,12 +24,14 @@ import java.io.File
  * Records the microphone to AAC in an m4a file as a foreground service (MEDIA-04), so the recording
  * survives leaving the app and the screen turning off. The ongoing notification has a Stop action.
  * The finished file is announced on [RecorderHub]; an editor that isn't open picks it up next time it
- * opens the notebook (it adopts any complete `.m4a` in the notebook's audio folder).
+ * opens the notebook (it adopts any complete `.m4a` in the notebook's audio folder). A locked notebook's recording is
+ * encrypted as it is written ([SealedSink]) and adopted from its `.bnsa` / cut-off `.bnsr` file instead.
  */
 class AudioRecorderService : Service() {
     private var recorder: MediaRecorder? = null
     private var active: RecorderHub.Active? = null
     private var part: File? = null
+    private var sealed: SealedSink? = null
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -44,19 +48,28 @@ class AudioRecorderService : Service() {
         if (recorder != null) return
         val startedAt = System.currentTimeMillis()
         ServiceCompat.startForeground(this, NOTIFICATION_ID, notification(title, startedAt), ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE)
-        val file = AudioFiles.partOf(this, notebookId, recordingId)
+        val keys = RecorderHub.takeKeys(notebookId)
+        val file = if (keys != null) AudioFiles.sealedPartOf(this, notebookId, recordingId) else AudioFiles.partOf(this, notebookId, recordingId)
         try {
             file.parentFile?.mkdirs()
             @Suppress("DEPRECATION")
             val r = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) MediaRecorder(this) else MediaRecorder()
             recorder = r
             r.setAudioSource(MediaRecorder.AudioSource.MIC)
-            r.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
+            if (keys != null) {
+                // Locked notebook (LIB-11b): the recorder writes into a pipe, encrypted chunk by chunk on the way to
+                // disk, so no plaintext audio ever touches storage. A pipe cannot seek, so the container is ADTS (raw
+                // AAC frames) instead of MP4; a recording cut off by a crash still plays up to its last whole chunk.
+                r.setOutputFormat(MediaRecorder.OutputFormat.AAC_ADTS)
+                sealed = SealedSink.open(file, keys, AudioWorkFiles.aad(NotebookId(notebookId), recordingId)).also { r.setOutputFile(it.recorderFd) }
+            } else {
+                r.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
+                r.setOutputFile(file.path)
+            }
             r.setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
             r.setAudioChannels(1)
             r.setAudioSamplingRate(SAMPLE_RATE)
             r.setAudioEncodingBitRate(BIT_RATE)
-            r.setOutputFile(file.path)
             r.prepare()
             r.start()
             part = file
@@ -76,25 +89,40 @@ class AudioRecorderService : Service() {
         val r = recorder
         val a = active
         val file = part
+        val sink = sealed
         recorder = null
         active = null
         part = null
+        sealed = null
         var result: RecorderHub.Finished? = null
         if (r != null && a != null && file != null) {
+            var stopped = false
             try {
                 r.stop()
+                stopped = true
+            } catch (@Suppress("TooGenericExceptionCaught") e: RuntimeException) {
+                Log.w(TAG, "Recording had no audio", e) // stop() throws when stopped immediately
+            } finally {
+                r.release()
+            }
+            // The encrypted sink ends with the recorder: its final record is written, or nothing is kept.
+            val sealedOk = sink?.finish(stopped)
+            if (!stopped) {
+                file.delete()
+            } else if (sealedOk == false) {
+                Log.w(TAG, "Encrypted recording left cut off; the editor recovers it") // still encrypted, never plain
+            } else if (sink != null) {
+                val done = AudioFiles.sealedOf(this, a.notebookId, a.recordingId)
+                if (sink.bytesIn == 0L) file.delete() else if (file.renameTo(done)) result = RecorderHub.Finished(a.notebookId, a.recordingId, a.startedAtMillis)
+            } else {
                 val done = AudioFiles.fileOf(this, a.notebookId, a.recordingId)
                 if (file.length() == 0L) {
                     file.delete() // the microphone delivered nothing
                 } else if (file.renameTo(done)) result = RecorderHub.Finished(a.notebookId, a.recordingId, a.startedAtMillis)
-            } catch (@Suppress("TooGenericExceptionCaught") e: RuntimeException) {
-                Log.w(TAG, "Recording had no audio", e) // stop() throws when stopped immediately
-                file.delete()
-            } finally {
-                r.release()
             }
         } else {
             r?.release()
+            sink?.finish(false)
         }
         RecorderHub.stopped(result)
         ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE)
@@ -104,6 +132,8 @@ class AudioRecorderService : Service() {
     private fun release() {
         recorder?.release()
         recorder = null
+        sealed?.finish(false)
+        sealed = null
         part = null
         active = null
     }

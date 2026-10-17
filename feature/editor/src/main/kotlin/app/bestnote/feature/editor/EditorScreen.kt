@@ -236,6 +236,10 @@ class EditorViewModel @Inject constructor(
     val aiProviders: AiProviders,
     /** Smart Board per-notebook settings (notes language for Tidy). */
     private val smartBoardStyles: app.bestnote.ai.vision.providers.SmartBoardStyles,
+    /** Keys of unlocked locked notebooks: their recordings are encrypted while recorded and played (LIB-11b). */
+    keyring: app.bestnote.core.storage.NotebookKeyring,
+    /** Where a locked notebook's PDFs are opened from without a plain copy staying behind (LIB-11b). */
+    lockedScratch: app.bestnote.core.storage.LockedScratch,
 ) : ViewModel() {
     private val route = savedStateHandle.toRoute<EditorRoute>()
     val notebookId = NotebookId(route.notebookId)
@@ -259,8 +263,8 @@ class EditorViewModel @Inject constructor(
     val document = PagedDocument().apply { blankPage = Page(notebookId, 0) }
 
     /** Loads the pages, autosaves them and keeps the thumbnail fresh (DOC-03, DOC-10, CANVAS-07). */
-    internal val audio = AudioController(context, notebookId, viewModelScope)
-    internal val session = DocumentSession(notebookId, repository, document, viewModelScope, File(context.cacheDir, "pdf"), audio) {
+    internal val audio = AudioController(context, notebookId, viewModelScope, keyring)
+    internal val session = DocumentSession(notebookId, repository, document, viewModelScope, File(context.cacheDir, "pdf"), lockedScratch.pdfDir(notebookId), audio) {
         dao.observe(notebookId.value).filterNotNull().first().toModel()
     }
 

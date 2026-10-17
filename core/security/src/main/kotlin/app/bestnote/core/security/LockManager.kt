@@ -64,6 +64,12 @@ interface LockHooks {
 
     /** Deletes thumbnails and search index rows made from [id] before it was locked. */
     suspend fun forgetDerived(id: NotebookId) = Unit
+
+    /** [id] was just sealed with [dataKey]: encrypt its working files outside the package (LIB-11b). */
+    suspend fun sealedWith(id: NotebookId, dataKey: ByteArray) = Unit
+
+    /** The lock of [id] (key [dataKey]) was removed: its encrypted working files become plain again. */
+    suspend fun unsealed(id: NotebookId, dataKey: ByteArray) = Unit
 }
 
 /** How long the unlocked state survives the app being in the background (Settings → Storage → Locked notebooks). */
@@ -303,6 +309,7 @@ class LockManager @Inject constructor(
                 done += id
                 if (keepUnlocked) keyring.put(id, dataKey, header)
                 hooks.forgetDerived(id)
+                hooks.sealedWith(id, dataKey)
             }
         }
         refresh()
@@ -312,7 +319,13 @@ class LockManager @Inject constructor(
     /** "Remove lock": writes [ids] back as plain files. They must be unlocked. @return the ids now plain. */
     suspend fun removeLock(ids: Collection<NotebookId>): Set<NotebookId> = withContext(Dispatchers.Default) {
         val done = HashSet<NotebookId>()
-        for (id in ids) if (id in keyring && sealing.unseal(id)) done += id
+        for (id in ids) {
+            val key = keyring[id]?.dataKey ?: continue
+            if (sealing.unseal(id)) {
+                done += id
+                hooks.unsealed(id, key)
+            }
+        }
         refresh()
         done
     }

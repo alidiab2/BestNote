@@ -29,13 +29,19 @@ object VisionDiagnostics {
     /** Keep response bodies. On in debug builds; opt-in ("Verbose AI logging") in release. */
     @Volatile var captureRaw: Boolean = false
 
+    /**
+     * While a locked notebook is open (LIB-11b) response bodies are never kept, whatever [captureRaw] says: they hold
+     * its handwriting as text, and the list is saved to disk for the debug log.
+     */
+    @Volatile var privateSession: Boolean = false
+
     /** Called after each change, e.g. to persist the list for the debug log. Off the main thread. */
     @Volatile var listener: ((List<AiExchange>) -> Unit)? = null
 
     private val entries = ArrayDeque<AiExchange>()
 
     fun recordResponse(provider: String, model: String, httpCode: Int, body: String?, clock: () -> Long = System::currentTimeMillis) {
-        val raw = if (captureRaw) body?.let { Redactor.redact(it).take(MAX_RAW) } else null
+        val raw = if (captureRaw && !privateSession) body?.let { Redactor.redact(it).take(MAX_RAW) } else null
         update { add(AiExchange(clock(), provider, model, httpCode, raw)) }
     }
 

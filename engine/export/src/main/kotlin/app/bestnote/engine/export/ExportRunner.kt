@@ -131,7 +131,7 @@ class ExportRunner @Inject constructor(
         val rendered = ArrayList<Bitmap>() // must outlive writeTo: the document draws from them then
         try {
             val needRaster = selected.any { i -> pkg.pages[i].page.pdf != null && !merger.handles(pkg.pages[i].page) }
-            if (needRaster) backgrounds = PdfNotebookFiles.open(pkg, File(context.cacheDir, PDF_SOURCES_DIR))
+            if (needRaster) backgrounds = PdfNotebookFiles.openPrivate(pkg, File(context.noBackupFilesDir, PDF_SCRATCH_DIR))
             val pdfPages = pkg.pages.count { it.page.pdf != null }
             selected.forEachIndexed { n, i ->
                 coroutineContext.ensureActive()
@@ -170,7 +170,7 @@ class ExportRunner @Inject constructor(
 
     private suspend fun writePng(pkg: NotebookPackage, selected: List<Int>, options: ExportOptions, dir: File, base: String, progress: ExportProgress): List<File> {
         val digits = pkg.pages.size.toString().length
-        val backgrounds = PdfNotebookFiles.open(pkg, File(context.cacheDir, PDF_SOURCES_DIR))
+        val backgrounds = PdfNotebookFiles.openPrivate(pkg, File(context.noBackupFilesDir, PDF_SCRATCH_DIR))
         try {
             return writePngPages(pkg, selected, options, dir, base, digits, backgrounds, progress)
         } finally {
@@ -252,7 +252,11 @@ class ExportRunner @Inject constructor(
 
     private companion object {
         const val EXPORT_DIR = "exports"
+        /** Where older builds cached plain PDF copies for exports (swept at start, LIB-11b). */
         const val PDF_SOURCES_DIR = "export-pdf-sources"
+
+        /** PDFs open for an export are never cached in plain (a locked notebook's included): see openPrivate. */
+        const val PDF_SCRATCH_DIR = "locked-pdf/export"
         const val PDF_BACKGROUND_SCALE = 2.8f
         const val MAX_BACKGROUND_PX = 2400
         const val MIN_BACKGROUND_PX = 400

@@ -10,6 +10,7 @@ import app.bestnote.core.database.SearchSegmentEntity
 import app.bestnote.core.model.Notebook
 import app.bestnote.core.storage.InkChunkCodec
 import app.bestnote.core.storage.NotebookLockedException
+import app.bestnote.core.storage.NotebookPackage
 import app.bestnote.core.storage.NotebookStore
 import app.bestnote.core.storage.PageContent
 import app.bestnote.core.model.PageRect
@@ -67,16 +68,35 @@ class PageIndexer @Inject constructor(
         }
         val present = notebooks.mapTo(HashSet()) { it.id.value }
         known.keys.filter { it !in present }.forEach { dao.removeNotebook(it) }
-        for (id in sealed) thumbnailDir.listFiles { f -> f.name.startsWith(id.value + "-") }?.forEach { it.delete() }
+        // Read again: a notebook locked while this run was reading it (the editor keeps its key) loses what was written.
+        for (id in store.sealedIds()) {
+            dao.removeNotebook(id.value)
+            thumbnailDir.listFiles { f -> f.name.startsWith(id.value + "-") }?.forEach { it.delete() }
+        }
         pages
     }
 
     private suspend fun indexNotebook(nb: Notebook, extractor: PageTextExtractor, ink: Boolean): Int {
         val pkg = store.read(nb.id) ?: return 0
         val before = dao.pages(nb.id.value).associateBy { it.pageId }
+        val pdfs = PdfTexts(pkg.assets, File(context.cacheDir, PDF_DIR))
+        try {
+            return indexPages(nb, pkg, before, ink, extractor, pdfs)
+        } finally {
+            pdfs.close() // deletes the plain PDF copies: one of a notebook locked later must not stay behind (LIB-11b)
+        }
+    }
+
+    private suspend fun indexPages(
+        nb: Notebook,
+        pkg: NotebookPackage,
+        before: Map<String, SearchPageEntity>,
+        ink: Boolean,
+        extractor: PageTextExtractor,
+        pdfs: PdfTexts,
+    ): Int {
         var read = 0
         var inkComplete = ink
-        val pdfs = PdfTexts(pkg.assets, File(context.cacheDir, "search-pdf"))
         for ((i, content) in pkg.pages.withIndex()) {
             currentCoroutineContext().ensureActive()
             val signature = signatureOf(content)
@@ -85,6 +105,8 @@ class PageIndexer @Inject constructor(
                 if (prev.pageIndex != i) dao.upsertPage(prev.copy(pageIndex = i))
                 continue
             }
+            // Locked meanwhile (LIB-11): stop before another plain row or page picture is written.
+            if (store.isSealed(nb.id)) throw NotebookLockedException(nb.id)
             try {
                 if (!indexPage(nb, content, i, signature, extractor, ink, pdfs)) inkComplete = false
                 read++
@@ -95,7 +117,7 @@ class PageIndexer @Inject constructor(
                 return read
             }
         }
-        pdfs.close()
+        if (store.isSealed(nb.id)) throw NotebookLockedException(nb.id)
         dao.retainPages(nb.id.value, pkg.pages.mapTo(HashSet()) { it.id })
         dao.upsertNotebook(SearchNotebookEntity(nb.id.value, nb.updatedAtMillis, inkComplete = inkComplete))
         return read
@@ -155,14 +177,24 @@ class PageIndexer @Inject constructor(
             val bytes = assets[asset] ?: return null
             val file = File(dir.apply { mkdirs() }, "${bytes.contentHashCode().toUInt().toString(16)}-${bytes.size}.pdf")
             if (!file.isFile || file.length() != bytes.size.toLong()) file.writeBytes(bytes)
+            files += file
             return PdfTextExtractor.open(file)
         }
 
-        fun close() = readers.values.forEach { it?.close() }
+        private val files = ArrayList<File>()
+
+        fun close() {
+            readers.values.forEach { it?.close() }
+            readers.clear()
+            files.forEach { it.delete() }
+        }
     }
 
     internal companion object {
         const val THUMBNAILS = "search-thumbs"
+
+        /** Plain PDF copies for text extraction; only while a notebook is being read (swept at start, LIB-11b). */
+        const val PDF_DIR = "search-pdf"
         const val THUMB_WIDTH = 360
 
         /** Changes whenever the page's ink or text boxes change. */

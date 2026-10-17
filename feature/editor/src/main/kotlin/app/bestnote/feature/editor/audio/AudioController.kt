@@ -7,7 +7,11 @@ import app.bestnote.core.model.AudioRecording
 import app.bestnote.core.model.AudioSync
 import app.bestnote.core.model.AudioTimeline
 import app.bestnote.core.model.NotebookId
+import app.bestnote.core.storage.AudioWorkFiles
 import app.bestnote.core.storage.Autosaver
+import app.bestnote.core.storage.NotebookKeyring
+import app.bestnote.core.storage.SealCrypto
+import app.bestnote.core.storage.SealedStream
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -21,6 +25,9 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import java.io.ByteArrayInputStream
+import java.io.File
+import java.io.IOException
 import java.util.UUID
 
 /** What the audio UI shows (MEDIA-04, MEDIA-05). */
@@ -57,6 +64,8 @@ internal class AudioController(
     private val context: Context,
     private val notebookId: NotebookId,
     private val scope: CoroutineScope,
+    /** Keys of unlocked locked notebooks (LIB-11): with one for this notebook, its working copies are encrypted. */
+    private val keyring: NotebookKeyring? = null,
 ) {
     private val mutable = MutableStateFlow(AudioState())
     val state: StateFlow<AudioState> = mutable.asStateFlow()
@@ -67,6 +76,9 @@ internal class AudioController(
     private var recordings: List<AudioRecording> = emptyList()
     private val storeLock = Mutex()
     private var player: MediaPlayer? = null
+
+    /** True while [player] decrypts an encrypted working copy. */
+    private var sealedPlayer = false
     private var ticker: Job? = null
     private val watcher: Job = scope.launch {
         launch {
@@ -76,7 +88,14 @@ internal class AudioController(
         }
         launch { RecorderHub.finished.collect { f -> if (f.notebookId == notebookId.value) adopt(listOf(f.recordingId), f.startedAtMillis) } }
         launch { RecorderHub.failed.collect { m -> mutable.update { it.copy(failure = m) } } }
+        // Relocked (LIB-11b): the player decrypting this notebook's audio stops with the key.
+        keyring?.let { ring -> launch { ring.unlocked.collect { ids -> if (sealedPlayer && notebookId !in ids) closePlayer() } } }
     }
+
+    /** This notebook's keys while it is locked and unlocked, else null (a plain notebook). */
+    private fun keys(): SealCrypto.Keys? = keyring?.get(notebookId)?.let { SealCrypto.Keys(it.dataKey) }
+
+    private fun aad(recordingId: String) = AudioWorkFiles.aad(notebookId, recordingId)
 
     /**
      * The notebook finished loading: [stored] are its recordings and [assets] its audio bytes (by asset path).
@@ -85,21 +104,40 @@ internal class AudioController(
     suspend fun attach(stored: List<AudioRecording>, assets: Map<String, ByteArray>, autosaver: Autosaver) {
         saver = autosaver
         recordings = stored
+        val keys = keys()
         withContext(Dispatchers.IO) {
-            for (r in stored) {
-                val file = AudioFiles.fileOf(context, notebookId.value, r.id)
-                if (!file.isFile) assets[r.assetPath]?.let { file.parentFile?.mkdirs(); file.writeBytes(it) }
+            if (keys != null) {
+                // Locked notebook: working copies are only ever written encrypted (LIB-11b); plain ones an older
+                // build left are encrypted now.
+                AudioWorkFiles.seal(AudioFiles.dir(context, notebookId.value), notebookId, keys)
+                for (r in stored) {
+                    val file = AudioFiles.sealedOf(context, notebookId.value, r.id)
+                    if (!file.isFile) assets[r.assetPath]?.let { SealedStream.encrypt(keys, aad(r.id), ByteArrayInputStream(it), file) }
+                }
+            } else {
+                for (r in stored) {
+                    val file = AudioFiles.fileOf(context, notebookId.value, r.id)
+                    if (!file.isFile) assets[r.assetPath]?.let { file.parentFile?.mkdirs(); file.writeBytes(it) }
+                }
             }
         }
         mutable.update { it.copy(recordings = stored) }
         val known = stored.mapTo(HashSet()) { it.id }
         val running = RecorderHub.active.value?.takeIf { it.notebookId == notebookId.value }?.recordingId
         val orphans = withContext(Dispatchers.IO) {
+            val dir = AudioFiles.dir(context, notebookId.value)
             // A `.rec` that nothing is recording into was cut off (process killed): it has no index and can't play.
-            AudioFiles.dir(context, notebookId.value).listFiles { f -> f.name.endsWith(AudioFiles.RECORDING_SUFFIX) }.orEmpty()
+            dir.listFiles { f -> f.name.endsWith(AudioFiles.RECORDING_SUFFIX) }.orEmpty()
                 .filter { it.name.removeSuffix(AudioFiles.RECORDING_SUFFIX) != running }.forEach { it.delete() }
-            AudioFiles.dir(context, notebookId.value).listFiles { f -> f.isFile && f.name.endsWith(".m4a") }.orEmpty()
-                .map { it.name.removeSuffix(".m4a") }
+            // An encrypted one keeps its whole chunks (ADTS plays up to there): it becomes a finished recording.
+            if (keys != null) {
+                dir.listFiles { f -> f.name.endsWith(AudioWorkFiles.SEALED_PART) }.orEmpty()
+                    .filter { it.name.removeSuffix(AudioWorkFiles.SEALED_PART) != running }
+                    .forEach { it.renameTo(File(dir, it.name.removeSuffix(AudioWorkFiles.SEALED_PART) + AudioWorkFiles.SEALED)) }
+            }
+            val finished = if (keys != null) AudioWorkFiles.SEALED else AudioWorkFiles.PLAIN
+            dir.listFiles { f -> f.isFile && f.name.endsWith(finished) }.orEmpty()
+                .map { it.name.removeSuffix(finished) }
                 .filter { it !in known && it != running && AudioRecording.ID_PATTERN.matches(it) }
         }
         if (orphans.isNotEmpty()) adopt(orphans, null)
@@ -111,6 +149,7 @@ internal class AudioController(
         RecorderHub.clearFailure()
         mutable.update { it.copy(failure = null) }
         pause()
+        RecorderHub.handKeys(notebookId.value, keys()) // a locked notebook records encrypted (LIB-11b)
         AudioRecorderService.start(context, notebookId.value, "rec-" + UUID.randomUUID().toString().take(ID_LENGTH), null)
     }
 
@@ -128,7 +167,9 @@ internal class AudioController(
     }
 
     private suspend fun adopt(ids: List<String>, startedAt: Long?) {
+        val keys = keys()
         val added = withContext(Dispatchers.IO) {
+            if (keys != null) return@withContext ids.mapNotNull { id -> readSealed(id, keys, startedAt) }
             ids.mapNotNull { id ->
                 val file = AudioFiles.fileOf(context, notebookId.value, id)
                 if (!file.isFile) return@mapNotNull null
@@ -151,6 +192,26 @@ internal class AudioController(
         }
     }
 
+    /** A locked notebook's finished (or recovered) encrypted recording [id] and its bytes for the package. */
+    private fun readSealed(id: String, keys: SealCrypto.Keys, startedAt: Long?): Pair<AudioRecording, ByteArray>? {
+        val file = AudioFiles.sealedOf(context, notebookId.value, id)
+        if (!file.isFile) return null
+        return try {
+            val duration = SealedStream.Reader(file, keys, aad(id), allowTruncated = true).use { r ->
+                if (r.size == 0L) null else AudioFiles.durationOf(SealedMediaDataSource(r))
+            }
+            if (duration == null) {
+                file.delete() // nothing recorded, or not audio
+                return null
+            }
+            val started = startedAt ?: (file.lastModified() - duration)
+            AudioRecording(id, null, started, duration) to SealedStream.decryptAll(keys, aad(id), file, allowTruncated = true)
+        } catch (e: IOException) {
+            Log.w(TAG, "Cannot read encrypted recording $id", e) // wrong key or damaged: left for a later try
+            null
+        }
+    }
+
     fun rename(id: String, title: String) {
         scope.launch {
             storeLock.withLock {
@@ -169,7 +230,10 @@ internal class AudioController(
                 saver?.updateRecordings(recordings)
                 mutable.update { it.copy(recordings = recordings) }
             }
-            withContext(Dispatchers.IO) { AudioFiles.fileOf(context, notebookId.value, id).delete() }
+            withContext(Dispatchers.IO) {
+                AudioFiles.fileOf(context, notebookId.value, id).delete()
+                AudioFiles.sealedOf(context, notebookId.value, id).delete()
+            }
         }
     }
 
@@ -211,6 +275,7 @@ internal class AudioController(
         ticker?.cancel()
         player?.release()
         player = null
+        sealedPlayer = false
         mutable.update { it.copy(current = null, playing = false, positionMs = 0) }
         syncDim()
     }
@@ -229,10 +294,16 @@ internal class AudioController(
 
     private fun load(rec: AudioRecording): Boolean {
         closePlayer()
-        val file = AudioFiles.fileOf(context, notebookId.value, rec.id)
+        val keys = keys()
         return try {
             val p = MediaPlayer()
-            p.setDataSource(file.path)
+            if (keys != null) {
+                // Decrypted chunk by chunk as the player reads (LIB-11b): no plaintext copy, not even in the cache.
+                val reader = SealedStream.Reader(AudioFiles.sealedOf(context, notebookId.value, rec.id), keys, aad(rec.id), allowTruncated = true)
+                p.setDataSource(SealedMediaDataSource(reader))
+            } else {
+                p.setDataSource(AudioFiles.fileOf(context, notebookId.value, rec.id).path)
+            }
             p.prepare()
             p.setOnCompletionListener {
                 ticker?.cancel()
@@ -240,6 +311,7 @@ internal class AudioController(
                 syncDim()
             }
             player = p
+            sealedPlayer = keys != null
             mutable.update { it.copy(current = rec.id, positionMs = 0, playing = false) }
             true
         } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {

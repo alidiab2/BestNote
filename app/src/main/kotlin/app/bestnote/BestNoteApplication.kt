@@ -14,6 +14,9 @@ import app.bestnote.ai.vision.providers.KeystoreAiSettings
 import app.bestnote.core.common.CrashLog
 import app.bestnote.core.security.LockManager
 import app.bestnote.core.security.LockSession
+import app.bestnote.core.storage.LockedScratch
+import app.bestnote.core.storage.NotebookKeyring
+import app.bestnote.engine.pdf.PdfNotebookFiles
 import app.bestnote.core.updater.BuildInfo
 import app.bestnote.core.updater.UpdateManager
 import dagger.Provides
@@ -30,6 +33,7 @@ import dagger.Module
 import dagger.hilt.InstallIn
 import dagger.hilt.android.HiltAndroidApp
 import dagger.hilt.components.SingletonComponent
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -44,6 +48,10 @@ class BestNoteApplication : Application() {
     @Inject lateinit var updates: UpdateManager
 
     @Inject lateinit var locks: LockManager
+
+    @Inject lateinit var keyring: NotebookKeyring
+
+    @Inject lateinit var lockedScratch: LockedScratch
 
     override fun onCreate() {
         // First, so even a crash during start-up lands in Settings → Debug → Share debug log.
@@ -64,11 +72,31 @@ class BestNoteApplication : Application() {
         }
         // Locked notebooks (LIB-11): which are sealed, and relock after the app has been in the background.
         LockSession.install(this, locks)
-        notebooks.backgroundScope.launch { runCatching { locks.refresh() }.onFailure { Log.w("BestNote", "Lock state unavailable", it) } }
+        notebooks.backgroundScope.launch {
+            runCatching { locks.refresh() }.onFailure { Log.w("BestNote", "Lock state unavailable", it) }
+            keepLockedFilesPrivate()
+        }
         // Handwriting and text search (REC-02): index pages in the background, battery-aware.
         searchIndexing.start(notebooks.backgroundScope)
         // In-app updates (REL-01): at most one check per 24 h, if "Check automatically" is on.
         updates.checkOnStart()
+    }
+
+    /**
+     * LIB-11b: no plaintext of a locked notebook stays on disk outside its package. At start every scratch file is an
+     * orphan of a crash, and older builds' plain caches go; a dropped key deletes that notebook's scratch; a newly
+     * locked notebook loses its plain PDF cache; raw AI answers are not kept while one is open.
+     */
+    private suspend fun keepLockedFilesPrivate() = coroutineScope {
+        val pdfCache = File(cacheDir, "pdf")
+        runCatching {
+            val legacy = listOf("export-pdf-sources", "search-pdf", "exports/.sources", "exports/.annotations.pdf").map { File(cacheDir, it) } +
+                locks.sealed.value.map { PdfNotebookFiles.cacheDirOf(it, pdfCache) }
+            lockedScratch.sweepAtStart(locks.sealed.value, legacy)
+        }.onFailure { Log.w("BestNote", "Locked files sweep failed", it) }
+        launch { lockedScratch.follow(keyring) }
+        launch { locks.sealed.collect { ids -> ids.forEach { runCatching { PdfNotebookFiles.forget(it, pdfCache) } } } }
+        launch { keyring.unlocked.collect { VisionDiagnostics.privateSession = it.isNotEmpty() } }
     }
 
     companion object {
