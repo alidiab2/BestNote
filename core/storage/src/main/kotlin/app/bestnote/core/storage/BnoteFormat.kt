@@ -38,6 +38,20 @@ internal data class ManifestJson(
     val extras: List<String> = emptyList(),
 )
 
+/**
+ * The plaintext stub manifest of a sealed (locked) notebook (LIB-11): what the locked cover needs plus the
+ * wrapped keys. [format] is [BnoteFormat.SEALED_FORMAT], newer than any plain layout an older app knows, so an
+ * old app refuses the notebook ("update the app") instead of misreading it; [pages] is always empty.
+ */
+@Serializable
+internal data class SealedManifestJson(
+    val format: Int,
+    val generator: String = "BestNote",
+    val notebook: NotebookJson,
+    val pages: List<String> = emptyList(),
+    val sealed: SealHeader,
+)
+
 @Serializable
 internal data class RecordingJson(
     val id: String,
@@ -140,11 +154,19 @@ internal data class RunJson(
 object BnoteFormat {
     /** Current layout. History: 1 = DOC-01 draft, 2 = page metadata always carries `paper`, 3 = pages carry `elements`, 4 = manifest lists audio `recordings`, 5 = manifest lists `extras`, 6 = pages may have an edit journal `pages/<id>.jrnl`, 7 = strokes may carry a shape fill, 8 = text elements may carry underline/strike, style runs, lists and line spacing, 9 = text elements may carry paragraph formats (see [FormatMigrations]). */
     const val VERSION = 9
+
+    /**
+     * Format of a sealed notebook's stub manifest (LIB-11). Sealed notebooks are recognised by their `sealed`
+     * key, not by this number; it only has to be newer than what older apps read, so they refuse the notebook. 10, not 9: TEXT-04 gives plain notebooks format 9.
+     * Plain notebooks keep [VERSION].
+     */
+    const val SEALED_FORMAT = 10
     const val MANIFEST = "manifest.json"
     const val PAGES_DIR = "pages/"
     const val ASSETS_DIR = "assets/"
     const val EXTRAS_DIR = "extras/"
 
+    private const val SEALED_KEY = "sealed"
     private val INK_NAME = Regex("[A-Za-z0-9_-]{1,64}\\.ink")
 
     internal val json = Json { ignoreUnknownKeys = true; prettyPrint = true; encodeDefaults = true }
@@ -202,13 +224,41 @@ object BnoteFormat {
         return construct("notebook") { NotebookPackage(manifest.notebook.toModel(), pages, assets, recordings, extras) }
     }
 
-    /** Notebook metadata from a manifest, for listing without reading pages. */
-    fun readNotebook(manifestBytes: ByteArray): Notebook = parseManifest(manifestBytes).notebook.toModel()
+    /** Notebook metadata from a manifest (plain, or a sealed notebook's stub), for listing without reading pages. */
+    fun readNotebook(manifestBytes: ByteArray): Notebook =
+        if (isSealedManifest(manifestBytes)) readSealedStub(manifestBytes).first else parseManifest(manifestBytes).notebook.toModel()
+
+    /** True when [manifestBytes] is the stub of a sealed notebook (LIB-11). Damaged JSON is not a stub. */
+    fun isSealedManifest(manifestBytes: ByteArray): Boolean = try {
+        SEALED_KEY in json.parseToJsonElement(manifestBytes.decodeToString()).jsonObject
+    } catch (_: SerializationException) {
+        false
+    } catch (_: IllegalArgumentException) {
+        false
+    }
+
+    /** The cover facts and header of a sealed notebook's stub manifest. */
+    fun readSealedStub(manifestBytes: ByteArray): Pair<Notebook, SealHeader> {
+        val stub = decode(MANIFEST, manifestBytes) { json.decodeFromString(SealedManifestJson.serializer(), it) }
+        return stub.notebook.toModel() to stub.sealed
+    }
+
+    /** The stub manifest written for a sealed notebook: cover facts only, no pages. */
+    fun encodeSealedStub(notebook: Notebook, header: SealHeader): ByteArray {
+        val stub = SealedManifestJson(
+            format = SEALED_FORMAT,
+            notebook = NotebookJson(notebook.id.value, notebook.title, notebook.createdAtMillis, notebook.updatedAtMillis, notebook.template.name, notebook.pageCount),
+            sealed = header,
+        )
+        return json.encodeToString(SealedManifestJson.serializer(), stub).encodeToByteArray()
+    }
 
     internal fun parseManifest(bytes: ByteArray): ManifestJson {
         val text = bytes.decodeToString()
         // Check the version before the schema, so a future manifest layout is refused rather than "corrupt".
         val tree = decode(MANIFEST, text) { json.parseToJsonElement(it).jsonObject }
+        // A sealed stub has no pages: reading it as a plain notebook would show it empty.
+        if (SEALED_KEY in tree) throw NotebookLockedException(null, "Sealed notebook: unlock it first")
         val format = decode(MANIFEST, text) { FormatMigrations.formatOf(tree) }
         if (format > VERSION) throw UnsupportedFormatVersionException(format, VERSION, "Notebook format")
         if (format < 1) throw CorruptChunkException("Bad format $format")

@@ -57,6 +57,12 @@
     <string name="library_menu_open">Open</string>
     <string name="library_menu_rename">Rename</string>
     <string name="library_menu_trash">Move to Trash</string>
+    <!-- LIB-11 -->
+    <string name="library_menu_lock">Lock</string>
+    <string name="library_menu_unlock">Unlock</string>
+    <string name="library_menu_lock_now">Lock now</string>
+    <string name="library_menu_remove_lock">Remove lock</string>
+    <string name="library_locked">Locked</string>
     <string name="library_rename_title">Rename notebook</string>
     <string name="library_rename_confirm">Rename</string>
     <string name="library_cancel">Cancel</string>
@@ -154,6 +160,8 @@
     <string name="library_folder_rename">Rename</string>
     <string name="library_folder_recolor">Change color</string>
     <string name="library_folder_delete">Delete folder</string>
+    <string name="library_folder_lock">Lock folder</string>
+    <string name="library_folder_remove_lock">Remove folder lock</string>
     <string name="library_folder_more">More actions for %1$s</string>
     <string name="library_folder_name_hint">Folder name</string>
     <string name="library_folder_color">Color</string>

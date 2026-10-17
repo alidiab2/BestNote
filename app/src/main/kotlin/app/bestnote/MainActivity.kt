@@ -6,7 +6,7 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
-import androidx.activity.ComponentActivity
+import androidx.fragment.app.FragmentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -64,7 +64,8 @@ import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
 
 @AndroidEntryPoint
-class MainActivity : ComponentActivity() {
+// FragmentActivity (not ComponentActivity): the biometric / screen-lock prompt of locked notebooks (LIB-11) needs it.
+class MainActivity : FragmentActivity() {
     @Inject lateinit var preferences: UserPreferencesRepository
 
     @Inject lateinit var updates: UpdateManager
@@ -108,7 +109,7 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    // ComponentActivity marks dispatchKeyEvent restricted; overriding it is the documented way to see every key first.
+    // ComponentActivity (our base) marks dispatchKeyEvent restricted; overriding it is the documented way to see every key first.
     @SuppressLint("RestrictedApi")
     override fun dispatchKeyEvent(event: KeyEvent): Boolean =
         shortcuts.onKeyEvent(event, focusIsTextEditor = currentFocus?.onCheckIsTextEditor() == true) || super.dispatchKeyEvent(event)

@@ -36,6 +36,7 @@ include(":core:datastore")
 include(":core:storage")
 include(":core:updater")
 include(":core:fonts")
+include(":core:security")
 
 include(":engine:stylus")
 include(":engine:ink")

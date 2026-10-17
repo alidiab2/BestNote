@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- LIB-11 الدفاتر المقفلة -->
+    <string name="lock_prompt_title">فتح قفل الدفتر</string>
+    <string name="lock_prompt_subtitle">أكّد هويتك لفتح ملاحظاتك المقفلة</string>
+    <string name="lock_gate_title">هذا الدفتر مقفل</string>
+    <string name="lock_gate_body">صفحاته مشفّرة على هذا الجهاز. افتح القفل ببصمتك أو وجهك أو قفل الشاشة أو رمز PIN للتطبيق.</string>
+    <string name="lock_unlock">فتح القفل</string>
+    <string name="lock_lock">قفل</string>
+    <string name="lock_back">رجوع</string>
+    <string name="lock_cancel">إلغاء</string>
+    <string name="lock_ok">حسنًا</string>
+    <string name="lock_working">جارٍ التشفير…</string>
+    <string name="lock_mismatch">غير متطابقين</string>
+    <plurals name="lock_setup_title">
+        <item quantity="zero">قفل %d دفتر</item>
+        <item quantity="one">قفل الدفتر</item>
+        <item quantity="two">قفل دفترين</item>
+        <item quantity="few">قفل %d دفاتر</item>
+        <item quantity="many">قفل %d دفترًا</item>
+        <item quantity="other">قفل %d دفتر</item>
+    </plurals>
+    <string name="lock_setup_title_folder">قفل المجلد «%s»</string>
+    <string name="lock_setup_body_device">ستُشفَّر صفحاته على هذا الجهاز، وسيحتاج فتحه إلى بصمتك أو وجهك أو قفل الشاشة.</string>
+    <string name="lock_setup_body_pin">لا يوجد قفل شاشة على هذا الجهاز، لذلك يستخدم BestNote رمز PIN خاصًا بالتطبيق. ستُشفَّر صفحاته على هذا الجهاز وسيحتاج فتحه إلى الرمز. يُعيَّن الرمز مرة واحدة ولا يُحفظ منه إلا تحقّق مُشفَّر.</string>
+    <string name="lock_setup_hidden">ما دام مقفلًا يظهر عليه قفل بدل صفحاته، ولا يظهر في البحث ولا في «تابع الكتابة» ولا في «الأخيرة».</string>
+    <string name="lock_setup_warning">مهم: إذا أزلت قفل الشاشة أو أعدت ضبطه (أو حذفت بيانات التطبيق فضاع رمز PIN)، قد يحذف أندرويد المفتاح الذي يفتح الدفاتر المقفلة، فلا يمكن فتحها بعد ذلك. كلمة مرور الاسترداد تتيح لك فتحها رغم ذلك. احفظها في مكان آمن: لا يستطيع BestNote إعادة تعيينها.</string>
+    <string name="lock_recovery_optional_label">كلمة مرور الاسترداد (اختيارية)</string>
+    <string name="lock_recovery_again_label">أعد كتابة كلمة مرور الاسترداد</string>
+    <plurals name="lock_recovery_short">
+        <item quantity="zero">%d حرف على الأقل</item>
+        <item quantity="one">حرف واحد على الأقل</item>
+        <item quantity="two">حرفان على الأقل</item>
+        <item quantity="few">%d أحرف على الأقل</item>
+        <item quantity="many">%d حرفًا على الأقل</item>
+        <item quantity="other">%d حرف على الأقل</item>
+    </plurals>
+    <string name="lock_pin_new_label">رمز PIN جديد للتطبيق (4–12 رقمًا)</string>
+    <string name="lock_pin_again_label">أعد كتابة الرمز</string>
+    <string name="lock_pin_label">رمز PIN للتطبيق</string>
+    <string name="lock_pin_enter_title">أدخل رمز PIN للتطبيق</string>
+    <string name="lock_pin_enter_body">أدخل الرمز الذي عيّنته للدفاتر المقفلة.</string>
+    <string name="lock_pin_wrong">رمز خاطئ</string>
+    <string name="lock_recovery_title">كلمة مرور الاسترداد</string>
+    <string name="lock_recovery_body">لم يعد مفتاح هذا الجهاز يفتح هذا الدفتر، غالبًا لأن قفل الشاشة أُزيل أو تغيّر. أدخل كلمة مرور الاسترداد التي عيّنتها عند قفله.</string>
+    <string name="lock_recovery_label">كلمة مرور الاسترداد</string>
+    <string name="lock_recovery_wrong">كلمة مرور الاسترداد خاطئة</string>
+    <string name="lock_failed_title">حدث خطأ</string>
+    <string name="lock_failed_body">تعذّر على BestNote تغيير القفل. لم يتغيّر دفترك، حاول مرة أخرى.</string>
+    <string name="lock_lost_title">تعذّر فتح القفل</string>
+    <string name="lock_lost_body">المفتاح الذي كان يفتح هذا الدفتر لم يعد موجودًا (أُزيل قفل الشاشة أو أُعيد ضبطه) ولم تُعيَّن كلمة مرور استرداد، لذلك لا يمكن فك تشفيره.</string>
+    <plurals name="lock_remove_title">
+        <item quantity="zero">إزالة القفل من %d دفتر؟</item>
+        <item quantity="one">إزالة القفل؟</item>
+        <item quantity="two">إزالة القفل من دفترين؟</item>
+        <item quantity="few">إزالة القفل من %d دفاتر؟</item>
+        <item quantity="many">إزالة القفل من %d دفترًا؟</item>
+        <item quantity="other">إزالة القفل من %d دفتر؟</item>
+    </plurals>
+    <string name="lock_remove_body">سيُحفظ الدفتر دون تشفير من جديد، وستظهر صفحاته ويظهر في البحث ويُنسخ احتياطيًا كغيره.</string>
+    <string name="lock_remove_confirm">إزالة القفل</string>
+    <string name="lock_export_title">تصدير نسخة غير مقفلة؟</string>
+    <string name="lock_export_body">هذا الدفتر مقفل، لكن الملف المُصدَّر غير مشفّر: يستطيع أي شخص يحصل على الملف قراءته.</string>
+    <string name="lock_export_confirm">متابعة</string>
+</resources>

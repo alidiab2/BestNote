@@ -5,6 +5,7 @@ import app.bestnote.core.database.NotebookDao
 import app.bestnote.core.model.Notebook
 import app.bestnote.core.model.NotebookId
 import app.bestnote.core.storage.FileNotebookStore
+import app.bestnote.core.storage.NotebookKeyring
 import app.bestnote.core.storage.NotebookStore
 import app.bestnote.core.storage.ThumbnailCache
 import dagger.Module
@@ -45,12 +46,17 @@ object LibraryModule {
         @ApplicationContext context: Context,
         mirror: RoomIndexMirror,
         thumbnails: CachedThumbnails,
+        keyring: NotebookKeyring,
     ): LibraryRepository = StoreLibraryRepository(
         store,
-        FileNotebookStore(File(context.filesDir, TRASH_DIR)),
+        FileNotebookStore(File(context.filesDir, TRASH_DIR), keyring = keyring),
         mirror,
         thumbnailSource = thumbnails,
+        keyring = keyring,
     )
+
+    @Provides
+    fun locks(impl: ManagerLibraryLocks): LibraryLocks = impl
 
     @Provides
     fun pdfImporting(service: PdfImportService): PdfImporting = service

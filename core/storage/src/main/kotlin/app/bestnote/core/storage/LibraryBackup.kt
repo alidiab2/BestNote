@@ -61,7 +61,15 @@ data class BackupManifest(
 class BackupException(message: String, cause: Throwable? = null) : IOException(message, cause)
 
 /** What a backup run did. */
-data class BackupResult(val notebooks: Int, val trashed: Int, val written: Int, val reused: Int, val manifest: BackupManifest)
+data class BackupResult(
+    val notebooks: Int,
+    val trashed: Int,
+    val written: Int,
+    val reused: Int,
+    val manifest: BackupManifest,
+    /** Locked notebooks (LIB-11) that were not unlocked, so not backed up (an earlier backed-up copy is kept). */
+    val locked: Int = 0,
+)
 
 /** What a restore run did. [failed] holds titles of notebooks that could not be read from the backup. */
 data class RestoreResult(
@@ -108,6 +116,8 @@ class LibraryBackup(
         progress: BackupProgress = BackupProgress.None,
     ): BackupResult {
         val previous = readManifest(target)
+        val previousEntries = previous?.notebooks.orEmpty().associateBy { it.id to it.trashed }
+        var locked = 0
         val reusable = previous?.notebooks.orEmpty().filter { !it.trashed }.mapTo(HashSet()) { it.file }
         val live = notebooks.list().map { it to false }
         val binned = trash.list().map { it to true }
@@ -124,8 +134,15 @@ class LibraryBackup(
                 reused++
             } else {
                 // Trash entries are always rewritten: their deletion marker can change without updatedAt changing.
-                val pkg = (if (trashed) trash else notebooks).read(nb.id)
-                    ?: continue // removed while we were backing up
+                val pkg = try {
+                    (if (trashed) trash else notebooks).read(nb.id)
+                } catch (_: NotebookLockedException) {
+                    // A locked notebook is only backed up while unlocked (and then as a plain file, like any export).
+                    locked++
+                    previousEntries[nb.id.value to trashed]?.takeIf { target.exists(it.file) }?.let { entries += it }
+                    progress.update(i + 1, all.size)
+                    continue
+                } ?: continue // removed while we were backing up
                 target.write(file) { BnoteArchive.export(pkg, it) }
                 written++
             }
@@ -143,7 +160,7 @@ class LibraryBackup(
         for (dir in listOf(NOTEBOOKS_DIR, TRASH_DIR, EXTRAS_DIR)) {
             for (name in target.list(dir)) if ("$dir$name" !in keep) target.delete("$dir$name")
         }
-        return BackupResult(entries.count { !it.trashed }, entries.count { it.trashed }, written, reused, manifest)
+        return BackupResult(entries.count { !it.trashed }, entries.count { it.trashed }, written, reused, manifest, locked)
     }
 
     /** @throws BackupException if [target] holds no complete backup, or one from a newer BestNote. */
@@ -172,8 +189,12 @@ class LibraryBackup(
                 if (pkg == null || pkg.notebook.id.value != entry.id) {
                     failed += entry.title
                 } else {
-                    store.write(pkg)
-                    restoredIds += entry.id
+                    try {
+                        store.write(pkg)
+                        restoredIds += entry.id
+                    } catch (_: NotebookLockedException) {
+                        failed += entry.title // never replace a locked notebook with a plain copy
+                    }
                 }
             }
             progress.update(i + 1, manifest.notebooks.size)

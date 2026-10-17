@@ -6,6 +6,7 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.border
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.CreateNewFolder
+import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.MoreHoriz
 import androidx.compose.material3.IconButton
 import androidx.compose.runtime.mutableStateOf
@@ -183,6 +184,9 @@ internal fun LibrarySidebar(
                     modifier = Modifier.dropTarget(dest),
                     leading = { FolderGlyph(item.folder.colorIndex, Modifier.size(18.dp, 15.dp)) },
                     trailing = {
+                        if (item.folder.locked) {
+                            Icon(Icons.Outlined.Lock, stringResource(R.string.library_locked), tint = BestNoteTheme.colors.muted, modifier = Modifier.size(14.dp))
+                        }
                         Box {
                             val more = stringResource(R.string.library_folder_more, item.folder.name)
                             Box(
@@ -195,7 +199,7 @@ internal fun LibrarySidebar(
                             ) {
                                 Icon(Icons.Outlined.MoreHoriz, null, tint = BestNoteTheme.colors.muted, modifier = Modifier.size(18.dp))
                             }
-                            FolderMenu(menu, onDismiss = { menu = false }) { action ->
+                            FolderMenu(menu, onDismiss = { menu = false }, locked = item.folder.locked) { action ->
                                 menu = false
                                 onFolderMenu(item.folder, action)
                             }

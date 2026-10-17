@@ -97,6 +97,7 @@ import androidx.navigation.NavController
 import androidx.navigation.NavGraphBuilder
 import androidx.navigation.compose.composable
 import androidx.navigation.toRoute
+import app.bestnote.core.security.LockGate
 import app.bestnote.core.database.NotebookDao
 import app.bestnote.core.database.NotebookRepository
 import app.bestnote.core.database.toModel
@@ -201,7 +202,10 @@ fun NavGraphBuilder.editorScreen(
     onSmartBoard: (NotebookId, Page, String?, String?) -> Unit = { _, _, _, _ -> },
     takeInsert: () -> InkInsert? = { null },
 ) {
-    composable<EditorRoute> { EditorScreen(onBack, onOpenSettings, onSmartBoard, takeInsert) }
+    composable<EditorRoute> { entry ->
+        // LIB-11: a locked notebook shows a lock screen until unlocked, and is kept out of screenshots / recents.
+        LockGate(NotebookId(entry.toRoute<EditorRoute>().notebookId), onBack) { EditorScreen(onBack, onOpenSettings, onSmartBoard, takeInsert) }
+    }
 }
 
 data class EditorUiState(
@@ -476,6 +480,7 @@ fun EditorScreen(
     val compact = WidthClass.of(LocalConfiguration.current.screenWidthDp.dp) == WidthClass.Compact
     val side = if (compact) TraySide.Bottom else traySide(state.dock, state.leftHanded)
     LifecycleEventEffect(Lifecycle.Event.ON_STOP) { viewModel.session.onStop() }
+    val lock = rememberEditorLock(viewModel.notebookId, viewModel.session, onBack)
     DisposableEffect(document) {
         val setHistory = { undo: Boolean, redo: Boolean ->
             canUndo = undo
@@ -604,7 +609,8 @@ fun EditorScreen(
         },
         pagesMenu = { PaperMenuButton(canvas, onManage = { picker = null; managerPage = canvas?.currentPage?.coerceAtLeast(0) ?: 0 }) },
         onOpenSettings = onOpenSettings,
-        onExport = { picker = null; exporting = true },
+        onExport = { picker = null; lock.beforeExport { exporting = true } },
+        lock = lock,
     )
     // SPEN-10: hardware-keyboard shortcuts. Dialogs are their own windows (they never see these keys); the
     // sheets drawn in this window pause them too.

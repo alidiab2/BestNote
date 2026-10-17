@@ -33,6 +33,11 @@ object PdfNotebookFiles {
         return if (sources.isEmpty()) null else PdfPageBackgrounds(sources)
     }
 
+    /** Deletes the copies [open] made for notebook [id] (LIB-11: a locked notebook's PDFs never stay in the cache). */
+    fun forget(id: NotebookId, cacheDir: File) {
+        File(cacheDir, dirName(id)).deleteRecursively()
+    }
+
     internal fun dirName(id: NotebookId): String =
         id.value.map { if (it.isLetterOrDigit() || it == '-' || it == '_') it else '_' }.joinToString("").take(48) +
             "-" + Integer.toHexString(id.value.hashCode())

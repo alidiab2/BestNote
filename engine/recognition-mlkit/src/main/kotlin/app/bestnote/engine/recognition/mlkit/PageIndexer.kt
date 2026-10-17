@@ -9,6 +9,7 @@ import app.bestnote.core.database.SearchPageEntity
 import app.bestnote.core.database.SearchSegmentEntity
 import app.bestnote.core.model.Notebook
 import app.bestnote.core.storage.InkChunkCodec
+import app.bestnote.core.storage.NotebookLockedException
 import app.bestnote.core.storage.NotebookStore
 import app.bestnote.core.storage.PageContent
 import app.bestnote.core.model.PageRect
@@ -50,16 +51,23 @@ class PageIndexer @Inject constructor(
         val ink = models.state.value.isReady
         val extractor = PageTextExtractor(recognizer, MlKitModels.LANGUAGES)
         val known = dao.notebooks().associateBy { it.notebookId }
-        val notebooks = store.list().sortedByDescending { it.updatedAtMillis }
+        // Locked notebooks (LIB-11) are never indexed: the index and page pictures are plaintext on disk.
+        val sealed = store.sealedIds()
+        val notebooks = store.list().filter { it.id !in sealed }.sortedByDescending { it.updatedAtMillis }
         var pages = 0
         for (nb in notebooks) {
             currentCoroutineContext().ensureActive()
             val state = known[nb.id.value]
             if (state != null && state.indexedUpdatedAtMillis == nb.updatedAtMillis && (state.inkComplete || !ink)) continue
-            pages += indexNotebook(nb, extractor, ink)
+            pages += try {
+                indexNotebook(nb, extractor, ink)
+            } catch (@Suppress("SwallowedException") e: NotebookLockedException) {
+                0 // locked while we were indexing it
+            }
         }
         val present = notebooks.mapTo(HashSet()) { it.id.value }
         known.keys.filter { it !in present }.forEach { dao.removeNotebook(it) }
+        for (id in sealed) thumbnailDir.listFiles { f -> f.name.startsWith(id.value + "-") }?.forEach { it.delete() }
         pages
     }
 
