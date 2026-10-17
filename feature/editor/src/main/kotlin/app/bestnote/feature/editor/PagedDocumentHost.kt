@@ -89,6 +89,7 @@ internal fun PagedDocumentHost(
                     view.revealDurationMs = Motion.Duration.Long
                     view.zoomDurationMs = Motion.Duration.Standard
                     view.shapeMorphMs = Motion.Duration.Medium
+                    view.shapeGhostText = shapeGhostText(context)
                     view.pageIndicatorListener = PagedDocumentView.PageIndicatorListener { page, total ->
                         current = page
                         count = total

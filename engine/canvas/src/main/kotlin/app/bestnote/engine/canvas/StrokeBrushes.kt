@@ -35,8 +35,8 @@ class StrokeBrushes<I : Any, S : Any> {
 
     /** [piece] was cut from [original] (pixel eraser): it is stored with the same brush. */
     fun inherit(piece: S, original: S) {
-        // A cut-off piece is no longer a closed outline: it keeps the pen, not the fill.
-        finished[original]?.let { finished[piece] = it.copy(fillArgb = null) }
+        // A cut-off piece is no longer a closed outline (nor a clean shape): it keeps the pen, not the fill.
+        finished[original]?.let { finished[piece] = it.copy(fillArgb = null, shape = null) }
     }
 
     /** [stroke] (pasted or restyled) is stored with [brush]. */

@@ -22,3 +22,4 @@
 | [x] CANVAS-14 | Group/ungroup, bring to front / send to back | M3 | M | CANVAS-08 | — |
 | [ ] CANVAS-15 | Gesture tools: scribble-to-erase, circle-to-lasso | M3 | M | REC-01 | False-positive rate < 1% in the test corpus |
 | [ ] CANVAS-16 | Zoom window (magnified writing strip with auto-advance) | M3 | L | CANVAS-05 | — |
+| [x] CANVAS-17 | Shapes: live ghost before lift (hold-to-shape preview with label and snap hints, follows the pen, shake/move away cancels), better recognition (diamonds, stars, open circles, sloppy boxes; accuracy harness over `shapes_sloppy` corpus: 76% → 98%), glue (shapes snap corner-to-corner / edge-to-edge, line ends attach) and connectors that follow moved/resized shapes (`ShapeInfo` on `InkBrush`, `.ink` chunk v6) | M3 | L | INK-08, REC-09 | Lifting commits exactly the ghost; connectors stay attached through move/resize and undo |

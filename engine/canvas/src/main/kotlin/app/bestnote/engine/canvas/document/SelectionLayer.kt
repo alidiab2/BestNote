@@ -12,7 +12,9 @@ import android.view.HapticFeedbackConstants
 import android.view.View
 import android.view.animation.DecelerateInterpolator
 import androidx.ink.strokes.Stroke
+import app.bestnote.core.model.InkBrush
 import app.bestnote.core.model.PageElement
+import app.bestnote.core.model.ShapeInfo
 import app.bestnote.core.model.PageRect
 import app.bestnote.core.model.TextElement
 import app.bestnote.engine.canvas.StrokeBrushes
@@ -32,6 +34,11 @@ import app.bestnote.engine.canvas.select.SpatialGrid
 import app.bestnote.engine.canvas.select.StrokeEdits
 import app.bestnote.engine.canvas.select.StrokeOutlines
 import app.bestnote.engine.canvas.select.TransformGesture
+import app.bestnote.engine.canvas.shape.Anchor
+import app.bestnote.engine.canvas.shape.ShapeEdits
+import app.bestnote.engine.canvas.shape.ShapeGeometry
+import app.bestnote.engine.canvas.shape.ShapeGlue
+import app.bestnote.engine.canvas.shape.ShapeStroke
 import app.bestnote.engine.ink.BrushCatalog
 import app.bestnote.engine.ink.InkRenderer
 import java.util.Collections
@@ -116,6 +123,16 @@ internal class SelectionLayer(
     /** TEXT-04: where a moving text box / picture snaps (page lines), and the guides it lines up on right now. */
     private var snapTargets: SnapGuides.Targets? = null
     private var guides: SnapGuides.Snap? = null
+
+    /** CANVAS-17: the moving shapes' glue points and box, the shapes they glue to, and the current glue snap. */
+    private var glue: Pair<List<Anchor>, Box>? = null
+    private var glueTargets: List<ShapeInfo> = emptyList()
+    private var glueMove: ShapeGlue.Move? = null
+
+    /** Connectors (not selected) glued to the selected shapes, and how they look following the drag right now. */
+    private var followers: List<Pair<Stroke, ShapeInfo>> = emptyList()
+    private var selectedShapes: List<ShapeInfo> = emptyList()
+    private var followPreview: List<Stroke> = emptyList()
 
     /** Where the pen last touched a page (page, x, y in page points): where paste lands. */
     private var lastTouch: Triple<DocumentPage, Float, Float>? = null
@@ -214,8 +231,16 @@ internal class SelectionLayer(
             } else {
                 null
             }
+            // Moving shapes glue onto the page's other shapes (corners, edge middles, centers, edges).
+            val infos = sel.strokes.mapNotNull { brushes.brushOf(it)?.shape }
+            glue = if (grip == Grip.Move) ShapeGlue.movingOf(infos) else null
+            glueTargets = if (glue != null) shapesOn(sel.page, infos.mapTo(HashSet()) { it.id }) else emptyList()
+            glueMove = null
+            selectedShapes = infos
+            followers = connectorsOf(sel, infos.mapTo(HashSet()) { it.id })
+            followPreview = emptyList()
             previewStrokes = readable(sel.page, sel.strokes)
-            pages.setHidden(selIndex, identitySet(sel.strokes))
+            pages.setHidden(selIndex, identitySet(sel.strokes + followers.map { it.first }))
             previewElements = sel.elements.filter { !it.locked }
             pages.setHiddenElements(selIndex, previewElements.mapTo(HashSet()) { it.id })
             listener?.onSelectionMenu(null)
@@ -267,6 +292,28 @@ internal class SelectionLayer(
             val was = guides
             if (snapped.snapped && (snapped.guideX != was?.guideX || snapped.guideY != was?.guideY)) performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
             guides = snapped.takeIf { it.snapped }
+        }
+        glue?.let { (anchors, box) ->
+            val m = g.transform
+            val moved = anchors.map { it.copy(x = it.x + m.tx, y = it.y + m.ty) }
+            val scale = pages.layout?.scale ?: 1f
+            val snapped = ShapeGlue.snapMove(moved, Box(box.minX + m.tx, box.minY + m.ty, box.maxX + m.tx, box.maxY + m.ty), glueTargets, GLUE_DP * density / scale)
+            if (snapped.snapped) {
+                g.update(px + snapped.dx, py + snapped.dy)
+                val was = glueMove
+                if (was == null || was.markers != snapped.markers || was.guideX != snapped.guideX || was.guideY != snapped.guideY) {
+                    performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+                }
+            }
+            glueMove = snapped.takeIf { it.snapped }
+        }
+        if (followers.isNotEmpty()) {
+            val m = g.transform
+            val moved = selectedShapes.associate { it.id to ShapeGeometry.transformed(it, m) }
+            val follow = ShapeGeometry.follow(followers.map { it.second }, moved)
+            followPreview = readable(sel.page, followers.map { (stroke, info) ->
+                follow[info.id]?.let { ShapeStroke.build(it.first, stroke, ShapeStroke.samplesOf(stroke)).stroke } ?: stroke
+            })
         }
         val snap = g.snappedDeg
         if (snap != null && snap != lastSnap) performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
@@ -342,12 +389,19 @@ internal class SelectionLayer(
         previewElements = emptyList()
         snapTargets = null
         guides = null
+        glue = null
+        glueTargets = emptyList()
+        glueMove = null
+        followers = emptyList()
+        selectedShapes = emptyList()
+        followPreview = emptyList()
         val sel = selection
         val m = g.transform
         if (commit && sel != null && !nearlyIdentity(m)) {
             val k = m.lengthScale
+            val moveShape = shapeMover(sel, m)
             replace(sel, { s ->
-                StrokeEdits.transformed(s, m).also { n -> brushes.derive(n, s) { if (k != 1f) StrokeEdits.resized(it, k) else it } }
+                StrokeEdits.transformed(s, m).also { n -> brushes.derive(n, s) { moveShape(if (k != 1f) StrokeEdits.resized(it, k) else it) } }
             }) { e ->
                 ElementTransforms.transformed(e, m).let { if (it is TextElement && it !== e) elementPainter.fitted(it) else it }
             }
@@ -409,7 +463,10 @@ internal class SelectionLayer(
         if (index < 0) return
         val m = Affine.translate(PastePlacement.DUPLICATE_OFFSET, PastePlacement.DUPLICATE_OFFSET)
         val groups = ObjectOrder.Regrouper()
-        val copies = sel.strokes.map { s -> StrokeEdits.transformed(s, m).also { n -> brushes.derive(n, s) { it.copy(group = groups.of(it.group)) } } }
+        val renamed = ShapeEdits.renamer(sel.strokes.mapNotNull { brushes.brushOf(it)?.shape?.id })
+        val copies = sel.strokes.map { s ->
+            StrokeEdits.transformed(s, m).also { n -> brushes.derive(n, s) { ShapeEdits.copied(it.copy(group = groups.of(it.group)), renamed, m) } }
+        }
         val shapes = sel.elements.map { it.withId(PageElement.newId()).withGroup(groups.of(it.group)).placed(cx = it.cx + PastePlacement.DUPLICATE_OFFSET, cy = it.cy + PastePlacement.DUPLICATE_OFFSET) }
         edit { document?.editContent(index, addedStrokes = copies, elements = sel.page.elements + shapes) }
         select(sel.page, copies, shapes)
@@ -427,8 +484,9 @@ internal class SelectionLayer(
         val (dx, dy) = PastePlacement.offset(box, x, y, page.page.widthPt, page.page.heightPt)
         val m = Affine.translate(dx, dy)
         val groups = ObjectOrder.Regrouper()
+        val renamed = ShapeEdits.renamer(InkClipboard.items.mapNotNull { it.brush?.shape?.id })
         val pasted = InkClipboard.items.map { item ->
-            StrokeEdits.transformed(item.stroke, m).also { n -> item.brush?.let { brushes.put(n, it.copy(group = groups.of(it.group))) } }
+            StrokeEdits.transformed(item.stroke, m).also { n -> item.brush?.let { brushes.put(n, ShapeEdits.copied(it.copy(group = groups.of(it.group)), renamed, m)) } }
         }
         pasteOffer = null
         val shapes = InkClipboard.elements.map { it.withId(PageElement.newId()).withGroup(groups.of(it.group)).placed(cx = it.cx + dx, cy = it.cy + dy) }
@@ -573,10 +631,66 @@ internal class SelectionLayer(
         val changed = LinkedHashMap<String, PageElement>()
         for (e in sel.elements) changed[e.id] = makeElement(e)
         if (mapping.isEmpty() && changed.all { (id, e) -> sel.elements.first { it.id == id } === e }) return
-        edit { document?.editContent(index, replacements = mapping, elements = sel.page.elements.map { changed[it.id] ?: it }) }
+        // Connectors glued to shapes that moved follow them, in the same undo step (CANVAS-17).
+        val all = LinkedHashMap(mapping).apply { putAll(followers(sel, mapping)) }
+        edit { document?.editContent(index, replacements = all, elements = sel.page.elements.map { changed[it.id] ?: it }) }
         val shapes = changed.values.toList()
         selection = Selected(sel.page, after, shapes, boxOf(after, shapes) ?: sel.box)
         invalidate()
+    }
+
+    /** The shapes on [page] (except [skip] ids), as their stored records. */
+    private fun shapesOn(page: DocumentPage, skip: Set<String> = emptySet()): List<ShapeInfo> =
+        page.strokes.mapNotNull { brushes.brushOf(it)?.shape?.takeIf { s -> s.id !in skip } }
+
+    /** How the stored shape of a stroke in [sel] changes when it moves by [m] (connector ends re-glue where they land). */
+    private fun shapeMover(sel: Selected, m: Affine): (InkBrush) -> InkBrush {
+        val ids = sel.strokes.mapNotNullTo(HashSet()) { brushes.brushOf(it)?.shape?.id }
+        if (ids.isEmpty()) return { it }
+        val others = shapesOn(sel.page, ids)
+        val tolerance = GLUE_DP * density / (pages.layout?.scale ?: 1f) * RELINK_SHARE
+        return { b -> ShapeEdits.moved(b, m, ids, others, tolerance) }
+    }
+
+    /** Connector strokes on [sel]'s page, not selected, with an end glued to one of the shapes [ids]. */
+    private fun connectorsOf(sel: Selected, ids: Set<String>): List<Pair<Stroke, ShapeInfo>> {
+        if (ids.isEmpty()) return emptyList()
+        val picked = identitySet(sel.strokes)
+        return sel.page.strokes.mapNotNull { s ->
+            val info = brushes.brushOf(s)?.shape ?: return@mapNotNull null
+            if (s in picked || !ShapeGeometry.isConnector(info)) return@mapNotNull null
+            if (info.start?.targetId in ids || info.end?.targetId in ids) s to info else null
+        }
+    }
+
+    /** Re-drawn connectors (not in [sel]) whose glued ends must follow the shapes [mapping] moved. */
+    private fun followers(sel: Selected, mapping: Map<Stroke, Stroke>): Map<Stroke, Stroke> {
+        val moved = HashMap<String, ShapeInfo>()
+        for ((old, new) in mapping) {
+            val before = brushes.brushOf(old)?.shape ?: continue
+            val after = brushes.brushOf(new)?.shape ?: continue
+            if (before.points != after.points) moved[after.id] = after
+        }
+        if (moved.isEmpty()) return emptyMap()
+        val picked = identitySet(sel.strokes)
+        val byId = HashMap<String, Stroke>()
+        val connectors = ArrayList<ShapeInfo>()
+        for (s in sel.page.strokes) {
+            if (s in picked) continue
+            val info = brushes.brushOf(s)?.shape ?: continue
+            if (!ShapeGeometry.isConnector(info)) continue
+            if (info.start?.targetId !in moved && info.end?.targetId !in moved) continue
+            connectors += info
+            byId[info.id] = s
+        }
+        val out = LinkedHashMap<Stroke, Stroke>()
+        for ((id, redrawn) in ShapeGeometry.follow(connectors, moved)) {
+            val old = byId[id] ?: continue
+            val clean = ShapeStroke.build(redrawn.first, old, ShapeStroke.samplesOf(old)).stroke
+            brushes.derive(clean, old) { it.copy(shape = redrawn.second) }
+            out[old] = clean
+        }
+        return out
     }
 
     /**
@@ -587,7 +701,8 @@ internal class SelectionLayer(
         val sel = selection ?: return false
         if (gesture != null || sel.elements.any { it.locked }) return false
         val m = Affine.translate(dx, dy)
-        replace(sel, { s -> StrokeEdits.transformed(s, m).also { n -> brushes.derive(n, s) { it } } }) { e -> ElementTransforms.transformed(e, m) }
+        val moveShape = shapeMover(sel, m)
+        replace(sel, { s -> StrokeEdits.transformed(s, m).also { n -> brushes.derive(n, s, moveShape) } }) { e -> ElementTransforms.transformed(e, m) }
         notifyMenu()
         return true
     }
@@ -726,9 +841,11 @@ internal class SelectionLayer(
                 ink.draw(canvas, previewStrokes, full)
             }
             canvas.restore()
+            if (followPreview.isNotEmpty()) ink.draw(canvas, followPreview, matrix)
         }
         drawBox(canvas, gestureBox.takeIf { g != null } ?: padded(sel.box), m, showHandles = g == null)
         if (g != null) guides?.let { drawGuides(canvas, it, sel.page) }
+        if (g != null) glueMove?.let { drawGlue(canvas, it, sel.page) }
     }
 
     /** The snap guides across the whole page, thin and in the selection color. */
@@ -746,6 +863,20 @@ internal class SelectionLayer(
             pts[0] = 0f; pts[1] = y; pts[2] = w; pts[3] = y
             matrix.mapPoints(pts)
             canvas.drawLine(pts[0], pts[1], pts[2], pts[3], line)
+        }
+    }
+
+    /** Glue markers (rings on the points the shapes snapped together at) and alignment guides. */
+    private fun drawGlue(canvas: Canvas, move: ShapeGlue.Move, page: DocumentPage) {
+        line.color = color
+        val p = FloatArray(4)
+        for (mk in move.markers) {
+            p[0] = mk.x; p[1] = mk.y
+            matrix.mapPoints(p, 0, p, 0, 1)
+            canvas.drawCircle(p[0], p[1], GLUE_MARK_DP * density, line)
+        }
+        if (move.guideX != null || move.guideY != null) {
+            drawGuides(canvas, SnapGuides.Snap(0f, 0f, move.guideX, move.guideY), page)
         }
     }
 
@@ -900,6 +1031,11 @@ internal class SelectionLayer(
 
         /** A moving box catches a snap line this close (screen dp, so it feels the same at every zoom). */
         private const val SNAP_DP = 6f
+
+        /** CANVAS-17: moving shapes glue onto others this close (screen dp); a moved line's end re-glues within a share of it. */
+        private const val GLUE_DP = 14f
+        private const val RELINK_SHARE = 0.35f
+        private const val GLUE_MARK_DP = 7f
         private const val MIN_STEP_DP = 1.5f
         private const val TAP_DP = 12f
         private const val MOVE_EPS = 0.5f

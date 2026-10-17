@@ -341,4 +341,22 @@
         <item quantity="one">Move %1$d page</item>
         <item quantity="other">Move %1$d pages</item>
     </plurals>
+    <!-- CANVAS-17: hold-to-shape ghost label -->
+    <string name="shape_line">Line</string>
+    <string name="shape_arrow">Arrow</string>
+    <string name="shape_circle">Circle</string>
+    <string name="shape_ellipse">Ellipse</string>
+    <string name="shape_rectangle">Rectangle</string>
+    <string name="shape_square">Square</string>
+    <string name="shape_triangle">Triangle</string>
+    <string name="shape_polygon">Polygon</string>
+    <string name="shape_diamond">Diamond</string>
+    <string name="shape_star">Star</string>
+    <string name="shape_polyline">Polyline</string>
+    <string name="shape_hint_perfect">perfect</string>
+    <string name="shape_hint_right_angles">90°</string>
+    <string name="shape_hint_horizontal">horizontal</string>
+    <string name="shape_hint_vertical">vertical</string>
+    <string name="shape_hint_diagonal">45°</string>
+    <string name="shape_hint_glued">snapped</string>
 </resources>
