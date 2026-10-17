@@ -51,6 +51,7 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -431,6 +432,8 @@ fun EditorScreen(
     var pageOrigin by remember { mutableStateOf(Offset.Zero) }
     var pageNumber by remember { mutableStateOf(1 to 1) }
     var managerPage by remember { mutableStateOf<Int?>(null) }
+    val pageInsert = rememberPageInsertFlow(document, viewModel.session) { canvas?.currentPage?.coerceAtLeast(0) ?: 0 }
+    SideEffect { pageInsert.onInserted = { first -> canvas?.scrollToPage(first) } }
     var selectionMenu by remember { mutableStateOf<PagedDocumentView.SelectionMenu?>(null) }
     var exporting by remember { mutableStateOf(false) }
     // TPL-01: on a Smart Board page, Smart Board asks: continue this page (add a photo) or new pages.
@@ -611,7 +614,7 @@ fun EditorScreen(
                 page?.page?.let { onSmartBoard(viewModel.notebookId, it, null, null) }
             }
         },
-        pagesMenu = { PaperMenuButton(canvas, onManage = { picker = null; managerPage = canvas?.currentPage?.coerceAtLeast(0) ?: 0 }) },
+        pagesMenu = { PaperMenuButton(canvas, onManage = { picker = null; managerPage = canvas?.currentPage?.coerceAtLeast(0) ?: 0 }, insert = pageInsert) },
         onOpenSettings = onOpenSettings,
         onExport = { picker = null; lock.beforeExport { exporting = true } },
         lock = lock,
@@ -1118,8 +1121,10 @@ fun EditorScreen(
                     managerPage = null
                     if (page != null) canvas?.scrollToPage(page)
                 },
+                insert = pageInsert,
             )
         }
+        pageInsert.Dialogs()
 
         // ---- TPL-01: on a Smart Board page, continue it (add a photo) or start new pages ----
         smartBoardChoice?.let { index ->
