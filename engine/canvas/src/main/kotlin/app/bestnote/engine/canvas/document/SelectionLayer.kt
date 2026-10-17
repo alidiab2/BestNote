@@ -73,6 +73,9 @@ internal class SelectionLayer(
 
     var listener: PagedDocumentView.SelectionListener? = null
 
+    /** A tap with the lasso selected this (unlocked) element on its own, e.g. to open an equation's editor (MATH-01). */
+    var elementTapListener: ((PageElement) -> Unit)? = null
+
     val hasSelection: Boolean get() = selection != null
 
     /** A lasso or a transform is under the pen. */
@@ -309,6 +312,7 @@ internal class SelectionLayer(
                 } else {
                     val (strokes, elements) = withGroupMates(d.page, emptyList(), listOf(hit))
                     select(d.page, strokes, elements)
+                    if (strokes.isEmpty() && elements.size == 1) elementTapListener?.invoke(hit)
                 }
                 return invalidate()
             }
@@ -509,7 +513,11 @@ internal class SelectionLayer(
     fun recolor(colorArgb: Int) {
         val sel = selection ?: return
         replace(sel, { s -> StrokeEdits.recolored(s, colorArgb).also { n -> brushes.derive(n, s) { StrokeEdits.recolored(it, colorArgb) } } }) { e ->
-            if (e is TextElement) e.copy(colorArgb = colorArgb) else e
+            when (e) {
+                is TextElement -> e.copy(colorArgb = colorArgb)
+                is app.bestnote.core.model.EquationElement -> e.copy(colorArgb = colorArgb)
+                else -> e
+            }
         }
         notifyMenu()
     }
@@ -681,7 +689,7 @@ internal class SelectionLayer(
             return l.onSelectionMenu(
                 PagedDocumentView.SelectionMenu(
                     sel.strokes.size + sel.elements.size, pts[0], pts[1], pts[2], pts[3],
-                    strokes = sel.strokes.size, element = singleElement, texts = sel.elements.count { it is TextElement },
+                    strokes = sel.strokes.size, element = singleElement, texts = sel.elements.count { it is TextElement || it is app.bestnote.core.model.EquationElement },
                     fillable = sel.strokes.count { isClosed(it) },
                     filled = sel.strokes.count { StrokeFills.of(it) != null },
                     canGroup = canGroup(sel),

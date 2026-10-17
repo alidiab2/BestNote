@@ -8,7 +8,7 @@ Open-source Android handwriting notes app (Kotlin, Compose, androidx.ink). Read 
 - Tick the task box in the workstream file when the task is done.
 
 ## Rules
-- Module dependencies: `app → feature → engine/ai → core`. No `feature` → `feature`. `core:model`, `core:common`, `core:storage`, `engine:recognition`, `engine:layout`, `ai:vision-api` and `ai:math` stay pure JVM.
+- Module dependencies: `app → feature → engine/ai → core`. No `feature` → `feature`. `core:model`, `core:common`, `core:storage`, `engine:recognition`, `engine:layout`, `engine:mathtype`, `ai:vision-api` and `ai:math` stay pure JVM.
 - Smart Board AI: `Prompts.EXPERT_STUDENT` is the foundational persona. Behavior it asks for must also be enforced in `:engine:layout` (see `docs/workstreams/12-smart-board-ai.md`).
 - Versions only in `gradle/libs.versions.toml`. Shared build config in `build-logic/convention` (`bestnote.*` plugins).
 - UI: theme and `Motion` tokens from `:core:designsystem` only. Nothing animates under an active pen.

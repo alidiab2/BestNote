@@ -64,6 +64,7 @@ private val FontLicenses = listOf(
     "IBM Plex Sans Arabic" to "licenses/OFL-IBMPlexSansArabic.txt",
     "Caveat" to "licenses/OFL-Caveat.txt",
     "Gveret Levin" to "licenses/OFL-GveretLevin.txt",
+    "STIX Two Math (equations)" to "licenses/OFL-STIXTwoMath.txt",
 )
 
 /** Libraries in the app, all Apache License 2.0. */

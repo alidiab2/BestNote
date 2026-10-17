@@ -18,6 +18,9 @@ dependencies {
     implementation(projects.ai.visionProviders)
     // AI-08 Tidy: the neat handwriting is written by the Smart Board hand.
     implementation(projects.engine.handwriting)
+    // MATH-01: handwriting → typeset equations (typesetter, palette, LaTeX sanitizing).
+    implementation(projects.engine.mathtype)
+    implementation(projects.ai.math)
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.compose.material.icons.extended)
     implementation(libs.androidx.activity.compose)

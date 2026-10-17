@@ -224,6 +224,37 @@
     <string name="text_strike">Strikethrough</string>
     <string name="text_more">More formatting</string>
     <string name="text_done_typing">Done typing</string>
+    <!-- MATH-01: handwriting → typeset equations -->
+    <string name="selection_convert_equation">Convert to equation</string>
+    <string name="selection_copy_latex">Copy LaTeX</string>
+    <string name="equation_title">Convert to equation</string>
+    <string name="equation_no_provider">Reading handwritten maths uses your AI provider. Add one in Settings → Smart Board AI, or type the LaTeX yourself. (Reading maths on the device is coming later.)</string>
+    <string name="equation_open_settings">Open Settings</string>
+    <string name="equation_type_instead">Type it</string>
+    <string name="equation_reading">Reading your maths…</string>
+    <string name="equation_no_math">No maths found in that handwriting.</string>
+    <string name="equation_failed">The AI provider didn\'t answer. Check Settings → Smart Board AI and try again.</string>
+    <string name="equation_needs_ai">Reading handwriting needs an AI provider. Add one in Settings → Smart Board AI.</string>
+    <string name="equation_ai_problem">The AI\'s answer needs fixing (%1$s). Correct the LaTeX below.</string>
+    <string name="equation_latex">LaTeX</string>
+    <string name="equation_keep_ink">Keep my handwriting</string>
+    <string name="equation_empty_preview">The equation appears here as you type.</string>
+    <string name="equation_edit_title">Equation</string>
+    <string name="equation_copy_latex">Copy LaTeX</string>
+    <string name="equation_copied">LaTeX copied</string>
+    <string name="equation_done">Done</string>
+    <string name="equation_next_slot">Next box</string>
+    <string name="equation_size">Size %1$d</string>
+    <string name="equation_rewrite">Rewrite by hand</string>
+    <string name="equation_rewrite_hint">Write the part again. It replaces the selected LaTeX, or goes in at the cursor.</string>
+    <string name="equation_read_pad">Read</string>
+    <string name="equation_clear_pad">Clear</string>
+    <string name="equation_group_structures">Structures</string>
+    <string name="equation_group_calculus">Calculus</string>
+    <string name="equation_group_matrices">Matrices</string>
+    <string name="equation_group_greek">Greek</string>
+    <string name="equation_group_relations">Relations</string>
+    <string name="equation_group_arrows">Arrows</string>
 
     <!-- PAGES-05: insert pages from a PDF or an image -->
     <string name="insert_from_pdf">From PDF</string>

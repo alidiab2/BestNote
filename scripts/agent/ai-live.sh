@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ONE real Smart Board call with the owner's DeepSeek key (limited budget: the owner asked for few calls).
-# Usage: scripts/agent/ai-live.sh IMAGE [template=study-columns] [notes=ar] [terms=he] [note="text to the AI"] [rtl=1] [model=deepseek-flash]
+# Usage: scripts/agent/ai-live.sh IMAGE [mode=equation] [template=study-columns] [notes=ar] [terms=he] [note="text to the AI"] [rtl=1] [model=deepseek-flash]
 # Output in build/ai-live/<timestamp>/: notes.json (parsed elements), raw.txt (provider answer, key redacted), summary.txt.
 set -euo pipefail
 cfg="$HOME/.config/bestnote"

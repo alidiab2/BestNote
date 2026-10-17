@@ -12,7 +12,7 @@ The work is split into **12 workstreams**. Each one owns specific modules, so pe
 | [06](06-pages-and-templates.md) | Pages & Templates | `PAGES` | templates in `:core:model`, page manager UI | M1 |
 | [07](07-library.md) | Library & Organization | `LIB` | `:feature:library` | M1 |
 | [08](08-design-system.md) | Design System & Motion | `DS` | `:core:designsystem`, `:core:ui`, editor chrome | M1 |
-| [09](09-text-and-media.md) | Text & Media | `TEXT`, `MEDIA` | text/image/audio elements | M2 |
+| [09](09-text-and-media.md) | Text & Media | `TEXT`, `MEDIA` | text/image/audio elements, `:engine:mathtype` (MATH) | M2 |
 | [10](10-recognition-and-search.md) | Recognition & Search | `REC` | `:engine:recognition` | M3 |
 | [11](11-quality-and-release.md) | Quality, Performance & Release | `QA` | `.github/`, benchmarks, release | M0 |
 | [12](12-smart-board-ai.md) | Smart Board AI ("expert student") | `AI` | `:ai:*`, `:engine:layout` | M2 |

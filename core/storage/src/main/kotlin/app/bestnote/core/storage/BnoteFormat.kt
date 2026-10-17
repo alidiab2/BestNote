@@ -1,6 +1,7 @@
 package app.bestnote.core.storage
 
 import app.bestnote.core.model.CropRect
+import app.bestnote.core.model.EquationElement
 import app.bestnote.core.model.ImageElement
 import app.bestnote.core.model.AudioRecording
 import app.bestnote.core.model.Notebook
@@ -88,7 +89,7 @@ internal data class PageJson(
     val elements: List<ElementJson> = emptyList(),
 )
 
-/** One page element. [type] is `image` or `text`; fields of the other kind stay at their defaults. */
+/** One page element. [type] is `image`, `text` or `equation`; fields of the other kinds stay at their defaults. */
 @Serializable
 internal data class ElementJson(
     val type: String,
@@ -123,6 +124,10 @@ internal data class ElementJson(
     val group: String? = null,
     /** Per-paragraph formats (v9, TEXT-04); absent = every paragraph plain. */
     val paras: List<ParaJson> = emptyList(),
+    // equation (v10, MATH-01): the LaTeX source; size and color use [size] and [color]
+    val latex: String? = null,
+    /** False for an inline (text-style) formula. */
+    val display: Boolean = true,
 )
 
 /** One paragraph's format: [st] a [ParagraphStyle] name, [list] a [ListStyle] name or null (the box's), [ind] indent level. */
@@ -152,15 +157,15 @@ internal data class RunJson(
  * Shared by the unpacked directory store and the zip archive so both stay byte-identical.
  */
 object BnoteFormat {
-    /** Current layout. History: 1 = DOC-01 draft, 2 = page metadata always carries `paper`, 3 = pages carry `elements`, 4 = manifest lists audio `recordings`, 5 = manifest lists `extras`, 6 = pages may have an edit journal `pages/<id>.jrnl`, 7 = strokes may carry a shape fill, 8 = text elements may carry underline/strike, style runs, lists and line spacing, 9 = text elements may carry paragraph formats (see [FormatMigrations]). */
-    const val VERSION = 9
+    /** Current layout. History: 1 = DOC-01 draft, 2 = page metadata always carries `paper`, 3 = pages carry `elements`, 4 = manifest lists audio `recordings`, 5 = manifest lists `extras`, 6 = pages may have an edit journal `pages/<id>.jrnl`, 7 = strokes may carry a shape fill, 8 = text elements may carry underline/strike, style runs, lists and line spacing, 9 = text elements may carry paragraph formats, 10 = pages may carry `equation` elements (see [FormatMigrations]). */
+    const val VERSION = 10
 
     /**
      * Format of a sealed notebook's stub manifest (LIB-11). Sealed notebooks are recognised by their `sealed`
-     * key, not by this number; it only has to be newer than what older apps read, so they refuse the notebook. 10, not 9: TEXT-04 gives plain notebooks format 9.
+     * key, not by this number; it only has to be newer than what older apps read, so they refuse the notebook. 11, not 10: MATH-01 gives plain notebooks format 10.
      * Plain notebooks keep [VERSION].
      */
-    const val SEALED_FORMAT = 10
+    const val SEALED_FORMAT = 11
     const val MANIFEST = "manifest.json"
     const val PAGES_DIR = "pages/"
     const val ASSETS_DIR = "assets/"
@@ -313,6 +318,10 @@ object BnoteFormat {
             group = e.group,
             paras = Paragraphs.normalized(e.paragraphs, e.text).map { ParaJson(it.style.name, it.list?.name, it.indent) },
         )
+        is EquationElement -> ElementJson(
+            "equation", e.id, e.cx, e.cy, e.width, e.height, e.rotation, e.locked,
+            size = e.sizePt, color = e.colorArgb, group = e.group, latex = e.latex, display = e.display,
+        )
     }
 
     /** An element, or null for one this version cannot show (unknown type from a newer app, or unusable numbers). */
@@ -346,6 +355,10 @@ object BnoteFormat {
                     },
                     j.text.orEmpty(),
                 ),
+            )
+            "equation" -> EquationElement(
+                j.id, j.cx, j.cy, j.w, j.h, j.latex.orEmpty(),
+                j.size.coerceIn(EquationElement.MIN_SIZE_PT, EquationElement.MAX_SIZE_PT), j.color, j.rot, j.locked, j.group, j.display,
             )
             else -> null
         }

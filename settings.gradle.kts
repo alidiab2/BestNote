@@ -48,6 +48,7 @@ include(":engine:layout")
 include(":engine:handwriting")
 include(":engine:export")
 include(":engine:templates")
+include(":engine:mathtype")
 
 include(":ai:math")
 include(":ai:vision-api")

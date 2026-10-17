@@ -49,6 +49,9 @@ class GeminiVisionProvider(
     override suspend fun transcribe(selection: VisionImage, language: String?): AiDocument =
         generate(Prompts.transcribe(language), Prompts.TRANSCRIBE_USER, selection)
 
+    override suspend fun readEquation(selection: VisionImage): AiDocument =
+        generate(Prompts.equation(), Prompts.EQUATION_USER, selection)
+
     override suspend fun completeText(system: String, turns: List<app.bestnote.ai.vision.ChatTurn>, json: Boolean): String {
         val key = settings.apiKey()?.trim()?.takeIf { it.isNotEmpty() } ?: throw VisionError.MissingKey()
         val model = settings.model().trim().ifEmpty { GeminiConfig.DEFAULT_MODEL }

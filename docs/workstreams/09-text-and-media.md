@@ -10,6 +10,7 @@
 | [x] TEXT-02 | Formatting: font, size, color, bold/italic/underline, alignment, lists | M2 | M | TEXT-01 | Arabic text shapes and aligns correctly |
 | [ ] TEXT-03 | Typed text document type | M4 | L | TEXT-02 | — |
 | [x] TEXT-04 | Keyboard typing and design: tap-to-type on the canvas (in place, IME/bidi), format bar above the keyboard, paragraph styles (Title…Code), Text shortcuts + Markdown autoformat, snap guides + arrow nudging, caret kept above the keyboard | M2 | L | TEXT-02, SPEN-10 | Paragraph styles persist in `.bnote` v9; v8 files still read |
+| [x] MATH-01 | Handwriting → equations: lasso → "Convert to equation" (AI provider, strict LaTeX prompt, `LatexSanitizer`; `EquationRecognizer` seam for on-device AI-10), `EquationElement` typeset by `:engine:mathtype` (TeX spacing/styles on the STIX Two Math MATH table, OFL; vector glyph outlines on canvas and in PDF), editor sheet (live preview, structure palette, LaTeX field with error highlight, rewrite by hand, copy LaTeX) | M2 | L | TEXT-01, REC-05 | Equations persist in `.bnote` v10 (v9 files still read; locked notebooks keep them); typesetting unit-tested |
 | [x] MEDIA-01 | Insert image: picker, camera, paste, drag-and-drop | M2 | M | — | Large images downsampled and stored once per notebook |
 | [x] MEDIA-02 | Crop, rotate, resize image; lock image | M2 | M | MEDIA-01 | — |
 | [ ] MEDIA-03 | Local sticker packs (files, importable) | M3 | M | MEDIA-01 | — |

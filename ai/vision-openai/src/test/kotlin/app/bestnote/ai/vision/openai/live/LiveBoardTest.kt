@@ -7,6 +7,7 @@ import app.bestnote.ai.vision.ProviderCredentials
 import app.bestnote.ai.vision.VisionDiagnostics
 import app.bestnote.ai.vision.VisionError
 import app.bestnote.ai.vision.VisionImage
+import app.bestnote.ai.vision.equationLatex
 import app.bestnote.ai.vision.openai.OpenAiVisionProvider
 import app.bestnote.engine.layout.AiInstructions
 import app.bestnote.engine.layout.NoteTemplates
@@ -43,6 +44,7 @@ class LiveBoardTest {
             override suspend fun model() = args["model"] ?: env.getValue("DEEPSEEK_MODEL")
             override suspend fun baseUrl() = env.getValue("DEEPSEEK_BASE_URL")
         }
+        if (args["mode"] == "equation") return@runBlocking equation(creds, args)
         val template = NoteTemplates.builtIns().first { it.id == (args["template"] ?: "study-columns") }.let {
             it.copy(ai = it.ai.copy(notesLanguage = args["notes"]?.ifBlank { null }, termsLanguage = args["terms"]?.ifBlank { null }, note = args["note"].orEmpty()))
         }
@@ -63,6 +65,23 @@ class LiveBoardTest {
         File(out, "summary.txt").writeText(
             "model=$model result=ok canary=${image.canary} (model returned it) prompt_tokens=${promptTokens()} " +
                 "ms=${System.currentTimeMillis() - started} elements=${doc.flatten().size} kinds=${doc.flatten().groupingBy { it.element }.eachCount()}\n",
+        )
+    }
+
+    /** MATH-01 "Convert to equation": `ai-live.sh IMAGE mode=equation` reads handwritten maths as LaTeX (one call). */
+    private suspend fun equation(creds: ProviderCredentials, args: Map<String, String>) {
+        VisionDiagnostics.captureRaw = true
+        val started = System.currentTimeMillis()
+        val image = jpeg(File(args.getValue("image")))
+        val out = File(args.getValue("out")).apply { mkdirs() }
+        val latex = try {
+            OpenAiVisionProvider(OkHttpClient(), creds).readEquation(image).equationLatex()
+        } finally {
+            File(out, "raw.txt").writeText(VisionDiagnostics.latest()?.raw.orEmpty())
+        }
+        File(out, "equation.tex").writeText(latex + "\n")
+        File(out, "summary.txt").writeText(
+            "model=${creds.model()} mode=equation result=ok prompt_tokens=${promptTokens()} ms=${System.currentTimeMillis() - started}\nlatex=$latex\n",
         )
     }
 

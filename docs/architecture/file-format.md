@@ -28,13 +28,14 @@ notebook.bnote
 On disk inside the app, a notebook lives **unpacked** as a directory with the same layout, which makes partial writes cheap. The `.bnote` zip is produced for export, share and backup.
 
 ## Versioning
-- `manifest.json` and every `pages/<id>.json` carry `"format": N` (current: **6**). Readers refuse versions newer than they know and offer "update the app".
+- `manifest.json` and every `pages/<id>.json` carry `"format": N` (current: **10**). Readers refuse versions newer than they know and offer "update the app".
 - Older versions are upgraded in memory on read by `FormatMigrations` (one step per version, on the JSON tree); the next save writes the current version.
 - v1 → v2: page metadata always states `paper` (v1 drafts could omit it, meaning White).
 - v3 → v4: the manifest may list `recordings` (MEDIA-04): `{id, title?, startedAtMillis, durationMillis}`; each one's audio is `assets/audio/<id>.m4a` (AAC, mono). Absent means none, so the step only stamps the version.
 - v4 → v5: the manifest may list `extras` (TPL-01): names of small notebook-level JSON records stored at `extras/<name>` (`[a-z0-9_-]{1,40}.json`), rewritten on every save. `smartboard.json` holds Smart Board's notebook glossary and, per insert, the template id, page ids and the page's notes in the compact element format (for follow-up photos). Absent means none, so the step only stamps the version.
 - v5 → v6: a page may have an edit journal `pages/<id>.jrnl` next to its chunk (DOC-11, see *Page journal*). The JSON is unchanged, so the step only stamps the version; a v5 app refuses v6 notebooks rather than save over strokes that only live in a journal.
-- Format **9** is the stub manifest of a **sealed (locked) notebook** (LIB-11, see [locked-notebooks.md](locked-notebooks.md)). Plain notebooks stay at the current plain version; a sealed one is recognised by its `sealed` key, and its number only has to be newer than what older apps read, so they refuse it.
+- v9 → v10: pages may carry `equation` elements (MATH-01): `{"type": "equation", id, cx, cy, w, h, rot, locked, group?, "latex": "<LaTeX source>", "size": <pt per em>, "color": <ARGB>, "display": true|false}`. The frame is the typeset formula plus a margin; readers typeset `latex` (STIX Two Math metrics) and scale it to fit the frame. Absent means none, so the step only stamps the version; a v9 app refuses v10 notebooks rather than drop equations.
+- Format **11** (9 before MATH-01 and TEXT-04 took 9 and 10) is the stub manifest of a **sealed (locked) notebook** (LIB-11, see [locked-notebooks.md](locked-notebooks.md)). Plain notebooks stay at the current plain version; a sealed one is recognised by its `sealed` key, and its number only has to be newer than what older apps read, so they refuse it.
 - Every migration ships as a test fixture (`core/storage/src/test/resources/fixtures/v<N>-notebook/`) with a test in `FormatMigrationTest`.
 
 ## Backup (DOC-08)
@@ -85,7 +86,7 @@ A record removes strokes by index (in the list before the edit) and inserts the 
 ## Sealed (locked) notebooks (LIB-11)
 A locked notebook keeps the unpacked layout, but nothing in it is readable without its key:
 ```
-manifest.json      stub, plaintext: {"format": 9, "notebook": {id, title, dates, template, pageCount}, "pages": [], "sealed": header}
+manifest.json      stub, plaintext: {"format": 11, "notebook": {id, title, dates, template, pageCount}, "pages": [], "sealed": header}
 data/<32 hex>.bin  every package entry (real manifest, page JSON, .ink, assets, extras), encrypted
 ```
 Entry file names are `HMAC-SHA256(nameKey, entry path)`, so page ids and asset names are hidden. Each file is

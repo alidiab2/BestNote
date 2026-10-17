@@ -80,6 +80,20 @@ object RoughMeasurer : BlockMeasurer {
 }
 
 /** A [VisionProvider.transcribe] answer as the lines to type, in reading order. */
+/**
+ * The LaTeX of a [VisionProvider.readEquation] answer: the math blocks in order, several joined as lines
+ * (`\\`); a block with only `text` counts too (some models put the LaTeX there). Empty = no maths seen.
+ */
+fun AiDocument.equationLatex(): String {
+    val ordered = blocks.withIndex().sortedWith(compareBy({ it.value.order ?: Int.MAX_VALUE }, { it.index })).map { it.value }
+    val parts = ordered.mapNotNull { b ->
+        b.latex?.takeIf { it.isNotBlank() }
+            ?: b.steps?.mapNotNull { s -> s.latex?.takeIf(String::isNotBlank) }?.takeIf { it.isNotEmpty() }?.joinToString(" \\\\ ")
+            ?: b.text?.takeIf { it.isNotBlank() }
+    }.map { it.trim() }
+    return parts.joinToString(" \\\\ ")
+}
+
 fun AiDocument.transcriptLines(): List<String> {
     val ordered = blocks.withIndex().sortedWith(compareBy({ it.value.order ?: Int.MAX_VALUE }, { it.index })).map { it.value }
     return ordered.flatMap { b ->

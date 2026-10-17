@@ -92,6 +92,13 @@ interface VisionProvider {
         throw VisionError.BadResponse("this provider cannot transcribe handwriting")
 
     /**
+     * Rasterised handwritten maths → its LaTeX ("Convert to equation", MATH-01), as one `math` block
+     * ([Prompts.equation]). No blocks means the model saw no maths. Read it with [equationLatex].
+     */
+    suspend fun readEquation(selection: VisionImage): AiDocument =
+        throw VisionError.BadResponse("this provider cannot read equations")
+
+    /**
      * Template first (TPL-01): board photo → the template's built-in elements in the compact format
      * ([NoteWire], [NoteSchema], [NotePrompts]). With [NotesRequest.current] (a follow-up photo) the answer
      * is ONE merged list of the page's notes and the new board. Providers without the element format

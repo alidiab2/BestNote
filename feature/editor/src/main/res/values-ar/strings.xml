@@ -224,6 +224,37 @@
     <string name="text_strike">يتوسطه خط</string>
     <string name="text_more">تنسيق إضافي</string>
     <string name="text_done_typing">إنهاء الكتابة</string>
+    <!-- MATH-01: handwriting → typeset equations -->
+    <string name="selection_convert_equation">تحويل إلى معادلة</string>
+    <string name="selection_copy_latex">نسخ LaTeX</string>
+    <string name="equation_title">تحويل إلى معادلة</string>
+    <string name="equation_no_provider">قراءة الرياضيات المكتوبة بخط اليد تستخدم مزوّد الذكاء الاصطناعي. أضِف مزوّدًا من الإعدادات ← الذكاء الاصطناعي للسبورة، أو اكتب LaTeX بنفسك. (قراءة الرياضيات على الجهاز ستأتي لاحقًا.)</string>
+    <string name="equation_open_settings">فتح الإعدادات</string>
+    <string name="equation_type_instead">اكتبها</string>
+    <string name="equation_reading">جارٍ قراءة المعادلة…</string>
+    <string name="equation_no_math">لم يُعثر على رياضيات في هذا الخط.</string>
+    <string name="equation_failed">لم يستجب مزوّد الذكاء الاصطناعي. تحقّق من الإعدادات ← الذكاء الاصطناعي للسبورة وحاول مجددًا.</string>
+    <string name="equation_needs_ai">قراءة خط اليد تحتاج مزوّد ذكاء اصطناعي. أضِفه من الإعدادات ← الذكاء الاصطناعي للسبورة.</string>
+    <string name="equation_ai_problem">إجابة الذكاء الاصطناعي تحتاج إلى تصحيح (%1$s). صحّح LaTeX أدناه.</string>
+    <string name="equation_latex">LaTeX</string>
+    <string name="equation_keep_ink">الإبقاء على خط يدي</string>
+    <string name="equation_empty_preview">تظهر المعادلة هنا أثناء الكتابة.</string>
+    <string name="equation_edit_title">معادلة</string>
+    <string name="equation_copy_latex">نسخ LaTeX</string>
+    <string name="equation_copied">تم نسخ LaTeX</string>
+    <string name="equation_done">تم</string>
+    <string name="equation_next_slot">الخانة التالية</string>
+    <string name="equation_size">الحجم %1$d</string>
+    <string name="equation_rewrite">إعادة الكتابة باليد</string>
+    <string name="equation_rewrite_hint">اكتب الجزء مرة أخرى. سيحلّ محل LaTeX المحدد، أو يُدرج عند المؤشر.</string>
+    <string name="equation_read_pad">قراءة</string>
+    <string name="equation_clear_pad">مسح</string>
+    <string name="equation_group_structures">البنى</string>
+    <string name="equation_group_calculus">التفاضل والتكامل</string>
+    <string name="equation_group_matrices">المصفوفات</string>
+    <string name="equation_group_greek">يونانية</string>
+    <string name="equation_group_relations">العلاقات</string>
+    <string name="equation_group_arrows">الأسهم</string>
 
     <!-- PAGES-05: insert pages from a PDF or an image -->
     <string name="insert_from_pdf">من PDF</string>

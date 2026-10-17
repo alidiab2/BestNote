@@ -13,6 +13,8 @@ dependencies {
     api(projects.engine.ink)
     api(projects.engine.stylus)
     api(projects.engine.layout)
+    // MATH-01: typeset equations, drawn as vector glyph outlines.
+    api(projects.engine.mathtype)
     implementation(projects.engine.recognition)
     implementation(libs.androidx.core.ktx)
 

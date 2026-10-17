@@ -272,7 +272,7 @@ class PagedDocumentView(context: Context) : FrameLayout(context), InProgressStro
         val strokes: Int = count,
         /** The selected picture or text box when it is the only thing selected (TEXT-01, MEDIA-02). */
         val element: PageElement? = null,
-        /** How many selected things are text boxes. */
+        /** How many selected things are text boxes or equations (they take a color). */
         val texts: Int = 0,
         /** How many selected strokes outline a closed shape that can be filled (INK-11). */
         val fillable: Int = 0,
@@ -290,6 +290,13 @@ class PagedDocumentView(context: Context) : FrameLayout(context), InProgressStro
         get() = selection.listener
         set(value) {
             selection.listener = value
+        }
+
+    /** A lasso tap selected this element on its own (MATH-01: an equation opens its editor). */
+    var elementTapListener: ((PageElement) -> Unit)?
+        get() = selection.elementTapListener
+        set(value) {
+            selection.elementTapListener = value
         }
 
     /** Lasso and selection color; the host passes a theme color. */
@@ -362,6 +369,9 @@ class PagedDocumentView(context: Context) : FrameLayout(context), InProgressStro
 
     /** [element] with its height fitted to its text (text boxes grow with their text). */
     fun fitted(element: TextElement): TextElement = ElementPainter().fitted(element)
+
+    /** [element] with its frame re-measured for its LaTeX and size (MATH-01). */
+    fun fitted(element: app.bestnote.core.model.EquationElement): app.bestnote.core.model.EquationElement = EquationRendering.fitted(element)
 
     fun clearSelection() = selection.clear()
     fun deleteSelection() = selection.delete()
