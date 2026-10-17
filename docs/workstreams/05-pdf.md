@@ -11,7 +11,7 @@
 | [ ] PDF-02 | (done: background-thread render at page-slot width, byte-bounded LRU, low-res placeholder, and past that resolution each CANVAS-06 tile renders its own PDF region, sharp at 500 % ([before/after](../qa/tiles/pdf02-500pct-before-after.png)); open: an OOM check on a real 4 GB device) Tiled render pipeline: zoom-dependent resolution, background thread, LRU bitmap pool | M2 | L | CANVAS-06 | Text stays sharp at 400%; no OOM on 4 GB devices |
 | [x] PDF-03 | Ink annotation layer over PDF pages (ink is stored per page in page points, the page is the PDF page's size) | M2 | M | PDF-02 | Ink aligns exactly at every zoom and after rotation |
 | [ ] PDF-04 | Text-aware highlighter (snaps to text lines when a text layer exists) | M2 | L | INK-03 | Highlight follows the line even when hand-drawn slightly off |
-| [ ] PDF-05 | Export with annotations (flattened or as PDF annotations) | M2 | L | — | Opens correctly in Acrobat, Chrome and Samsung Notes |
+| [x] PDF-05 | Export with annotations (done: flattened, imported pages merged with PDFBox so text stays vector/selectable; range + template options, Save to Files; open: Acrobat/Samsung Notes check) | M2 | L | — | Opens correctly in Acrobat, Chrome and Samsung Notes |
 | [ ] PDF-06 | Outline (table of contents) panel, multi-level | M3 | M | — | — |
 | [ ] PDF-07 | Bookmarks | M3 | S | — | — |
 | [ ] PDF-08 | Follow PDF links; user-created links between pages and notebooks | M3 | M | — | — |

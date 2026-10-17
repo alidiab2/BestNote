@@ -491,6 +491,7 @@ private fun LibraryDialogs(dialog: LibraryDialog?, state: LibraryUiState, ui: Li
                     runner = runner,
                     notebookId = item.id,
                     pageCount = item.pageCount,
+                    fileName = item.title,
                     onDismiss = dismiss,
                     startWith = if (dialog.share) ExportFormat.Pdf else null,
                 )

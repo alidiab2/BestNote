@@ -1,6 +1,13 @@
 package app.bestnote.engine.export
 
 import android.content.ActivityNotFoundException
+import android.net.Uri
+import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.selection.toggleable
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Switch
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -47,6 +54,7 @@ import kotlinx.coroutines.launch
  *
  * @param currentPage zero-based page being viewed, when opened from the editor; adds "This page".
  * @param beforeExport runs first (editor: flush autosave so the file holds what is on screen).
+ * @param fileName notebook title, the suggested name in the Save to Files picker.
  * @param startWith when set, starts exporting in that format immediately (the library's "Share").
  */
 @Composable
@@ -57,19 +65,25 @@ fun ExportDialog(
     onDismiss: () -> Unit,
     currentPage: Int? = null,
     startWith: ExportFormat? = null,
+    fileName: String = "Notebook",
     beforeExport: suspend () -> Unit = {},
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var format by remember { mutableStateOf(startWith ?: ExportFormat.Pdf) }
-    var onlyThisPage by remember { mutableStateOf(currentPage != null) }
+    var scopeChoice by remember { mutableStateOf(if (currentPage != null && pageCount > 1) ScopeChoice.This else ScopeChoice.All) }
+    var rangeText by remember { mutableStateOf("") }
+    var includeTemplate by remember { mutableStateOf(true) }
     var working by remember { mutableStateOf(false) }
     var done by remember { mutableIntStateOf(0) }
     var total by remember { mutableIntStateOf(0) }
     var error by remember { mutableStateOf<String?>(null) }
     var job by remember { mutableStateOf<Job?>(null) }
+    val rangeParse = remember(rangeText, pageCount) { ExportPlan.parseRange(rangeText, pageCount) }
+    val rangeInvalid = scopeChoice == ScopeChoice.Range && rangeParse !is RangeParse.Ok
+    val pagesApply = format != ExportFormat.Bnote && pageCount > 1
 
-    fun start() {
+    fun start(saveTo: Uri?) {
         error = null
         working = true
         done = 0
@@ -77,14 +91,25 @@ fun ExportDialog(
         job = scope.launch {
             try {
                 beforeExport()
-                val range = if (format == ExportFormat.Png && onlyThisPage && currentPage != null) PageRange.Single(currentPage) else PageRange.All
-                val result = runner.export(notebookId, format, range) { d, t -> done = d; total = t }
-                try {
-                    context.startActivity(runner.shareIntent(result))
+                val range = when {
+                    !pagesApply -> PageRange.All
+                    scopeChoice == ScopeChoice.This && currentPage != null -> PageRange.Single(currentPage)
+                    scopeChoice == ScopeChoice.Range -> PageRange.Pages((rangeParse as RangeParse.Ok).indices)
+                    else -> PageRange.All
+                }
+                val result = runner.export(notebookId, format, range, ExportOptions(includeTemplate)) { d, t -> done = d; total = t }
+                if (saveTo != null) {
+                    runner.saveTo(result, saveTo)
+                    Toast.makeText(context, R.string.export_saved, Toast.LENGTH_SHORT).show()
                     onDismiss()
-                } catch (e: ActivityNotFoundException) {
-                    error = e.message
-                    working = false
+                } else {
+                    try {
+                        context.startActivity(runner.shareIntent(result))
+                        onDismiss()
+                    } catch (e: ActivityNotFoundException) {
+                        error = e.message
+                        working = false
+                    }
                 }
             } catch (e: CancellationException) {
                 working = false
@@ -95,7 +120,9 @@ fun ExportDialog(
             }
         }
     }
-    LaunchedEffect(Unit) { if (startWith != null) start() }
+    // Save to Files: the system picker first, then the export writes straight into the chosen document.
+    val picker = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument(format.mime)) { uri -> if (uri != null) start(uri) }
+    LaunchedEffect(Unit) { if (startWith != null) start(null) }
 
     AlertDialog(
         onDismissRequest = { job?.cancel(); onDismiss() },
@@ -113,10 +140,31 @@ fun ExportDialog(
                         FormatRow(ExportFormat.Png, format, R.string.export_png, R.string.export_png_sub) { format = it }
                         FormatRow(ExportFormat.Bnote, format, R.string.export_bnote, R.string.export_bnote_sub) { format = it }
                     }
-                    if (format == ExportFormat.Png && currentPage != null && pageCount > 1) {
-                        Row(Modifier.selectableGroup().fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Spacing.M)) {
-                            ScopeChip(stringResource(R.string.export_this_page), onlyThisPage) { onlyThisPage = true }
-                            ScopeChip(stringResource(R.string.export_all_pages, pageCount), !onlyThisPage) { onlyThisPage = false }
+                    if (pagesApply) {
+                        Text(stringResource(R.string.export_pages_label), style = BestNoteTheme.type.caption, color = BestNoteTheme.colors.muted)
+                        Row(Modifier.selectableGroup().fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Spacing.S)) {
+                            ScopeChip(stringResource(R.string.export_all_pages, pageCount), scopeChoice == ScopeChoice.All) { scopeChoice = ScopeChoice.All }
+                            if (currentPage != null) ScopeChip(stringResource(R.string.export_this_page), scopeChoice == ScopeChoice.This) { scopeChoice = ScopeChoice.This }
+                            ScopeChip(stringResource(R.string.export_range), scopeChoice == ScopeChoice.Range) { scopeChoice = ScopeChoice.Range }
+                        }
+                        if (scopeChoice == ScopeChoice.Range) {
+                            OutlinedTextField(
+                                value = rangeText,
+                                onValueChange = { rangeText = it },
+                                singleLine = true,
+                                isError = rangeText.isNotEmpty() && rangeInvalid,
+                                label = { Text(stringResource(R.string.export_range_hint, pageCount)) },
+                                modifier = Modifier.fillMaxWidth(),
+                            )
+                        }
+                    }
+                    if (format != ExportFormat.Bnote) {
+                        Row(
+                            Modifier.fillMaxWidth().toggleable(includeTemplate, role = Role.Switch) { includeTemplate = it },
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text(stringResource(R.string.export_template), Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurface)
+                            Switch(checked = includeTemplate, onCheckedChange = null)
                         }
                     }
                     error?.let { Text(stringResource(R.string.export_failed, it), color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
@@ -124,7 +172,21 @@ fun ExportDialog(
             }
         },
         confirmButton = {
-            if (!working) ExportPill(stringResource(R.string.export_share), ::start)
+            if (!working) {
+                Row(horizontalArrangement = Arrangement.spacedBy(Spacing.S)) {
+                    if (format != ExportFormat.Png) {
+                        val name = ExportNames.fileBase(fileName) + "." + format.extension
+                        ExportPill(
+                            stringResource(R.string.export_save_files),
+                            { picker.launch(name) },
+                            enabled = !rangeInvalid,
+                            background = MaterialTheme.colorScheme.primaryContainer,
+                            foreground = MaterialTheme.colorScheme.onPrimaryContainer,
+                        )
+                    }
+                    ExportPill(stringResource(R.string.export_share), { start(null) }, enabled = !rangeInvalid)
+                }
+            }
         },
         dismissButton = {
             ExportPill(
@@ -136,6 +198,8 @@ fun ExportDialog(
         },
     )
 }
+
+private enum class ScopeChoice { All, This, Range }
 
 @Composable
 internal fun WorkingContent(done: Int, total: Int, label: String) {

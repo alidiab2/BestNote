@@ -976,6 +976,7 @@ fun EditorScreen(
                 notebookId = viewModel.notebookId,
                 pageCount = document.pages.size.coerceAtLeast(1),
                 currentPage = canvas?.currentPage?.coerceAtLeast(0) ?: 0,
+                fileName = state.title,
                 onDismiss = { exporting = false },
                 beforeExport = { viewModel.session.flush() },
             )

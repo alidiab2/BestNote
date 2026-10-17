@@ -120,4 +120,50 @@ class ExportRunnerInstrumentedTest {
         val pdf = runner.export(id, ExportFormat.Pdf).files.single()
         assertTrue("pdf has the page", pdf.length() > 1000)
     }
+
+    /** PDF-05: an imported PDF page keeps its text (vector, selectable) with ink on top; ranges and template toggle work. */
+    @Test fun annotatedImportedPdfKeepsTextAndRespectsRange(): Unit = runBlocking<Unit> {
+        val id = NotebookId("pdf05-test")
+        val pdfBytes = java.io.ByteArrayOutputStream().also { out ->
+            val doc = android.graphics.pdf.PdfDocument()
+            for (n in 1..2) {
+                val page = doc.startPage(android.graphics.pdf.PdfDocument.PageInfo.Builder(595, 842, n).create())
+                page.canvas.drawRect(0f, 0f, 200f, 100f, android.graphics.Paint().apply { color = Color.RED })
+                page.canvas.drawText("SELECTABLE SOURCE TEXT $n", 60f, 300f, android.graphics.Paint().apply { textSize = 28f })
+                doc.finishPage(page)
+            }
+            doc.writeTo(out)
+            doc.close()
+        }.toByteArray()
+        val ink = listOf(stroke(Tool.Pen, PenStyle.Ball, 0xFF1E2433.toInt(), 400f), stroke(Tool.Highlighter, PenStyle.Fountain, 0xFFF7D84A.toInt(), 290f))
+        val ref = { n: Int -> app.bestnote.core.model.PdfPageRef("assets/bg.pdf", n) }
+        val pkg = NotebookPackage(
+            Notebook(id, "Annotated", 1, 2, PaperTemplate.Blank, pageCount = 3),
+            listOf(
+                PageContent(Page(id, 0, PaperTemplate.Blank, pdf = ref(0)), InkChunkCodec.encode(ink), "page-0"),
+                PageContent(Page(id, 1, PaperTemplate.Ruled), InkChunkCodec.encode(ink), "page-1"),
+                PageContent(Page(id, 2, PaperTemplate.Blank, pdf = ref(1)), InkChunkCodec.encode(ink), "page-2"),
+            ),
+            mapOf("assets/bg.pdf" to pdfBytes),
+        )
+        val store = FileNotebookStore(File(context.cacheDir, "export-test-store-pdf05").also { it.deleteRecursively() })
+        store.write(pkg)
+        val runner = ExportRunner(context, store)
+
+        val all = runner.export(id, ExportFormat.Pdf).files.single()
+        com.tom_roush.pdfbox.android.PDFBoxResourceLoader.init(context)
+        com.tom_roush.pdfbox.pdmodel.PDDocument.load(all).use { d ->
+            assertEquals(3, d.numberOfPages)
+            val text = com.tom_roush.pdfbox.text.PDFTextStripper().getText(d)
+            assertTrue("source text stays selectable: $text", text.contains("SELECTABLE SOURCE TEXT 1") && text.contains("SELECTABLE SOURCE TEXT 2"))
+        }
+        File("/sdcard/Download").takeIf { it.canWrite() }?.let { all.copyTo(File(it, "pdf05-all.pdf"), overwrite = true) }
+
+        val part = runner.export(id, ExportFormat.Pdf, PageRange.Pages(listOf(1, 2)), ExportOptions(includeTemplate = false)).files.single()
+        com.tom_roush.pdfbox.pdmodel.PDDocument.load(part).use { d ->
+            assertEquals(2, d.numberOfPages)
+            assertTrue(com.tom_roush.pdfbox.text.PDFTextStripper().getText(d).contains("SELECTABLE SOURCE TEXT 2"))
+        }
+        File("/sdcard/Download").takeIf { it.canWrite() }?.let { part.copyTo(File(it, "pdf05-range-notemplate.pdf"), overwrite = true) }
+    }
 }

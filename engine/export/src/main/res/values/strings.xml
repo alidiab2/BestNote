@@ -2,13 +2,19 @@
 <resources>
     <string name="export_title">Export</string>
     <string name="export_pdf">PDF document</string>
-    <string name="export_pdf_sub">Every page; ink stays sharp at any zoom</string>
+    <string name="export_pdf_sub">Ink, shapes, text and pictures stay sharp; imported PDF pages keep their text</string>
     <string name="export_png">Images (PNG)</string>
     <string name="export_png_sub">One picture per page</string>
     <string name="export_bnote">BestNote file</string>
     <string name="export_bnote_sub">Keeps everything; opens in BestNote</string>
     <string name="export_this_page">This page</string>
     <string name="export_all_pages">All %1$d pages</string>
+    <string name="export_pages_label">PAGES</string>
+    <string name="export_range">Range</string>
+    <string name="export_range_hint">Pages, e.g. 1-3, 5 (of %1$d)</string>
+    <string name="export_template">Include page template (lines, grid, dots)</string>
+    <string name="export_save_files">Save to Files</string>
+    <string name="export_saved">Saved</string>
     <string name="export_share">Share</string>
     <string name="export_cancel">Cancel</string>
     <string name="export_working">Preparing page %1$d of %2$d</string>
