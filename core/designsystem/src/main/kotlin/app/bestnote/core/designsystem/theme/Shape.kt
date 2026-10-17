@@ -56,16 +56,20 @@ data class ShadowToken(val radius: Dp, val offsetY: Dp, val alpha: Float)
 /** Draws a soft long shadow tinted with [BestNoteColors.shadowTint]. Never use on the page canvas. */
 @Composable
 fun Modifier.softShadow(token: ShadowToken, shape: Shape): Modifier {
-    val tint = BestNoteTheme.colors.shadowTint
-    return dropShadow(
+    val colors = BestNoteTheme.colors
+    val shadowed = dropShadow(
         shape = shape,
         shadow = Shadow(
             radius = token.radius,
-            color = tint.copy(alpha = token.alpha),
+            color = colors.shadowTint.copy(alpha = (token.alpha * colors.shadowStrength).coerceAtMost(MAX_SHADOW_ALPHA)),
             offset = DpOffset(0.dp, token.offsetY),
         ),
     )
+    // Dark theme: a faint warm rim so floating chrome separates from the desk (DS-11).
+    return if (colors.chromeRim.alpha > 0f) shadowed.border(Elevation.Hairline, colors.chromeRim, shape) else shadowed
 }
+
+private const val MAX_SHADOW_ALPHA = 0.8f
 
 /** 1 dp hairline outline in the theme's outline color. */
 @Composable

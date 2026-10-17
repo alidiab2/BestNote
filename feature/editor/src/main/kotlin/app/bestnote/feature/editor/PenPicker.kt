@@ -71,6 +71,7 @@ import app.bestnote.core.designsystem.theme.BestNoteTheme
 import app.bestnote.core.designsystem.theme.Elevation
 import app.bestnote.core.designsystem.theme.Motion
 import app.bestnote.core.designsystem.theme.Spacing
+import app.bestnote.core.designsystem.theme.isDarkChrome
 import app.bestnote.core.designsystem.theme.reducedMotion
 import app.bestnote.core.designsystem.theme.softShadow
 import kotlin.math.roundToInt
@@ -190,7 +191,7 @@ internal fun PenPickerContent(
                         .clickable(role = Role.Button, onClickLabel = label) { onToolbox(toolbox.withPreset(preset, kind)) }
                         .semantics { contentDescription = label },
                 ) {
-                    Spacer(Modifier.fillMaxSize().padding(horizontal = 10.dp, vertical = 8.dp).inkSquiggle(kind, presetSettings))
+                    Spacer(Modifier.fillMaxSize().padding(horizontal = 10.dp, vertical = 8.dp).inkSquiggle(kind, presetSettings, legibleOn = MaterialTheme.colorScheme.surfaceContainerLow))
                 }
             }
         }
@@ -407,7 +408,8 @@ private fun WedgeSlider(
     wedge: Boolean = true,
 ) {
     val rtl = androidx.compose.ui.platform.LocalLayoutDirection.current == LayoutDirection.Rtl
-    val track = MaterialTheme.colorScheme.surfaceContainerHigh
+    // Dark chrome: the container ladder is too close to the popover, so the track takes the hairline tone.
+    val track = if (isDarkChrome(MaterialTheme.colorScheme.surface)) MaterialTheme.colorScheme.outlineVariant else MaterialTheme.colorScheme.surfaceContainerHigh
     val thumb = MaterialTheme.colorScheme.surface
     val outline = MaterialTheme.colorScheme.outline
     val span = range.endInclusive - range.start

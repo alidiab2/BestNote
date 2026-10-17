@@ -16,4 +16,5 @@
 | [ ] DS-08 | Accessibility: TalkBack labels, 48 dp targets, contrast AA, reduced motion | M3 | M | — | Accessibility Scanner shows zero issues |
 | [ ] DS-09 | Localization: Arabic (RTL) + English at launch; string extraction rules | M2 | M | — | Full RTL pass. The canvas never mirrors; chrome does |
 | [ ] DS-10 | App icon, splash, Play listing visuals | M3 | M | — | — |
+| [x] DS-11 | Dark theme contrast pass: warm graphite ladder, AA contrast for text/icons/borders, swatch rings, dark pen art, theme-root content color | M2 | M | DS-01 | `DarkContrastTest` passes; editor chrome and library readable in dark on a tablet |
 | [x] ONB-01 | First-run onboarding (`:feature:onboarding`): welcome, live pen/finger check, real palm-rejection scratch canvas, start; skippable, shown once, re-openable from Settings → About → "Show welcome again" | M2 | M | SPEN-02 | en + ar; "I don't have a pen" sets the existing finger-drawing preference; nothing animates under an active pen |

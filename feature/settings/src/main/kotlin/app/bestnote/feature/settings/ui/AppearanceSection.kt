@@ -132,8 +132,8 @@ internal fun AppearanceSection(
 private object Preview {
     val LightPaper = Color(0xFFF6F4EF)
     val LightSidebar = Color(0xFFEFECE5)
-    val DarkPaper = Color(0xFF121417)
-    val DarkSidebar = Color(0xFF1C1F24)
+    val DarkPaper = Color(0xFF161412)
+    val DarkSidebar = Color(0xFF201D1A)
     val Page = Color(0xFFFFFEFB)
     val Accent = Color(0xFF2A4BD7)
 }

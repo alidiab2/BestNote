@@ -35,16 +35,25 @@ internal object PenArt {
     private val WhiteBody = Brush.horizontalGradient(listOf(Color.White, Color(0xFFF1EFEA), Color(0xFFD9D5CC)), 6f, 20f)
     private val Cream = Color(0xFFF3F0E8)
     private val BrushBody = Brush.horizontalGradient(listOf(Color(0xFF4A4D57), Color(0xFF2B2D33), Color(0xFF17181C)), 6f, 20f)
+
+    // Dark chrome: the same pens under a desk lamp. Lifted barrels so navy/black pens keep their shape.
+    private val SectionOnDark = Color(0xFF4F566B)
+    private val BrushBodyOnDark = Brush.horizontalGradient(listOf(Color(0xFF7E828D), Color(0xFF5A5D66), Color(0xFF3C3E45)), 6f, 20f)
+    private const val BARREL_LIFT_ON_DARK = 0.32f
     private val Ferrule = Brush.horizontalGradient(listOf(Color(0xFFE6E8EC), Color(0xFFB9BDC6), Color(0xFF8D919B)), 8f, 18f)
 
-    /** @param rim optional outline around the body (dark chrome), or [Color.Unspecified]. */
+    /**
+     * @param rim optional outline around the body, or [Color.Unspecified]. A rim means dark chrome: dark
+     *   barrels are also lifted toward a lighter tone there (the ink band and tip keep the true ink).
+     */
     fun DrawScope.drawPen(kind: PenKind, ink: Color, rim: Color = Color.Unspecified) {
         val s = size.width / WIDTH
+        val onDark = rim != Color.Unspecified
         scale(s, s, pivot = Offset.Zero) {
             when (kind) {
-                PenKind.Fountain -> fountain(ink)
+                PenKind.Fountain -> fountain(ink, onDark)
                 PenKind.Ballpoint -> ballpoint(ink)
-                PenKind.Brush -> brushPen(ink)
+                PenKind.Brush -> brushPen(ink, onDark)
                 PenKind.Pencil -> pencil(ink)
                 PenKind.Highlighter -> highlighter(ink)
                 PenKind.Eraser -> eraser()
@@ -82,19 +91,22 @@ internal object PenArt {
         drawRoundRect(Hairline, Offset(x, y), Size(w, h), CornerRadius(r, r), style = Stroke(0.8f))
 
     /** Gold nib, dark section, barrel in a deep shade of the ink. */
-    private fun DrawScope.fountain(ink: Color) {
+    private fun DrawScope.fountain(ink: Color, onDark: Boolean) {
         drawPath(path(7.5f, 21f, 13f, 4f, 18.5f, 21f), Gold)
         drawLine(GoldShade, Offset(13f, 9.5f), Offset(13f, 17.5f), strokeWidth = 0.9f)
         drawCircle(GoldShade, 1f, Offset(13f, 15f))
-        drawPath(path(7f, 20f, 19f, 20f, 18f, 28f, 8f, 28f), Section)
+        drawPath(path(7f, 20f, 19f, 20f, 18f, 28f, 8f, 28f), if (onDark) SectionOnDark else Section)
+        val base = if (onDark) lerp(ink, Color.White, BARREL_LIFT_ON_DARK) else ink
         val barrel = Brush.horizontalGradient(
-            listOf(lerp(ink, Color.White, 0.18f), ink, lerp(ink, Color.Black, 0.45f)),
+            listOf(lerp(base, Color.White, 0.18f), base, lerp(base, Color.Black, if (onDark) 0.25f else 0.45f)),
             5.5f,
             20.5f,
         )
         body(5.5f, 27f, 15f, 54f, 5f, barrel)
         drawRect(Gold, Offset(5.5f, 36f), Size(15f, 2.6f))
-        body(8f, 30f, 2f, 40f, 1f, Color.White.copy(alpha = 0.18f))
+        body(8f, 30f, 2f, 40f, 1f, Color.White.copy(alpha = if (onDark) 0.3f else 0.18f))
+        // The true ink as a thin cap ring, so a lifted barrel still names its color.
+        if (onDark) drawRect(ink, Offset(5.5f, 39.4f), Size(15f, 2.4f))
     }
 
     private fun DrawScope.ballpoint(ink: Color) {
@@ -106,7 +118,7 @@ internal object PenArt {
     }
 
     /** Pointed brush tip dipped in ink, steel ferrule, matte black handle with an ink band. */
-    private fun DrawScope.brushPen(ink: Color) {
+    private fun DrawScope.brushPen(ink: Color, onDark: Boolean) {
         val tip = Path().apply {
             moveTo(13f, 3f)
             cubicTo(14.5f, 8f, 17.5f, 14f, 17.2f, 21f)
@@ -115,8 +127,9 @@ internal object PenArt {
             close()
         }
         drawPath(tip, ink)
+        if (onDark) drawPath(tip, Color.White.copy(alpha = 0.4f), style = Stroke(0.8f))
         drawPath(path(8.5f, 20f, 17.5f, 20f, 17.5f, 27f, 8.5f, 27f), Ferrule)
-        body(6.5f, 26f, 13f, 56f, 4f, BrushBody)
+        body(6.5f, 26f, 13f, 56f, 4f, if (onDark) BrushBodyOnDark else BrushBody)
         drawRect(ink, Offset(6.5f, 34f), Size(13f, 3f))
     }
 

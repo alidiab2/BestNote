@@ -78,8 +78,9 @@ internal fun PagedDocumentHost(
     val penSeenCallback by rememberUpdatedState(onPenSeen)
     var current by remember { mutableIntStateOf(-1) }
     var count by remember { mutableIntStateOf(0) }
-    val muted = BestNoteTheme.colors.muted.toArgb()
-    val accent = MaterialTheme.colorScheme.primary.toArgb()
+    // Drawn on the page, so page-relative (the page stays light in dark mode).
+    val muted = BestNoteTheme.colors.paper.muted.toArgb()
+    val accent = BestNoteTheme.colors.paper.accent.toArgb()
     Box(modifier) {
         AndroidView(
             factory = { context ->

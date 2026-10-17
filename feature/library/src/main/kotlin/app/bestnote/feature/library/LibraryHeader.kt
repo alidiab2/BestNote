@@ -78,6 +78,7 @@ import app.bestnote.core.designsystem.theme.Elevation
 import app.bestnote.core.designsystem.theme.Motion
 import app.bestnote.core.designsystem.theme.Spacing
 import app.bestnote.core.designsystem.theme.hairline
+import app.bestnote.core.designsystem.theme.swatchOutline
 import app.bestnote.core.designsystem.theme.softShadow
 
 private val ControlHeight = 44.dp
@@ -404,7 +405,7 @@ private fun LastNotebookCard(item: NotebookItem, now: Long, onClick: () -> Unit,
         NotebookThumbnail(item.thumbnailPath, item.updatedAtMillis, Modifier.fillMaxHeight().width(108.dp), seed = item.pageCount)
         Column(Modifier.weight(1f).fillMaxHeight()) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.S)) {
-                Box(Modifier.size(10.dp).clip(BestNoteShapes.Control).background(coverColor(item.coverIndex)))
+                Box(Modifier.size(10.dp).clip(BestNoteShapes.Control).background(coverMarkColor(item.coverIndex)))
                 Text(
                     (item.folder?.name ?: stringResource(R.string.library_nav_library)).uppercase(),
                     style = BestNoteTheme.type.overline,
@@ -607,7 +608,8 @@ private fun ColorChip(colorIndex: Int, selected: Boolean, onClick: () -> Unit) {
                 .size(if (selected) 26.dp else 20.dp)
                 .then(if (selected) Modifier.border(2.dp, MaterialTheme.colorScheme.onSurface, BestNoteShapes.Pill).padding(3.dp) else Modifier)
                 .clip(BestNoteShapes.Pill)
-                .background(coverColor(colorIndex)),
+                .background(coverColor(colorIndex))
+                .swatchOutline(coverColor(colorIndex), BestNoteShapes.Pill, background = MaterialTheme.colorScheme.background),
         )
     }
 }

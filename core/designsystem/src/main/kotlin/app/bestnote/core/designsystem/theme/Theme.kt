@@ -4,6 +4,7 @@ import android.content.Context
 import android.os.Build
 import android.provider.Settings
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
@@ -57,8 +58,12 @@ fun BestNoteTheme(
             colorScheme = colorScheme,
             typography = typography,
             shapes = AtelierMaterialShapes,
-            content = content,
-        )
+        ) {
+            // MaterialTheme leaves LocalContentColor at black; only a Surface sets it. Chrome drawn
+            // straight on the desk (editor pills, overlays) would get black icons on graphite in dark
+            // mode (DS-11), so the theme root provides the on-background color.
+            CompositionLocalProvider(LocalContentColor provides colorScheme.onBackground, content = content)
+        }
     }
 }
 

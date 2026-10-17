@@ -327,7 +327,7 @@ internal fun ListRow(item: NotebookItem, now: Long, actions: NotebookActions, mo
                 }
                 if (item.folderPath.isNotEmpty()) {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.S)) {
-                        Box(Modifier.size(10.dp).clip(RoundedCornerShape(3.dp)).background(coverColor(item.folderPath.last().colorIndex)))
+                        Box(Modifier.size(10.dp).clip(RoundedCornerShape(3.dp)).background(coverMarkColor(item.folderPath.last().colorIndex)))
                         Text(
                             item.folderPath.joinToString(" › ") { it.name },
                             style = MaterialTheme.typography.labelMedium,
