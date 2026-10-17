@@ -1,8 +1,6 @@
 package app.bestnote.feature.editor
 
 import app.bestnote.engine.canvas.EraserMode
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -33,7 +31,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -45,7 +42,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.pointer.pointerInput
@@ -58,80 +54,13 @@ import androidx.compose.ui.semantics.progressBarRangeInfo
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.setProgress
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.IntOffset
-import androidx.compose.ui.unit.IntRect
-import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.Popup
-import androidx.compose.ui.window.PopupPositionProvider
-import androidx.compose.ui.window.PopupProperties
 import app.bestnote.core.designsystem.theme.BestNoteShapes
 import app.bestnote.core.designsystem.theme.BestNoteTheme
-import app.bestnote.core.designsystem.theme.Elevation
-import app.bestnote.core.designsystem.theme.Motion
 import app.bestnote.core.designsystem.theme.Spacing
 import app.bestnote.core.designsystem.theme.isDarkChrome
-import app.bestnote.core.designsystem.theme.reducedMotion
-import app.bestnote.core.designsystem.theme.softShadow
 import kotlin.math.roundToInt
-
-/** Places a popover next to its anchor, on the page side of the docked tray, clamped to the window. */
-private class AnchoredPopoverPosition(private val side: TraySide, private val gap: Int, private val margin: Int) : PopupPositionProvider {
-    override fun calculatePosition(anchorBounds: IntRect, windowSize: IntSize, layoutDirection: LayoutDirection, popupContentSize: IntSize): IntOffset {
-        val w = popupContentSize.width
-        val h = popupContentSize.height
-        fun clampX(x: Int) = x.coerceIn(margin, (windowSize.width - w - margin).coerceAtLeast(margin))
-        fun clampY(y: Int) = y.coerceIn(margin, (windowSize.height - h - margin).coerceAtLeast(margin))
-        return when (side) {
-            TraySide.Top -> IntOffset(clampX(anchorBounds.center.x - w / 2), anchorBounds.bottom + gap) // never over the tray
-            TraySide.Bottom -> IntOffset(clampX(anchorBounds.center.x - w / 2), clampY(anchorBounds.top - gap - h)) // opens upward
-            TraySide.Left -> IntOffset(clampX(anchorBounds.right + gap), clampY(anchorBounds.center.y - h / 2))
-            TraySide.Right -> IntOffset(clampX(anchorBounds.left - gap - w), clampY(anchorBounds.center.y - h / 2))
-        }
-    }
-}
-
-/**
- * A popover anchored to its parent (DS-04): grows from the anchor with [Motion.Enter.popover],
- * dismisses on an outside tap with [Motion.Exit.popover], then calls [onDismissed].
- */
-@Composable
-internal fun AnchoredPopover(side: TraySide, onDismissed: () -> Unit, content: @Composable () -> Unit) {
-    val reduce = reducedMotion()
-    val visible = remember { MutableTransitionState(false).apply { targetState = true } }
-    val density = androidx.compose.ui.platform.LocalDensity.current
-    val position = remember(side, density) {
-        // The popup window includes PopoverInset of shadow room on every side.
-        with(density) { AnchoredPopoverPosition(side, gap = (18.dp - PopoverInset).roundToPx(), margin = (12.dp - PopoverInset).roundToPx()) }
-    }
-    val origin = when (side) {
-        TraySide.Top -> TransformOrigin(0.5f, 0f)
-        TraySide.Bottom -> TransformOrigin(0.5f, 1f)
-        TraySide.Left -> TransformOrigin(0f, 0.5f)
-        TraySide.Right -> TransformOrigin(1f, 0.5f)
-    }
-    LaunchedEffect(visible.currentState, visible.isIdle) {
-        if (visible.isIdle && !visible.currentState && !visible.targetState) onDismissed()
-    }
-    Popup(
-        popupPositionProvider = position,
-        onDismissRequest = { visible.targetState = false },
-        properties = PopupProperties(focusable = true),
-    ) {
-        AnimatedVisibility(visible, enter = Motion.Enter.popover(reduce, origin), exit = Motion.Exit.popover(reduce, origin)) {
-            Box(
-                Modifier
-                    .padding(PopoverInset) // room for the shadow inside the popup window
-                    .softShadow(Elevation.High, BestNoteShapes.Card)
-                    .clip(BestNoteShapes.Card)
-                    .background(MaterialTheme.colorScheme.surface),
-            ) { content() }
-        }
-    }
-}
-
-private val PopoverInset = Spacing.XL
 
 @Composable
 private fun Overline(text: String) {

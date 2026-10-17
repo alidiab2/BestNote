@@ -57,6 +57,27 @@ object ExportPlan {
         return RangeParse.Ok(out.toList())
     }
 
+    /**
+     * The one-based range text [parseRange] reads back as exactly [indices] (zero-based): runs of
+     * three or more pages collapse to `a-b`, e.g. [0, 1, 2, 4] → "1-3, 5". Pages chosen in the page
+     * manager (PAGES-10) prefill the export dialog with it.
+     */
+    fun formatRange(indices: Collection<Int>): String {
+        val sorted = indices.filter { it >= 0 }.toSortedSet().toList()
+        val parts = ArrayList<String>()
+        var i = 0
+        while (i < sorted.size) {
+            var j = i
+            while (j + 1 < sorted.size && sorted[j + 1] == sorted[j] + 1) j++
+            when {
+                j - i >= 2 -> parts += "${sorted[i] + 1}-${sorted[j] + 1}"
+                else -> for (k in i..j) parts += "${sorted[k] + 1}"
+            }
+            i = j + 1
+        }
+        return parts.joinToString(", ")
+    }
+
     private fun number(s: String): Int? {
         if (s.isEmpty() || s.length > 7) return null
         var n = 0

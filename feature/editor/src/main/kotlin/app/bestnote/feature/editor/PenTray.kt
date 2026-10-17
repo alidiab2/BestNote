@@ -1,5 +1,8 @@
 package app.bestnote.feature.editor
 
+import androidx.compose.foundation.layout.offset
+import androidx.compose.ui.unit.IntOffset
+
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.Canvas
@@ -280,9 +283,18 @@ private fun PenSlot(kind: PenKind, ink: Color, active: Boolean, side: TraySide, 
                     },
             ) { drawPen(kind, ink, rim) }
         }
-        anchored()
+        // DS-12: the pen's popover points at the pen. On the top dock the active dot sits under the
+        // slot, so the popover's anchor reaches past it and the caret never covers the dot.
+        Box(
+            Modifier
+                .matchParentSize()
+                .offset { if (side == TraySide.Top) IntOffset(0, ActiveDotReach.roundToPx()) else IntOffset.Zero },
+        ) { anchored() }
     }
 }
+
+/** How far below a top-dock pen slot its active dot reaches (7 dp gap + 2.5 dp radius + air). */
+private val ActiveDotReach = 12.dp
 
 @Composable
 private fun ColorDot(color: Color, selected: Boolean, enabled: Boolean, onClick: () -> Unit) {

@@ -15,3 +15,4 @@
 | [ ] PAGES-07 | Infinite canvas notebook type | M3 | XL | CANVAS-06 | Split before starting |
 | [ ] PAGES-08 | Custom templates from image/PDF, saved for reuse | M3 | M | PAGES-05 | — |
 | [ ] PAGES-09 | Horizontal paging and two-page spread view | M3 | M | CANVAS-07 | — |
+| [x] PAGES-10 | Paper picker redesign (floating sheet: live template previews grouped Basic/Study/Planning/Music, paper color chips, apply to this page / all pages / new pages, insert from PDF / image) and a discoverable page manager (Pages button, pinch-out overview, select mode: duplicate / rotate / move to / export / delete, "+" between pages, undo for every action) | M2 | M | PAGES-05 | Light and dark screenshots of the sheet and the manager on a tablet; `PageOpsTest` passes |

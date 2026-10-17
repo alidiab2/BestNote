@@ -59,4 +59,14 @@ class ExportPlanTest {
         val m = OverlayTransform.of(0, 0f, 0f, 400f, 200f, 200f, 100f)
         assertArrayEquals(floatArrayOf(400f, 200f), map(m, 200f, 100f), 0.001f)
     }
+
+    @Test
+    fun `selected pages format as a range that parses back to them`() {
+        assertEquals("1-3, 5", ExportPlan.formatRange(listOf(4, 0, 2, 1)))
+        assertEquals("2, 3", ExportPlan.formatRange(listOf(1, 2)))
+        assertEquals("7", ExportPlan.formatRange(listOf(6, 6)))
+        assertEquals("", ExportPlan.formatRange(emptyList()))
+        val picked = listOf(0, 1, 2, 5, 7, 8, 9, 10)
+        assertEquals(RangeParse.Ok(picked), ExportPlan.parseRange(ExportPlan.formatRange(picked), 12))
+    }
 }

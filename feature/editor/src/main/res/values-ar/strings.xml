@@ -269,4 +269,114 @@
         <item quantity="many">أُدرجت %1$d صفحة</item>
         <item quantity="other">أُدرجت %1$d صفحة</item>
     </plurals>
+    <!-- PAGES-10: paper sheet -->
+    <string name="editor_paper">الورق</string>
+    <string name="paper_apply_to">تطبيق على</string>
+    <string name="paper_scope_this">هذه الصفحة</string>
+    <string name="paper_scope_all">كل الصفحات</string>
+    <string name="paper_scope_new">الصفحات الجديدة</string>
+    <string name="paper_scope_new_hint">الصفحات التي تضيفها من الآن تستخدم هذا الورق.</string>
+    <string name="paper_color">لون الورق</string>
+    <string name="paper_white">أبيض</string>
+    <string name="paper_cream">كريمي</string>
+    <string name="paper_dark">داكن</string>
+    <string name="paper_group_basic">أساسي</string>
+    <string name="paper_group_study">دراسة</string>
+    <string name="paper_group_planning">تخطيط</string>
+    <string name="paper_group_music">موسيقى</string>
+    <string name="paper_size">الحجم</string>
+    <string name="paper_fit">ملء الشاشة</string>
+    <string name="paper_custom">مخصص…</string>
+    <string name="paper_portrait">عمودي</string>
+    <string name="paper_landscape">أفقي</string>
+    <string name="paper_selected">%1$s، محدد</string>
+    <string name="paper_insert_pdf">إدراج صفحات من PDF…</string>
+    <string name="paper_insert_image">إدراج صفحة من صورة…</string>
+    <string name="paper_manage">إدارة الصفحات</string>
+    <string name="paper_custom_title">حجم صفحة مخصص</string>
+    <string name="paper_width_mm">العرض (مم)</string>
+    <string name="paper_height_mm">الارتفاع (مم)</string>
+    <string name="paper_apply">تطبيق</string>
+    <!-- PAGES-10: page manager -->
+    <string name="pages_close">إغلاق مدير الصفحات</string>
+    <string name="pages_select">تحديد</string>
+    <string name="pages_done">تم</string>
+    <string name="pages_select_all">تحديد الكل</string>
+    <string name="pages_deselect_all">إلغاء تحديد الكل</string>
+    <string name="pages_duplicate">تكرار</string>
+    <string name="pages_rotate">تدوير</string>
+    <string name="pages_move">نقل إلى…</string>
+    <string name="pages_export">تصدير</string>
+    <string name="pages_delete">حذف</string>
+    <string name="pages_insert">إدراج صفحة</string>
+    <string name="pages_add">إضافة صفحة</string>
+    <string name="pages_insert_after">إدراج صفحة بعد الصفحة %1$d</string>
+    <string name="pages_open">فتح الصفحة %1$d</string>
+    <string name="pages_select_page">تحديد الصفحة %1$d</string>
+    <string name="pages_page">الصفحة %1$d</string>
+    <string name="pages_current">الصفحة الحالية</string>
+    <string name="pages_hint">اضغط على صفحة لفتحها · اضغط مطولًا واسحب لإعادة الترتيب · «تحديد» لمزيد من الخيارات</string>
+    <string name="pages_select_hint">اضغط على الصفحات لتحديدها</string>
+    <string name="pages_added">أُضيفت صفحة</string>
+    <string name="pages_paper">الورق</string>
+    <string name="pages_move_start">إلى البداية</string>
+    <string name="pages_move_after">بعد الصفحة %1$d</string>
+    <string name="pages_move_end">إلى النهاية</string>
+    <string name="pages_move_action">نقل</string>
+    <plurals name="pages_count">
+        <item quantity="zero">لا صفحات</item>
+        <item quantity="one">صفحة واحدة</item>
+        <item quantity="two">صفحتان</item>
+        <item quantity="few">%1$d صفحات</item>
+        <item quantity="many">%1$d صفحة</item>
+        <item quantity="other">%1$d صفحة</item>
+    </plurals>
+    <plurals name="pages_selected">
+        <item quantity="zero">لا شيء محدد</item>
+        <item quantity="one">واحدة محددة</item>
+        <item quantity="two">اثنتان محددتان</item>
+        <item quantity="few">%1$d محددة</item>
+        <item quantity="many">%1$d محددة</item>
+        <item quantity="other">%1$d محددة</item>
+    </plurals>
+    <plurals name="pages_duplicated">
+        <item quantity="zero">لم تُكرَّر صفحات</item>
+        <item quantity="one">كُرِّرت الصفحة</item>
+        <item quantity="two">كُرِّرت صفحتان</item>
+        <item quantity="few">كُرِّرت %1$d صفحات</item>
+        <item quantity="many">كُرِّرت %1$d صفحة</item>
+        <item quantity="other">كُرِّرت %1$d صفحة</item>
+    </plurals>
+    <plurals name="pages_deleted">
+        <item quantity="zero">لم تُحذف صفحات</item>
+        <item quantity="one">حُذفت الصفحة</item>
+        <item quantity="two">حُذفت صفحتان</item>
+        <item quantity="few">حُذفت %1$d صفحات</item>
+        <item quantity="many">حُذفت %1$d صفحة</item>
+        <item quantity="other">حُذفت %1$d صفحة</item>
+    </plurals>
+    <plurals name="pages_rotated">
+        <item quantity="zero">لم تُدوَّر صفحات</item>
+        <item quantity="one">دُوِّرت الصفحة</item>
+        <item quantity="two">دُوِّرت صفحتان</item>
+        <item quantity="few">دُوِّرت %1$d صفحات</item>
+        <item quantity="many">دُوِّرت %1$d صفحة</item>
+        <item quantity="other">دُوِّرت %1$d صفحة</item>
+    </plurals>
+    <plurals name="pages_moved">
+        <item quantity="zero">لم تُنقل صفحات</item>
+        <item quantity="one">نُقلت الصفحة</item>
+        <item quantity="two">نُقلت صفحتان</item>
+        <item quantity="few">نُقلت %1$d صفحات</item>
+        <item quantity="many">نُقلت %1$d صفحة</item>
+        <item quantity="other">نُقلت %1$d صفحة</item>
+    </plurals>
+    <plurals name="pages_move_title">
+        <item quantity="zero">نقل %1$d صفحة</item>
+        <item quantity="one">نقل صفحة واحدة</item>
+        <item quantity="two">نقل صفحتين</item>
+        <item quantity="few">نقل %1$d صفحات</item>
+        <item quantity="many">نقل %1$d صفحة</item>
+        <item quantity="other">نقل %1$d صفحة</item>
+    </plurals>
 </resources>

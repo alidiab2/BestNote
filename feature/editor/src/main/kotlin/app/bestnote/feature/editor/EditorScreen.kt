@@ -432,6 +432,8 @@ fun EditorScreen(
     SideEffect { pageInsert.onInserted = { first -> canvas?.scrollToPage(first) } }
     var selectionMenu by remember { mutableStateOf<PagedDocumentView.SelectionMenu?>(null) }
     var exporting by remember { mutableStateOf(false) }
+    /** Pages picked in the page manager for export (PAGES-10), or null for the usual choices. */
+    var exportPages by remember { mutableStateOf<List<Int>?>(null) }
     // TPL-01: on a Smart Board page, Smart Board asks: continue this page (add a photo) or new pages.
     var smartBoardChoice by remember { mutableStateOf<Int?>(null) }
     val snackbar = remember { SnackbarHostState() }
@@ -584,6 +586,10 @@ fun EditorScreen(
         // From the lasso, Shapes means "draw shapes now"; otherwise it toggles.
         viewModel.setShapes(toolbox.lasso || !toolbox.shapes)
     }
+    fun openPages() {
+        picker = null
+        managerPage = canvas?.currentPage?.coerceAtLeast(0) ?: 0
+    }
     fun onPen(kind: PenKind) {
         elements.leaveTextTool()
         if (kind == toolbox.active && !toolbox.lasso) {
@@ -610,7 +616,8 @@ fun EditorScreen(
                 page?.page?.let { onSmartBoard(viewModel.notebookId, it, null, null) }
             }
         },
-        pagesMenu = { PaperMenuButton(canvas, onManage = { picker = null; managerPage = canvas?.currentPage?.coerceAtLeast(0) ?: 0 }, insert = pageInsert) },
+        pagesMenu = { PaperMenuButton(canvas, onManage = ::openPages, insert = pageInsert) },
+        onPages = ::openPages,
         onOpenSettings = onOpenSettings,
         onExport = { picker = null; lock.beforeExport { exporting = true } },
         lock = lock,
@@ -862,6 +869,8 @@ fun EditorScreen(
                     view.selectionListener = PagedDocumentView.SelectionListener { selectionMenu = it }
                     view.selectionAppearMs = Motion.Duration.Short
                     view.viewportListener = { viewportTick++ }
+                    // PAGES-10: pinching on past the smallest zoom opens the page overview.
+                    view.overviewListener = { if (managerPage == null) openPages() }
                     view.temporaryToolListener = { tool -> temporary = if (tool == Tool.Eraser) PenKind.Eraser else null }
                     view.quickPaletteListener = PagedDocumentView.QuickPaletteListener { x, y ->
                         picker = null
@@ -871,7 +880,7 @@ fun EditorScreen(
                     viewModel.session.attach(view)
                 },
                 onIndicator = { page, count -> pageNumber = page + 1 to count },
-                onIndicatorClick = { managerPage = canvas?.currentPage?.coerceAtLeast(0) ?: 0 },
+                onIndicatorClick = ::openPages,
                 onPenSeen = ::onPenSeen,
                 topInsetPx = topInsetPx,
                 bottomInsetPx = bottomInsetPx,
@@ -1118,6 +1127,12 @@ fun EditorScreen(
                     if (page != null) canvas?.scrollToPage(page)
                 },
                 insert = pageInsert,
+                onExport = { pages ->
+                    lock.beforeExport {
+                        exportPages = pages
+                        exporting = true
+                    }
+                },
             )
         }
         pageInsert.Dialogs()
@@ -1156,8 +1171,12 @@ fun EditorScreen(
                 pageCount = document.pages.size.coerceAtLeast(1),
                 currentPage = canvas?.currentPage?.coerceAtLeast(0) ?: 0,
                 fileName = state.title,
-                onDismiss = { exporting = false },
+                onDismiss = {
+                    exporting = false
+                    exportPages = null
+                },
                 beforeExport = { viewModel.session.flush() },
+                selectedPages = exportPages,
             )
         }
 

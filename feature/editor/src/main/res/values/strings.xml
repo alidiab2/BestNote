@@ -257,4 +257,86 @@
         <item quantity="one">%1$d page inserted</item>
         <item quantity="other">%1$d pages inserted</item>
     </plurals>
+    <!-- PAGES-10: paper sheet -->
+    <string name="editor_paper">Paper</string>
+    <string name="paper_apply_to">Apply to</string>
+    <string name="paper_scope_this">This page</string>
+    <string name="paper_scope_all">All pages</string>
+    <string name="paper_scope_new">New pages</string>
+    <string name="paper_scope_new_hint">Pages you add from now on use this paper.</string>
+    <string name="paper_color">Paper color</string>
+    <string name="paper_white">White</string>
+    <string name="paper_cream">Cream</string>
+    <string name="paper_dark">Dark</string>
+    <string name="paper_group_basic">Basic</string>
+    <string name="paper_group_study">Study</string>
+    <string name="paper_group_planning">Planning</string>
+    <string name="paper_group_music">Music</string>
+    <string name="paper_size">Size</string>
+    <string name="paper_fit">Fit screen</string>
+    <string name="paper_custom">Custom…</string>
+    <string name="paper_portrait">Portrait</string>
+    <string name="paper_landscape">Landscape</string>
+    <string name="paper_selected">%1$s, selected</string>
+    <string name="paper_insert_pdf">Insert pages from PDF…</string>
+    <string name="paper_insert_image">Insert page from image…</string>
+    <string name="paper_manage">Manage pages</string>
+    <string name="paper_custom_title">Custom page size</string>
+    <string name="paper_width_mm">Width (mm)</string>
+    <string name="paper_height_mm">Height (mm)</string>
+    <string name="paper_apply">Apply</string>
+    <!-- PAGES-10: page manager -->
+    <string name="pages_close">Close page manager</string>
+    <string name="pages_select">Select</string>
+    <string name="pages_done">Done</string>
+    <string name="pages_select_all">Select all</string>
+    <string name="pages_deselect_all">Deselect all</string>
+    <string name="pages_duplicate">Duplicate</string>
+    <string name="pages_rotate">Rotate</string>
+    <string name="pages_move">Move to…</string>
+    <string name="pages_export">Export</string>
+    <string name="pages_delete">Delete</string>
+    <string name="pages_insert">Insert page</string>
+    <string name="pages_add">Add page</string>
+    <string name="pages_insert_after">Insert a page after page %1$d</string>
+    <string name="pages_open">Open page %1$d</string>
+    <string name="pages_select_page">Select page %1$d</string>
+    <string name="pages_page">Page %1$d</string>
+    <string name="pages_current">Current page</string>
+    <string name="pages_hint">Tap a page to open it · long-press and drag to reorder · Select for more</string>
+    <string name="pages_select_hint">Tap pages to select them</string>
+    <string name="pages_added">Page added</string>
+    <string name="pages_paper">Paper</string>
+    <string name="pages_move_start">To the start</string>
+    <string name="pages_move_after">After page %1$d</string>
+    <string name="pages_move_end">To the end</string>
+    <string name="pages_move_action">Move</string>
+    <plurals name="pages_count">
+        <item quantity="one">%1$d page</item>
+        <item quantity="other">%1$d pages</item>
+    </plurals>
+    <plurals name="pages_selected">
+        <item quantity="one">%1$d selected</item>
+        <item quantity="other">%1$d selected</item>
+    </plurals>
+    <plurals name="pages_duplicated">
+        <item quantity="one">Page duplicated</item>
+        <item quantity="other">%1$d pages duplicated</item>
+    </plurals>
+    <plurals name="pages_deleted">
+        <item quantity="one">Page deleted</item>
+        <item quantity="other">%1$d pages deleted</item>
+    </plurals>
+    <plurals name="pages_rotated">
+        <item quantity="one">Page rotated</item>
+        <item quantity="other">%1$d pages rotated</item>
+    </plurals>
+    <plurals name="pages_moved">
+        <item quantity="one">Page moved</item>
+        <item quantity="other">%1$d pages moved</item>
+    </plurals>
+    <plurals name="pages_move_title">
+        <item quantity="one">Move %1$d page</item>
+        <item quantity="other">Move %1$d pages</item>
+    </plurals>
 </resources>

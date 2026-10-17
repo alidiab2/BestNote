@@ -81,6 +81,12 @@ object ZoomMath {
     const val MIN_ZOOM = 0.25f
     const val MAX_ZOOM = 8f
 
+    /**
+     * Pinching on past [MIN_ZOOM] until the fingers asked for this much more shrink opens the page
+     * overview (PAGES-10): a deliberate squeeze, not the tail of an ordinary zoom-out.
+     */
+    const val OVERVIEW_PINCH = 0.7f
+
     fun clamp(zoom: Float): Float = zoom.coerceIn(MIN_ZOOM, MAX_ZOOM)
 
     /** The factor to apply to [current] (with a pending preview scale [preview]) so the result stays in limits. */
