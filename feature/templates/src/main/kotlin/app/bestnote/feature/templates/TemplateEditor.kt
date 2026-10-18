@@ -53,6 +53,7 @@ import app.bestnote.core.designsystem.theme.Spacing
 import app.bestnote.core.fonts.FontPickerDialog
 import app.bestnote.core.fonts.FontRegistry
 import app.bestnote.core.fonts.FontScript
+import app.bestnote.core.model.EquationStyle
 import app.bestnote.engine.layout.Decoration
 import app.bestnote.engine.layout.DetailLevel
 import app.bestnote.engine.layout.HandFont
@@ -184,6 +185,13 @@ private fun LookSection(t: NoteTemplate, update: ((NoteTemplate) -> NoteTemplate
     Row(verticalAlignment = Alignment.CenterVertically) {
         Text(stringResource(R.string.tpl_look_margin_arrows), Modifier.weight(1f))
         Switch(t.look.marginArrows, { v -> look { it.copy(marginArrows = v) } })
+    }
+
+    SectionTitle(R.string.tpl_look_equations)
+    Text(stringResource(R.string.tpl_look_equations_hint), style = MaterialTheme.typography.bodySmall, color = BestNoteTheme.colors.muted)
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(Spacing.S)) {
+        FilterChip(t.look.equationStyle == EquationStyle.Handwritten, { look { it.copy(equationStyle = EquationStyle.Handwritten) } }, label = { Text(stringResource(R.string.tpl_equations_handwritten)) })
+        FilterChip(t.look.equationStyle == EquationStyle.Typeset, { look { it.copy(equationStyle = EquationStyle.Typeset) } }, label = { Text(stringResource(R.string.tpl_equations_typeset)) })
     }
 
     SectionTitle(R.string.tpl_look_layout)

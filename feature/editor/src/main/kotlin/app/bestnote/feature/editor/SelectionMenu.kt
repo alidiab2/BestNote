@@ -38,6 +38,7 @@ import app.bestnote.core.designsystem.theme.Motion
 import app.bestnote.core.designsystem.theme.Spacing
 import app.bestnote.core.designsystem.theme.reducedMotion
 import app.bestnote.core.model.EquationElement
+import app.bestnote.core.model.EquationStyle
 import app.bestnote.core.model.ImageElement
 import app.bestnote.core.model.TextElement
 import app.bestnote.engine.canvas.document.PagedDocumentView
@@ -63,6 +64,7 @@ internal class SelectionActions(
     val onConvertEquation: () -> Unit = {},
     val onEditEquation: () -> Unit = {},
     val onCopyLatex: () -> Unit = {},
+    val onToggleEquationStyle: () -> Unit = {},
     val onTidy: () -> Unit = {},
     /** INK-11: fill closed shapes with this ARGB (alpha = opacity); null clears the fill. */
     val onFill: (Int?) -> Unit = {},
@@ -201,6 +203,10 @@ internal fun SelectionMenu(
                 if (element is EquationElement) {
                     MenuText(stringResource(R.string.selection_edit), onClick = actions.onEditEquation)
                     MenuText(stringResource(R.string.selection_copy_latex), onClick = actions.onCopyLatex)
+                    MenuText(
+                        stringResource(if (element.style == EquationStyle.Typeset) R.string.selection_eq_style_typeset else R.string.selection_eq_style_handwritten),
+                        onClick = actions.onToggleEquationStyle,
+                    )
                 }
                 if (element is ImageElement) {
                     MenuText(stringResource(R.string.image_crop), onClick = actions.onCrop)

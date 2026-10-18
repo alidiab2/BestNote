@@ -126,4 +126,7 @@
     <string name="smartboard_continue_title">Add to this page</string>
     <string name="smartboard_continue_body">Photograph the board again (or the next part). The notes are merged into the page: new content added, repeats removed, everything in teaching order. Your own writing stays where it is.</string>
     <string name="smartboard_manage_templates">Manage…</string>
+    <string name="smartboard_equations">Equations</string>
+    <string name="smartboard_eq_handwritten">Handwritten</string>
+    <string name="smartboard_eq_typeset">Typeset</string>
 </resources>

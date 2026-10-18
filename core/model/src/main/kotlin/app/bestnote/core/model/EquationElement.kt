@@ -19,6 +19,8 @@ data class EquationElement(
     override val group: String? = null,
     /** True for a displayed formula (large operators, limits above and below); false for an inline one. */
     val display: Boolean = true,
+    /** How the formula is drawn: real typeset maths, or a handwriting-like look. */
+    val style: EquationStyle = EquationStyle.Typeset,
 ) : PageElement {
     init {
         require(width > 0f && height > 0f) { "Equation frame must be positive" }
@@ -42,3 +44,6 @@ data class EquationElement(
         const val MARGIN_EM = 0.25f
     }
 }
+
+/** How equations are drawn: [Handwritten] strokes like a hand, or [Typeset] TeX-quality maths (STIX Two Math). */
+enum class EquationStyle { Handwritten, Typeset }

@@ -63,7 +63,10 @@ class MathTypesetter(
 
     private class RuleBox(width: Float, height: Float) : Box(width, height, 0f)
 
-    private class TextBox(val text: String, val size: Float, val bold: Boolean, val italic: Boolean, w: Float, h: Float, d: Float) : Box(w, h, d)
+    private class TextBox(val text: String, val size: Float, val bold: Boolean, val italic: Boolean, w: Float, h: Float, d: Float, val rtl: Boolean = false) : Box(w, h, d)
+
+    /** A line from the box origin to (dx, dy); it takes no room (the caller sizes the group). */
+    private class LineBox(val dx: Float, val dy: Float, val thickness: Float) : Box(0f, 0f, 0f)
 
     private class Placed(val x: Float, val y: Float, val box: Box)
 
@@ -185,6 +188,7 @@ class MathTypesetter(
             is MathNode.Space -> Atom(AtomKind.Ord, kern(n.mu * em(s) / MU_PER_EM), transparent = true)
             is MathNode.Styled -> Atom(AtomKind.Ord, row(n.body, Style(n.level, s.cramped && n.level >= s.level)))
             is MathNode.Boxed -> Atom(AtomKind.Ord, boxed(n, s))
+            is MathNode.Cancel -> Atom(AtomKind.Ord, cancel(n, s))
             is MathNode.Phantom -> {
                 val b = row(n.body, s)
                 Atom(AtomKind.Ord, HBox(emptyList(), if (n.width) b.width else 0f, if (n.height) b.height else 0f, if (n.height) b.depth else 0f))
@@ -208,6 +212,23 @@ class MathTypesetter(
 
         /** Upright words: math-font glyphs where it has them, the device font for the rest. */
         fun text(t: String, s: Style, bold: Boolean, italic: Boolean): Box {
+            if (t.none { isRtl(it.code) }) return textLtr(t, s, bold, italic)
+            // Right-to-left words (Hebrew, Arabic) become one run each, shaped and ordered by the device's BiDi
+            // engine; neutrals (spaces, digits, punctuation) between two RTL letters belong to the run.
+            val first = t.indexOfFirst { isRtl(it.code) }
+            val last = t.indexOfLast { isRtl(it.code) }
+            val parts = ArrayList<Box>()
+            if (first > 0) parts += textLtr(t.substring(0, first), s, bold, italic)
+            val run = t.substring(first, last + 1)
+            val m = measurer.measure(run, em(s), bold, italic)
+            parts += TextBox(run, em(s), bold, italic, m[0], m[1], m[2], rtl = true)
+            if (last + 1 < t.length) parts += text(t.substring(last + 1), s, bold, italic)
+            return parts.singleOrNull() ?: hbox(parts)
+        }
+
+        fun isRtl(cp: Int) = cp in RTL_START..RTL_END || cp in 0xFB1D..0xFDFF || cp in 0xFE70..0xFEFF
+
+        fun textLtr(t: String, s: Style, bold: Boolean, italic: Boolean): Box {
             val sc = scale(s)
             val boxes = ArrayList<Box>()
             val pending = StringBuilder()
@@ -562,6 +583,23 @@ class MathTypesetter(
             return limits(base, 0f, n.over, n.under, s)
         }
 
+        fun cancel(n: MathNode.Cancel, s: Style): Box {
+            val body = row(n.body, s, slot = true)
+            val t = c("FractionRuleThickness", s)
+            val pad = em(s) * CANCEL_OVERSHOOT
+            val w = body.width
+            val h = max(body.height, em(s) * STRUT_H * 0.7f)
+            val d = max(body.depth, 0f)
+            val placed = arrayListOf(Placed(0f, 0f, body))
+            if (n.slash) placed += Placed(-pad, d + pad, LineBox(w + 2 * pad, -(h + d + 2 * pad), t))
+            if (n.back) placed += Placed(-pad, -(h + pad), LineBox(w + 2 * pad, h + d + 2 * pad, t))
+            val g = group(placed, w)
+            val to = n.to ?: return HBox(g.items, g.width, h + pad, d + pad)
+            val l = row(to, s.sup(), slot = true)
+            val withTo = group(g.items + Placed(w + pad + em(s) * 0.1f, -(h + pad) + l.depth, l), w + pad + em(s) * 0.1f + l.width)
+            return HBox(withTo.items, withTo.width, max(h + pad, withTo.height), d + pad)
+        }
+
         fun boxed(n: MathNode.Boxed, s: Style): Box {
             val body = row(n.body, s, slot = true)
             val t = c("FractionRuleThickness", s)
@@ -665,7 +703,8 @@ class MathTypesetter(
             when (b) {
                 is GlyphBox -> if (b.glyph.path.ops.isNotEmpty()) ops += MathOp.GlyphOp(b.glyph, x, y, b.scale, tone)
                 is RuleBox -> ops += MathOp.RuleOp(x, y - b.height, b.width, b.height + b.depth, tone)
-                is TextBox -> ops += MathOp.TextOp(b.text, x, y, b.size, b.bold, b.italic, tone)
+                is TextBox -> ops += MathOp.TextOp(b.text, x, y, b.size, b.bold, b.italic, tone, b.rtl)
+                is LineBox -> ops += MathOp.LineOp(x, y, x + b.dx, y + b.dy, b.thickness, tone)
                 is HBox -> {
                     val t = b.tone ?: tone
                     for (p in b.items) walk(p.box, x + p.x, y + p.y, t)
@@ -715,6 +754,7 @@ class MathTypesetter(
         const val SMALL_COLUMN_GAP = 0.5f
         const val ALIGN_PAIR_GAP = 2f
         const val BOX_PADDING = 0.3f
+        const val CANCEL_OVERSHOOT = 0.08f
         const val MAX_REPEATS = 200
         const val RADICAL = 0x221A
         const val OVER_BRACE = 0x23DE

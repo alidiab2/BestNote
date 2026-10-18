@@ -154,4 +154,25 @@ class FontComposerTest {
         // Hebrew text is written with the Hebrew font slot.
         assertTrue(runs.filter { WritingScript.dominant(it.text) == WritingScript.Hebrew }.all { it.font == StyleTemplates.Classic.hebrewFont })
     }
+
+    @Test fun `typeset equation style turns formulas into equation runs, handwritten keeps them as ink`() {
+        val base = StyleTemplates.all.first()
+        val typeset = write(base.copy(equationStyle = app.bestnote.core.model.EquationStyle.Typeset))
+        val hand = write(base.copy(equationStyle = app.bestnote.core.model.EquationStyle.Handwritten))
+        val runs = typeset.pages.pages.flatMap { it.equations }
+        assertTrue(runs.isNotEmpty())
+        assertTrue(runs.any { it.latex.contains("lim") })
+        assertTrue(runs.all { it.width > 0f && it.ascent > 0f })
+        val el = runs.first().toElement("e1")
+        assertTrue(el.width > runs.first().width && el.style == app.bestnote.core.model.EquationStyle.Typeset)
+        assertTrue(hand.pages.pages.all { it.equations.isEmpty() })
+    }
+
+    @Test fun `handwritten maths writes strokes for cancel, braces, vectors and hats`() {
+        for (tex in listOf("\\cancel{W_N} = 0", "\\underbrace{a+b}_{\\text{sum}}", "d\\vec r \\hat x", "\\boxed{x}")) {
+            val ink = HandMath.write(tex, 24f)!!
+            assertTrue(tex, ink.strokes.isNotEmpty() && ink.width > 0f)
+        }
+        assertTrue(HandMath.write("\\cancel{x}", 24f)!!.strokes.size > HandMath.write("x", 24f)!!.strokes.size)
+    }
 }

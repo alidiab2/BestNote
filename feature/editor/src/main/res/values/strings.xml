@@ -231,6 +231,8 @@
     <!-- MATH-01: handwriting → typeset equations -->
     <string name="selection_convert_equation">Convert to equation</string>
     <string name="selection_copy_latex">Copy LaTeX</string>
+    <string name="selection_eq_style_typeset">Style: Typeset (tap for Handwritten)</string>
+    <string name="selection_eq_style_handwritten">Style: Handwritten (tap for Typeset)</string>
     <string name="equation_title">Convert to equation</string>
     <string name="equation_no_provider">Reading handwritten maths uses your AI provider. Add one in Settings → Smart Board AI, or type the LaTeX yourself. (Reading maths on the device is coming later.)</string>
     <string name="equation_open_settings">Open Settings</string>

@@ -35,12 +35,24 @@ object LatexSanitizer {
         var s = raw.trim()
         s = stripDelimiters(s)
         unicode.forEach { (k, v) -> s = s.replace(k, v) }
+        s = normaliseCommands(s)
         s = s.replace(Regex("""\s+"""), " ").trim()
 
         if (s.isEmpty()) return LatexResult.Invalid("empty")
         forbidden.find(s)?.let { return LatexResult.Invalid("forbidden command ${it.value}") }
         balance(s)?.let { return LatexResult.Invalid(it) }
         return LatexResult.Ok(s)
+    }
+
+    /** Commands the typesetter draws; kept as written, with common variants and a missing backslash repaired. */
+    private val bareDrawn = Regex("""(?<![\\A-Za-z])(cancelto|bcancel|xcancel|cancel|underbrace|overbrace|boxed)(?=\s*\{)""")
+
+    private fun normaliseCommands(s: String): String {
+        var t = bareDrawn.replace(s) { "\\" + it.value }
+        t = t.replace(Regex("""\\sout\b"""), "\\cancel")
+        // Hebrew or Arabic words in \mathrm{…} are plain text (typeset as one right-to-left run).
+        t = t.replace(Regex("""\\(?:mathrm|textrm|textnormal|mbox)\s*\{([^{}]*[\u0590-\u08FF][^{}]*)\}""")) { "\\text{" + it.groupValues[1] + "}" }
+        return t
     }
 
     private fun stripDelimiters(s: String): String {

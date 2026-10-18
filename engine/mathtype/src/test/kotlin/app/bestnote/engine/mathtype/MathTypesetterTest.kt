@@ -239,7 +239,8 @@ class MathTypesetterTest {
     fun unknownCommandsAreMarkedNotFatal() {
         val l = tex.typeset("\\foo + x", size)
         assertEquals(LatexError(0, 4, "unknown command \\foo"), l.errors.single())
-        assertTrue(l.ops.any { it.tone == Tone.Error })
+        // The unknown command is reported but never drawn as text; the rest is drawn.
+        assertTrue(l.ops.none { it is MathOp.TextOp })
         assertTrue(l.ops.any { it.tone == Tone.Normal })
     }
 
@@ -305,5 +306,66 @@ class MathTypesetterTest {
             assertTrue(f, l.ops.none { it is MathOp.TextOp })
             assertTrue(f, l.width > size)
         }
+    }
+}
+
+class MathCoverageTest {
+    private val tex = MathTypesetter(MathFont.stixTwo)
+    private fun lines(l: MathLayout) = l.ops.filterIsInstance<MathOp.LineOp>()
+
+    @Test
+    fun cancelDrawsOneDiagonalStrike() {
+        val l = tex.typeset("\\cancel{W_N}", 20f)
+        assertTrue(l.errors.isEmpty())
+        val s = lines(l).single()
+        assertTrue(s.x2 > s.x1 && s.y2 < s.y1) // bottom-left to top-right
+        assertTrue(l.ops.none { it is MathOp.TextOp })
+    }
+
+    @Test
+    fun bcancelAndXcancel() {
+        val b = lines(tex.typeset("\\bcancel{x}", 20f)).single()
+        assertTrue(b.y2 > b.y1)
+        assertEquals(2, lines(tex.typeset("\\xcancel{x}", 20f)).size)
+    }
+
+    @Test
+    fun cancelToKeepsTheTarget() {
+        val plain = tex.typeset("\\cancel{x}", 20f)
+        val to = tex.typeset("\\cancelto{0}{x}", 20f)
+        assertEquals(1, lines(to).size)
+        assertTrue(to.width > plain.width)
+    }
+
+    @Test
+    fun bracesWithLabelsAreTallerThanTheBody() {
+        val body = tex.typeset("W", 20f)
+        assertTrue(tex.typeset("\\underbrace{W}_{\\text{x}}", 20f).descent > body.descent)
+        assertTrue(tex.typeset("\\overbrace{W}^{n}", 20f).ascent > body.ascent)
+    }
+
+    @Test
+    fun vectorsAccentsBoxAndLines() {
+        for (s in listOf("d\\vec r", "\\hat x", "\\overrightarrow{AB}", "\\boxed{E=mc^2}", "\\underline{x}", "\\overline{x}", "\\left\\{ \\begin{matrix} a \\\\ b \\end{matrix} \\right\\} = 0", "a\\quad b\\, c")) {
+            val l = tex.typeset(s, 20f)
+            assertTrue("$s: ${l.errors}", l.errors.isEmpty())
+            assertTrue(l.ops.isNotEmpty())
+        }
+    }
+
+    @Test
+    fun hebrewTextIsOneRtlRun() {
+        val l = tex.typeset("W_{\\text{לא משמרים}}", 20f)
+        val run = l.ops.filterIsInstance<MathOp.TextOp>().single { it.rtl }
+        assertEquals("לא משמרים", run.text)
+    }
+
+    @Test
+    fun unknownCommandNeverPrintsItsName() {
+        val l = tex.typeset("a \\frobnicate{x+1} b", 20f)
+        assertTrue(l.errors.isNotEmpty())
+        assertTrue(l.ops.none { it is MathOp.TextOp && it.text.contains("frobnicate") })
+        val bare = tex.typeset("a \\zzz b", 20f)
+        assertTrue(bare.ops.none { it is MathOp.TextOp && it.text.contains("zzz") })
     }
 }

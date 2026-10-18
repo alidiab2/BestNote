@@ -26,6 +26,7 @@ object StrokeHand {
         is MathParser.Text -> canWrite(n.s)
         is MathParser.Space -> true
         is MathParser.Group -> n.body.all(::canWriteNode)
+        is MathParser.Deco -> n.body.all(::canWriteNode) && n.label.orEmpty().all(::canWriteNode)
         is MathParser.Frac -> n.num.all(::canWriteNode) && n.den.all(::canWriteNode)
         is MathParser.Scripts -> (n.base?.let(::canWriteNode) ?: true) && n.sup.orEmpty().all(::canWriteNode) && n.sub.orEmpty().all(::canWriteNode)
         is MathParser.Sqrt -> n.body.all(::canWriteNode)

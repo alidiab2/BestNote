@@ -16,8 +16,14 @@ sealed interface MathOp {
     /** A filled rectangle (fraction bars, radical overbars, box frames). */
     class RuleOp(val x: Float, val top: Float, val width: Float, val height: Float, override val tone: Tone) : MathOp
 
+    /** A stroked line from ([x1], [y1]) to ([x2], [y2]) with [thickness] (cancel strikes). */
+    class LineOp(val x1: Float, val y1: Float, val x2: Float, val y2: Float, val thickness: Float, override val tone: Tone) : MathOp
+
+    /** A stroked polyline ([points] = x0, y0, x1, y1…) with round joins: handwritten ink. */
+    class PolyOp(val points: FloatArray, val thickness: Float, override val tone: Tone) : MathOp
+
     /** Words the math font cannot draw (Arabic, Hebrew…): the device font draws them, baseline at [y]. */
-    class TextOp(val text: String, val x: Float, val y: Float, val sizePt: Float, val bold: Boolean, val italic: Boolean, override val tone: Tone) : MathOp
+    class TextOp(val text: String, val x: Float, val y: Float, val sizePt: Float, val bold: Boolean, val italic: Boolean, override val tone: Tone, val rtl: Boolean = false) : MathOp
 }
 
 /** A typeset formula: [width] by [ascent] above and [descent] below the baseline, in points. */

@@ -9,6 +9,8 @@ import android.text.TextPaint
 import android.util.LruCache
 import android.util.SparseArray
 import app.bestnote.core.model.EquationElement
+import app.bestnote.core.model.EquationStyle
+import app.bestnote.engine.handwriting.HandMath
 import app.bestnote.engine.mathtype.GlyphPath
 import app.bestnote.engine.mathtype.MathFont
 import app.bestnote.engine.mathtype.MathLayout
@@ -35,28 +37,38 @@ object EquationRendering {
 
     val typesetter: MathTypesetter by lazy { MathTypesetter(MathFont.stixTwo, DeviceText) }
 
-    private data class Key(val latex: String, val sizePt: Float, val display: Boolean, val placeholders: Boolean)
+    private data class Key(val latex: String, val sizePt: Float, val display: Boolean, val placeholders: Boolean, val style: EquationStyle)
 
     private val layouts = LruCache<Key, MathLayout>(LAYOUT_CACHE)
     private val paths = SparseArray<Path>()
 
     /** [latex] typeset at [sizePt] (cached). Never throws: errors are in [MathLayout.errors]. */
-    fun layout(latex: String, sizePt: Float, display: Boolean = true, placeholders: Boolean = false): MathLayout {
-        val key = Key(latex, sizePt, display, placeholders)
+    fun layout(latex: String, sizePt: Float, display: Boolean = true, placeholders: Boolean = false, style: EquationStyle = EquationStyle.Typeset): MathLayout {
+        val key = Key(latex, sizePt, display, placeholders, style)
         layouts.get(key)?.let { return it }
-        return typesetter.typeset(latex, sizePt, display, placeholders).also { layouts.put(key, it) }
+        val l = (if (style == EquationStyle.Handwritten && !placeholders) handwritten(latex, sizePt) else null)
+            ?: typesetter.typeset(latex, sizePt, display, placeholders)
+        return l.also { layouts.put(key, it) }
+    }
+
+    /** The handwriting-like look: pen strokes from the Smart Board hand; null when the hand cannot write [latex] (it is typeset instead). */
+    private fun handwritten(latex: String, sizePt: Float): MathLayout? {
+        val ink = HandMath.write(latex, sizePt) ?: return null
+        val errors = typesetter.typeset(latex, sizePt).errors
+        val ops = ink.strokes.map { MathOp.PolyOp(it, ink.thickness, Tone.Normal) }
+        return MathLayout(ink.width, ink.ascent, ink.descent, ops, errors)
     }
 
     /** The frame (width, height in points) an equation needs: its formula plus [EquationElement.MARGIN_EM] all round. */
-    fun frameSize(latex: String, sizePt: Float, display: Boolean = true): Pair<Float, Float> {
-        val l = layout(latex, sizePt, display)
+    fun frameSize(latex: String, sizePt: Float, display: Boolean = true, style: EquationStyle = EquationStyle.Typeset): Pair<Float, Float> {
+        val l = layout(latex, sizePt, display, style = style)
         val m = sizePt * EquationElement.MARGIN_EM
         return (l.width + 2 * m).coerceAtLeast(sizePt) to (l.height + 2 * m).coerceAtLeast(sizePt)
     }
 
     /** [e] with its frame re-measured for its current LaTeX and size, keeping its center. */
     fun fitted(e: EquationElement): EquationElement {
-        val (w, h) = frameSize(e.latex, e.sizePt, e.display)
+        val (w, h) = frameSize(e.latex, e.sizePt, e.display, e.style)
         return e.copy(width = w, height = h)
     }
 
@@ -65,7 +77,7 @@ object EquationRendering {
      * Parts with LaTeX errors use [errorColor].
      */
     fun drawElement(canvas: Canvas, e: EquationElement, color: Int, errorColor: Int = ERROR_COLOR) {
-        val l = layout(e.latex, e.sizePt, e.display)
+        val l = layout(e.latex, e.sizePt, e.display, style = e.style)
         val m = e.sizePt * EquationElement.MARGIN_EM
         val w = (l.width + 2 * m).coerceAtLeast(e.sizePt)
         val h = (l.height + 2 * m).coerceAtLeast(e.sizePt)
@@ -94,13 +106,34 @@ object EquationRendering {
                     canvas.restore()
                 }
                 is MathOp.RuleOp -> canvas.drawRect(x + op.x, baseline + op.top, x + op.x + op.width, baseline + op.top + op.height, fill)
+                is MathOp.LineOp -> {
+                    fill.style = Paint.Style.STROKE
+                    fill.strokeWidth = op.thickness
+                    canvas.drawLine(x + op.x1, baseline + op.y1, x + op.x2, baseline + op.y2, fill)
+                    fill.style = Paint.Style.FILL
+                }
+                is MathOp.PolyOp -> {
+                    fill.style = Paint.Style.STROKE
+                    fill.strokeWidth = op.thickness
+                    fill.strokeCap = Paint.Cap.ROUND
+                    fill.strokeJoin = Paint.Join.ROUND
+                    val p = Path()
+                    val c = op.points
+                    p.moveTo(x + c[0], baseline + c[1])
+                    if (c.size == 2) p.lineTo(x + c[0] + 0.01f, baseline + c[1])
+                    var k = 2
+                    while (k + 1 < c.size) { p.lineTo(x + c[k], baseline + c[k + 1]); k += 2 }
+                    canvas.drawPath(p, fill)
+                    fill.style = Paint.Style.FILL
+                }
                 is MathOp.TextOp -> {
                     // Laid out at a larger size and scaled down, as text elements are, for precise glyph positions.
                     val p = textPaint(op.sizePt * MEASURE_SCALE, op.bold, op.italic).apply { this.color = fill.color }
                     canvas.save()
                     canvas.translate(x + op.x, baseline + op.y)
                     canvas.scale(1f / MEASURE_SCALE, 1f / MEASURE_SCALE)
-                    canvas.drawText(op.text, 0f, 0f, p)
+                    if (op.rtl) canvas.drawTextRun(op.text, 0, op.text.length, 0, op.text.length, 0f, 0f, true, p)
+                    else canvas.drawText(op.text, 0f, 0f, p)
                     canvas.restore()
                 }
             }

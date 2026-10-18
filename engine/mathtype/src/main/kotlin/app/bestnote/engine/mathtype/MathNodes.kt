@@ -73,6 +73,9 @@ sealed interface MathNode {
 
     data class Boxed(val body: Row) : MathNode
 
+    /** `\cancel` (slash), `\bcancel` (back slash), `\xcancel` (both), `\cancelto{to}{body}`: a strike line over [body]. */
+    data class Cancel(val body: Row, val slash: Boolean, val back: Boolean, val to: Row? = null) : MathNode
+
     /** Takes the room of [body] without drawing it. */
     data class Phantom(val body: Row, val width: Boolean = true, val height: Boolean = true) : MathNode
 

@@ -15,6 +15,8 @@ dependencies {
     api(projects.engine.layout)
     // MATH-01: typeset equations, drawn as vector glyph outlines.
     api(projects.engine.mathtype)
+    // MATH-02: the handwriting-like equation style is written by the Smart Board stroke hand.
+    implementation(projects.engine.handwriting)
     implementation(projects.engine.recognition)
     implementation(libs.androidx.core.ktx)
 

@@ -149,4 +149,8 @@
     <string name="tpl_density_airy">متباعد</string>
     <string name="tpl_density_normal">عادي</string>
     <string name="tpl_density_dense">كثيف</string>
+    <string name="tpl_look_equations">نمط المعادلات</string>
+    <string name="tpl_look_equations_hint">كيف تُرسم المعادلات: بخط اليد أو كمعادلات مطبوعة (LaTeX).</string>
+    <string name="tpl_equations_handwritten">خط اليد</string>
+    <string name="tpl_equations_typeset">مطبوع (LaTeX)</string>
 </resources>

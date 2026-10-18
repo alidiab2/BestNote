@@ -17,6 +17,11 @@ internal object MathParser {
     data class Sqrt(val body: List<Node>) : Node
     data class Group(val body: List<Node>) : Node
 
+    /** A drawn mark on [body]: strike lines, bars, braces (with a [label]), a box, an arrow or a hat. */
+    data class Deco(val body: List<Node>, val kind: DecoKind, val label: List<Node>? = null) : Node
+
+    enum class DecoKind { Cancel, BCancel, XCancel, CancelTo, Under, Over, UnderBrace, OverBrace, Box, Vec, Hat }
+
     /** `\left( … \right)` and similar pairs: delimiters as tall as what they hold ("" = none; "|" bars are drawn as lines). */
     data class Delim(val left: String, val body: List<Node>, val right: String) : Node
 
@@ -27,9 +32,12 @@ internal object MathParser {
     private val LINE_ENVS = Regex("""^\\begin\{(aligned|align\*?|gather\*?|gathered|eqnarray\*?|split|multline\*?)\}(.*)\\end\{\1\}$""", RegexOption.DOT_MATCHES_ALL)
 
     /** Top-level rows (split on `\\` outside braces and environments). Alignment `&` is ignored at the top level. */
-    fun parse(latex: String): List<List<Node>> {
+    fun parse(latex: String): List<List<Node>> = rowsOf(latex).map { Reader(it).group(untilBrace = false) }.filter { it.isNotEmpty() }
+
+    /** The source of each top-level row of [latex] (a wrapping aligned/gather environment is removed). */
+    fun rowsOf(latex: String): List<String> {
         val whole = LINE_ENVS.find(latex.trim())?.groupValues?.get(2) ?: latex
-        return splitTop(whole, "\\\\").map { Reader(it).group(untilBrace = false) }.filter { it.isNotEmpty() }
+        return splitTop(whole, "\\\\").map { it.trim() }.filter { it.isNotEmpty() }
     }
 
     /** [s] split at [sep] where it is not inside `{…}` or a `\begin … \end` environment. */
@@ -105,7 +113,9 @@ internal object MathParser {
                         i++
                         val arg = argument()
                         val last = out.removeLastOrNull()
-                        out += if (last is Scripts && (if (c == '^') last.sup == null else last.sub == null)) {
+                        out += if (last is Deco && last.label == null && (last.kind == DecoKind.UnderBrace && c == '_' || last.kind == DecoKind.OverBrace && c == '^')) {
+                            last.copy(label = arg)
+                        } else if (last is Scripts && (if (c == '^') last.sup == null else last.sub == null)) {
                             if (c == '^') last.copy(sup = arg) else last.copy(sub = arg)
                         } else {
                             if (c == '^') Scripts(last, arg, null) else Scripts(last, null, arg)
@@ -236,15 +246,32 @@ internal object MathParser {
                     if (i < s.length && s[i] == '[') { while (i < s.length && s[i] != ']') i++; i++ }
                     out += Sqrt(argument())
                 }
-                "text", "mathrm", "textrm", "textbf", "operatorname", "mbox" -> {
+                "text", "mathrm", "textrm", "textbf", "operatorname", "mbox", "textit", "textnormal", "mathsf", "mathtt", "texttt" -> {
                     val raw = rawArgument()
+                    val words = ArrayList<Node>()
                     raw.split(' ').forEachIndexed { k, w ->
-                        if (k > 0) out += Space(0.9f)
-                        if (w.isNotEmpty()) out += Text(w)
+                        if (k > 0) words += Space(0.9f)
+                        if (w.isNotEmpty()) words += Text(w)
                     }
+                    // Right-to-left words stay one run of their own so the device's BiDi orders them.
+                    if (raw.any { it.code in 0x0590..0x08FF }) out += Group(words) else out += words
                 }
+                "cancel" -> out += Deco(argument(), DecoKind.Cancel)
+                "bcancel" -> out += Deco(argument(), DecoKind.BCancel)
+                "xcancel" -> out += Deco(argument(), DecoKind.XCancel)
+                "cancelto" -> {
+                    val to = argument()
+                    out += Deco(argument(), DecoKind.CancelTo, to)
+                }
+                "underbrace" -> out += Deco(argument(), DecoKind.UnderBrace)
+                "overbrace" -> out += Deco(argument(), DecoKind.OverBrace)
+                "boxed", "fbox" -> out += Deco(argument(), DecoKind.Box)
+                "underline" -> out += Deco(argument(), DecoKind.Under)
+                "overline", "bar" -> out += Deco(argument(), DecoKind.Over)
+                "vec", "overrightarrow" -> out += Deco(argument(), DecoKind.Vec)
+                "hat", "widehat" -> out += Deco(argument(), DecoKind.Hat)
                 "displaystyle", "textstyle" -> Unit
-                "mathbf", "mathit", "boldsymbol", "mathcal", "mathbb", "vec", "hat", "bar", "overline", "underline" -> out.add(Group(argument()))
+                "mathbf", "mathit", "boldsymbol", "mathcal", "mathbb", "bm", "mathscr", "tilde", "dot", "ddot", "textcolor" -> out.add(Group(argument()))
                 "left" -> {
                     val l = delimiter()
                     rightDelim = ""
@@ -281,8 +308,9 @@ internal object MathParser {
                 else -> {
                     val symbol = SYMBOLS[name]
                     if (symbol == null) unknown?.add(name)
-                    // Last resort: the bare name, never a backslash.
-                    out += Text(symbol ?: name)
+                    // Unknown command: never print its name; draw its braced argument, if any.
+                    if (symbol != null) out += Text(symbol)
+                    else if (i < s.length && s[i] == '{') out += Group(argument())
                 }
             }
         }
@@ -358,6 +386,17 @@ internal class MathWriter(private val hand: Hand, private val text: TextWriter, 
         }
         is MathParser.Space -> Metrics(n.em * xh * scale, 0f, 0f)
         is MathParser.Group -> measure(n.body, scale)
+        is MathParser.Deco -> {
+            val b = measure(n.body, scale)
+            val e = DecoGeometry.extra(n.kind, xh * scale)
+            val label = n.label?.takeIf { n.kind == MathParser.DecoKind.UnderBrace || n.kind == MathParser.DecoKind.OverBrace }?.let { measure(it, scale * SCRIPT) }
+            val above = n.kind == MathParser.DecoKind.OverBrace
+            Metrics(
+                max(b.width + e.side, label?.width ?: 0f),
+                b.ascent + e.up + if (above && label != null) label.ascent + label.descent else 0f,
+                b.descent + e.down + if (!above && label != null && n.kind == MathParser.DecoKind.UnderBrace) label.ascent + label.descent else 0f,
+            )
+        }
         is MathParser.Frac -> {
             val s = fracScale(scale)
             val num = measure(n.num, s)
@@ -406,6 +445,20 @@ internal class MathWriter(private val hand: Hand, private val text: TextWriter, 
         }
         is MathParser.Space -> x + n.em * xh * scale
         is MathParser.Group -> write(n.body, x, baseline, color, scale, gap)
+        is MathParser.Deco -> {
+            val b = measure(n.body, scale)
+            val e = DecoGeometry.extra(n.kind, xh * scale)
+            val m = measure(n, scale)
+            val bx = x + (m.width - b.width) / 2 + e.side / 2
+            write(n.body, bx, baseline, color, scale, gap)
+            DecoGeometry.draw(shapes, n.kind, bx, baseline, b.width, b.ascent, b.descent, xh * scale, color, e)
+            n.label?.takeIf { n.kind == MathParser.DecoKind.UnderBrace || n.kind == MathParser.DecoKind.OverBrace }?.let { l ->
+                val lm = measure(l, scale * SCRIPT)
+                val ly = if (n.kind == MathParser.DecoKind.OverBrace) baseline - b.ascent - e.up - lm.descent else baseline + b.descent + e.down + lm.ascent
+                write(l, bx + (b.width - lm.width) / 2, ly, color, scale * SCRIPT, Gap.Letter)
+            }
+            x + m.width
+        }
         is MathParser.Frac -> {
             val m = measure(n, scale)
             val s = fracScale(scale)
@@ -503,6 +556,7 @@ internal object InlineMath {
             is MathParser.Text -> n.s
             is MathParser.Space -> " "
             is MathParser.Group -> flat(n.body)
+            is MathParser.Deco -> flat(n.body)
             is MathParser.Frac -> wrapped(n.num) + "/" + wrapped(n.den)
             is MathParser.Scripts -> (n.base?.let { flat(listOf(it)) } ?: "") +
                 (n.sub?.let { wrapped(it) } ?: "") + (n.sup?.let { wrapped(it) } ?: "")

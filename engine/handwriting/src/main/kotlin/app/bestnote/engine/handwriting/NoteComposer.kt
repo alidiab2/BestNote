@@ -101,7 +101,7 @@ class NoteComposer(
                 sheet.block = RULES
                 sheet.ink.block = RULES
                 for (r in rules.filter { it.page == page }) sheet.shapes.dashed(P(r.x0, r.y0), P(r.x1, r.y1), RULE_COLOR)
-                TypesetPage(sheet.runs, sheet.marks + sheet.ink.build().map { it.stroke })
+                TypesetPage(sheet.runs, sheet.marks + sheet.ink.build().map { it.stroke }, sheet.equations)
             },
         )
     }
@@ -194,11 +194,7 @@ class NoteComposer(
 
     private fun mathBoxes(latex: String, width: Float, scale: Float = 1f): List<FontComposer.MBox> {
         val avail = fc.usable(width) - 1.2f * gap
-        return MathParser.parse(latex).map { nodes ->
-            val size = fc.displaySize() * scale
-            val b = fc.layout(nodes, size)
-            if (b.width > avail && b.width > 0f) fc.layout(nodes, size * max(0.55f, avail / b.width)) else b
-        }
+        return fc.displayBoxes(latex, avail, fc.displaySize() * scale)
     }
 
     private fun linesOf(box: FontComposer.MBox) = max(1, ceil((box.ascent + 0.12f * gap) / gap - 0.02f).toInt())

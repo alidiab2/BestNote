@@ -1,5 +1,6 @@
 package app.bestnote.engine.layout
 
+import app.bestnote.core.model.EquationStyle
 import app.bestnote.core.model.CalloutTone
 import app.bestnote.core.model.PageBlock
 import app.bestnote.core.model.PaperTemplate
@@ -80,6 +81,7 @@ enum class Density { Airy, Normal, Dense }
  * @property highlight the highlighter colour for [Decoration.Highlight].
  * @property layout one column ([PageLayout.Flow]) or packed columns ([PageLayout.Packed]).
  * @property density how much goes on a page in the packed layout.
+ * @property equationStyle how formulas are drawn (a notebook can override it).
  */
 data class StyleTemplate(
     val id: String,
@@ -94,6 +96,8 @@ data class StyleTemplate(
     val highlight: Long = 0x66FFE066L,
     val layout: PageLayout = PageLayout.Flow,
     val density: Density = Density.Normal,
+    /** MATH-02: formulas as handwriting ([EquationStyle.Handwritten], today's look) or typeset maths ([EquationStyle.Typeset]). */
+    val equationStyle: EquationStyle = EquationStyle.Handwritten,
 ) {
     fun role(r: NoteRole): RoleStyle = roles[r] ?: roles[NoteRole.Body] ?: RoleStyle()
 

@@ -1,5 +1,6 @@
 package app.bestnote.engine.handwriting
 
+import app.bestnote.core.model.EquationStyle
 import app.bestnote.core.model.CalloutTone
 import app.bestnote.core.model.InkBrush
 import app.bestnote.core.model.InkStroke
@@ -49,7 +50,31 @@ data class TypeRun(
 )
 
 /** A page of typed notes: text runs, plus pen strokes for boxes, underlines, arrows, fraction bars and drawings. */
-class TypesetPage(val runs: List<TypeRun>, val ink: List<InkStroke>)
+class TypesetPage(val runs: List<TypeRun>, val ink: List<InkStroke>, val equations: List<EquationRun> = emptyList())
+
+/** A typeset formula ([latex]) whose ink box sits on [baseline] from [left], [ascent] above and [descent] below it. */
+data class EquationRun(
+    val latex: String,
+    val left: Float,
+    val baseline: Float,
+    val width: Float,
+    val ascent: Float,
+    val descent: Float,
+    val sizePt: Float,
+    val color: Int,
+    val boxed: Boolean = false,
+) {
+    /** The page element for this formula: a typeset [app.bestnote.core.model.EquationElement] whose frame is the formula plus its margin. */
+    fun toElement(id: String): app.bestnote.core.model.EquationElement {
+        val m = sizePt * app.bestnote.core.model.EquationElement.MARGIN_EM
+        val h = ascent + descent
+        return app.bestnote.core.model.EquationElement(
+            id = id, cx = left + width / 2, cy = baseline - ascent + h / 2, width = (width + 2 * m).coerceAtLeast(sizePt), height = (h + 2 * m).coerceAtLeast(sizePt),
+            latex = latex, sizePt = sizePt.coerceIn(app.bestnote.core.model.EquationElement.MIN_SIZE_PT, app.bestnote.core.model.EquationElement.MAX_SIZE_PT),
+            colorArgb = color,
+        )
+    }
+}
 
 class TypesetPages(val pages: List<TypesetPage>) {
     val elementCount: Int get() = pages.sumOf { it.runs.size + it.ink.size }
@@ -114,6 +139,7 @@ class FontComposer(
     /** Collects one page's output. */
     internal inner class Sheet(page: Int) {
         val runs = ArrayList<TypeRun>()
+        val equations = ArrayList<EquationRun>()
         internal val h = hand(page)
         val ink = InkBuilder(h, PenChoice(colorArgb = penColor))
         val shapes = ShapeWriter(h, ink)
@@ -166,7 +192,7 @@ class FontComposer(
                     }
                     if (b is PageBlock.MarginNote && style.marginArrows) b.anchor?.let(byId::get)?.let { marginArrow(sheet, b, it) }
                 }
-                TypesetPage(sheet.runs, sheet.marks + sheet.ink.build().map { it.stroke })
+                TypesetPage(sheet.runs, sheet.marks + sheet.ink.build().map { it.stroke }, sheet.equations)
             },
         )
     }
@@ -495,15 +521,38 @@ class FontComposer(
 
     internal fun displayWidth(tex: String) = MathParser.parse(tex).maxOfOrNull { layout(it, displaySize()).width } ?: 0f
 
-    internal fun mathRows(latex: String, width: Float, color: Int, boxed: Boolean, indent: Float = mathIndent, scale: Float = 1f): List<Row> {
-        val parsed = MathParser.parse(latex)
-        val pad = if (boxed) 0.45f * gap else 0f
-        val avail = usable(width) - indent - 2 * pad
-        val size = displaySize() * scale
-        val boxes = parsed.map { nodes ->
+    /** MATH-02: formulas drawn as real typeset maths (equation elements) instead of handwriting. */
+    private val typesetter by lazy { app.bestnote.engine.mathtype.MathTypesetter(app.bestnote.engine.mathtype.MathFont.stixTwo) }
+
+    /** One box per line of [latex], in the template's equation style, shrunk to fit [avail]. */
+    internal fun displayBoxes(latex: String, avail: Float, size: Float): List<MBox> {
+        if (style.equationStyle == EquationStyle.Typeset) {
+            return MathParser.rowsOf(latex).map { raw ->
+                val row = if ("\\begin" in raw) raw else raw.replace("&", " ")
+                var sz = size
+                var l = typesetter.typeset(row, sz, display = true)
+                if (l.width > avail && l.width > 0f) {
+                    sz = size * max(0.55f, avail / l.width)
+                    l = typesetter.typeset(row, sz, display = true)
+                }
+                val tex = l
+                val fontSize = sz
+                MBox(tex.width, tex.ascent, tex.descent) { x, baseline, color ->
+                    equations += EquationRun(row, x, baseline, tex.width, tex.ascent, tex.descent, fontSize, color)
+                }
+            }
+        }
+        return MathParser.parse(latex).map { nodes ->
             val b = layout(nodes, size)
             if (b.width > avail && b.width > 0f) layout(nodes, size * max(0.55f, avail / b.width)) else b
         }
+    }
+
+    internal fun mathRows(latex: String, width: Float, color: Int, boxed: Boolean, indent: Float = mathIndent, scale: Float = 1f): List<Row> {
+        val pad = if (boxed) 0.45f * gap else 0f
+        val avail = usable(width) - indent - 2 * pad
+        val size = displaySize() * scale
+        val boxes = displayBoxes(latex, avail, size)
         val rows = boxes.map { box ->
             val lines = max(1, ceil((box.ascent + 0.12f * gap) / gap - 0.02f).toInt())
             Row(lines) { left, right, baseline ->
@@ -716,6 +765,26 @@ class FontComposer(
         is MathParser.Text -> textBox(n.s, size)
         is MathParser.Space -> MBox(n.em * size * 0.28f, 0f, 0f) { _, _, _ -> }
         is MathParser.Group -> layout(n.body, size)
+        is MathParser.Deco -> {
+            val b = layout(n.body, size)
+            val unit = 0.3f * size
+            val e = DecoGeometry.extra(n.kind, unit)
+            val label = n.label?.takeIf { n.kind == MathParser.DecoKind.UnderBrace || n.kind == MathParser.DecoKind.OverBrace }?.let { layout(it, size * 0.62f) }
+            val over = n.kind == MathParser.DecoKind.OverBrace
+            val labelH = label?.let { it.ascent + it.descent } ?: 0f
+            val w = max(b.width + e.side, label?.width ?: 0f)
+            val tail = n.label?.takeIf { n.kind == MathParser.DecoKind.CancelTo }?.let { layout(it, size * 0.62f) }
+            MBox(w + (tail?.width ?: 0f), b.ascent + e.up + if (over) labelH else 0f, b.descent + e.down + if (!over) labelH else 0f) { x, baseline, color ->
+                val bx = x + (w - b.width) / 2
+                b.draw(this, bx, baseline, color)
+                DecoGeometry.draw(shapes, n.kind, bx, baseline, b.width, b.ascent, b.descent, unit, color, e)
+                label?.let { l ->
+                    val ly = if (over) baseline - b.ascent - e.up - l.descent else baseline + b.descent + e.down + l.ascent
+                    l.draw(this, x + (w - l.width) / 2, ly, color)
+                }
+                tail?.draw(this, x + w, baseline - b.ascent, color)
+            }
+        }
         is MathParser.Frac -> {
             val s = max(size * 0.55f, size * 0.8f)
             val num = layout(n.num, s)

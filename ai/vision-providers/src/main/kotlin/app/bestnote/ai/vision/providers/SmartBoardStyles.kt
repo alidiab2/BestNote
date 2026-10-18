@@ -3,6 +3,7 @@ package app.bestnote.ai.vision.providers
 import android.content.Context
 import android.content.SharedPreferences
 import app.bestnote.ai.vision.NotesLanguage
+import app.bestnote.core.model.EquationStyle
 import app.bestnote.engine.layout.StyleTemplate
 import app.bestnote.engine.layout.StyleTemplates
 
@@ -51,6 +52,11 @@ class SmartBoardStyles(private val storage: StyleStorage) {
 
     fun setLanguageFor(notebookId: String, language: NotesLanguage) = storage.put(KEY_NOTEBOOK_LANGUAGE + notebookId, language.code ?: BOARD)
 
+    /** MATH-02: the notebook's own equation style, overriding its template's; null = follow the template. */
+    fun equationStyleFor(notebookId: String): EquationStyle? = EquationStyle.entries.firstOrNull { it.name == storage.get(KEY_NOTEBOOK_EQUATIONS + notebookId) }
+
+    fun setEquationStyleFor(notebookId: String, style: EquationStyle?) = storage.put(KEY_NOTEBOOK_EQUATIONS + notebookId, style?.name)
+
     var writingMode: WritingMode
         get() = WritingMode.entries.firstOrNull { it.name == storage.get(KEY_MODE) } ?: WritingMode.Font
         set(value) = storage.put(KEY_MODE, value.name)
@@ -68,6 +74,7 @@ class SmartBoardStyles(private val storage: StyleStorage) {
         const val KEY_TEMPLATE = "notebook_template:"
         const val KEY_LANGUAGE = "default_language"
         const val KEY_NOTEBOOK_LANGUAGE = "notebook_language:"
+        const val KEY_NOTEBOOK_EQUATIONS = "notebook_equations:"
         const val BOARD = "board"
     }
 }
