@@ -17,6 +17,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import app.bestnote.ai.scan.Pt
 import app.bestnote.ai.scan.Quad
+import app.bestnote.core.model.EquationStyle
 import app.bestnote.core.model.PaperTemplate
 import app.bestnote.engine.layout.RuledPaper
 import app.bestnote.engine.layout.Decoration
@@ -302,7 +303,7 @@ private fun CaptureStage(state: SmartBoardUiState, viewModel: SmartBoardViewMode
                 color = BestNoteTheme.colors.muted,
                 modifier = Modifier.widthIn(max = 560.dp),
             )
-            TemplateChips(state, viewModel::setTemplate, Modifier.widthIn(max = 640.dp))
+            TemplateChips(state, viewModel::setTemplate, Modifier.widthIn(max = 640.dp), viewModel::setEquationStyle)
             if (state.loading > 0) {
                 CircularProgressIndicator()
                 Text(stringResource(R.string.smartboard_finding_edges), style = MaterialTheme.typography.bodyMedium, color = BestNoteTheme.colors.muted)
@@ -341,7 +342,7 @@ private fun CaptureStage(state: SmartBoardUiState, viewModel: SmartBoardViewMode
             }
         }
         PhotoStrip(state, onSelect = viewModel::select, onRemove = viewModel::removePhoto, onCamera = takePhoto, onGallery = choose)
-        TemplateChips(state, viewModel::setTemplate)
+        TemplateChips(state, viewModel::setTemplate, onEquations = viewModel::setEquationStyle)
         FlowRow(
             verticalArrangement = Arrangement.Center,
             horizontalArrangement = Arrangement.spacedBy(Spacing.M),
@@ -725,7 +726,7 @@ private fun roleName(role: NoteRole) = stringResource(
  * switchable on the review screen). Locked on a follow-up: the page keeps its template.
  */
 @Composable
-private fun TemplateChips(state: SmartBoardUiState, onTemplate: (NoteTemplate) -> Unit, modifier: Modifier = Modifier) {
+private fun TemplateChips(state: SmartBoardUiState, onTemplate: (NoteTemplate) -> Unit, modifier: Modifier = Modifier, onEquations: ((EquationStyle?) -> Unit)? = null) {
     val pen = MaterialTheme.colorScheme.onSurface
     Row(modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(Spacing.S), verticalAlignment = Alignment.CenterVertically) {
         Text(stringResource(R.string.smartboard_template), style = MaterialTheme.typography.labelLarge)
@@ -743,6 +744,12 @@ private fun TemplateChips(state: SmartBoardUiState, onTemplate: (NoteTemplate) -
                     }
                 },
             )
+        }
+        if (onEquations != null) {
+            val own = state.equationStyle ?: state.noteTemplate.look.equationStyle
+            Text(stringResource(R.string.smartboard_equations), style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(start = Spacing.S))
+            FilterChip(own == EquationStyle.Handwritten, { onEquations(EquationStyle.Handwritten) }, label = { Text(stringResource(R.string.smartboard_eq_handwritten)) })
+            FilterChip(own == EquationStyle.Typeset, { onEquations(EquationStyle.Typeset) }, label = { Text(stringResource(R.string.smartboard_eq_typeset)) })
         }
         val manage = LocalManageTemplates.current
         androidx.compose.material3.AssistChip(onClick = manage, label = { Text(stringResource(R.string.smartboard_manage_templates)) })

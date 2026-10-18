@@ -17,6 +17,7 @@ import app.bestnote.ai.vision.LegacyNotes
 import app.bestnote.ai.vision.NoteWire
 import app.bestnote.ai.vision.SmartBoardGroup
 import app.bestnote.ai.vision.SmartBoardRecord
+import app.bestnote.core.model.EquationStyle
 import app.bestnote.core.model.NotebookId
 import app.bestnote.core.storage.NotebookStore
 import app.bestnote.engine.handwriting.NotePages
@@ -130,6 +131,8 @@ data class SmartBoardUiState(
     val language: NotesLanguage = NotesLanguage.Board,
     /** Set (to the model's name) when the chosen model is remembered as unable to read images; asks before calling. */
     val textOnlyWarning: String? = null,
+    /** MATH-02: this notebook's equation style; null = the template's own. */
+    val equationStyle: EquationStyle? = null,
 ) {
     /** The look of [noteTemplate]. */
     val style: StyleTemplate get() = noteTemplate.look
@@ -196,6 +199,7 @@ class SmartBoardViewModel @Inject constructor(
             noteTemplate = startNoteTemplate,
             mode = styles.writingMode,
             language = styles.languageFor(route.notebookId),
+            equationStyle = styles.equationStyleFor(route.notebookId),
             followUp = route.continuePageId != null,
             templates = templateStore.all(),
         ),
@@ -221,7 +225,7 @@ class SmartBoardViewModel @Inject constructor(
 
     /** The template with the notebook's notes language applied (the language picker overrides the template's). */
     private fun effective(s: SmartBoardUiState = state.value): NoteTemplate {
-        val t = s.noteTemplate
+        val t = s.noteTemplate.let { n -> s.equationStyle?.let { n.copy(look = n.look.copy(equationStyle = it)) } ?: n }
         return if (s.language == NotesLanguage.Board) t else t.copy(ai = t.ai.copy(notesLanguage = s.language.code))
     }
     private val measure by lazy {
@@ -269,6 +273,14 @@ class SmartBoardViewModel @Inject constructor(
         val change = TemplateChange.between(effective(before), effective())
         state.update { it.copy(notice = change) }
         if (change == TemplateChange.NeedsAi) read() else rerender()
+    }
+
+    /** MATH-02: draws this notebook's formulas as handwriting or typeset maths (null = follow the template); the notes are re-drawn, no AI call. */
+    fun setEquationStyle(style: EquationStyle?) {
+        if (style == state.value.equationStyle) return
+        styles.setEquationStyleFor(route.notebookId, style)
+        state.update { it.copy(equationStyle = style) }
+        rerender()
     }
 
     /** Adds the notebook glossary (all its terms) at the end of the page; no AI call. */

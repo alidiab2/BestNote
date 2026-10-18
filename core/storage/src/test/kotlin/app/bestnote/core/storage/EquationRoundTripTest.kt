@@ -71,4 +71,10 @@ class EquationRoundTripTest {
         store.writePages(NotebookPackage(original.notebook.copy(updatedAtMillis = 50), listOf(edited)), setOf(edited.id))
         assertEquals("\\sum_{k=1}^{n} k", (store.read(nid)!!.pages[0].elements.single() as EquationElement).latex)
     }
+
+    @Test fun equationStyleRoundTrips() {
+        val hand = quadratic.copy(style = app.bestnote.core.model.EquationStyle.Handwritten)
+        val back = BnoteFormat.fromEntries(BnoteFormat.toEntries(pkg(listOf(hand, inline)))::get)
+        assertEquals(listOf(hand, inline), back.pages[0].elements)
+    }
 }

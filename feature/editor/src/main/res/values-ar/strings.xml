@@ -231,6 +231,8 @@
     <!-- MATH-01: handwriting → typeset equations -->
     <string name="selection_convert_equation">تحويل إلى معادلة</string>
     <string name="selection_copy_latex">نسخ LaTeX</string>
+    <string name="selection_eq_style_typeset">النمط: مطبوع (اضغط لخط اليد)</string>
+    <string name="selection_eq_style_handwritten">النمط: خط اليد (اضغط للمطبوع)</string>
     <string name="equation_title">تحويل إلى معادلة</string>
     <string name="equation_no_provider">قراءة الرياضيات المكتوبة بخط اليد تستخدم مزوّد الذكاء الاصطناعي. أضِف مزوّدًا من الإعدادات ← الذكاء الاصطناعي للسبورة، أو اكتب LaTeX بنفسك. (قراءة الرياضيات على الجهاز ستأتي لاحقًا.)</string>
     <string name="equation_open_settings">فتح الإعدادات</string>

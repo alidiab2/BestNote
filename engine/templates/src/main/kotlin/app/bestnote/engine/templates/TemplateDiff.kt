@@ -17,6 +17,7 @@ object TemplateDiff {
         add("font.latin", a.look.latinFont.id, b.look.latinFont.id)
         add("font.arabic", a.look.arabicFont.id, b.look.arabicFont.id)
         add("font.hebrew", a.look.hebrewFont.id, b.look.hebrewFont.id)
+        add("equations", a.look.equationStyle.name, b.look.equationStyle.name)
         add("bodyScale", "%.2f".format(a.look.bodyScale), "%.2f".format(b.look.bodyScale))
         add("spaceBeforeHeading", a.look.spaceBeforeHeading, b.look.spaceBeforeHeading)
         add("marginArrows", a.look.marginArrows, b.look.marginArrows)

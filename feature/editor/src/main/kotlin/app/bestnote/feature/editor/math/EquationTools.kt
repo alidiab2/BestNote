@@ -19,6 +19,7 @@ import app.bestnote.ai.math.EquationReading
 import app.bestnote.ai.math.EquationRecognizer
 import app.bestnote.ai.vision.VisionError
 import app.bestnote.core.model.EquationElement
+import app.bestnote.core.model.EquationStyle
 import app.bestnote.core.model.PageElement
 import app.bestnote.engine.canvas.document.EquationRendering
 import app.bestnote.engine.canvas.document.PagedDocument
@@ -197,6 +198,18 @@ internal class EquationTools(
 
     fun editSelected() {
         (canvas()?.selectedElement as? EquationElement)?.let(::edit)
+    }
+
+    /** MATH-02: switches the selected equation between the handwritten and the typeset look (one undo step). */
+    fun toggleStyleSelected() {
+        canvas()?.updateSelectedElement { old ->
+            if (old is EquationElement) {
+                val next = if (old.style == EquationStyle.Typeset) EquationStyle.Handwritten else EquationStyle.Typeset
+                EquationRendering.fitted(old.copy(style = next))
+            } else {
+                old
+            }
+        }
     }
 
     fun closeEditor() {

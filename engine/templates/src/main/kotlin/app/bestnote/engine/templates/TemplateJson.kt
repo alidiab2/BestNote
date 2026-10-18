@@ -1,6 +1,7 @@
 package app.bestnote.engine.templates
 
 import app.bestnote.core.model.PaperTemplate
+import app.bestnote.core.model.EquationStyle
 import app.bestnote.engine.layout.AiInstructions
 import app.bestnote.engine.layout.Decoration
 import app.bestnote.engine.layout.DetailLevel
@@ -72,6 +73,7 @@ object TemplateJson {
             put("marginArrows", l.marginArrows)
             put("layout", l.layout.name.lowercase())
             put("density", l.density.name.lowercase())
+            put("equations", l.equationStyle.name.lowercase())
             put("highlight", hex(l.highlight))
             put("paper", l.paper?.name?.let(::JsonPrimitive) ?: JsonNull)
             putJsonObject("roles") {
@@ -130,6 +132,7 @@ object TemplateJson {
             marginArrows = l.bool("marginArrows") ?: base.marginArrows,
             layout = l.str("layout")?.let { v -> PageLayout.entries.firstOrNull { it.name.equals(v.trim(), ignoreCase = true) } } ?: base.layout,
             density = l.str("density")?.let { v -> Density.entries.firstOrNull { it.name.equals(v.trim(), ignoreCase = true) } } ?: base.density,
+            equationStyle = l.str("equations")?.let { v -> EquationStyle.entries.firstOrNull { it.name.equals(v.trim(), ignoreCase = true) } } ?: base.equationStyle,
             highlight = l.str("highlight")?.let(::parseColor)?.let { 0x66000000L or (it and 0xFFFFFF) } ?: base.highlight,
             roles = if (roles == null) base.roles else NoteRole.entries.associateWith { r ->
                 val prev = base.role(r)

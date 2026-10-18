@@ -28,4 +28,14 @@ class LatexSanitizerTest {
     @Test fun `escaped braces do not count`() {
         assertEquals("\\{x \\mid x > 0\\}", ok("\\{x \\mid x > 0\\}"))
     }
+
+    @Test
+    fun drawnCommandsAreKeptAndBareOnesRepaired() {
+        fun ok(raw: String) = (LatexSanitizer.sanitize(raw) as LatexResult.Ok).latex
+        assertEquals("\\cancel{W_N} + \\underbrace{a}_{b}", ok("\\cancel{W_N} + \\underbrace{a}_{b}"))
+        assertEquals("\\cancel{W_N}", ok("cancel{W_N}"))
+        assertEquals("\\boxed{x} \\vec r \\hat x", ok("\\boxed{x} \\vec r \\hat x"))
+        assertEquals("\\text{לא משמרים}", ok("\\mathrm{לא משמרים}"))
+        assertEquals("\\left\\{ a \\right.", ok("\\left\\{ a \\right."))
+    }
 }

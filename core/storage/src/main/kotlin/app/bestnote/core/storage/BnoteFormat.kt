@@ -2,6 +2,7 @@ package app.bestnote.core.storage
 
 import app.bestnote.core.model.CropRect
 import app.bestnote.core.model.EquationElement
+import app.bestnote.core.model.EquationStyle
 import app.bestnote.core.model.ImageElement
 import app.bestnote.core.model.AudioRecording
 import app.bestnote.core.model.Notebook
@@ -128,6 +129,8 @@ internal data class ElementJson(
     val latex: String? = null,
     /** False for an inline (text-style) formula. */
     val display: Boolean = true,
+    /** "Handwritten" for the handwriting-like look; absent = typeset. */
+    val eq: String? = null,
 )
 
 /** One paragraph's format: [st] a [ParagraphStyle] name, [list] a [ListStyle] name or null (the box's), [ind] indent level. */
@@ -321,6 +324,7 @@ object BnoteFormat {
         is EquationElement -> ElementJson(
             "equation", e.id, e.cx, e.cy, e.width, e.height, e.rotation, e.locked,
             size = e.sizePt, color = e.colorArgb, group = e.group, latex = e.latex, display = e.display,
+            eq = e.style.takeIf { it == EquationStyle.Handwritten }?.name,
         )
     }
 
@@ -359,6 +363,7 @@ object BnoteFormat {
             "equation" -> EquationElement(
                 j.id, j.cx, j.cy, j.w, j.h, j.latex.orEmpty(),
                 j.size.coerceIn(EquationElement.MIN_SIZE_PT, EquationElement.MAX_SIZE_PT), j.color, j.rot, j.locked, j.group, j.display,
+                EquationStyle.entries.firstOrNull { it.name == j.eq } ?: EquationStyle.Typeset,
             )
             else -> null
         }

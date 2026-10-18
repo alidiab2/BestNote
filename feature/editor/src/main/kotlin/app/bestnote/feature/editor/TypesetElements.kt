@@ -49,7 +49,7 @@ internal class PaintMeasure : TextMeasure {
  * plus the font's ascent).
  */
 internal object TypesetElements {
-    fun elements(page: TypesetPage, measure: TextMeasure, newId: () -> String): List<PageElement> = page.runs.map { element(it, measure, newId()) }
+    fun elements(page: TypesetPage, measure: TextMeasure, newId: () -> String): List<PageElement> = page.runs.map { element(it, measure, newId()) } + page.equations.map { it.toElement(newId()) }
 
     private fun element(r: TypeRun, measure: TextMeasure, id: String): TextElement {
         val pad = r.sizePt * PAD

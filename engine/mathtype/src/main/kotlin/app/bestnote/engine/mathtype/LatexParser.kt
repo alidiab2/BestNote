@@ -393,7 +393,7 @@ object LatexParser {
                     out += MathNode.BigDelim(d, size, kind)
                 }
                 "overline" -> out += MathNode.Line(argument(at), over = true)
-                "underline" -> out += MathNode.Line(argument(at), over = false)
+                "underline", "uline" -> out += MathNode.Line(argument(at), over = false)
                 "overbrace" -> out += MathNode.Brace(argument(at), over = true, label = null)
                 "underbrace" -> out += MathNode.Brace(argument(at), over = false, label = null)
                 "overset" -> {
@@ -433,6 +433,12 @@ object LatexParser {
                 "mathclose" -> out += argument(at).copy(kind = AtomKind.Close)
                 "mathpunct" -> out += argument(at).copy(kind = AtomKind.Punct)
                 "mathinner" -> out += argument(at).copy(kind = AtomKind.Inner)
+                "cancel", "bcancel", "xcancel", "sout" ->
+                    out += MathNode.Cancel(argument(at), slash = name != "bcancel", back = name == "bcancel" || name == "xcancel")
+                "cancelto" -> {
+                    val to = argument(at)
+                    out += MathNode.Cancel(argument(at), slash = true, back = false, to = to)
+                }
                 "boxed", "fbox" -> out += MathNode.Boxed(argument(at))
                 "phantom" -> out += MathNode.Phantom(argument(at))
                 "hphantom" -> out += MathNode.Phantom(argument(at), width = true, height = false)
@@ -472,8 +478,11 @@ object LatexParser {
                     out += MathNode.Error("\\")
                 }
                 else -> {
+                    // Never print the command name: draw its braced argument (if any) and log the miss.
                     error(at, i, "unknown command \\$name")
-                    out += MathNode.Error("\\$name")
+                    LOG.warning("unsupported LaTeX command \\$name")
+                    skipSpaces()
+                    if (i < s.length && s[i] == '{') out += argument(at)
                 }
             }
         }
@@ -525,6 +534,7 @@ object LatexParser {
         }
     }
 
+    private val LOG = java.util.logging.Logger.getLogger("LatexParser")
     private val PRIMES = listOf("′", "″", "‴", "⁗")
     private val STARRED = setOf("operatorname", "tag", "align", "gather")
 }

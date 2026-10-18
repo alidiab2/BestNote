@@ -149,4 +149,8 @@
     <string name="tpl_density_airy">Airy</string>
     <string name="tpl_density_normal">Normal</string>
     <string name="tpl_density_dense">Dense</string>
+    <string name="tpl_look_equations">Equation style</string>
+    <string name="tpl_look_equations_hint">How formulas are drawn: like handwriting, or as real typeset maths (LaTeX).</string>
+    <string name="tpl_equations_handwritten">Handwritten</string>
+    <string name="tpl_equations_typeset">Typeset (LaTeX)</string>
 </resources>

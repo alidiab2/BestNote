@@ -8,5 +8,7 @@ plugins {
 dependencies {
     api(projects.core.model)
     api(projects.engine.layout)
+    // MATH-02: "Typeset" equations are measured with the TeX typesetter and become equation elements.
+    implementation(projects.engine.mathtype)
     implementation(libs.kotlinx.serialization.json)
 }

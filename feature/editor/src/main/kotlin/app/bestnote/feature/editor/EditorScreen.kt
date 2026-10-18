@@ -1157,6 +1157,7 @@ fun EditorScreen(
                     onConvertEquation = equations::convert,
                     onEditEquation = equations::editSelected,
                     onCopyLatex = equations::copySelectedLatex,
+                    onToggleEquationStyle = equations::toggleStyleSelected,
                     onTidy = tidier::tidy,
                     onFill = { view?.fillSelection(it) },
                     onPen = { view?.restyleSelection(it) },
