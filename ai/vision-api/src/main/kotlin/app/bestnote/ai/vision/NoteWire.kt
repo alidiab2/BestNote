@@ -16,6 +16,8 @@ import app.bestnote.engine.layout.NoteDocument
 import app.bestnote.engine.layout.NoteElement
 import app.bestnote.engine.layout.NotePart
 import app.bestnote.engine.layout.NoteStep
+import app.bestnote.engine.layout.figlib.FigSpec
+import app.bestnote.engine.layout.figlib.FigureLibrary
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
@@ -205,7 +207,7 @@ object NoteWire {
     private fun figure(o: JsonObject): BoardFigure? {
         val boxRaw = o["box"] ?: o["bbox"]
         val kindRaw = str(o["k"] ?: o["kind"])
-        if (boxRaw == null && kindRaw == null && o["graph"] !is JsonObject && o["shape"] !is JsonObject && o["ref"] == null) return null
+        if (boxRaw == null && kindRaw == null && o["graph"] !is JsonObject && o["shape"] !is JsonObject && o["ref"] == null && o["p"] == null) return null
         val box = (boxRaw as? JsonArray)?.mapNotNull { num(it) }?.let(FigureBox::of)
         val labels = (o["lbl"] ?: o["labels"]).let { it as? JsonArray }.orEmpty().mapNotNull { l ->
             when (l) {
@@ -234,7 +236,28 @@ object NoteWire {
             raster = img,
             source = if (source == FigureSource.Picture && img == null) FigureSource.Pending else source,
             ref = num(o["ref"])?.toInt(),
+            spec = spec(kindRaw, o["p"] ?: o["params"], num(o["c"] ?: o["conf"])),
         )
+    }
+
+    /**
+     * FIG-LIB: a library kind (`k`) with its parameter rows (`p`: `[["a",37],["f","N","n"]]`, or an
+     * object); null when the kind is not in the library or there are no rows. LaTeX in text values is
+     * restored like everywhere else.
+     */
+    private fun spec(kind: String?, raw: JsonElement?, confidence: Float?): FigSpec? {
+        val element = FigureLibrary.find(kind) ?: return null
+        val rows = FigSpec.rowsOf(plain(raw ?: return null)).map { r -> r.map { v -> if (v is String) AiDocumentParser.restoreLatex(v) ?: v else v } }
+        if (rows.isEmpty()) return null
+        return FigSpec(element.kind, rows, confidence?.let { (if (it > 1f) it / 100f else it).coerceIn(0f, 1f) })
+    }
+
+    /** A JSON value as plain Kotlin values (String, Double, Boolean, List, Map). */
+    private fun plain(el: JsonElement): Any? = when (el) {
+        is JsonNull -> null
+        is JsonPrimitive -> if (el.isString) el.content else el.content.toBooleanStrictOrNull() ?: el.doubleOrNull
+        is JsonArray -> el.map(::plain)
+        is JsonObject -> el.mapValues { plain(it.value) }
     }
 
     /** A wire point (0–1000, or fractions) → photo fractions; null when missing or negative. */
@@ -398,7 +421,11 @@ object NoteWire {
     }
 
     private fun kotlinx.serialization.json.JsonObjectBuilder.encodeFigure(f: BoardFigure, forAi: Boolean) {
-        put("k", f.kind.name.lowercase())
+        put("k", f.spec?.kind ?: f.kind.name.lowercase())
+        f.spec?.let { sp ->
+            put("p", JsonArray(sp.rows.map { r -> JsonArray(r.map { v -> if (v is Number) JsonPrimitive(v.toDouble().let { d -> if (d == Math.rint(d) && kotlin.math.abs(d) < 1e9) d.toLong() as Number else d }) else JsonPrimitive(v.toString()) }) }))
+            if (!forAi) sp.confidence?.let { put("c", it) }
+        }
         if (!forAi) {
             f.box?.let { b -> put("box", JsonArray(listOf(b.left, b.top, b.right, b.bottom).map { JsonPrimitive(Math.round(it * 1000)) })) }
             if (f.source != FigureSource.Pending) put("src", f.source.name.lowercase())

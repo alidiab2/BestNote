@@ -180,7 +180,11 @@ class NoteWireTest {
         val o0 = tokens(oldTypical)
         val o1 = tokens(newOutput)
         println("TOKENS prompt+schema old=$p0 new=$p1 (${pct(p0, p1)}); output old=$o0 (bare ${tokens(oldOutput)}) new=$o1 (${pct(o0, o1)})")
-        assertTrue(p1 < p0 * 0.6)
+        // FIG-LIB: the figure catalogue is budgeted on its own (≤ 650 tokens); the rest stays well under the old format.
+        val catalogue = tokens(NotePrompts.FIGURE_KINDS)
+        println("TOKENS figure catalogue=$catalogue")
+        assertTrue(catalogue <= 650)
+        assertTrue(p1 - catalogue < p0 * 0.6)
         assertTrue(o1 < o0 * 0.7)
     }
 

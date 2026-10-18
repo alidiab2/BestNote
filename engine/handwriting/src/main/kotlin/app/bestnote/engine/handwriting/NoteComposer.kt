@@ -554,7 +554,7 @@ class NoteComposer(
     // ------------------------------------------------------------------ diagrams, columns
 
     private fun diagram(b: NoteBlock, width: Float): List<FontComposer.Row> {
-        b.figure?.let { f -> if (f.raster != null || b.diagram != null) return figure(b, f, width) }
+        b.figure?.let { f -> if (f.raster != null || b.diagram != null || f.spec != null) return figure(b, f, width) }
         val d = b.diagram ?: return b.head?.let { fc.textRows(it, width, body, fc.penColor) }.orEmpty()
         val caption = b.head?.let { fc.textRows(it, width, body * CELL_SCALE, colorOf(NoteRole.Note)) }.orEmpty()
         return caption + fc.rows(PageBlock.Diagram(BlockId("x"), EMPTY, d), width)
@@ -578,7 +578,14 @@ class NoteComposer(
                 else -> fc.penColor
             }
         }
-        val rows = f.raster?.let { fc.pictureRows(it, frac, width) } ?: b.diagram?.let { fc.figureRows(it, frac, width, recolour) }.orEmpty()
+        // FIG-LIB: a library drawing is drawn in label units, so it is sized for its labels to come out at the note's label size.
+        val fromSpec = f.raster == null && f.spec != null && (b.diagram == null || f.source == app.bestnote.engine.layout.FigureSource.FromData)
+        val library = if (fromSpec) b.diagram ?: f.spec?.let { app.bestnote.engine.layout.figlib.FigureLibrary.render(it)?.diagram } else null
+        val rows = when {
+            f.raster != null -> fc.pictureRows(f.raster!!, frac, width)
+            library != null -> fc.figureRows(library, fc.libraryFrac(library, width), width, recolour, labelsPlaced = true)
+            else -> b.diagram?.let { fc.figureRows(it, frac, width, recolour) }.orEmpty()
+        }
         return rows
     }
 
