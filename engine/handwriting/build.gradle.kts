@@ -12,3 +12,11 @@ dependencies {
     implementation(projects.engine.mathtype)
     implementation(libs.kotlinx.serialization.json)
 }
+
+// LAYOUT-QA: deep layout fuzzing with -Playoutfuzz.iterations=N (and -Playoutfuzz.seed, -Playoutfuzz.png=true, -Playoutfuzz.only=<case>).
+tasks.withType<Test>().configureEach {
+    listOf("layoutfuzz.iterations", "layoutfuzz.seed", "layoutfuzz.png", "layoutfuzz.only").forEach { key ->
+        project.findProperty(key)?.let { systemProperty(key, it.toString()) }
+    }
+    if (listOf("layoutfuzz.iterations", "layoutfuzz.only", "layoutfuzz.png").any(project::hasProperty)) outputs.upToDateWhen { false }
+}

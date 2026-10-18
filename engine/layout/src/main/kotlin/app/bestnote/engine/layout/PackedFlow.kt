@@ -29,9 +29,11 @@ class PackedFlow(
     private val rtl: Boolean,
     private val density: Density = Density.Normal,
     private val reserved: (page: Int, line: Int) -> Boolean = { _, _ -> false },
+    /** Narrower columns than this (points) are unreadable at the text size: then one column per page. */
+    private val minColumnWidth: Float = 0f,
 ) {
     /** One row of a block at a width: whole ruled [lines]; [blank] rows are air that may be dropped at a column's top. */
-    data class Row(val lines: Int, val blank: Boolean = false, val glue: Boolean = false)
+    data class Row(val lines: Int, val blank: Boolean = false, val glue: Boolean = false, val ink: RowInk = RowInk.None)
 
     /**
      * A block to place. [rows] gives its rows at a width (column or full). [topic]: starts a topic
@@ -63,8 +65,12 @@ class PackedFlow(
     private val fullWidth = right - left
     private val lineCount = paper.lineCount
 
-    /** Columns per page: 3 only for dense notes on a wide page where a column stays readable. */
-    val columns: Int = if (density == Density.Dense && paper.width >= paper.height && colWidth(3) >= MIN_COLUMN_LINES * gap) 3 else 2
+    /** Columns per page: 3 only for dense notes on a wide page where a column stays readable, 1 when even 2 would be too narrow (big text on a small page). */
+    val columns: Int = when {
+        density == Density.Dense && paper.width >= paper.height && colWidth(3) >= max(MIN_COLUMN_LINES * gap, minColumnWidth) -> 3
+        colWidth(2) >= minColumnWidth -> 2
+        else -> 1
+    }
 
     val gutter: Float get() = GUTTER * gap
 
@@ -93,11 +99,23 @@ class PackedFlow(
         val blockLines: Int,
         /** Lines of this row and the rows glued after it (a pen box drawn by a later row). */
         val chain: Int,
+        /** Real ink around this row's baseline (LAYOUT-QA): a block's first row must clear the ink above it in the column. */
+        val ink: RowInk = RowInk.None,
     )
 
     private class Placed(val piece: Piece, val column: Int, val line: Int)
 
-    private class Fill(val placed: List<Placed>, val separators: List<Pair<Int, Int>>, val next: Int, val used: IntArray)
+    /** [tail]: the ink of all columns seen from the baseline of the region's last line. */
+    private class Fill(val placed: List<Placed>, val separators: List<Pair<Int, Int>>, val next: Int, val used: IntArray, val tail: RowInk = RowInk.None)
+
+    /** Extra lines (at most [MAX_PUSH]) so ink [next] written [lines] below the baseline of [above] clears it. */
+    private fun push(above: RowInk, next: RowInk, lines: Int): Int {
+        if (above.isEmpty || next.isEmpty) return 0
+        val need = RowInk.distance(above, next, gap)
+        var extra = 0
+        while (extra < MAX_PUSH && (lines + extra) * gap + 0.01f * gap < need) extra++
+        return extra
+    }
 
     fun place(blocks: List<PackBlock>): Result {
         val slots = ArrayList<Slot>()
@@ -105,6 +123,12 @@ class PackedFlow(
         var page = 0
         var top = 0
         var lastWasTitle = false
+        // Ink hanging below what was written last across the page (a full-width block, a rule, a run of
+        // columns), from the baseline of line top - 1, on page tailPage (LAYOUT-QA).
+        var tail = RowInk.None
+        var tailPage = -1
+        fun tailHere() = if (tailPage == page && top > 0) tail else RowInk.None
+        val ruleInk = RowInk.rule(RULE_ABOVE * gap)
         var i = 0
         val colW = colWidth()
         while (i < blocks.size) {
@@ -113,7 +137,12 @@ class PackedFlow(
                 val rows = b.rows(fullWidth)
                 val n = rows.sumOf { it.lines }.coerceAtLeast(1)
                 val rule = top > 0 && !lastWasTitle
+                // The rule, then the block's first written row, clear the ink above them.
+                var above = tailHere()
+                if (rule) top += push(above, ruleInk, 1)
+                if (rule) above = ruleInk
                 var start = top + (if (rule) 1 else 0)
+                rows.indices.firstOrNull { !rows[it].ink.isEmpty }?.let { k -> start += push(above, rows[k].ink, rows.subList(0, k + 1).sumOf { it.lines }) }
                 // A heading-like span keeps the next block's first lines with it.
                 val need = n + if (b.keepWithNext) 2 else 0
                 if (top > 0 && start + need > lineCount) {
@@ -125,6 +154,8 @@ class PackedFlow(
                 }
                 start = skipReserved(page, start, n)
                 slots += Slot(b.key, page, 0, rows.size, frame(start, n, left, right), start, -1)
+                tail = tailOf(rows)
+                tailPage = page
                 top = start + n
                 lastWasTitle = b.keepWithNext
                 if (top >= lineCount) { page++; top = 0 }
@@ -142,15 +173,25 @@ class PackedFlow(
             var firstRegion = true
             while (s < pieces.size) {
                 if (top > 0 && firstRegion && !lastWasTitle) {
+                    top += push(tailHere(), ruleInk, 1)
                     rules += hRule(page, top, left, right)
                     top++
+                    tail = ruleInk
+                    tailPage = page
                 }
                 firstRegion = false
                 if (top >= lineCount - 1) { page++; top = 0 }
+                // Columns start clear of the ink above them (the title, a rule).
+                startInk = tailHere()
+                tailPage = -1
                 val avail = lineCount - top
                 val full = fill(pieces, s, page, top, avail)
                 val fill = if (full.next >= pieces.size) balanced(pieces, s, page, top, avail) ?: full else full
-                if (fill.placed.isEmpty()) { page++; top = 0; continue }
+                if (fill.placed.isEmpty()) {
+                    // Only air was left (blank rows dropped at a column's top): done with this run.
+                    if (fill.next > s) { s = fill.next; continue }
+                    page++; top = 0; continue
+                }
                 emit(fill, run, page, top, colW, slots, rules)
                 s = fill.next
                 if (s < pieces.size) {
@@ -158,6 +199,8 @@ class PackedFlow(
                     top = 0
                 } else {
                     top += fill.used.max()
+                    tail = fill.tail
+                    tailPage = page
                 }
             }
             lastWasTitle = false
@@ -177,7 +220,7 @@ class PackedFlow(
                 var chain = r.lines
                 var k = ri
                 while (rows[k].glue && k + 1 < rows.size) chain += rows[++k].lines
-                out += Piece(bi, ri, r.lines, r.blank, topicStart = b.topic && ri == 0, blockStart = ri == 0, restLines = rest, blockLines = total, chain = chain)
+                out += Piece(bi, ri, r.lines, r.blank, topicStart = b.topic && ri == 0, blockStart = ri == 0, restLines = rest, blockLines = total, chain = chain, ink = r.ink)
                 rest -= r.lines
             }
         }
@@ -192,31 +235,64 @@ class PackedFlow(
         val placed = ArrayList<Placed>()
         val seps = ArrayList<Pair<Int, Int>>()
         val used = IntArray(columns)
+        // Ink written so far in each column, seen from the baseline on line inkLine[c] (LAYOUT-QA).
+        val ink = Array(columns) { startInk }
+        val inkLine = IntArray(columns) { -1 }
         var col = 0
         var i = start
         while (i < pieces.size && col < columns) {
             val p = pieces[i]
-            if (used[col] == 0 && p.blank) { i++; continue }
-            val sep = if (p.topicStart && used[col] > 0) 1 else 0
-            val at = skipReservedIn(page, top, used[col] + sep, p.lines, height)
+            // Air at a column's top is dropped, but not the first line of a pen box (glued to the rows it encloses).
+            if (used[col] == 0 && p.blank && p.chain == p.lines) { i++; continue }
+            var sep = if (p.topicStart && used[col] > 0) 1 else 0
+            var above = ink[col]
+            var aboveLine = inkLine[col]
+            if (sep == 1) {
+                // The dashed topic rule clears the ink above it too.
+                val rule = RowInk.rule(RULE_ABOVE * gap)
+                while (sep < MAX_PUSH && !above.isEmpty && RowInk.distance(above, rule, gap) > (used[col] + sep - 1 - aboveLine) * gap + 0.01f * gap) sep++
+                above = RowInk.union(RowInk.shifted(above, (used[col] + sep - 1 - aboveLine) * gap), rule)
+                aboveLine = used[col] + sep - 1
+            }
+            var at = skipReservedIn(page, top, used[col] + sep, p.lines, height)
+            // A block's first row, or any row that starts a column (under the title, a rule), clears the ink above.
+            if ((p.blockStart || used[col] == 0) && !above.isEmpty && !p.ink.isEmpty) {
+                val need = RowInk.distance(above, p.ink, gap)
+                var extra = 0
+                while (extra < MAX_PUSH && (at + extra + p.lines - 1 - aboveLine) * gap + 0.01f * gap < need) extra++
+                if (extra > 0) at = skipReservedIn(page, top, at + extra, p.lines, height)
+            }
             val need = needed(pieces, i)
-            if (at + need > height) {
+            // Ink hanging below the page (a fraction on the last line whose air row moves on) does not fit either.
+            val hang = listOf(p.ink.textDown, p.ink.penDown).filter { !it.isNaN() }.maxOrNull()
+            val spills = hang != null && paper.lineY(top + at + p.lines - 1) + hang > paper.height
+            if (at + need > height || spills) {
                 // In an empty column the keep rules give way only when they can never be met (a block
                 // taller than a whole column is split row by row; a single row taller than the column is
                 // placed anyway, nothing is lost).
-                val hopeless = at + need > avail
-                val forced = used[col] == 0 && hopeless && (at + p.lines <= height || (p.lines > height && top == 0))
+                // (Below a full-width block a fresh page may still take it whole: then it is not hopeless.)
+                val hopeless = at + need > avail && (top == 0 || need > lineCount)
+                // (Rows glued under one pen box go together: a box never loses its top line to another column.)
+                val forced = used[col] == 0 && hopeless && (at + p.chain <= height || (p.chain > height && top == 0))
                 if (!forced) {
                     col++
                     continue
                 }
             }
-            if (sep == 1) seps += col to used[col]
+            if (sep > 0) seps += col to (used[col] + sep - 1)
             placed += Placed(p, col, at)
+            if (!p.ink.isEmpty) {
+                val base = at + p.lines - 1
+                ink[col] = RowInk.union(RowInk.shifted(ink[col], (base - inkLine[col]) * gap), p.ink)
+                inkLine[col] = base
+            }
             used[col] = at + p.lines
             i++
         }
-        return Fill(placed, seps, i, used)
+        val bottom = (used.maxOrNull() ?: 0) - 1
+        var tail = RowInk.None
+        for (c in 0 until columns) if (!ink[c].isEmpty) tail = RowInk.union(tail, RowInk.shifted(ink[c], (bottom - inkLine[c]) * gap))
+        return Fill(placed, seps, i, used, tail)
     }
 
     /** Lines that must fit in the column for piece [i] to go there (keep rules). */
@@ -246,6 +322,21 @@ class PackedFlow(
 
     // Set per run of column blocks before filling: blocks that keep with the next one / stay whole.
     private var keepNext: Set<Int> = emptySet()
+
+    /** Ink above the first line of the region being filled (LAYOUT-QA): a full-width block's tail. */
+    private var startInk: RowInk = RowInk.None
+
+    /** The ink of [rows] seen from their last baseline. */
+    private fun tailOf(rows: List<Row>): RowInk {
+        val total = rows.sumOf { it.lines }
+        var cum = 0
+        var out = RowInk.None
+        for (r in rows) {
+            cum += r.lines
+            if (!r.ink.isEmpty) out = RowInk.union(out, RowInk.shifted(r.ink, (total - cum) * gap))
+        }
+        return out
+    }
     private var whole: Set<Int> = emptySet()
 
     private fun keepWhole(p: Piece) = p.block in whole
@@ -297,7 +388,9 @@ class PackedFlow(
             val h = minOf(max(fill.used[c], fill.used[c + 1]), lineCount - top)
             if (fill.used[c] == 0 || fill.used[c + 1] == 0) continue
             val x = (if (rtl) columnLeft(c + 1) + colW else columnLeft(c) + colW) + gutter / 2
-            val y0 = paper.lineY(top) - gap + 0.25f * gap
+            // It starts below whatever hangs down from above (the title's descenders).
+            val hang = listOf(startInk.textDown, startInk.penDown).filter { !it.isNaN() }.maxOrNull()
+            val y0 = max(paper.lineY(top) - gap + 0.25f * gap, if (top > 0 && hang != null) paper.lineY(top - 1) + hang + RowInk.CLEAR * gap else 0f)
             val y1 = paper.lineY(top + h - 1) + 0.25f * gap
             rules += Rule(page, x, y0, x, y1)
         }
@@ -305,7 +398,7 @@ class PackedFlow(
 
     /** A rule in the middle of line [line]'s band. */
     private fun hRule(page: Int, line: Int, x0: Float, x1: Float): Rule {
-        val y = paper.lineY(line) - 0.45f * gap
+        val y = paper.lineY(line) - RULE_ABOVE * gap
         return Rule(page, x0, y, x1, y)
     }
 
@@ -324,6 +417,12 @@ class PackedFlow(
     }
 
     companion object {
+        /** A topic rule sits this far (line gaps) above its line. */
+        const val RULE_ABOVE = 0.45f
+
+        /** At most this many lines are added to clear ink (a giant matrix is placed anyway). */
+        const val MAX_PUSH = 4
+
         /** Gutter between columns, in line gaps. */
         const val GUTTER = 1.0f
 

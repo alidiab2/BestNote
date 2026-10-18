@@ -9,12 +9,12 @@ import java.io.File
 internal object AwtMeasure : TextMeasure {
     private fun file(f: HandFont): File? {
         val root = generateSequence(File("").absoluteFile) { it.parentFile }.first { File(it, "settings.gradle.kts").exists() }
-        return when (f) {
-            HandFont.Caveat -> File(root, "core/designsystem/src/main/res/font/caveat.ttf")
-            HandFont.ArefRuqaa -> File(root, "core/designsystem/src/main/res/font/aref_ruqaa.ttf")
-            HandFont.GveretLevin -> File(root, "core/designsystem/src/main/res/font/gveret_levin.ttf")
-            else -> null
+        val name = when (f.id) {
+            "ibm-plex-sans-arabic" -> "ibm_plex_sans_arabic_regular"
+            else -> f.id.replace('-', '_')
         }
+        // The bundled hands and the TEXT-05 text fonts, by registry id.
+        return File(root, "core/designsystem/src/main/res/font/$name.ttf").takeIf { it.exists() }
     }
 
     private val fonts = HashMap<HandFont, Font>()
@@ -42,6 +42,22 @@ internal object AwtMeasure : TextMeasure {
         }
         flush()
         return w
+    }
+
+    private val inkCache = HashMap<Pair<String, HandFont>, FloatArray>()
+
+    override fun ink(text: String, font: HandFont, sizePt: Float): FloatArray {
+        val unit = inkCache.getOrPut(text to font) {
+            val f = font(font).deriveFont(100f)
+            val fallback = Font(Font.SANS_SERIF, Font.PLAIN, 100)
+            val s = java.text.AttributedString(text.ifEmpty { " " })
+            for ((i, c) in text.withIndex()) s.addAttribute(java.awt.font.TextAttribute.FONT, if (f.canDisplay(c)) f else fallback, i, i + 1)
+            if (text.isEmpty()) s.addAttribute(java.awt.font.TextAttribute.FONT, f)
+            val l = java.awt.font.TextLayout(s.iterator, frc)
+            val b = l.bounds
+            if (b.isEmpty) floatArrayOf(0f, 0f, 0f, 0f) else floatArrayOf((-b.y / 100).toFloat(), ((b.y + b.height) / 100).toFloat(), (-b.x / 100).toFloat(), ((b.x + b.width - l.advance) / 100).toFloat())
+        }
+        return FloatArray(4) { unit[it] * sizePt }
     }
 
     override fun ascent(font: HandFont): Float = font(font).deriveFont(100f).getLineMetrics("Hg", frc).ascent / 100f

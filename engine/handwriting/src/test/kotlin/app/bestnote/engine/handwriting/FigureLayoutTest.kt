@@ -57,7 +57,7 @@ class FigureLayoutTest {
             val fig = placed.first { it.block.element == NoteElement.Diagram }
             val para = placed.first { it.block.text?.startsWith("A block") == true } // study-columns makes it a Note
             val formula = placed.first { it.block.element == NoteElement.Formula }
-            assertTrue("${template.id}: figure after its paragraph", fig.frame.top >= para.frame.top)
+            assertTrue("${template.id}: figure after its paragraph", fig.frame.top >= para.frame.top || fig.frame.left != para.frame.left)
             assertTrue("${template.id}: formula after the figure", formula.frame.top >= fig.frame.top || formula.frame.left != fig.frame.left)
             val page = pages.pages.pages[pages.placed.first { it.second === fig }.first]
             val shapes = page.ink.filter { it.brush.shape != null }

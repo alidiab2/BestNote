@@ -145,6 +145,8 @@ data class RuledPaper(
  * - A block taller than a page is placed anyway (it runs off the bottom) so nothing is lost.
  *
  * @param spaceBefore blank lines wanted before an item (skipped at the top of a page).
+ * @param clearance blank lines needed between two items that follow each other in the main column so
+ *   their REAL ink does not touch (a title's underline over a tall formula); at least [spaceBefore].
  * @param reserved lines already written on by the user (page index, line index): a main-column block
  *   never covers one, so a Smart Board re-layout leaves the user's own ink untouched.
  */
@@ -153,6 +155,7 @@ class RuledFlow(
     private val measurer: BlockMeasurer,
     private val rtl: Boolean = false,
     private val reserved: (page: Int, line: Int) -> Boolean = { _, _ -> false },
+    private val clearance: (prev: FlowItem, next: FlowItem, width: Float) -> Int = { _, _, _ -> 0 },
     private val spaceBefore: (FlowItem) -> Int = { 0 },
 ) {
     /** A placed item, with the ruled lines it occupies. */
@@ -185,6 +188,7 @@ class RuledFlow(
         var line = 0
         var marginPage = 0
         var marginLine = 0
+        var prevMain: FlowItem? = null
 
         fun linesOf(item: FlowItem, width: Float) = ceil(measurer.heightFor(item, width) / paper.lineGap - EPS).toInt().coerceAtLeast(1)
 
@@ -208,7 +212,7 @@ class RuledFlow(
                 // No room beside the anchor: falls through to the main column.
             }
             val n = linesOf(item, mainWidth)
-            val blank = if (line == 0) 0 else spaceBefore(item)
+            val blank = if (line == 0) 0 else maxOf(spaceBefore(item), prevMain?.let { clearance(it, item, mainWidth) } ?: 0)
             val next = items.getOrNull(index + 1)?.takeIf { item.keepWithNext && it.role != RegionRole.Margin }
             val needed = blank + n + (next?.let { spaceBefore(it) + linesOf(it, mainWidth) } ?: 0)
             var start = line + blank
@@ -229,6 +233,7 @@ class RuledFlow(
             out += slot
             byKey[item.key] = slot
             line = start + n
+            prevMain = item
             if (line >= lineCount) {
                 page++
                 line = 0
