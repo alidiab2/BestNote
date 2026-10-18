@@ -452,4 +452,18 @@
     <string name="shape_hint_vertical">عمودي</string>
     <string name="shape_hint_diagonal">45°</string>
     <string name="shape_hint_glued">ملتصق</string>
+    <string name="lasso_filter_all">الكل</string>
+    <string name="lasso_filter_handwriting">خط اليد</string>
+    <string name="lasso_filter_text">النصوص</string>
+    <string name="lasso_filter_images">الصور</string>
+    <string name="lasso_filter_shapes">الأشكال</string>
+    <string name="lasso_select_all">تحديد الكل</string>
+    <plurals name="selection_text_boxes">
+        <item quantity="zero">%d مربعات نص</item>
+        <item quantity="one">مربع نص واحد</item>
+        <item quantity="two">مربعا نص</item>
+        <item quantity="few">%d مربعات نص</item>
+        <item quantity="many">%d مربع نص</item>
+        <item quantity="other">%d مربع نص</item>
+    </plurals>
 </resources>

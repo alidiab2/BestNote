@@ -73,6 +73,8 @@ internal class SelectionActions(
     val onUngroup: () -> Unit = {},
     val onToFront: () -> Unit = {},
     val onToBack: () -> Unit = {},
+    /** CANVAS-20: select everything on the page (through the lasso filter). */
+    val onSelectAll: () -> Unit = {},
 )
 
 private enum class MenuPanel { Main, Fill, Pen, Arrange }
@@ -212,6 +214,7 @@ internal fun SelectionMenu(
                     MenuDivider()
                 }
                 MenuText(stringResource(R.string.selection_arrange), onClick = { panel = MenuPanel.Arrange })
+                MenuText(stringResource(R.string.lasso_select_all), onClick = actions.onSelectAll)
                 MenuDivider()
                 MenuText(stringResource(R.string.selection_cut), onClick = actions.onCut)
                 MenuText(stringResource(R.string.selection_copy), onClick = actions.onCopy)

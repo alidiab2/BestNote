@@ -29,4 +29,17 @@
     <string name="fonts_license_show">Show licence</string>
     <string name="fonts_license_hide">Hide licence</string>
     <string name="fonts_license_source">Source: %1$s</string>
+    <string name="fonts_search">Search fonts</string>
+    <string name="fonts_all_scripts">All</string>
+    <string name="fonts_section_favourites">Favourites</string>
+    <string name="fonts_section_recent">Recent</string>
+    <string name="fonts_section_fonts">On this device</string>
+    <string name="fonts_favourite">Add %1$s to favourites</string>
+    <string name="fonts_unfavourite">Remove %1$s from favourites</string>
+    <string name="fonts_none_found">No fonts match.</string>
+    <string name="fonts_cat_sans">Sans</string>
+    <string name="fonts_cat_serif">Serif</string>
+    <string name="fonts_cat_mono">Mono</string>
+    <string name="fonts_cat_hand">Handwriting</string>
+    <string name="fonts_cat_display">Display</string>
 </resources>

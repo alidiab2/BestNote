@@ -8,6 +8,11 @@ Files were subset (Latin; plus Arabic for IBM Plex Sans Arabic) and variable axe
 | caveat.ttf | Caveat (wght 400–600) | OFL-Caveat.txt |
 | gveret_levin.ttf | Gveret Levin (Hebrew handwriting) | OFL-GveretLevin.txt |
 | ibm_plex_sans_arabic_*.ttf | IBM Plex Sans Arabic Regular/Medium/SemiBold | OFL-IBMPlexSansArabic.txt |
+| lora.ttf | Lora (variable wght, unmodified; TEXT-05 text font) | OFL-Lora.txt |
+| jetbrains_mono.ttf | JetBrains Mono (variable wght, unmodified) | OFL-JetBrainsMono.txt |
+| noto_naskh_arabic.ttf | Noto Naskh Arabic (variable wght, unmodified) | OFL-NotoNaskhArabic.txt |
+| heebo.ttf | Heebo (variable wght, unmodified) | OFL-Heebo.txt |
+| frank_ruhl_libre.ttf | Frank Ruhl Libre (variable wght, unmodified) | OFL-FrankRuhlLibre.txt |
 
 Equations (MATH-01) are drawn from vector outlines exported from **STIX Two Math** 2.13 (OFL 1.1, github.com/stipub/stixfonts)
 by `tools/math/export_math_font.py` into `:engine:mathtype` resources; no font file ships. License: OFL-STIXTwoMath.txt.

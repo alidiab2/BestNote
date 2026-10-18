@@ -42,7 +42,32 @@ class FontRegistry private constructor(context: Context) {
         if (started) return
         started = true
         runCatching { HandwritingTypefaces.init(app) }
+        BundledTextFonts.register(app.resources)
         refresh()
+    }
+
+    private val prefs by lazy { app.getSharedPreferences(PREFS, Context.MODE_PRIVATE) }
+    private val recentState by lazy { MutableStateFlow(prefs.getString(KEY_RECENTS, null).orEmpty().split('\n').filter { it.isNotEmpty() }) }
+    private val favouriteState by lazy { MutableStateFlow(prefs.getStringSet(KEY_FAVOURITES, emptySet()).orEmpty().toSet()) }
+
+    /** TEXT-05: fonts picked lately, newest first. */
+    val recents: StateFlow<List<String>> get() = recentState.asStateFlow()
+
+    /** TEXT-05: fonts the user starred in the picker. */
+    val favourites: StateFlow<Set<String>> get() = favouriteState.asStateFlow()
+
+    /** Remembers that [id] was just picked (the picker's Recent row). */
+    fun noteUsed(id: String?) {
+        if (id.isNullOrEmpty()) return
+        val next = FontChoices.pushRecent(recentState.value, id)
+        recentState.value = next
+        prefs.edit().putString(KEY_RECENTS, next.joinToString("\n")).apply()
+    }
+
+    fun toggleFavourite(id: String) {
+        val next = FontChoices.toggle(favouriteState.value, id)
+        favouriteState.value = next
+        prefs.edit().putStringSet(KEY_FAVOURITES, next).apply()
     }
 
     private fun refresh() {
@@ -59,6 +84,8 @@ class FontRegistry private constructor(context: Context) {
 
     fun nameOf(id: String?): String = byId(id)?.name ?: when (id) {
         null, "", "system" -> "System"
+        "mono" -> "Monospace"
+        "hand", "hand-ar", "hand-he" -> "Handwriting"
         else -> FontCatalogue.byId(id)?.family ?: id
     }
 
@@ -128,7 +155,27 @@ class FontRegistry private constructor(context: Context) {
     fun licenseText(id: String): String? = library.licenseText(id)
 
     companion object {
+        private const val PREFS = "fonts"
+        private const val KEY_RECENTS = "recents"
+        private const val KEY_FAVOURITES = "favourites"
+
         @Volatile private var instance: FontRegistry? = null
+
+        /**
+         * The typeface for a stored font id: the font itself when it is on this device, else a fallback of the same
+         * kind ([FontChoices.fallbackFor]), so a page from another device (or after a font was deleted) still reads well
+         * on screen and in the PDF export. Null only for the default font (null id).
+         */
+        fun typefaceOrFallback(id: String?): android.graphics.Typeface? {
+            if (id == null) return null
+            HandwritingTypefaces.of(id)?.let { return it }
+            return when (FontChoices.fallbackFor(id)) {
+                FontChoices.Fallback.Serif -> android.graphics.Typeface.SERIF
+                FontChoices.Fallback.Mono -> android.graphics.Typeface.MONOSPACE
+                FontChoices.Fallback.Hand -> HandwritingTypefaces.of(HandwritingTypefaces.LATIN_FIRST)
+                FontChoices.Fallback.Sans -> android.graphics.Typeface.SANS_SERIF
+            }
+        }
 
         fun get(context: Context): FontRegistry = instance ?: synchronized(this) {
             instance ?: FontRegistry(context).also { instance = it }

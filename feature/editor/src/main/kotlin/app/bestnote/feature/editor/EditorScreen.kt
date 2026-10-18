@@ -388,6 +388,7 @@ private val ChromeGap = 12.dp
 private val WideTopTray = 960.dp
 private val AudioPillBottom = 64.dp
 private val FormatBarGap = 8.dp
+private val SnackbarClearance = 72.dp
 
 /** Tools picked with a bare letter key; with the Text tool on these letters are typed instead (TEXT-04). */
 private val LetterTools = setOf(ShortcutAction.ToolPen, ShortcutAction.ToolHighlighter, ShortcutAction.ToolEraser, ShortcutAction.ToolLasso, ShortcutAction.ToolText)
@@ -437,6 +438,10 @@ fun EditorScreen(
     val pageInsert = rememberPageInsertFlow(document, viewModel.session) { canvas?.currentPage?.coerceAtLeast(0) ?: 0 }
     SideEffect { pageInsert.onInserted = { first -> canvas?.scrollToPage(first) } }
     var selectionMenu by remember { mutableStateOf<PagedDocumentView.SelectionMenu?>(null) }
+    // CANVAS-20: what the lasso picks up, and the font picker of the selection's text bar.
+    var lassoFilter by rememberSaveable { mutableStateOf(app.bestnote.engine.canvas.select.LassoFilter.All) }
+    var pickingSelectionFont by remember { mutableStateOf(false) }
+    LaunchedEffect(canvas, lassoFilter) { canvas?.lassoFilter = lassoFilter }
     var exporting by remember { mutableStateOf(false) }
     /** Pages picked in the page manager for export (PAGES-10), or null for the usual choices. */
     var exportPages by remember { mutableStateOf<List<Int>?>(null) }
@@ -1081,6 +1086,33 @@ fun EditorScreen(
                     ),
                 )
             }
+            // CANVAS-20: lasso options (filter, Select all), or the text bar when the selection holds text boxes.
+            val textBoxes = selectionMenu?.textBoxes.orEmpty()
+            AnimatedVisibility(
+                visible = toolbox.lasso && managerPage == null && typing.editing == null && !writing,
+                enter = Motion.Enter.sheet(reduce),
+                exit = Motion.Exit.sheet(reduce),
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(
+                        start = edge,
+                        end = edge,
+                        // Rides above a snackbar while one shows, so its buttons stay reachable.
+                        bottom = (if (bottomChromeShown) with(density) { bottomChromePx.toDp() } + 8.dp else FormatBarGap) +
+                            (if (snackbar.currentSnackbarData != null) SnackbarClearance else 0.dp),
+                    ),
+            ) {
+                if (textBoxes.isNotEmpty()) {
+                    SelectionTextBar(
+                        texts = textBoxes,
+                        colors = toolbox.quickColors(PenKind.Fountain),
+                        onStyle = { canvas?.styleSelectedTexts(it) },
+                        onFont = { pickingSelectionFont = true },
+                    )
+                } else {
+                    LassoOptionsBar(lassoFilter, onFilter = { lassoFilter = it }, onSelectAll = { canvas?.selectAllOnPage() })
+                }
+            }
             SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).padding(bottom = 16.dp)) { data ->
                 Snackbar(
                     data,
@@ -1132,10 +1164,23 @@ fun EditorScreen(
                     onUngroup = { view?.ungroupSelection() },
                     onToFront = { view?.bringSelectionToFront() },
                     onToBack = { view?.sendSelectionToBack() },
+                    onSelectAll = { view?.selectAllOnPage() },
                 ),
             )
         }
 
+        if (pickingSelectionFont) {
+            val texts = selectionMenu?.textBoxes.orEmpty()
+            app.bestnote.core.fonts.FontPickerDialog(
+                null, app.bestnote.engine.canvas.select.TextBulkStyle.summary(texts).font,
+                onSelect = { id ->
+                    pickingSelectionFont = false
+                    canvas?.styleSelectedTexts(app.bestnote.engine.canvas.select.TextBulkStyle(font = id, clearFont = id == null))
+                },
+                onDismiss = { pickingSelectionFont = false },
+                allowDefault = true,
+            )
+        }
         elements.Dialogs()
         converter.Dialogs()
         equations.EquationDialogs(onOpenSettings)

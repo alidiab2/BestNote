@@ -404,4 +404,14 @@
     <string name="shape_hint_vertical">vertical</string>
     <string name="shape_hint_diagonal">45°</string>
     <string name="shape_hint_glued">snapped</string>
+    <string name="lasso_filter_all">All</string>
+    <string name="lasso_filter_handwriting">Handwriting</string>
+    <string name="lasso_filter_text">Text</string>
+    <string name="lasso_filter_images">Images</string>
+    <string name="lasso_filter_shapes">Shapes</string>
+    <string name="lasso_select_all">Select all</string>
+    <plurals name="selection_text_boxes">
+        <item quantity="one">%d text box</item>
+        <item quantity="other">%d text boxes</item>
+    </plurals>
 </resources>

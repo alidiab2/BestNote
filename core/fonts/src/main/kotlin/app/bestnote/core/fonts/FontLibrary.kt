@@ -16,7 +16,7 @@ class FontLibrary(private val root: File) {
         val out = ArrayList<AppFont>()
         FontCatalogue.all.forEach { c ->
             val f = File(gf, c.dir + ".ttf")
-            if (f.isFile) out += AppFont(c.id, c.family, FontOrigin.Downloaded, c.scripts, f)
+            if (f.isFile) out += AppFont(c.id, c.family, FontOrigin.Downloaded, c.scripts, f, c.category)
         }
         mine.listFiles { f -> f.extension == "meta" }.orEmpty().sortedBy { it.nameWithoutExtension.toIntOrNull() ?: Int.MAX_VALUE }.forEach { meta ->
             val n = meta.nameWithoutExtension
@@ -38,7 +38,7 @@ class FontLibrary(private val root: File) {
         val target = File(gf, font.dir + ".ttf")
         atomicWrite(target, bytes)
         if (license != null) atomicWrite(File(gf, font.dir + ".OFL.txt"), license.toByteArray())
-        return AppFont(font.id, font.family, FontOrigin.Downloaded, font.scripts, target)
+        return AppFont(font.id, font.family, FontOrigin.Downloaded, font.scripts, target, font.category)
     }
 
     /** Adds the user's own font. [fileName] (e.g. "MyHand.ttf") names it when the file has no family name. */

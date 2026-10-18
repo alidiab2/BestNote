@@ -77,6 +77,7 @@ class ReplayInstaller : ContentProvider() {
                         PINCH -> pinch(activity, intent)
                         STATE -> state(activity, intent)
                         SEED -> seed(activity, intent)
+                        TEXTS -> texts(activity, intent)
                         PERF -> perf(activity, intent)
                         ONBOARDING -> showOnboardingAgain(activity)
                         else -> replay(activity, intent)
@@ -86,6 +87,7 @@ class ReplayInstaller : ContentProvider() {
                 addAction(PINCH)
                 addAction(STATE)
                 addAction(SEED)
+                addAction(TEXTS)
                 addAction(PERF)
                 addAction(ONBOARDING)
             }
@@ -235,6 +237,37 @@ class ReplayInstaller : ContentProvider() {
             }
         }
 
+        /**
+         * CANVAS-20 checks: adds text boxes to the page in view, one per "|"-separated text, stacked from [y] (page points):
+         *   am broadcast -a app.bestnote.debug.TEXTS -p <pkg> --es texts "مرحبا|שלום" [--es font heebo] [--ef x 300] [--ef y 120]
+         */
+        private fun texts(activity: Activity, intent: Intent) {
+            val status = File(File(activity.filesDir, "replay").apply { mkdirs() }, "status")
+            try {
+                val canvas = findCanvas(activity.window.decorView) as? PagedDocumentView ?: error("no notebook canvas on screen")
+                val doc = canvas.document ?: error("no document")
+                val page = canvas.currentPage.coerceAtLeast(0)
+                val painter = app.bestnote.engine.canvas.document.ElementPainter()
+                var y = intent.getFloatExtra("y", 120f)
+                val x = intent.getFloatExtra("x", 300f)
+                val added = (intent.getStringExtra("texts") ?: error("missing --es texts")).split('|').map { t ->
+                    val box = painter.fitted(
+                        app.bestnote.core.model.TextElement(
+                            app.bestnote.core.model.PageElement.newId(), x, y + 15f, 220f, 30f, t,
+                            sizePt = 22f, font = intent.getStringExtra("font"),
+                        ),
+                    )
+                    y += box.height + 16f
+                    box
+                }
+                doc.replaceElements(page, doc.pages[page].elements + added)
+                status.writeText("done texts ${added.size}\n")
+            } catch (t: Throwable) {
+                status.writeText("error ${t.message}\n")
+                Log.e(TAG, "texts failed", t)
+            }
+        }
+
         private fun replay(activity: Activity, intent: Intent) {
             val dir = File(activity.filesDir, "replay").apply { mkdirs() }
             val status = File(dir, "status")
@@ -334,6 +367,7 @@ class ReplayInstaller : ContentProvider() {
         const val PINCH = "app.bestnote.debug.PINCH"
         const val STATE = "app.bestnote.debug.STATE"
         const val SEED = "app.bestnote.debug.SEED"
+        const val TEXTS = "app.bestnote.debug.TEXTS"
         const val PERF = "app.bestnote.debug.PERF"
         const val ONBOARDING = "app.bestnote.debug.ONBOARDING"
 

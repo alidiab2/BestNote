@@ -49,6 +49,15 @@ class PageElementsRoundTripTest {
         assertArrayEquals(jpeg, back.assets.getValue(asset))
     }
 
+    /** TEXT-05 / CANVAS-20: the picked font id (bundled, downloaded "gf:", own "my:") is stored per text box. */
+    @Test fun fontIdsRoundTrip() {
+        val fonts = listOf("noto-naskh-arabic", "frank-ruhl-libre", "gf:amiri", "my:3", null)
+        val boxes = fonts.mapIndexed { i, f -> english.copy(id = "font-$i", font = f) }
+        val entries = BnoteFormat.toEntries(pkg(boxes))
+        val back = BnoteFormat.fromEntries { entries[it] }
+        assertEquals(fonts, back.pages[0].elements.map { (it as TextElement).font })
+    }
+
     @Test fun styleRunsListsAndSpacingRoundTrip() {
         val rich = TextElement(
             "el-9", 50f, 60f, 200f, 80f, "سطر أول\nline two", underline = true, strike = true, align = app.bestnote.core.model.TextAlignment.Justify,
