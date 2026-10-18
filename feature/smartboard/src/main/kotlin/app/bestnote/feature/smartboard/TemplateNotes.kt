@@ -15,6 +15,8 @@ import app.bestnote.engine.layout.NotebookGlossary
 import app.bestnote.engine.layout.ReservedLines
 import app.bestnote.engine.layout.RuledPaper
 import app.bestnote.engine.layout.TemplateChange
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 /**
  * Smart Board's template-first core, without Android: photos → the provider writes the template's
@@ -50,7 +52,9 @@ internal class TemplateNotes(private val measure: TextMeasure) {
             aiCalls++
             val before = doc
             // AI-12: drawings already on the page come back by ref; the new photo's drawings are redrawn from it.
-            doc = figures(NoteWire.reattach(provider.writeNotes(image, NotesRequest(template, rtl, doc)), before), i)
+            val answer = NoteWire.reattach(provider.writeNotes(image, NotesRequest(template, rtl, doc)), before)
+            // Redrawing grows with the drawings: never on the main thread.
+            doc = withContext(Dispatchers.Default) { figures(answer, i) }
         }
         val out = doc ?: NoteDocument(emptyList())
         raw = out

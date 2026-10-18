@@ -1,5 +1,6 @@
 package app.bestnote.ai.scan.figure
 
+import app.bestnote.ai.scan.Enhance
 import app.bestnote.ai.scan.Raster
 import app.bestnote.core.model.Vec2
 import app.bestnote.core.model.VectorDiagram
@@ -157,16 +158,20 @@ class FigureRedrawTest {
             FigureLabel("5\\,(m)", at(805, 860)), FigureLabel("h_B", at(1000, 660)),
         )
         val box = FigureBox(420f / img.width, 410f / img.height, 1000f / img.width, 975f / img.height)
-        System.setProperty("figure.debug", "1")
-        val r = FigureRedraw.redraw(board, box, labels)
-        System.clearProperty("figure.debug")
-        render(board, box, r.diagram!!, "throw-board4")
-        val segs = r.prims.filterIsInstance<Prim.Seg>()
-        println("throw: recall=${r.recall} precision=${r.precision} prims=${r.prims.size} arrows=${segs.count { it.head }} dashed=${segs.count { it.dashed }}")
-        for (p in r.prims) println("  $p")
-        assertTrue("a dashed path", segs.any { it.dashed })
-        assertTrue("two vertical dimension arrows", segs.count { it.head && it.tail && abs(angleDeg(it) - 90f) < 8f } >= 1)
-        assertTrue("accepted", r.accepted)
+        // As the app sees it by default too: auto-enhanced.
+        for (enhanced in listOf(false, true)) {
+            System.setProperty("figure.debug", "1")
+            val r = FigureRedraw.redraw(if (enhanced) Enhance.apply(board) else board, box, labels)
+            System.clearProperty("figure.debug")
+            render(board, box, r.diagram!!, if (enhanced) "throw-board4-enhanced" else "throw-board4")
+            val segs = r.prims.filterIsInstance<Prim.Seg>()
+            println("throw enhanced=$enhanced: recall=${r.recall} precision=${r.precision} prims=${r.prims.size} arrows=${segs.count { it.head }} dashed=${segs.count { it.dashed }}")
+            for (p in r.prims) println("  $p")
+            assertTrue("a dashed path", segs.any { it.dashed })
+            assertTrue("two vertical dimension arrows", segs.count { it.head && it.tail && abs(angleDeg(it) - 90f) < 8f } >= 1)
+            assertTrue("accepted", r.accepted)
+    
+        }
     }
 
     /** Before/after: the crop, and the redraw on white beside it (build/figure-redraw/NAME.png). */

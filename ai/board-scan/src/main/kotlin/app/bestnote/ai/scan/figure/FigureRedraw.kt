@@ -345,7 +345,7 @@ object FigureRedraw {
         val h = mask.height
         val tol = max(3f, 1.2f * sw)
         val drawn = BooleanArray(w * h)
-        val samples = ArrayList<XY>()
+        val samples = ArrayList<Pair<XY, Float>>()
         for (p in prims) {
             val pts = samplesOf(p, sw, diag)
             for (q in pts) {
@@ -354,7 +354,9 @@ object FigureRedraw {
                 if (x in 0 until w && y in 0 until h) drawn[y * w + x] = true
             }
             // A spring is redrawn by its band, loop phase free: it is checked by coverage only.
-            if (!(p is Prim.Seg && p.dashed) && p !is Prim.Coil) samples += pts
+            // A hand-drawn straight line bows a little (as the fit allows): its own tolerance grows with it.
+            val near = if (p is Prim.Seg) max(tol, BOW * p.length) else tol
+            if (!(p is Prim.Seg && p.dashed) && p !is Prim.Coil) pts.mapTo(samples) { it to near }
         }
         val coils = prims.filterIsInstance<Prim.Coil>()
         fun inCoil(q: XY) = coils.any { c ->
@@ -375,10 +377,10 @@ object FigureRedraw {
             if (toDrawn[y * w + x] <= tol || inCoil(q)) covered++
         }
         var onInk = 0
-        for (q in samples) {
+        for ((q, near) in samples) {
             val x = q.x.roundToInt().coerceIn(0, w - 1)
             val y = q.y.roundToInt().coerceIn(0, h - 1)
-            if (toInk[y * w + x] <= tol) onInk++
+            if (toInk[y * w + x] <= near) onInk++
         }
         val recall = if (orig == 0) 1f else covered.toFloat() / orig
         val precision = if (samples.isEmpty()) 0f else onInk.toFloat() / samples.size
@@ -550,6 +552,8 @@ object FigureRedraw {
     /** Long side of the working crop: strokes a few pixels thick, fast to trace. */
     const val WORK_SIDE = 520
     private const val MIN_INK = 40
+    /** How far a straight line may bow from its fit, as a share of its length (FigureFit allows 0.05). */
+    private const val BOW = 0.03f
     /** Share of the ink a band needs to be a drawing of its own. */
     private const val BAND_INK = 0.2f
     /** Room kept around each label (board fraction) when the box is grown to hold it. */

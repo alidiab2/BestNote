@@ -505,6 +505,16 @@ class SmartBoardViewModel @Inject constructor(
     val ui: StateFlow<SmartBoardUiState> = state.asStateFlow()
 
     /** Debuggable build, or "Verbose AI logging" on: show "Copy raw AI response" on failures. */
+    /**
+     * Debug builds only: a recorded AI answer (`adb push answer.json /data/local/tmp/` then
+     * `run-as <app> cp /data/local/tmp/answer.json files/debug/smartboard-answer.json`) stands in for the
+     * AI on the photos, with no key and no call, so the real redraw and layout run on the device.
+     */
+    private fun recordedAnswer(hasPhotos: Boolean): java.io.File? {
+        val debuggable = (context.applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0
+        return if (debuggable && hasPhotos) java.io.File(context.filesDir, "debug/smartboard-answer.json").takeIf { it.isFile } else null
+    }
+
     private val showDiagnostics: Boolean
         get() = (context.applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0 || settings.verboseLogging
 
@@ -704,7 +714,8 @@ class SmartBoardViewModel @Inject constructor(
     private fun read(force: Boolean) {
         val s = state.value
         val photos = s.photos
-        val demo = photos.isEmpty() || !s.hasKey
+        val recorded = recordedAnswer(photos.isNotEmpty())
+        val demo = (photos.isEmpty() || !s.hasKey) && recorded == null
         if (!demo && !force && s.modelId in settings.textOnlyModels(s.provider)) {
             // This model ignored a photo before: say so instead of spending a call on invented notes.
             state.update { it.copy(textOnlyWarning = s.modelLabel.ifBlank { s.modelId }) }
@@ -735,7 +746,11 @@ class SmartBoardViewModel @Inject constructor(
                         boards.map { ImageCanary.jpeg(it) }
                     }
                 }
-                val provider: VisionProvider = if (demo) DemoVisionProvider() else providers.create(s.provider)
+                val provider: VisionProvider = when {
+                    recorded != null -> RecordedVisionProvider(NoteWire.answer(recorded.readText()))
+                    demo -> DemoVisionProvider()
+                    else -> providers.create(s.provider)
+                }
                 try {
                     // Regenerate reads the photos afresh; a follow-up photo merges into the page's notes.
                     notes.read(provider, images, effective(), s.language.rtl, if (s.regenerate != null) null else group?.notes) { doc, i ->
