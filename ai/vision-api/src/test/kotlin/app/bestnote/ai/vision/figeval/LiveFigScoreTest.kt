@@ -83,6 +83,7 @@ class LiveFigScoreTest {
         var labelTotal = 0
         var renders = 0
         var withSpec = 0
+        val kinds = HashSet<String>()
         val notes = ArrayList<String>()
         val strip = Canary.stripHeight(1600, 1100)
         val yScale = (1100f + strip) / 1100f
@@ -94,6 +95,7 @@ class LiveFigScoreTest {
             for (g in gt) {
                 gts++
                 val gk = g["k"]!!.jsonPrimitive.content
+                kinds += gk
                 val gb = g["box"]!!.jsonArray.map { it.jsonPrimitive.content.toFloat() / 1000f }
                 val gspec = FigSpec(gk, FigSpec.rowsOf(plain(g["p"]!!)))
                 fun iou(f: app.bestnote.engine.layout.BoardFigure): Float {
@@ -128,7 +130,7 @@ class LiveFigScoreTest {
         }
         if (gts == 0) return
         val report = buildString {
-            appendLine("(c) live recognition (Claude, ${FigBoardsTest.BOARDS} synthetic boards, $gts figures, ${FigureLibrary.elements.size} kinds):")
+            appendLine("(c) live recognition (Claude, ${FigBoardsTest.BOARDS} synthetic boards, $gts figures, ${kinds.size} kinds):")
             appendLine("    found ${found}/$gts; kind right ${kindRight}/$gts = ${"%.2f".format(kindRight.toFloat() / gts)}; key params ${paramRight}/$paramTotal; labels ${labelHit}/$labelTotal; answers that render ${renders}/$found")
             notes.forEach { appendLine("    $it") }
         }
