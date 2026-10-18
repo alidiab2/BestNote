@@ -48,6 +48,8 @@ object FigureRedraw {
         val prims: List<Prim>,
         /** The crop's ink, cleaned (transparent background, recoloured): the fallback picture. */
         val cleaned: Raster?,
+        /** Where the drawing itself is on the board (fractions): its strokes and labels, without the crop's padding. */
+        val content: FigureBox? = null,
     )
 
     /** A crop of [board] in board pixels plus how its working copy is scaled. */
@@ -86,8 +88,9 @@ object FigureRedraw {
         val sw = Skeleton.strokeWidth(mask, skel)
         val graph = Skeleton.trace(skel, w, h)
         val paths = Skeleton.clean(graph, spur = max(4f, 2.5f * sw))
-        val (labelled, words) = snapLabels(mask, labels.mapNotNull { l -> l.at?.let { toCrop(it) to l.text } }, diag)
-        val labelAt = labelled.map { it.first }
+        val (snapped, words) = snapLabels(mask, labels.mapNotNull { l -> l.at?.let { toCrop(it) to l.text } }, diag)
+        val labelled = snapped.toMutableList()
+        val labelAt = snapped.map { it.first }
         val bg = background(img, mask)
         val withColour = paths.map { p -> p.points.toList() to colourOf(img, mask, p.points, bg) }
         val il = (box.left * board.width - crop.left) * crop.scale
@@ -102,9 +105,26 @@ object FigureRedraw {
             fun mine(y: Float) = y in y0..y1
             val fitter = FigureFit(sw, if (y0 <= 0f && y1 >= h.toFloat()) diag else hypot(w.toFloat(), y1 - y0))
             val idx = labelled.indices.filter { mine(labelled[it].first.y) }
-            fitter.fit(withColour.filter { (pts, _) -> mine(pts.sumOf { it.y.toDouble() }.toFloat() / pts.size) }, idx.map { labelled[it] }, idx.map { words[it] }) to fitter.unsquared
+            val prims = fitter.fit(withColour.filter { (pts, _) -> mine(pts.sumOf { it.y.toDouble() }.toFloat() / pts.size) }, idx.map { labelled[it] }, idx.map { words[it] })
+            idx.forEachIndexed { k, i -> labelled[i] = fitter.labelPlaces[k] to labelled[i].second }
+            prims to fitter.unsquared
         }
-        val prims = fitted.flatMap { it.first }.filter(::kept)
+        // Strokes beyond the AI's own box that touch nothing of the drawing (a heading's underline, a divider) are neighbours.
+        val bl = (box0.left * board.width - crop.left) * crop.scale
+        val br = (box0.right * board.width - crop.left) * crop.scale
+        val bt = (box0.top * board.height - crop.top) * crop.scale
+        val bb = (box0.bottom * board.height - crop.top) * crop.scale
+        val all = fitted.flatMap { it.first }.filter(::kept)
+        val samples = all.associateWith { samplesOf(it, sw, diag).ifEmpty { listOfNotNull((it as? Prim.Mark)?.at) } }
+        val reach = max(4f, 3f * sw)
+        val prims = all.filter { p ->
+            val pts = samples.getValue(p)
+            val out = pts.count { it.x !in bl..br || it.y !in bt..bb } > pts.size / 2
+            // A board divider: a lone straight upright or level line no label is beside.
+            val divider = p is Prim.Seg && !p.head && !p.dashed && !p.hatch && (FigureFit.angleDiff(p.angle, 0f) < 3f || FigureFit.angleDiff(p.angle, (PI / 2).toFloat()) < 3f) &&
+                labelled.none { (at, _) -> FigureFit.segDist(at, p.a, p.b) < 0.06f * diag }
+            !(out || divider) || p is Prim.Mark || all.any { o -> o !== p && samples.getValue(o).any { q -> pts.any { it.dist(q) < reach } } }
+        }
         if (prims.isEmpty()) return Result(null, false, 0f, 0f, emptyList(), cleaned)
         val zone = max(0.075f * diag, 5f * sw)
         // Only the drawing counts: not the padding, not the written words the labels stand for.
@@ -119,7 +139,17 @@ object FigureRedraw {
         for ((c, text) in labelled) {
             if (c.x in 0f..w.toFloat() && c.y in 0f..h.toFloat()) shapes += VectorShape.Label(Vec2(c.x, c.y), text, latex = true)
         }
-        return Result(VectorDiagram(RectPt(0f, 0f, w.toFloat(), h.toFloat()), shapes), accepted, recall, precision, prims, cleaned)
+        // The drawing's own extent (labels as about a letter around their centre): no empty margin on the page.
+        val pts = prims.flatMap { samplesOf(it, sw, diag) + ((it as? Prim.Mark)?.let { m -> listOf(m.at) } ?: emptyList()) }
+        val letter = 0.035f * diag
+        val xs = pts.map { it.x } + labelled.flatMap { listOf(it.first.x - 1.5f * letter, it.first.x + 1.5f * letter) }
+        val ys = pts.map { it.y } + labelled.flatMap { listOf(it.first.y - letter, it.first.y + letter) }
+        val m = 2 * sw
+        val view = RectPt((xs.min() - m).coerceAtLeast(0f), (ys.min() - m).coerceAtLeast(0f), (xs.max() + m).coerceAtMost(w.toFloat()), (ys.max() + m).coerceAtMost(h.toFloat()))
+        fun bx(x: Float) = ((x / crop.scale + crop.left) / board.width).coerceIn(0f, 1f)
+        fun by(y: Float) = ((y / crop.scale + crop.top) / board.height).coerceIn(0f, 1f)
+        val content = FigureBox(bx(view.left), by(view.top), bx(view.right), by(view.bottom))
+        return Result(VectorDiagram(view, shapes), accepted, recall, precision, prims, cleaned, content)
     }
 
     /**
@@ -142,14 +172,18 @@ object FigureRedraw {
             if (f.kind == FigureKind.Table && b.rows.isNotEmpty()) return b.copy(element = NoteElement.Table, figure = f.copy(source = FigureSource.FromData))
             val box = f.box
             val result = if (board != null && box != null) runCatching { redraw(board, box, f.labels) }.getOrNull() else null
-            if (System.getProperty("figure.debug") != null) println("figure ${b.head}: accepted=${result?.accepted} recall=${result?.recall} precision=${result?.precision}")
-            if (result?.accepted == true) return b.copy(diagram = result.diagram, figure = f.copy(source = FigureSource.Redrawn))
+            if (System.getProperty("figure.debug") != null) {
+                println("figure ${b.head}: accepted=${result?.accepted} recall=${result?.recall} precision=${result?.precision}")
+                result?.prims?.forEach { println("  $it") }
+            }
+            // Its box becomes the drawing's own extent: the page sizes it by its share of the board.
+            if (result?.accepted == true) return b.copy(diagram = result.diagram, figure = f.copy(box = result.content ?: f.box, source = FigureSource.Redrawn))
             val data = f.shape?.let { s -> box?.let { FigureVectors.shape(s, it) } } ?: f.graph?.let(FigureVectors::graph)
             if (data != null) return b.copy(diagram = data, figure = f.copy(source = FigureSource.FromData))
             val picture = result?.cleaned?.let(store)
             if (picture != null) return b.copy(diagram = null, figure = f.copy(raster = picture, source = FigureSource.Picture))
             // Nothing better: an unchecked redraw beats losing the drawing.
-            if (result?.diagram != null) return b.copy(diagram = result.diagram, figure = f.copy(source = FigureSource.Redrawn))
+            if (result?.diagram != null) return b.copy(diagram = result.diagram, figure = f.copy(box = result.content ?: f.box, source = FigureSource.Redrawn))
             return b.copy(figure = f)
         }
         return doc.copy(elements = doc.elements.map(::one))
@@ -441,6 +475,7 @@ object FigureRedraw {
         is Prim.Arc -> p.points(1f / max(p.r, 1f)).zipWithNext().flatMap { (a, b) -> line(a, b) }
         is Prim.Curve -> p.points.zipWithNext().flatMap { (a, b) -> line(a, b) }
         is Prim.Block -> (p.corners + p.corners[0]).zipWithNext().flatMap { (a, b) -> line(a, b) }
+        is Prim.Mark -> emptyList()
     }
 
     private fun line(a: XY, b: XY): List<XY> {
@@ -471,6 +506,7 @@ object FigureRedraw {
             is Prim.Curve -> listOf(VectorShape.Polyline(p.points.map(::v), closed = p.closed, style = style))
             is Prim.Coil -> listOf(VectorShape.Polyline(p.points().map(::v), style = style))
             is Prim.Block -> listOf(VectorShape.Polyline(p.corners.map(::v), closed = true, style = style))
+            is Prim.Mark -> listOf(VectorShape.Label(v(p.at), p.text, latex = true, style = style))
         }
     }
 

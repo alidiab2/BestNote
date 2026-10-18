@@ -13,7 +13,7 @@ import kotlin.math.min
 import kotlin.math.sin
 
 /** Most ruled lines a board drawing may take (a tall figure is scaled down to fit). */
-internal const val MAX_FIGURE_LINES = 15f
+internal const val MAX_FIGURE_LINES = 20f
 
 /**
  * AI-12: a redrawn board figure as rows of the font writer. Every shape is ONE clean stroke (no hand

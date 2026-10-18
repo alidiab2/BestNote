@@ -33,6 +33,37 @@ class RecordedFiguresTest {
         return Raster(img.width, img.height, px)
     }
 
+    /** The redraw alone, twice its size (build/smartboard-preview/drawing-*.png). */
+    private fun drawing(d: app.bestnote.core.model.VectorDiagram, name: String) {
+        val k = 2f
+        val img = java.awt.image.BufferedImage((d.viewBox.width * k).toInt(), (d.viewBox.height * k).toInt(), java.awt.image.BufferedImage.TYPE_INT_RGB)
+        val g = img.createGraphics()
+        g.color = java.awt.Color.WHITE
+        g.fillRect(0, 0, img.width, img.height)
+        g.setRenderingHint(java.awt.RenderingHints.KEY_ANTIALIASING, java.awt.RenderingHints.VALUE_ANTIALIAS_ON)
+        g.scale(k.toDouble(), k.toDouble())
+        g.translate(-d.viewBox.left.toDouble(), -d.viewBox.top.toDouble())
+        fun line(a: app.bestnote.core.model.Vec2, b: app.bestnote.core.model.Vec2) = g.draw(java.awt.geom.Line2D.Float(a.x, a.y, b.x, b.y))
+        for (s in d.shapes) {
+            g.color = java.awt.Color(s.style.colorArgb.toInt())
+            g.stroke = java.awt.BasicStroke(1.5f, 1, 1, 1f, if (s.style.dashed) floatArrayOf(6f, 5f) else null, 0f)
+            when (s) {
+                is app.bestnote.core.model.VectorShape.Line -> line(s.from, s.to)
+                is app.bestnote.core.model.VectorShape.Arrow -> {
+                    line(s.from, s.to)
+                    val back = kotlin.math.atan2(s.from.y - s.to.y, s.from.x - s.to.x)
+                    for (t in listOf(-0.45f, 0.45f)) line(s.to, app.bestnote.core.model.Vec2(s.to.x + s.headSize * kotlin.math.cos(back + t), s.to.y + s.headSize * kotlin.math.sin(back + t)))
+                }
+                is app.bestnote.core.model.VectorShape.Polyline -> (if (s.closed) s.points + s.points.first() else s.points).zipWithNext().forEach { (a, b) -> line(a, b) }
+                is app.bestnote.core.model.VectorShape.Ellipse -> g.draw(java.awt.geom.Ellipse2D.Float(s.bounds.left, s.bounds.top, s.bounds.width, s.bounds.height))
+                is app.bestnote.core.model.VectorShape.Label -> { g.font = g.font.deriveFont(9f); g.drawString(s.text, s.at.x - 4, s.at.y + 4) }
+                else -> Unit
+            }
+        }
+        g.dispose()
+        javax.imageio.ImageIO.write(img, "png", java.io.File("build/smartboard-preview").apply { mkdirs() }.resolve("$name.png"))
+    }
+
     @Test fun `the teacher's drawings are redrawn into the notes and nothing is lost`() {
         for ((notes, image) in listOf("live_board2_figures" to "board2-whiteboard", "live_board3_figures" to "board3-whiteboard", "live_board4_figures" to "board4-whiteboard")) {
             val doc = NoteWire.answer(javaClass.getResource("/notes/$notes.json")!!.readText())
@@ -52,6 +83,7 @@ class RecordedFiguresTest {
                 assertTrue("$notes: a figure", figures.isNotEmpty())
                 for (f in figures) {
                     println("$notes enhanced=$enhanced: ${f.head} → ${f.figure?.source} shapes=${f.diagram?.shapes?.size}")
+                    f.diagram?.let { drawing(it, "drawing-$notes${if (enhanced) "-enhanced" else ""}") }
                     assertTrue("$notes: drawn", f.figure!!.source != FigureSource.Pending)
                 }
                 assertTrue("$notes: redrawn, not a picture", figures.any { it.figure!!.source == FigureSource.Redrawn })
