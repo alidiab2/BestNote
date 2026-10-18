@@ -117,15 +117,14 @@ internal fun ActionPills(
             ChromeIconButton(AtelierIcons.Redo, stringResource(R.string.editor_redo), actions.onRedo, enabled = canRedo, size = 44.dp)
         }
         if (!compact) SmartBoardPill { actions.onSmartBoard() }
-        val layers = stringResource(R.string.editor_layers)
         val export = stringResource(R.string.editor_export)
         var paperOpen by remember { mutableStateOf(false) }
         Row(Modifier.chromeSurface().padding(horizontal = 2.dp)) {
             ChromeIconButton(AtelierIcons.Pages, stringResource(R.string.editor_pages), actions.onPages, size = 44.dp)
             actions.pagesMenu(paperOpen) { paperOpen = it }
-            // Compact windows keep only Pages and More here: Smart Board, Layers and Export move into More.
+            // Compact windows keep only Pages and More here: Smart Board and Export move into More.
+            // Layers is not built yet (QA-20): no dead "coming soon" button in the chrome.
             if (!compact) {
-                ChromeIconButton(AtelierIcons.Layers, layers, { actions.onComingSoon(layers) }, size = 44.dp)
                 ChromeIconButton(AtelierIcons.Export, export, { actions.onExport() }, size = 44.dp)
             }
             MoreMenu(dock, leftHanded, actions, compact, onPaper = { paperOpen = true })
@@ -176,12 +175,6 @@ private fun MoreMenu(dock: ToolbarDock, leftHanded: Boolean, actions: ChromeActi
                     text = { Text(stringResource(R.string.editor_smart_board)) },
                     leadingIcon = { Icon(AtelierIcons.Sparkle, null, tint = BestNoteTheme.colors.aiAccent, modifier = Modifier.size(20.dp)) },
                     onClick = { actions.onSmartBoard(); open = false },
-                )
-                val layers = stringResource(R.string.editor_layers)
-                DropdownMenuItem(
-                    text = { Text(layers) },
-                    leadingIcon = { Icon(AtelierIcons.Layers, null, modifier = Modifier.size(20.dp)) },
-                    onClick = { actions.onComingSoon(layers); open = false },
                 )
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
             }
@@ -256,7 +249,7 @@ private val Tools = listOf(
     ToolEntry(AtelierIcons.Text, R.string.tool_text),
     ToolEntry(AtelierIcons.Image, R.string.tool_image),
     ToolEntry(AtelierIcons.Mic, R.string.tool_audio),
-    ToolEntry(AtelierIcons.Ruler, R.string.tool_ruler),
+    // The ruler is not built yet (QA-20): hidden rather than a "coming soon" button.
 )
 
 /** The lighter second capsule: lasso, shapes, text, image, audio, ruler (audio and ruler are placeholders until built). */
