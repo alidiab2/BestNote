@@ -128,6 +128,8 @@ data class BoardFigure(
     val raster: FigureRaster? = null,
     val source: FigureSource = FigureSource.Pending,
     val ref: Int? = null,
+    /** FIG-LIB: what the drawing is as a library element and its parameters ([app.bestnote.engine.layout.figlib.FigureLibrary]); null = not recognised. */
+    val spec: app.bestnote.engine.layout.figlib.FigSpec? = null,
 )
 
 /** Crisp vector drawings for simple figures given as data (used only when they match the photo, or no photo crop exists). */
