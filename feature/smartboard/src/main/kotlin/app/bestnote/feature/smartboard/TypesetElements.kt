@@ -3,6 +3,7 @@ package app.bestnote.feature.smartboard
 import android.graphics.Paint
 import android.graphics.Typeface
 import app.bestnote.core.designsystem.font.HandwritingTypefaces
+import app.bestnote.core.model.ImageElement
 import app.bestnote.core.model.PageElement
 import app.bestnote.core.model.TextAlignment
 import app.bestnote.core.model.TextElement
@@ -49,7 +50,11 @@ internal class PaintMeasure : TextMeasure {
  * plus the font's ascent).
  */
 internal object TypesetElements {
-    fun elements(page: TypesetPage, measure: TextMeasure, newId: () -> String): List<PageElement> = page.runs.map { element(it, measure, newId()) } + page.equations.map { it.toElement(newId()) }
+    fun elements(page: TypesetPage, measure: TextMeasure, newId: () -> String): List<PageElement> =
+        page.runs.map { element(it, measure, newId()) } +
+            // AI-12: a board drawing kept as a picture (could not be redrawn).
+            page.equations.map { it.toElement(newId()) } +
+            page.images.map { ImageElement(newId(), it.left + it.width / 2, it.top + it.height / 2, it.width, it.height, it.asset, it.srcWidth, it.srcHeight) }
 
     private fun element(r: TypeRun, measure: TextMeasure, id: String): TextElement {
         val pad = r.sizePt * PAD

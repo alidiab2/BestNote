@@ -101,7 +101,7 @@ class NoteComposer(
                 sheet.block = RULES
                 sheet.ink.block = RULES
                 for (r in rules.filter { it.page == page }) sheet.shapes.dashed(P(r.x0, r.y0), P(r.x1, r.y1), RULE_COLOR)
-                TypesetPage(sheet.runs, sheet.marks + sheet.ink.build().map { it.stroke }, sheet.equations)
+                TypesetPage(sheet.runs, sheet.marks + sheet.ink.build().map { it.stroke }, sheet.equations, sheet.images)
             },
         )
     }
@@ -554,9 +554,32 @@ class NoteComposer(
     // ------------------------------------------------------------------ diagrams, columns
 
     private fun diagram(b: NoteBlock, width: Float): List<FontComposer.Row> {
+        b.figure?.let { f -> if (f.raster != null || b.diagram != null) return figure(b, f, width) }
         val d = b.diagram ?: return b.head?.let { fc.textRows(it, width, body, fc.penColor) }.orEmpty()
         val caption = b.head?.let { fc.textRows(it, width, body * CELL_SCALE, colorOf(NoteRole.Note)) }.orEmpty()
         return caption + fc.rows(PageBlock.Diagram(BlockId("x"), EMPTY, d), width)
+    }
+
+    /**
+     * AI-12: a board drawing, redrawn as clean shapes (lines, arrows, arcs, springs, dashed lines) with
+     * typeset labels, in the template's colours: dark ink → the pen, red → the result colour, green →
+     * the margin colour, blue/purple → the heading colour. Sized from how much of the board it took.
+     */
+    private fun figure(b: NoteBlock, f: app.bestnote.engine.layout.BoardFigure, width: Float): List<FontComposer.Row> {
+        // AI-12 (owner): no text that is not on the board. A board drawing's caption is the AI's description
+        // of it (kept in the document, not written on the page); what is written on the drawing is in its labels.
+        val share = f.box?.width ?: 0.4f
+        val frac = (share * FIGURE_GROWTH).coerceIn(FIGURE_MIN, 1f)
+        val recolour: (Long) -> Int = { argb ->
+            when (argb or 0xFF000000L) {
+                app.bestnote.engine.layout.NotebookPalette.ESSENTIAL -> colorOf(NoteRole.Result)
+                app.bestnote.engine.layout.NotebookPalette.ANNOTATION -> colorOf(NoteRole.Margin)
+                app.bestnote.engine.layout.NotebookPalette.EMPHASIS -> colorOf(NoteRole.Heading)
+                else -> fc.penColor
+            }
+        }
+        val rows = f.raster?.let { fc.pictureRows(it, frac, width) } ?: b.diagram?.let { fc.figureRows(it, frac, width, recolour) }.orEmpty()
+        return rows
     }
 
     /**
@@ -604,6 +627,8 @@ class NoteComposer(
     private fun rule(color: Int) = listOf(row(1) { l, r, base -> shapes.dashed(P(l + 0.3f * gap, base - 0.5f * gap), P(r - 0.3f * gap, base - 0.5f * gap), color) })
 
     private companion object {
+        const val FIGURE_GROWTH = 3f
+        const val FIGURE_MIN = 0.7f
         val EMPTY = RectPt(0f, 0f, 0f, 0f)
 
         /** Block key of the packed layout's dashed dividers. */

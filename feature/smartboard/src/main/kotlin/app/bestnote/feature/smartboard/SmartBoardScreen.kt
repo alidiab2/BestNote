@@ -661,7 +661,7 @@ private fun ReviewStage(review: SmartBoardStage.Review, state: SmartBoardUiState
                     if (text != null) {
                         val typed = text.pages.pages[p]
                         val elements = remember(typed) { viewModel.previewElements(typed) }
-                        TypedPage(text.paper, typed, elements, replayKey = Triple(p, replay, typed))
+                        TypedPage(text.paper, typed, elements, replayKey = Triple(p, replay, typed), images = viewModel.previewImages)
                     } else {
                         val ink = review.ink!!
                         WrittenPage(ink.paper, ink.pages.pages[p], ink.pages.durationMs(p), replayKey = Triple(p, replay, ink))
@@ -812,6 +812,12 @@ private fun ReviewPanel(
         )
         if (review.demo) DemoChip()
         if (review.dropped > 0) Text(stringResource(R.string.smartboard_review_dropped, review.dropped), style = MaterialTheme.typography.bodySmall, color = BestNoteTheme.colors.warning)
+        // AI-12: redrawn drawings, and the ones only kept as a picture (flagged).
+        val figures = review.notes.flatten().mapNotNull { it.figure }
+        val redrawn = figures.count { it.source == app.bestnote.engine.layout.FigureSource.Redrawn || it.source == app.bestnote.engine.layout.FigureSource.FromData }
+        val pictures = figures.count { it.source == app.bestnote.engine.layout.FigureSource.Picture }
+        if (redrawn > 0) Text(stringResource(R.string.smartboard_review_drawings, redrawn), style = MaterialTheme.typography.bodySmall, color = BestNoteTheme.colors.muted)
+        if (pictures > 0) Text(stringResource(R.string.smartboard_review_pictures, pictures), style = MaterialTheme.typography.bodySmall, color = BestNoteTheme.colors.warning)
         LanguagePicker(state.language, onLanguage)
         TemplateChips(state, onTemplate)
         state.notice?.let { change ->

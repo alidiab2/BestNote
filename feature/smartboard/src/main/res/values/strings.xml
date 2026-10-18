@@ -33,6 +33,8 @@
     <string name="smartboard_step_write">Writing it by hand on ruled lines</string>
     <string name="smartboard_review_title">Your page, written by hand</string>
     <string name="smartboard_review_stats">%1$d page(s) · %2$d strokes of real, editable ink · %3$.1f s</string>
+    <string name="smartboard_review_drawings">%1$d drawing(s) redrawn from the board</string>
+    <string name="smartboard_review_pictures">%1$d drawing(s) could not be redrawn: kept as a cleaned picture of the board</string>
     <string name="smartboard_review_dropped">%1$d unreadable block(s) skipped</string>
     <string name="smartboard_did_order">Teaching order, not where things sat on the board</string>
     <string name="smartboard_did_lines">Every line sits on a ruled line, inside the margin</string>

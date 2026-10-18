@@ -109,7 +109,14 @@ private fun partialPath(s: WrittenStroke, untilMs: Long): Path {
  * is exactly what gets inserted), revealed piece by piece in about two seconds. [replayKey] restarts it.
  */
 @Composable
-internal fun TypedPage(paper: RuledPaper, page: TypesetPage, elements: List<PageElement>, replayKey: Any, modifier: Modifier = Modifier) {
+internal fun TypedPage(
+    paper: RuledPaper,
+    page: TypesetPage,
+    elements: List<PageElement>,
+    replayKey: Any,
+    modifier: Modifier = Modifier,
+    images: app.bestnote.engine.canvas.document.ElementImages? = null,
+) {
     val colors = BestNoteTheme.colors.paper
     val geometry = remember(paper) { PaperGeometry.of(paper.template, PageSize(paper.width, paper.height)) }
     val inkPaths = remember(page) { page.ink.map { s -> s to inkPath(s) } }
@@ -139,9 +146,11 @@ internal fun TypedPage(paper: RuledPaper, page: TypesetPage, elements: List<Page
         val shownText = (clock.value * 1.15f * elements.size).toInt().coerceAtMost(elements.size)
         withTransform({ scale(k, k, pivot = Offset.Zero) }) {
             for ((s, path) in inkPaths.take(shownInk)) {
-                drawPath(path, Color(s.brush.colorArgb), style = Stroke(width = s.brush.size * 0.9f, cap = StrokeCap.Round, join = StrokeJoin.Round))
+                // AI-12: a redrawn figure's dashed lines keep their dash.
+                val dash = if (s.brush.dash == app.bestnote.core.model.LineDash.Dashed) androidx.compose.ui.graphics.PathEffect.dashPathEffect(floatArrayOf(s.brush.size * 3.2f, s.brush.size * 2.6f)) else null
+                drawPath(path, Color(s.brush.colorArgb), style = Stroke(width = s.brush.size * 0.9f, cap = StrokeCap.Round, join = StrokeJoin.Round, pathEffect = dash))
             }
-            drawIntoCanvas { c -> painter.draw(c.nativeCanvas, elements.take(shownText), k, null, Runnable { }) }
+            drawIntoCanvas { c -> painter.draw(c.nativeCanvas, elements.take(shownText), k, images, Runnable { }) }
         }
     }
 }

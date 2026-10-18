@@ -7,6 +7,9 @@ import app.bestnote.ai.vision.ProviderCredentials
 import app.bestnote.ai.vision.VisionDiagnostics
 import app.bestnote.ai.vision.VisionError
 import app.bestnote.ai.vision.VisionImage
+import app.bestnote.ai.vision.VisionProvider
+import app.bestnote.ai.vision.claude.ClaudeConfig
+import app.bestnote.ai.vision.claude.ClaudeVisionProvider
 import app.bestnote.ai.vision.equationLatex
 import app.bestnote.ai.vision.openai.OpenAiVisionProvider
 import app.bestnote.engine.layout.AiInstructions
@@ -24,10 +27,10 @@ import java.io.File
 import javax.imageio.ImageIO
 
 /**
- * One REAL Smart Board call against the owner's DeepSeek key, for improving prompts and elements.
+ * One REAL Smart Board call against the owner's DeepSeek key (or Claude with `provider=claude`), for improving prompts and elements.
  * Never runs in CI or a normal `test`: it needs `scripts/agent/ai-live.sh`, which checks the call
  * budget in ~/.config/bestnote/ai-budget and leaves a one-shot request file. The key lives only in
- * ~/.config/bestnote/deepseek.env (outside the repo) and is never printed.
+ * ~/.config/bestnote/deepseek.env or anthropic.env (outside the repo) and is never printed.
  */
 class LiveBoardTest {
     private val home = File(System.getProperty("user.home"), ".config/bestnote")
@@ -37,13 +40,22 @@ class LiveBoardTest {
         assumeTrue("run through scripts/agent/ai-live.sh", request.exists())
         val args = request.readLines().associate { it.substringBefore('=') to it.substringAfter('=') }
         request.delete() // one call per request, even if this test fails
-        val env = File(home, "deepseek.env").readLines().filter { '=' in it && !it.startsWith("#") }
+        val claude = args["provider"] == "claude"
+        val env = File(home, if (claude) "anthropic.env" else "deepseek.env").readLines().filter { '=' in it && !it.startsWith("#") }
             .associate { it.substringBefore('=') to it.substringAfter('=') }
-        val creds = object : ProviderCredentials {
-            override suspend fun apiKey() = env.getValue("DEEPSEEK_API_KEY")
-            override suspend fun model() = args["model"] ?: env.getValue("DEEPSEEK_MODEL")
-            override suspend fun baseUrl() = env.getValue("DEEPSEEK_BASE_URL")
+        val creds = if (claude) {
+            object : ProviderCredentials {
+                override suspend fun apiKey() = env.getValue("ANTHROPIC_API_KEY")
+                override suspend fun model() = args["model"] ?: ClaudeConfig.DEFAULT_MODEL
+            }
+        } else {
+            object : ProviderCredentials {
+                override suspend fun apiKey() = env.getValue("DEEPSEEK_API_KEY")
+                override suspend fun model() = args["model"] ?: env.getValue("DEEPSEEK_MODEL")
+                override suspend fun baseUrl() = env.getValue("DEEPSEEK_BASE_URL")
+            }
         }
+        val provider: VisionProvider = if (claude) ClaudeVisionProvider(OkHttpClient(), creds) else OpenAiVisionProvider(OkHttpClient(), creds)
         if (args["mode"] == "equation") return@runBlocking equation(creds, args)
         val template = NoteTemplates.builtIns().first { it.id == (args["template"] ?: "study-columns") }.let {
             it.copy(ai = it.ai.copy(notesLanguage = args["notes"]?.ifBlank { null }, termsLanguage = args["terms"]?.ifBlank { null }, note = args["note"].orEmpty()))
@@ -54,7 +66,7 @@ class LiveBoardTest {
         val image = jpeg(File(args.getValue("image")))
         val out = File(args.getValue("out")).apply { mkdirs() }
         val doc = try {
-            OpenAiVisionProvider(OkHttpClient(), creds).writeNotes(image, NotesRequest(template, rtl = args["rtl"] == "1"))
+            provider.writeNotes(image, NotesRequest(template, rtl = args["rtl"] == "1"))
         } catch (e: VisionError.ImageNotSeen) {
             File(out, "raw.txt").writeText(VisionDiagnostics.latest()?.raw.orEmpty())
             File(out, "summary.txt").writeText("model=$model result=ImageNotSeen expected=${image.canary} prompt_tokens=${promptTokens()}\n")

@@ -2,6 +2,8 @@ package app.bestnote.engine.handwriting
 
 import app.bestnote.core.model.InkBrush
 import app.bestnote.core.model.InkStroke
+import app.bestnote.core.model.LineDash
+import app.bestnote.core.model.ShapeInfo
 import app.bestnote.core.model.PenStyle
 import app.bestnote.core.model.StylusSample
 import app.bestnote.core.model.Tool
@@ -84,7 +86,10 @@ data class PenChoice(val penStyle: PenStyle = PenStyle.Fountain, val size: Float
  * pressure ramp in and out, and air time between strokes that depends on what comes next.
  */
 internal class InkBuilder(private val hand: Hand, private val pen: PenChoice) {
-    private class Item(val pts: Poly, val dot: Boolean, val gap: Gap, val speed: Float, val pressure: Float, val color: Int, val width: Float, val block: String?)
+    private class Item(
+        val pts: Poly, val dot: Boolean, val gap: Gap, val speed: Float, val pressure: Float, val color: Int, val width: Float, val block: String?,
+        val shape: ShapeInfo? = null, val dash: LineDash = LineDash.Solid,
+    )
 
     private val items = ArrayList<Item>()
     var block: String? = null
@@ -92,6 +97,12 @@ internal class InkBuilder(private val hand: Hand, private val pen: PenChoice) {
     fun add(pts: Poly, gap: Gap, color: Int, speed: Float = 1f, pressure: Float = 1f, width: Float = 1f) {
         if (pts.isEmpty()) return
         items += Item(pts, dot = pts.size == 1, gap, speed, pressure, color, width, block)
+    }
+
+    /** AI-12: a clean shape stroke (a redrawn figure): CANVAS-17 [shape] metadata and its [dash]. */
+    fun addShape(pts: Poly, color: Int, shape: ShapeInfo, dash: LineDash = LineDash.Solid, width: Float = 1f) {
+        if (pts.size < 2) return
+        items += Item(pts, dot = false, Gap.Ruler, 0.9f, 1f, color, width, block, shape, dash)
     }
 
     fun dot(at: P, gap: Gap, color: Int, pressure: Float = 1f, width: Float = 1f) {
@@ -113,7 +124,7 @@ internal class InkBuilder(private val hand: Hand, private val pen: PenChoice) {
             last?.let { l -> t += hand.rnd.uniform(it.gap.minMs, it.gap.maxMs) + 1000f * Geom.dist(l, first) / mm / it.gap.travelMmPerS }
             val samples = if (it.dot) tap(first, it.pressure) else stroke(it.pts, it.speed, it.pressure)
             val begin = t
-            val brush = InkBrush(Tool.Pen, pen.penStyle, it.color, pen.size * it.width)
+            val brush = InkBrush(Tool.Pen, if (it.shape != null) PenStyle.Ball else pen.penStyle, it.color, pen.size * it.width, shape = it.shape, dash = it.dash)
             val rebased = samples.map { s -> s.copy(timeMillis = s.timeMillis) }
             out += WrittenStroke(InkStroke(brush, rebased), begin.roundToLong(), it.block)
             t = begin + samples.last().timeMillis

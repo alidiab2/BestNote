@@ -51,9 +51,13 @@ object NoteSchema {
             if (any(NoteElement.NumberedFormula, NoteElement.Derivation)) props += "n" to int()
             if (NoteElement.WorkedExample in has) props += "parts" to arr(obj(listOf("q" to str(), "s" to strArr, "r" to str()), emptyList()))
             if (NoteElement.Diagram in has) {
-                props += "fbd" to arr(arr(str()))
-                props += "flow" to obj(listOf("nodes" to strArr, "edges" to arr(arr(str()))), emptyList())
-                props += "axes" to obj(listOf("x" to str(), "y" to str(), "pts" to arr(arr(num()))), emptyList())
+                // AI-12: where the drawing is and what is written on it; the app redraws it from the photo.
+                props += "box" to arr(num())
+                props += "k" to enumStr(listOf("graph", "diagram", "table", "shape", "arrow", "drawing"))
+                props += "lbl" to arr(arr(str()))
+                props += "shape" to obj(listOf("type" to str(), "pts" to arr(arr(num()))), emptyList())
+                props += "graph" to obj(listOf("x" to arr(num()), "y" to arr(num()), "f" to str()), emptyList())
+                if (!any(NoteElement.Table, NoteElement.Comparison, NoteElement.VariableLegend, NoteElement.WorkedExample)) props += "rows" to arr(strArr)
             }
             return obj(props, listOf("e"))
         }

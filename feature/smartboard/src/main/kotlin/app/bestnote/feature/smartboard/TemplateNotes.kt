@@ -1,5 +1,6 @@
 package app.bestnote.feature.smartboard
 
+import app.bestnote.ai.vision.NoteWire
 import app.bestnote.ai.vision.NotesRequest
 import app.bestnote.ai.vision.VisionImage
 import app.bestnote.ai.vision.VisionProvider
@@ -36,11 +37,20 @@ internal class TemplateNotes(private val measure: TextMeasure) {
      * Reads [images] in order with [template]: the first photo (or [current], the page's notes on a
      * follow-up) is the base and every later photo is merged into it by the provider.
      */
-    suspend fun read(provider: VisionProvider, images: List<VisionImage>, template: NoteTemplate, rtl: Boolean, current: NoteDocument? = null): NoteDocument {
+    suspend fun read(
+        provider: VisionProvider,
+        images: List<VisionImage>,
+        template: NoteTemplate,
+        rtl: Boolean,
+        current: NoteDocument? = null,
+        figures: (doc: NoteDocument, photo: Int) -> NoteDocument = { d, _ -> d },
+    ): NoteDocument {
         var doc = current
-        for (image in images) {
+        for ((i, image) in images.withIndex()) {
             aiCalls++
-            doc = provider.writeNotes(image, NotesRequest(template, rtl, doc))
+            val before = doc
+            // AI-12: drawings already on the page come back by ref; the new photo's drawings are redrawn from it.
+            doc = figures(NoteWire.reattach(provider.writeNotes(image, NotesRequest(template, rtl, doc)), before), i)
         }
         val out = doc ?: NoteDocument(emptyList())
         raw = out
@@ -58,10 +68,17 @@ internal class TemplateNotes(private val measure: TextMeasure) {
      * Switches to [template]: [TemplateChange.LookOnly] keeps the cached notes (no call),
      * [TemplateChange.NeedsAi] reads [images] again.
      */
-    suspend fun switchTemplate(provider: VisionProvider, images: List<VisionImage>, template: NoteTemplate, rtl: Boolean, current: NoteDocument? = null): TemplateChange {
-        val before = askedWith ?: return TemplateChange.NeedsAi.also { read(provider, images, template, rtl, current) }
+    suspend fun switchTemplate(
+        provider: VisionProvider,
+        images: List<VisionImage>,
+        template: NoteTemplate,
+        rtl: Boolean,
+        current: NoteDocument? = null,
+        figures: (doc: NoteDocument, photo: Int) -> NoteDocument = { d, _ -> d },
+    ): TemplateChange {
+        val before = askedWith ?: return TemplateChange.NeedsAi.also { read(provider, images, template, rtl, current, figures) }
         val change = TemplateChange.between(before, template)
-        if (change == TemplateChange.NeedsAi) read(provider, images, template, rtl, current)
+        if (change == TemplateChange.NeedsAi) read(provider, images, template, rtl, current, figures)
         return change
     }
 

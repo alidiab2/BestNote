@@ -33,8 +33,17 @@ internal object TypesetPng {
         for (s in page.ink) {
             g.color = Color(s.brush.colorArgb, true)
             val pts = s.samples
-            g.stroke = BasicStroke(s.brush.size * scale * 0.9f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND)
-            for (i in 0 until pts.size - 1) g.draw(Line2D.Float(pts[i].x * scale, pts[i].y * scale, pts[i + 1].x * scale, pts[i + 1].y * scale))
+            val w = s.brush.size * scale * 0.9f
+            g.stroke = if (s.brush.dash == app.bestnote.core.model.LineDash.Dashed) {
+                BasicStroke(w, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND, 1f, floatArrayOf(w * 3.5f, w * 2.8f), 0f)
+            } else {
+                BasicStroke(w, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND)
+            }
+            val path = java.awt.geom.Path2D.Float().apply {
+                moveTo(pts[0].x * scale, pts[0].y * scale)
+                for (i in 1 until pts.size) lineTo(pts[i].x * scale, pts[i].y * scale)
+            }
+            g.draw(path)
         }
         for (r in page.runs) {
             g.color = Color(r.color, true)
