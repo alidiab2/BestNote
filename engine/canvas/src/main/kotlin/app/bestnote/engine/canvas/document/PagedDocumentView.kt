@@ -1417,7 +1417,9 @@ class PagedDocumentView(context: Context) : FrameLayout(context), InProgressStro
         // Hand off wet -> dry in the same frame so nothing flickers.
         strokes.entries.groupBy { strokePages.remove(it.key) ?: -1 }.forEach { (page, entries) ->
             if (doc != null && page in 0 until doc.size) {
-                doc.addStrokes(page, entries.map { it.value })
+                // One undo step per stroke (as in Goodnotes): the ink layer hands over several strokes at once when
+                // the pen lifts and lands again quickly, and undo must not take back whole words.
+                entries.forEach { doc.addStrokes(page, listOf(it.value)) }
                 entries.forEach { (id, stroke) -> snapper.onStrokeFinished(page, stroke, snapRequested.remove(id), ghostCommits.remove(id)) }
             }
         }
