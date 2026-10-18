@@ -28,7 +28,7 @@ class FigRender(val spec: FigSpec, val element: FigElement, val diagram: VectorD
  * null, and the app falls back to fitting the photo's strokes (AI-12), then to a flagged picture.
  */
 object FigureLibrary {
-    val elements: List<FigElement> by lazy { Physics.all + Maths.all + Generic.all }
+    val elements: List<FigElement> by lazy { Physics.all + Maths.all + Chemistry.all + Biology.all + Cs.all + Generic.all }
 
     private val byName: Map<String, FigElement> by lazy {
         val m = LinkedHashMap<String, FigElement>()

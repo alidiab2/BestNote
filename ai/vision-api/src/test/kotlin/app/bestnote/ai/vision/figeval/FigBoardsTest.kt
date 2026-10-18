@@ -22,7 +22,7 @@ class FigBoardsTest {
         /** The ground-truth specs per board (deterministic). */
         fun plan(): List<List<FigSpec>> {
             val g = FigGen(seed = 4242)
-            val order = g.kinds.shuffled(kotlin.random.Random(99))
+            val order = g.stage1.shuffled(kotlin.random.Random(99))
             val extra = (0 until BOARDS * 6 - order.size).map { order[it % order.size] }
             return (order + extra).chunked(6).map { ks -> ks.map(g::of) }
         }
@@ -44,6 +44,18 @@ class FigBoardsTest {
         assertEquals(BOARDS, plans.size)
         for ((i, specs) in plans.withIndex()) {
             val placed = BoardSynth(seed = 500 + i).board(specs, File(dir, "board-$i.jpg"), TITLES[i])
+            assertEquals(specs.size, placed.size)
+            File(dir, "board-$i.json").writeText(gtJson(placed))
+        }
+    }
+    /** Boards of the chemistry, biology and CS kinds, ready for a live run (`ai-live.sh build/figeval/boards2/board-N.jpg provider=claude`). */
+    @Test fun `stage two boards are generated with their ground truth`() {
+        val dir = File("build/figeval/boards2").apply { mkdirs() }
+        val g = FigGen(seed = 4343)
+        val kinds = g.kinds.drop(g.stage1.size)
+        val plans = (kinds + kinds.take(18 - kinds.size)).chunked(6).map { ks -> ks.map(g::of) }
+        for ((i, specs) in plans.withIndex()) {
+            val placed = BoardSynth(seed = 700 + i).board(specs, File(dir, "board-$i.jpg"), TITLES[(i + 1) % TITLES.size])
             assertEquals(specs.size, placed.size)
             File(dir, "board-$i.json").writeText(gtJson(placed))
         }

@@ -83,11 +83,10 @@ class Pen {
         if (ok(c) && rx > EPS && ry > EPS) shapes += VectorShape.Ellipse(RectPt(c.x - rx, c.y - ry, c.x + rx, c.y + ry), style(role, dashed))
     }
 
-    /** A filled dot (a junction, a point): a tiny circle plus a cross-hatch so it reads as solid. */
+    /** A filled dot (a junction, a point, an electron): a tiny circle with one inside it, so the pen fills it. */
     fun dot(c: Vec2, r: Float = 1.6f, role: Role = Role.Ink) {
         circle(c, r, role)
-        poly(listOf(Vec2(c.x - r * 0.6f, c.y), Vec2(c.x + r * 0.6f, c.y)), role = role)
-        poly(listOf(Vec2(c.x, c.y - r * 0.6f), Vec2(c.x, c.y + r * 0.6f)), role = role)
+        circle(c, r * 0.45f, role)
     }
 
     /** An arc of a circle from [a0] to [a1] degrees (counter-clockwise). */

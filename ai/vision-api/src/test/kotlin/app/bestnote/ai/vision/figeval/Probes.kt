@@ -60,6 +60,18 @@ object Probes {
             "solid" -> p.rows.filter { it.size == 2 && it[0] != "type" }.mapNotNull { Params.textOf(it[1]) }
             "ptree" -> col("b", 1) + col("b", 2)
             "sketch" -> p.rows.mapNotNull { r -> r.lastOrNull()?.takeIf { Params.numOf(it) == null && r[0] != "arrow" }?.let(Params::textOf) }
+            "molecule" -> col("name", 0)
+            "lewis" -> (col("c", 0) + col("l", 0) + col("e", 0))
+            "apparatus" -> col("item", 1)
+            "energy" -> col("r", 0) + col("p", 0) + col("ea", 0) + col("dh", 0)
+            "labelled" -> col("part", 0)
+            "chain" -> col("n", 0) + col("e", 0) + col("e", 1)
+            "flowchart" -> col("n", 2)
+            "tree" -> col("l", 0) + col("l", 1) + col("r", 0) + col("r", 1)
+            "network" -> col("e", 0) + col("e", 1) + col("e", 2)
+            "array" -> (p.first("a") ?: emptyList()).mapNotNull(Params::textOf) + col("ptr", 0)
+            "list" -> (p.first("n") ?: emptyList()).mapNotNull(Params::textOf) + col("head", 0)
+            "fsm" -> col("s", 0) + col("t", 2)
             else -> emptyList()
         }
         return s.toSet()
@@ -252,9 +264,95 @@ object Probes {
             "ptree" -> check("${p.all("b").size} branches", r.diagram.shapes.count { it is VectorShape.Line } == p.all("b").size)
             "sketch" -> check("${p.all("box").size} boxes", polys(r).count { it.closed && it.points.size == 4 } == p.all("box").size)
             "solid" -> check("hidden edges dashed", r.diagram.shapes.any { it.style.dashed } || p.str("type") == "sphere")
+            "molecule" -> molecule(p, r, ::check)
+            "lewis" -> {
+                val bonds = p.all("l").sumOf { (Params.numOf(it.getOrNull(1)) ?: 1f).toInt() }
+                check("$bonds bond lines", r.diagram.shapes.count { it is VectorShape.Line } == bonds)
+                val pairs = p.all("lp").sumOf { (Params.numOf(it.getOrNull(1)) ?: 0f).toInt() }
+                val e = p.first("e")?.getOrNull(1)?.let(Params::numOf)?.toInt()
+                val dots = r.diagram.shapes.filterIsInstance<VectorShape.Ellipse>().size / 2
+                check("electron dots", dots == (e ?: (2 * pairs)))
+            }
+            "punnett" -> {
+                fun genes(g: String) = g.chunked(2)
+                fun gam(gs: List<String>) = gs.fold(listOf("")) { acc, gene -> acc.flatMap { a -> listOf(a + gene[0], a + gene[1]) } }.distinct()
+                val g1 = genes(p.str("p1")!!)
+                val g2 = genes(p.str("p2")!!)
+                val want = gam(g1).flatMap { a -> gam(g2).map { b -> a.indices.joinToString("") { i -> listOf(a[i], b[i]).sortedWith(compareBy({ it.isLowerCase() }, { it })).joinToString("") } } }.sorted()
+                val cells = r.labels.filter { it.second[4] > 0f }.map { it.first }.sorted()
+                check("offspring genotypes", cells == want)
+            }
+            "labelled" -> {
+                val leaders = r.diagram.shapes.filterIsInstance<VectorShape.Line>()
+                var crossings = 0
+                for (i in leaders.indices) for (j in i + 1 until leaders.size) if (cross(leaders[i].from, leaders[i].to, leaders[j].from, leaders[j].to)) crossings++
+                check("one leader per part", leaders.size == p.all("part").size)
+                check("leaders do not cross", crossings == 0)
+            }
+            "chain" -> {
+                val edges = p.all("e").size.takeIf { it > 0 } ?: (p.all("n").size - 1)
+                check("$edges arrows", arrows(r).size == edges)
+            }
+            "flowchart" -> {
+                val boxes = polys(r).filter { it.closed }
+                check("${p.all("n").size} nodes", boxes.size == p.all("n").size)
+                check("${p.all("e").size} arrows", arrows(r).size == p.all("e").size)
+                // No edge runs through a node it does not join.
+                val segs = r.diagram.shapes.flatMap { s -> when (s) { is VectorShape.Arrow -> listOf(s.from to s.to); is VectorShape.Polyline -> if (s.closed) emptyList() else s.points.zipWithNext(); else -> emptyList() } }
+                val through = segs.count { (a, b) -> boxes.any { bx -> val xs = bx.points.map { it.x }; val ys = bx.points.map { it.y }; val m = Vec2((a.x + b.x) / 2, (a.y + b.y) / 2); m.x > xs.min() + 2 && m.x < xs.max() - 2 && m.y > ys.min() + 2 && m.y < ys.max() - 2 } }
+                check("edges clear of other nodes", through == 0)
+            }
+            "tree" -> {
+                val nodes = (p.all("l") + p.all("r")).flatMap { listOf(it[0], it[1]) }.mapNotNull(Params::textOf).toSet()
+                check("${nodes.size} nodes", r.diagram.shapes.count { it is VectorShape.Ellipse } == nodes.size)
+                check("children below parents", r.diagram.shapes.filterIsInstance<VectorShape.Line>().all { it.to.y > it.from.y })
+            }
+            "network" -> {
+                val nodes = p.all("e").flatMap { listOf(it[0], it[1]) }.mapNotNull(Params::textOf).toSet()
+                check("${nodes.size} nodes", r.diagram.shapes.count { it is VectorShape.Ellipse } == nodes.size)
+                val drawn = if (p.flag("directed")) arrows(r).size else r.diagram.shapes.count { it is VectorShape.Line }
+                check("${p.all("e").size} edges", drawn == p.all("e").size)
+            }
+            "array" -> check("${p.first("a")!!.size} cells", polys(r).count { it.closed && it.points.size == 4 } == p.first("a")!!.size)
+            "list" -> {
+                val n = p.first("n")!!.size
+                val want = (n - 1) * (if (p.flag("double")) 2 else 1) + (if (p.has("head")) 1 else 0)
+                check("$want pointers", arrows(r).size == want)
+            }
+            "fsm" -> {
+                val accept = p.all("s").count { it.getOrNull(1) == "accept" }
+                check("states and accept rings", r.diagram.shapes.count { it is VectorShape.Ellipse } == p.all("s").size + accept)
+            }
+            "energy" -> {
+                val curve = polys(r).first { it.style.colorArgb == NotebookPalette.EMPHASIS }
+                val top = curve.points.minOf { it.y }
+                check("the peak is above both levels", top < curve.points.first().y - 5f && top < curve.points.last().y - 5f)
+                val up = (Params.numOf(p.first("p")!![1])!! > Params.numOf(p.first("r")!![1])!!)
+                check("products above or below as given", (curve.points.last().y < curve.points.first().y) == up)
+            }
+            "apparatus" -> check("one label per item", labels(r).size == p.all("item").size)
             "pulley" -> check("${p.all("m").size} masses", polys(r).count { it.closed && it.points.size == 4 } == p.all("m").size.coerceAtMost(2))
         }
         return c
+    }
+
+    private fun cross(a: Vec2, b: Vec2, c: Vec2, d: Vec2): Boolean {
+        fun o(p: Vec2, q: Vec2, r: Vec2) = (q.x - p.x) * (r.y - p.y) - (q.y - p.y) * (r.x - p.x)
+        return o(a, b, c) * o(a, b, d) < 0 && o(c, d, a) * o(c, d, b) < 0
+    }
+
+    /** A molecule: as many bond strokes as bonds (doubles two, triples three), no two bonds on top of each other, heteroatoms labelled. */
+    private fun molecule(p: Params, r: FigRender, check: (String, Boolean) -> Unit) {
+        val smi = p.str("smiles")!!
+        val lines = r.diagram.shapes.filterIsInstance<VectorShape.Line>()
+        val hetero = Regex("""Cl|Br|[NOSPFIBnosp]""").findAll(smi).count()
+        val shown = labels(r).count { l -> l.text != p.str("name") }
+        check("$hetero heteroatoms labelled", shown == hetero)
+        val mids = lines.map { Vec2((it.from.x + it.to.x) / 2, (it.from.y + it.to.y) / 2) }
+        var clash = 0
+        for (i in mids.indices) for (j in i + 1 until mids.size) if (near(mids[i], mids[j]) < 1.5f) clash++
+        check("no bond drawn on another", clash == 0)
+        check("bonds of normal length", lines.all { near(it.from, it.to) in 5f..31f })
     }
 
     /** Least-squares value → position: position = k·value + b. */

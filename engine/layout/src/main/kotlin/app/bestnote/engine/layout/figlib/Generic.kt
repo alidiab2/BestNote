@@ -15,7 +15,7 @@ internal object Generic {
         listOf(
             FigElement(
                 "sketch", Subject.Generic,
-                "0-100 box coords, y down: box=[x,y,w,h,text]; circ=[x,y,r,text]; line|dash|arrow|darrow=[x1,y1,x2,y2,label]; poly|curve=[x,y,…]; text|dot=[x,y,text]; brace=[x1,y1,x2,y2,label]; callout=[x,y,tx,ty,text]; hatch=[x1,y1,x2,y2]",
+                "0-100 coords, y down: box=[x,y,w,h,text]; circ=[x,y,r,text]; line|dash|arrow|dim|brace=[x1,y1,x2,y2,label]; poly|curve=[x,y,…]; text|dot=[x,y,text]; callout=[x,y,tx,ty,text]; hatch=[x1,y1,x2,y2]",
                 listOf("generic", "drawing", "diagram", "arrows", "boxes", "labels", "braces", "callouts", "primitives", "free"),
                 ::sketch,
             ),

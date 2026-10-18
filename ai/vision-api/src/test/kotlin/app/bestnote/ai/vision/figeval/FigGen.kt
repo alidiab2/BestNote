@@ -1,6 +1,7 @@
 package app.bestnote.ai.vision.figeval
 
 import app.bestnote.engine.layout.figlib.FigSpec
+import kotlin.math.max
 import kotlin.random.Random
 
 /**
@@ -28,6 +29,16 @@ class FigGen(seed: Int) {
     val kinds = listOf(
         "incline", "fbd", "blocks", "spring", "pulley", "pendulum", "circuit", "lens", "mirror", "refraction", "wave", "field", "vectors",
         "plot", "numberline", "geo", "triangle", "venn", "solid", "ptree", "sketch",
+        "molecule", "lewis", "apparatus", "energy", "punnett", "labelled", "chain",
+        "flowchart", "tree", "network", "array", "list", "fsm",
+    )
+
+    /** The stage-1 kinds (physics, maths, generic): the live boards were made from these. */
+    val stage1 = kinds.take(21)
+
+    val smiles = listOf(
+        "CCO", "CC(=O)O", "c1ccccc1", "C1CCCCC1", "C=CC", "C#C", "Oc1ccccc1", "NCC(=O)O", "c1ccc2ccccc2c1", "CC(C)C", "CCOC(C)=O",
+        "Cc1ccccc1", "CC(C)=O", "OCC(O)CO", "C1CC1", "ClC(Cl)Cl", "CC(N)C(=O)O", "c1ccncc1", "O=C=O", "CCCCC",
     )
 
     fun any(): FigSpec = of(pickL(kinds))
@@ -118,6 +129,83 @@ class FigGen(seed: Int) {
                 prev = b
             }
             if (chance(0.5)) rows += r("callout", 10, 60, 20, 85, word())
+            rows
+        }
+        "molecule" -> listOfNotNull(r("smiles", pickL(smiles)), if (chance(0.5)) r("name", word()) else null)
+        "lewis" -> pick(
+            listOf(r("c", "O"), r("l", "H", 1), r("l", "H", 1), r("lp", "O", 2)),
+            listOf(r("c", "N"), r("l", "H", 1), r("l", "H", 1), r("l", "H", 1), r("lp", "N", 1)),
+            listOf(r("c", "C"), r("l", "H", 1), r("l", "H", 1), r("l", "H", 1), r("l", "H", 1)),
+            listOf(r("c", "C"), r("l", "O", 2), r("l", "O", 2), r("lp", "O", 2)),
+            listOf(r("c", "C"), r("l", "H", 1), r("l", "N", 3), r("lp", "N", 1)),
+            listOf(r("e", pick("Na", "Mg", "Al", "C", "N", "O", "F"), int(1, 7))),
+        )
+        "apparatus" -> (1..int(1, 3)).map { r("item", pick("beaker", "flask", "roundflask", "testtube", "cylinder", "funnel"), word(), pick(0.3, 0.5, 0.7)) } + (if (chance(0.4)) listOf(r("heat")) else emptyList())
+        "energy" -> {
+            val a = int(20, 60)
+            val b = int(5, 80)
+            listOfNotNull(r("r", pick("A+B", "R", "reactants"), a), r("p", pick("C", "P", "AB"), b), r("ts", max(a, b) + int(30, 60)), r("ea", "E_a"), if (chance(0.6)) r("dh", "\\Delta H") else null, if (chance(0.3)) r("cat") else null)
+        }
+        "punnett" -> {
+            val di = chance(0.3)
+            val g = { if (di) pick("Aa", "AA", "aa") + pick("Bb", "BB", "bb") else pick("Aa", "AA", "aa", "Bb", "Tt") }
+            val g1 = g()
+            listOf(r("p1", g1), r("p2", if (di) g() else g1.uppercase().take(1) + pick(g1.uppercase().take(1), g1.lowercase().take(1))))
+        }
+        "labelled" -> {
+            val rows = arrayListOf(r("outline", pick("ellipse", "circle", "rect", "rounded")))
+            val used = HashSet<String>()
+            repeat(int(2, 6)) {
+                val w = word()
+                if (used.add(w)) rows += r("part", w, int(10, 90), int(10, 90), pick("dot", "circle", "ellipse"), int(6, 20))
+            }
+            rows
+        }
+        "chain" -> {
+            val names = (words[0] + listOf("grass", "rabbit", "fox", "algae", "fish", "hawk", "חיטה", "עכבר", "نبات", "أرنب")).shuffled(rnd).take(int(3, 5))
+            if (chance(0.5)) names.map { r("n", it) } else names.zipWithNext().map { (a, b) -> r("e", a, b) } + (if (names.size > 3) listOf(r("e", names[0], names[2])) else emptyList())
+        }
+        "flowchart" -> {
+            val n = int(3, 6)
+            val rows = ArrayList<List<Any>>()
+            rows += r("n", "n0", "start", pick("Start", "התחלה", "بداية"))
+            for (i in 1 until n - 1) rows += r("n", "n$i", pick("process", "io", "decision"), word())
+            rows += r("n", "n${n - 1}", "end", pick("End", "סוף", "نهاية"))
+            for (i in 0 until n - 1) rows += r("e", "n$i", "n${i + 1}")
+            rows.firstOrNull { it[2] == "decision" }?.let { d -> val k = (d[1] as String).drop(1).toInt(); if (k >= 2) rows += r("e", d[1], "n${k - 1}", "no") }
+            rows
+        }
+        "tree" -> {
+            val vals = (1..int(4, 9)).map { int(1, 99) }.distinct()
+            // A binary search tree from inserts.
+            val left = HashMap<Int, Int>(); val right = HashMap<Int, Int>()
+            for (v in vals.drop(1)) {
+                var cur = vals[0]
+                while (true) {
+                    val m = if (v < cur) left else right
+                    val nx = m[cur]
+                    if (nx == null) { m[cur] = v; break }
+                    cur = nx
+                }
+            }
+            left.map { (pv, c) -> r("l", pv, c) } + right.map { (pv, c) -> r("r", pv, c) }
+        }
+        "network" -> {
+            val names = listOf("A", "B", "C", "D", "E", "F").take(int(3, 6))
+            val rows = ArrayList<List<Any>>()
+            for (i in 1 until names.size) rows += r("e", names[int(0, i - 1)], names[i], int(1, 9))
+            if (chance(0.6)) rows += r("e", names.last(), names[0], int(1, 9))
+            if (chance(0.5)) rows += r("directed")
+            rows
+        }
+        "array" -> listOfNotNull(r("a", *(1..int(3, 8)).map { int(0, 99) }.toTypedArray()), r("ptr", pick("i", "j", "lo", "top"), 0), if (chance(0.5)) r("hl", 1) else null)
+        "list" -> listOfNotNull(r("n", *(1..int(2, 5)).map { int(0, 99) }.toTypedArray()), if (chance(0.6)) r("head", "head") else null, if (chance(0.3)) r("double") else null)
+        "fsm" -> {
+            val n = int(2, 4)
+            val rows = (0 until n).map { r("s", "q$it", if (it == 0) "start" else if (it == n - 1) "accept" else "") }.toMutableList()
+            for (i in 0 until n - 1) rows += r("t", "q$i", "q${i + 1}", pick("a", "b", "0", "1"))
+            if (chance(0.5)) rows += r("t", "q${n - 1}", "q0", pick("a", "b"))
+            if (chance(0.5)) rows += r("t", "q1", "q1", pick("a", "b"))
             rows
         }
         else -> error(kind)

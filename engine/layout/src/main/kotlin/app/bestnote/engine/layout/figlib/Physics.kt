@@ -16,19 +16,19 @@ import kotlin.math.tan
 internal object Physics {
     val all: List<FigElement> by lazy {
         listOf(
-            FigElement("incline", Subject.Physics, "a=deg; up=L|R; blk=[m]; at=0-1; f=[label, n|g|up|down|h|deg above slope]…; ang=[label]; h|len|base=[label]; comp (dashed mg components, not forces); v=[label,up|down]; pulley=[m2]", listOf("ramp", "inclinedplane", "slope", "wedge"), ::incline),
+            FigElement("incline", Subject.Physics, "a=deg; up=L|R; blk=[m]; at=0-1; f=[label, n|g|up|down|h|deg above slope]…; ang=[label]; h|len|base=[label]; comp (dashed mg parts); v=[label,up|down]; pulley=[m2]", listOf("ramp", "inclinedplane", "slope", "wedge"), ::incline),
             FigElement("fbd", Subject.Physics, "body=[box|dot, label]; f=[label, deg|up|down|left|right, len]…; ang=[label, force]; axes", listOf("freebody", "freebodydiagram", "forces", "forcediagram"), ::fbd),
-            FigElement("blocks", Subject.Physics, "m=[label]… left→right; link=touch|rope|spring; f=[label, dir, block#]…; wall=L|R; mu=[label]; v=[label, block#]", listOf("block", "mass", "cart", "carts"), ::blocks),
+            FigElement("blocks", Subject.Physics, "m=[label]… left→right; link=touch|rope|spring; f=[label, dir, block#]…; wall=L|R; v=[label, block#]", listOf("block", "mass", "cart", "carts"), ::blocks),
             FigElement("spring", Subject.Physics, "state=relaxed|compressed|stretched; coils; k|m|x=[label]; eq; vertical; f=[label, dir]", listOf("springs", "springmass", "oscillator", "hooke"), ::spring),
             FigElement("pulley", Subject.Physics, "type=atwood|table|incline; m=[label]…; T; g; a=deg", listOf("pulleys", "atwood", "rope", "string"), ::pulley),
             FigElement("pendulum", Subject.Physics, "a=deg; L|m|h=[label]; f=[label, t|g]; path", listOf("pend", "simplependulum", "bob"), ::pendulum),
-            FigElement("circuit", Subject.Physics, "rows [R|C|L|bat|cell|sw|swc|bulb|A|V|G|D|wire, label, node, node]; I=[label, node, node]", listOf("circuits", "schematic", "electric", "electriccircuit", "netlist"), Circuit::draw),
+            FigElement("circuit", Subject.Physics, "rows [R|C|L|bat|cell|sw|bulb|A|V|G|D, label, node, node]; I=[label, node, node]", listOf("circuits", "schematic", "electric", "electriccircuit", "netlist"), Circuit::draw),
             FigElement("lens", Subject.Physics, "type=convex|concave; f=n; obj=[dist, height]; rays=1-3; 2f", listOf("lenses", "optics", "thinlens", "convexlens", "concavelens"), Optics::lens),
             FigElement("mirror", Subject.Physics, "type=concave|convex|plane; f=n; obj=[dist, height]", listOf("mirrors", "sphericalmirror", "planemirror"), Optics::mirror),
             FigElement("refraction", Subject.Physics, "n=[n1, n2]; i=deg; r=deg; reflect; ang=[θ1, θ2]", listOf("snell", "refract", "reflection", "interface", "ray"), Optics::refraction),
             FigElement("wave", Subject.Physics, "type=transverse|standing|longitudinal|pulse; n=wavelengths; A|lam|v|x|y=[label]", listOf("waves", "sine", "sinewave", "oscillation"), Waves::wave),
-            FigElement("field", Subject.Physics, "q=[±, x, y]… (-5..5); uniform=deg; plates; B=in|out; wire=in|out; E=[label]", listOf("fieldlines", "electricfield", "magneticfield", "charges"), Waves::field),
-            FigElement("vectors", Subject.Physics, "v=[label, x, y, x0, y0]…; sum=[label]; comp; grid; ang=[label, vec#]", listOf("vector", "vectoraddition", "resultant", "components"), ::vectors),
+            FigElement("field", Subject.Physics, "q=[±, x, y]… (-5..5); uniform=deg; plates; B|wire=in|out; E=[label]", listOf("fieldlines", "electricfield", "magneticfield", "charges"), Waves::field),
+            FigElement("vectors", Subject.Physics, "v=[label, x, y, x0, y0]…; sum=[label]; comp; grid", listOf("vector", "vectoraddition", "resultant", "components"), ::vectors),
         )
     }
 

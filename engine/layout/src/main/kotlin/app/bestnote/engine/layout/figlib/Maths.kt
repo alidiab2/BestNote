@@ -20,13 +20,13 @@ import kotlin.math.sqrt
 internal object Maths {
     val all: List<FigElement> by lazy {
         listOf(
-            FigElement("plot", Subject.Maths, "x=[min,max]; y=[min,max]; f=[expr in x, label]…; pts=[x1,y1,…]; pt=[label,x,y]…; drop; asy=[x|y, v]; shade=[a,b(,between)]; grid; xl|yl=[label]; eq", listOf("graph", "axes", "function", "functiongraph", "coordinate", "grid", "cartesian", "chart"), ::plot),
+            FigElement("plot", Subject.Maths, "x|y=[min,max]; f=[expr, label]…; pts=[x1,y1,…]; pt=[label,x,y]…; drop; asy=[x|y, v]; shade=[a,b(,between)]; grid; xl|yl=[label]", listOf("graph", "axes", "function", "functiongraph", "coordinate", "grid", "cartesian", "chart"), ::plot),
             FigElement("numberline", Subject.Maths, "x=[min,max]; pt=[x, open|closed, label]; int=[a, b|inf, \"[)\"]", listOf("number line", "line", "interval", "realline"), ::numberLine),
-            FigElement("geo", Subject.Maths, "pt=[A,x,y]…; seg|dash=[A,B,label]; poly=[A,B,C…]; line|ray=[A,B]; circ=[O, r|P, label]; arc=[O,r,deg,deg]; ang=[A,B,C,label]; right=[A,B,C]; eq=[A,B,ticks]; par=[A,B,n]; axes", listOf("geometry", "construction", "polygon", "circle", "circles", "shape", "shapes", "quadrilateral", "coordinategeometry"), ::geo),
-            FigElement("triangle", Subject.Maths, "v=[A,B,C]; type=right|iso|equi|any; right=[V]; angles=[A°,B°]; side=[P,Q,label]; ang=[V,label]; h=[V,label]", listOf("tri", "righttriangle", "trigonometry"), ::triangle),
+            FigElement("geo", Subject.Maths, "pt=[A,x,y]…; seg|dash=[A,B,label]; poly=[A,B,C…]; line|ray=[A,B]; circ=[O, r|P, label]; arc=[O,r,deg,deg]; ang=[A,B,C,label]; right|eq|par=[A,B(,C)]; axes", listOf("geometry", "construction", "polygon", "circle", "circles", "shape", "shapes", "quadrilateral", "coordinategeometry"), ::geo),
+            FigElement("triangle", Subject.Maths, "v=[A,B,C]; type=right|iso|equi|any; right=[V]; angles=[A°,B°]; side=[P,Q,label]; ang|h=[V,label]", listOf("tri", "righttriangle", "trigonometry"), ::triangle),
             FigElement("venn", Subject.Maths, "sets=[A,B,C]; U=[label]; shade=[set expr: A∩B, A-B, A']; in=[A|AB|out, text]", listOf("venndiagram", "sets", "settheory"), Venn::draw),
             FigElement("solid", Subject.Maths, "type=cube|cuboid|prism|cylinder|cone|sphere|pyramid; a|b|c|r|h|l=[label]", listOf("solids", "3d", "cube", "cuboid", "cylinder", "cone", "sphere", "pyramid", "prism", "box3d"), Solids::draw),
-            FigElement("ptree", Subject.Maths, "b=[parent (\"\" root, or A/B), prob, outcome]…", listOf("probabilitytree", "treediagram", "probability", "tree"), ::ptree),
+            FigElement("ptree", Subject.Maths, "b=[parent (\"\" root, or A/B), prob, outcome]…", listOf("probabilitytree", "treediagram", "probability"), ::ptree),
         )
     }
 

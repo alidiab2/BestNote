@@ -34,7 +34,8 @@ internal fun FontComposer.figureRows(d: VectorDiagram, frac: Float, width: Float
             val top = baseline - lines * gap + 0.4f * gap
             val ox = left + (right - left - w) / 2
             fun map(x: Float, y: Float) = P(ox + (x - vb.left) * scale, top + (y - vb.top) * scale)
-            val labelSize = body * LABEL_SCALE
+            // A library drawing shrunk to fit the column keeps its labels in proportion (they were placed at that size).
+            val labelSize = if (labelsPlaced) min(body * LABEL_SCALE, app.bestnote.engine.layout.figlib.Pen.FONT * scale) else body * LABEL_SCALE
             for (s in d.shapes) if (s !is VectorShape.Label) drawFigureShape(this, s, ::map, scale, recolour(s.style.colorArgb), labelSize)
             placeLabels(this, d, ::map, labelSize, recolour, left, right, labelsPlaced)
         },
