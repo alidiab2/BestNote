@@ -7,6 +7,14 @@ import app.bestnote.ai.vision.gemini.KeystoreGeminiSettings
 import app.bestnote.ai.vision.providers.AiProviders
 import app.bestnote.ai.vision.providers.KeystoreAiSettings
 import app.bestnote.ai.vision.providers.SmartBoardStyles
+import app.bestnote.ai.vision.AiProviderKind
+import app.bestnote.ai.vision.providers.account.AiAccounts
+import app.bestnote.ai.vision.providers.account.KeystoreAccountStore
+import app.bestnote.ai.vision.providers.account.OkAuthHttp
+import app.bestnote.ai.vision.providers.account.OpenRouterAuth
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import app.bestnote.feature.settings.data.DebugInfo
 import dagger.Module
 import dagger.Provides
@@ -46,6 +54,17 @@ object SmartBoardModule {
     @Provides
     @Singleton
     fun aiProviders(http: OkHttpClient, settings: KeystoreAiSettings): AiProviders = AiProviders(http, settings)
+
+    /** AI-11 "Sign in with OpenRouter": app-wide so a sign-in survives Settings going behind the browser. */
+    @Provides
+    @Singleton
+    fun aiAccounts(@ApplicationContext context: Context, http: OkHttpClient, settings: KeystoreAiSettings, providers: AiProviders): AiAccounts = AiAccounts(
+        auth = OpenRouterAuth(OkAuthHttp(http)),
+        store = KeystoreAccountStore(settings),
+        scope = CoroutineScope(SupervisorJob() + Dispatchers.Default),
+        returnUri = "${context.packageName}://ai-account/done",
+        onSignedIn = { providers.refreshModels(AiProviderKind.OpenRouter) },
+    )
 
     @Provides
     @Singleton

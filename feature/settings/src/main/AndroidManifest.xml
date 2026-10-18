@@ -11,5 +11,19 @@
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/debug_log_paths" />
         </provider>
+        <!-- AI-11: the button on the "signed in" page brings the app back and closes the Custom Tab. -->
+        <activity
+            android:name="app.bestnote.feature.settings.AiAccountReturnActivity"
+            android:exported="true"
+            android:excludeFromRecents="true"
+            android:noHistory="true"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="${applicationId}" android:host="ai-account" />
+            </intent-filter>
+        </activity>
     </application>
 </manifest>

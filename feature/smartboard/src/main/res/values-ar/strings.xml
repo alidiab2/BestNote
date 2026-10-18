@@ -62,6 +62,7 @@
     <string name="smartboard_provider_gemini">Google Gemini</string>
     <string name="smartboard_provider_claude">Claude</string>
     <string name="smartboard_provider_openai">OpenAI</string>
+    <string name="smartboard_provider_openrouter">OpenRouter</string>
     <string name="smartboard_provider_compatible">خادم الذكاء الخاص بك</string>
     <string name="smartboard_provider_compatible_short">متوافق مع OpenAI</string>
     <string name="smartboard_switch_provider">مزود الذكاء</string>

@@ -53,6 +53,8 @@ object ModelCatalog {
         AiProviderKind.Gemini -> "gemini-3.8-flash"
         AiProviderKind.Claude -> if (preference == Preference.Fast) "claude-haiku-5-5" else "claude-opus-5-5"
         AiProviderKind.OpenAi -> "gpt-5.6-terra"
+        // OpenRouter's own router picks a capable model for the request until the list is loaded.
+        AiProviderKind.OpenRouter -> "openrouter/auto"
         // Depends entirely on the server; the user names the model.
         AiProviderKind.OpenAiCompatible -> ""
     }

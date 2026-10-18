@@ -10,6 +10,8 @@ import dagger.hilt.components.SingletonComponent
 internal interface SettingsDataModule {
     @Binds fun keyStore(impl: ProvidersKeyStore): SmartBoardKeyStore
 
+    @Binds fun aiAccount(impl: AccountsGateway): AiAccountGateway
+
     @Binds fun locale(impl: SystemAppLocaleController): AppLocaleController
 
     @Binds fun storage(impl: FileStorageInspector): StorageInspector

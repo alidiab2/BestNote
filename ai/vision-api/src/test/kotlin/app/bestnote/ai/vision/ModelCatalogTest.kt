@@ -70,6 +70,7 @@ class ModelCatalogTest {
         assertEquals("claude-opus-5-5", ModelCatalog.resolve(AiProviderKind.Claude, "", list))
         assertEquals("claude-haiku-5-5", ModelCatalog.resolve(AiProviderKind.Claude, ModelCatalog.AUTO_FAST, list))
         assertEquals("gemini-3.8-flash", ModelCatalog.resolve(AiProviderKind.Gemini, null, emptyList()))
+        assertEquals("openrouter/auto", ModelCatalog.resolve(AiProviderKind.OpenRouter, "", emptyList()))
         assertEquals("gemini-3.8-flash", ModelCatalog.resolve(AiProviderKind.Gemini, ModelCatalog.AUTO_FAST, emptyList()))
     }
 

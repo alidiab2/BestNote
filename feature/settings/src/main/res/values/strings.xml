@@ -114,7 +114,7 @@
     <string name="settings_ai_openai_sub">GPT models</string>
     <string name="settings_ai_compatible">OpenAI-compatible</string>
     <string name="settings_ai_compatible_sub">OpenRouter, Groq, DeepSeek, a local Ollama… any server with the OpenAI API</string>
-    <string name="settings_ai_key_group">Your API key</string>
+    <string name="settings_ai_key_group">Or paste an API key (advanced)</string>
     <string name="settings_ai_key_saved">Key saved</string>
     <string name="settings_ai_key_none">No key yet</string>
     <string name="settings_ai_key_none_sub">Add your own %1$s API key to use Smart Board</string>
@@ -285,4 +285,38 @@
     <string name="settings_licenses_downloaded_fonts">Downloaded fonts</string>
     <string name="settings_show_welcome">Show welcome again</string>
     <string name="settings_show_welcome_sub">Replay the first-run tour and pen check</string>
+    <!-- AI account (AI-11) -->
+    <string name="settings_ai_openrouter">OpenRouter</string>
+    <string name="settings_ai_openrouter_sub">One account for GPT, Claude, Gemini, DeepSeek and more</string>
+    <string name="settings_account_group">AI account</string>
+    <string name="settings_account_openrouter_title">Sign in with OpenRouter</string>
+    <string name="settings_account_openrouter_sub">Use your own OpenRouter account and credits for GPT, Claude, Gemini, DeepSeek and more. No key to copy.</string>
+    <string name="settings_account_sign_in">Sign in with OpenRouter</string>
+    <string name="settings_account_waiting">Finish signing in in the browser…</string>
+    <string name="settings_account_finishing">Connecting your account…</string>
+    <string name="settings_account_cancel">Cancel</string>
+    <string name="settings_account_signed_in">Signed in with OpenRouter</string>
+    <string name="settings_account_in_use">Smart Board, equations and Design with AI use this account.</string>
+    <string name="settings_account_not_in_use">Another provider is active. Switch to use this account.</string>
+    <string name="settings_account_use">Use this account</string>
+    <string name="settings_account_sign_in_again">Sign in again</string>
+    <string name="settings_account_refresh">Refresh</string>
+    <string name="settings_account_sign_out">Sign out</string>
+    <string name="settings_account_manage">Manage on OpenRouter</string>
+    <string name="settings_account_manage_sub">Add credits, set a spending limit or delete this app\'s key</string>
+    <string name="settings_account_done">Signed in. Your account is ready.</string>
+    <string name="settings_account_err_cancelled">Sign-in cancelled.</string>
+    <string name="settings_account_err_timeout">Sign-in took too long. Try again.</string>
+    <string name="settings_account_err_denied">Access wasn\'t allowed on OpenRouter.</string>
+    <string name="settings_account_err_rejected">OpenRouter didn\'t accept the sign-in. Try again.</string>
+    <string name="settings_account_err_failed">Couldn\'t start sign-in. Try again, or paste a key below.</string>
+    <string name="settings_account_status_loading">Checking credits…</string>
+    <string name="settings_account_status_revoked">This key was deleted on OpenRouter. Sign in again.</string>
+    <string name="settings_account_status_unavailable">Couldn\'t load credits right now.</string>
+    <string name="settings_account_status_left">%1$s left on this key</string>
+    <string name="settings_account_status_free">Free tier: free models only until you add credits</string>
+    <string name="settings_account_status_used">%1$s used this month</string>
+    <string name="settings_account_why_title">Can I use my ChatGPT Plus or Claude Pro subscription?</string>
+    <string name="settings_account_why_body">Not yet. ChatGPT Plus/Pro and Claude Pro/Max are chat subscriptions. OpenAI lets only a few selected partner apps use ChatGPT plans, and Anthropic doesn\'t allow other apps to use Claude plans. Google AI Pro doesn\'t include API access either.</string>
+    <string name="settings_account_why_instead">Instead, sign in with OpenRouter and pay only for what you use (some models are free), or paste an API key below. Gemini keys from Google AI Studio have a free tier.</string>
 </resources>

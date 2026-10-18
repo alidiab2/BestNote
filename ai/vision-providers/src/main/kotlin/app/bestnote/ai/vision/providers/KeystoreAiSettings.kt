@@ -9,6 +9,7 @@ import app.bestnote.ai.vision.ProviderCredentials
 import app.bestnote.ai.vision.gemini.KeystoreCipher
 import app.bestnote.ai.vision.gemini.KeystoreGeminiSettings
 import app.bestnote.ai.vision.gemini.SecretCipher
+import app.bestnote.ai.vision.openai.OpenAiConfig
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.builtins.ListSerializer
@@ -46,6 +47,7 @@ class KeystoreAiSettings(
         if (kind == AiProviderKind.Gemini) return gemini.setApiKey(key)
         val trimmed = key?.trim()?.takeIf { it.isNotEmpty() }
         edit {
+            remove(k(kind, SIGNED_IN)) // a pasted (or removed) key is no longer an account sign-in
             if (trimmed == null) {
                 remove(k(kind, CIPHERTEXT))
                 remove(k(kind, HINT))
@@ -125,6 +127,18 @@ class KeystoreAiSettings(
 
     suspend fun setBaseUrl(kind: AiProviderKind, url: String) = edit { putString(k(kind, BASE_URL), url.trim()) }
 
+    /**
+     * True when the [AiProviderKind.OpenRouter] key came from "Sign in with OpenRouter" (AI-11)
+     * rather than being pasted. Cleared with the key.
+     */
+    fun isSignedIn(kind: AiProviderKind): Boolean = hasKey(kind) && prefs.getBoolean(k(kind, SIGNED_IN), false)
+
+    /** Stores a key obtained by signing in (encrypted like a pasted key) and marks it as an account. */
+    suspend fun setSignedInKey(kind: AiProviderKind, key: String?) {
+        setApiKey(kind, key)
+        edit { if (key.isNullOrBlank()) remove(k(kind, SIGNED_IN)) else putBoolean(k(kind, SIGNED_IN), true) }
+    }
+
     /** "Verbose AI logging": keep raw AI responses for the debug log (always on in debug builds). */
     var verboseLogging: Boolean
         get() = prefs.getBoolean(KEY_VERBOSE, false)
@@ -136,7 +150,11 @@ class KeystoreAiSettings(
     fun credentials(kind: AiProviderKind): ProviderCredentials = object : ProviderCredentials {
         override suspend fun apiKey() = this@KeystoreAiSettings.apiKey(kind)
         override suspend fun model() = this@KeystoreAiSettings.model(kind)
-        override suspend fun baseUrl() = if (kind == AiProviderKind.OpenAiCompatible) this@KeystoreAiSettings.baseUrl(kind) else null
+        override suspend fun baseUrl() = when (kind) {
+            AiProviderKind.OpenAiCompatible -> this@KeystoreAiSettings.baseUrl(kind)
+            AiProviderKind.OpenRouter -> OpenAiConfig.OPENROUTER_BASE_URL
+            else -> null
+        }
     }
 
     /** Every stored key in clear, for redacting the debug log. Never shown, logged or shared. */
@@ -155,6 +173,7 @@ class KeystoreAiSettings(
         const val KEY_VERBOSE = "verbose_logging"
         const val CIPHERTEXT = "api_key_ciphertext"
         const val HINT = "api_key_hint"
+        const val SIGNED_IN = "signed_in"
         const val MODEL = "model"
         const val BASE_URL = "base_url"
         const val MODELS = "models_json"

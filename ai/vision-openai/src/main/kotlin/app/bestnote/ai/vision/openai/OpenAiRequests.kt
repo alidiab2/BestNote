@@ -25,6 +25,9 @@ data class OpenAiConfig(
     companion object {
         const val OPENAI_BASE_URL = "https://api.openai.com/v1/"
 
+        /** [AiProviderKind.OpenRouter][app.bestnote.ai.vision.AiProviderKind.OpenRouter]: the user's own OpenRouter account. */
+        const val OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1/"
+
         /**
          * Servers whose models think unless told not to, and accept `thinking: {type: disabled}`.
          * DeepSeek ignored `reasoning_effort: low` (owner's key: 4,399 of 5,392 output tokens were
@@ -37,7 +40,7 @@ data class OpenAiConfig(
 
         /** Base URLs offered for "OpenAI-compatible" (the user can type any other). */
         val COMPATIBLE_PRESETS = linkedMapOf(
-            "OpenRouter" to "https://openrouter.ai/api/v1/",
+            "OpenRouter" to OPENROUTER_BASE_URL,
             "Groq" to "https://api.groq.com/openai/v1/",
             "DeepSeek" to "https://api.deepseek.com/v1/",
             "Ollama" to "http://localhost:11434/v1/",

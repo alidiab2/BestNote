@@ -51,6 +51,12 @@ enum class AiProviderKind(val id: String) {
     Claude("claude"),
     OpenAi("openai"),
 
+    /**
+     * OpenRouter with the user's own account (AI-11 "Sign in with OpenRouter", or a pasted key):
+     * GPT, Claude, Gemini, DeepSeek… billed to the user's OpenRouter credits. OpenAI wire format.
+     */
+    OpenRouter("openrouter"),
+
     /** Any OpenAI-compatible Chat Completions endpoint: OpenRouter, Groq, DeepSeek, local Ollama… */
     OpenAiCompatible("openai_compatible"),
     ;

@@ -264,6 +264,7 @@ private fun providerName(kind: AiProviderKind) = stringResource(
         AiProviderKind.Gemini -> R.string.smartboard_provider_gemini
         AiProviderKind.Claude -> R.string.smartboard_provider_claude
         AiProviderKind.OpenAi -> R.string.smartboard_provider_openai
+        AiProviderKind.OpenRouter -> R.string.smartboard_provider_openrouter
         AiProviderKind.OpenAiCompatible -> R.string.smartboard_provider_compatible_short
     },
 )
@@ -888,6 +889,7 @@ private fun KeyDialog(provider: AiProviderKind, hint: String?, onSave: (String?)
             AiProviderKind.Gemini -> R.string.smartboard_provider_gemini
             AiProviderKind.Claude -> R.string.smartboard_provider_claude
             AiProviderKind.OpenAi -> R.string.smartboard_provider_openai
+            AiProviderKind.OpenRouter -> R.string.smartboard_provider_openrouter
             AiProviderKind.OpenAiCompatible -> R.string.smartboard_provider_compatible
         },
     )

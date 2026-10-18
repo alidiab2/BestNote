@@ -91,6 +91,16 @@ class SmartBoardViewModel @Inject constructor(private val store: SmartBoardKeySt
         _state.update { it.copy(stored = stored) }
     }
 
+    /** The AI account signed in or out (AI-11): show whichever provider is active now, with its live list. */
+    fun reloadSelected() {
+        listing?.cancel()
+        viewModelScope.launch {
+            _state.update { it.copy(loadingModels = false, modelsError = null) }
+            show(store.selected())
+            refreshModels()
+        }
+    }
+
     fun selectProvider(kind: AiProviderKind) {
         if (kind == _state.value.provider) return
         listing?.cancel()

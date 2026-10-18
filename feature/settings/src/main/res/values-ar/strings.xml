@@ -108,7 +108,7 @@
     <string name="settings_ai_openai_sub">نماذج GPT</string>
     <string name="settings_ai_compatible">متوافق مع OpenAI</string>
     <string name="settings_ai_compatible_sub">OpenRouter أو Groq أو DeepSeek أو Ollama محلي… أي خادم بواجهة OpenAI</string>
-    <string name="settings_ai_key_group">مفتاح API الخاص بك</string>
+    <string name="settings_ai_key_group">أو الصق مفتاح API (متقدّم)</string>
     <string name="settings_ai_key_saved">المفتاح محفوظ</string>
     <string name="settings_ai_key_none">لا يوجد مفتاح بعد</string>
     <string name="settings_ai_key_none_sub">أضف مفتاح %1$s الخاص بك لاستخدام السبورة الذكية</string>
@@ -286,4 +286,38 @@
     <string name="settings_licenses_downloaded_fonts">الخطوط المنزَّلة</string>
     <string name="settings_show_welcome">إظهار الترحيب مرة أخرى</string>
     <string name="settings_show_welcome_sub">أعد جولة البداية واختبار القلم</string>
+    <!-- AI account (AI-11) -->
+    <string name="settings_ai_openrouter">OpenRouter</string>
+    <string name="settings_ai_openrouter_sub">حساب واحد لـ GPT وClaude وGemini وDeepSeek وغيرها</string>
+    <string name="settings_account_group">حساب الذكاء الاصطناعي</string>
+    <string name="settings_account_openrouter_title">تسجيل الدخول عبر OpenRouter</string>
+    <string name="settings_account_openrouter_sub">استخدم حسابك ورصيدك في OpenRouter مع GPT وClaude وGemini وDeepSeek وغيرها. بلا مفتاح تنسخه.</string>
+    <string name="settings_account_sign_in">تسجيل الدخول عبر OpenRouter</string>
+    <string name="settings_account_waiting">أكمل تسجيل الدخول في المتصفح…</string>
+    <string name="settings_account_finishing">جارٍ ربط حسابك…</string>
+    <string name="settings_account_cancel">إلغاء</string>
+    <string name="settings_account_signed_in">مسجّل الدخول عبر OpenRouter</string>
+    <string name="settings_account_in_use">السبورة الذكية والمعادلات والتصميم بالذكاء الاصطناعي تستخدم هذا الحساب.</string>
+    <string name="settings_account_not_in_use">مزوّد آخر مفعّل الآن. بدّل لاستخدام هذا الحساب.</string>
+    <string name="settings_account_use">استخدم هذا الحساب</string>
+    <string name="settings_account_sign_in_again">سجّل الدخول من جديد</string>
+    <string name="settings_account_refresh">تحديث</string>
+    <string name="settings_account_sign_out">تسجيل الخروج</string>
+    <string name="settings_account_manage">الإدارة في OpenRouter</string>
+    <string name="settings_account_manage_sub">أضف رصيدًا أو ضع حدًا للإنفاق أو احذف مفتاح هذا التطبيق</string>
+    <string name="settings_account_done">تم تسجيل الدخول. حسابك جاهز.</string>
+    <string name="settings_account_err_cancelled">أُلغي تسجيل الدخول.</string>
+    <string name="settings_account_err_timeout">استغرق تسجيل الدخول وقتًا طويلًا. حاول مرة أخرى.</string>
+    <string name="settings_account_err_denied">لم يُسمح بالوصول في OpenRouter.</string>
+    <string name="settings_account_err_rejected">لم يقبل OpenRouter تسجيل الدخول. حاول مرة أخرى.</string>
+    <string name="settings_account_err_failed">تعذّر بدء تسجيل الدخول. حاول مرة أخرى أو الصق مفتاحًا أدناه.</string>
+    <string name="settings_account_status_loading">جارٍ التحقق من الرصيد…</string>
+    <string name="settings_account_status_revoked">حُذف هذا المفتاح في OpenRouter. سجّل الدخول من جديد.</string>
+    <string name="settings_account_status_unavailable">تعذّر تحميل الرصيد الآن.</string>
+    <string name="settings_account_status_left">المتبقي على هذا المفتاح: %1$s</string>
+    <string name="settings_account_status_free">الباقة المجانية: النماذج المجانية فقط حتى تضيف رصيدًا</string>
+    <string name="settings_account_status_used">المستخدم هذا الشهر: %1$s</string>
+    <string name="settings_account_why_title">هل أستطيع استخدام اشتراك ChatGPT Plus أو Claude Pro؟</string>
+    <string name="settings_account_why_body">ليس بعد. ChatGPT Plus/Pro وClaude Pro/Max اشتراكات دردشة. تسمح OpenAI لعدد قليل من التطبيقات الشريكة المختارة فقط باستخدام خطط ChatGPT، ولا تسمح Anthropic للتطبيقات الأخرى باستخدام خطط Claude. واشتراك Google AI Pro لا يشمل الوصول إلى الواجهة البرمجية أيضًا.</string>
+    <string name="settings_account_why_instead">بدلًا من ذلك، سجّل الدخول عبر OpenRouter وادفع مقابل ما تستخدمه فقط (بعض النماذج مجانية)، أو الصق مفتاح API أدناه. مفاتيح Gemini من Google AI Studio لها باقة مجانية.</string>
 </resources>

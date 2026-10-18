@@ -15,6 +15,7 @@ object AiProviderDefaults {
         AiProviderKind.Gemini -> "https://aistudio.google.com/apikey"
         AiProviderKind.Claude -> "https://platform.claude.com/settings/keys"
         AiProviderKind.OpenAi -> "https://platform.openai.com/api-keys"
+        AiProviderKind.OpenRouter -> "https://openrouter.ai/settings/keys"
         AiProviderKind.OpenAiCompatible -> null
     }
 

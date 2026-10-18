@@ -80,7 +80,7 @@ class AiProviders(private val http: OkHttpClient, val settings: KeystoreAiSettin
                 override suspend fun model() = modelId()
             },
         )
-        AiProviderKind.Claude, AiProviderKind.OpenAi, AiProviderKind.OpenAiCompatible -> {
+        AiProviderKind.Claude, AiProviderKind.OpenAi, AiProviderKind.OpenRouter, AiProviderKind.OpenAiCompatible -> {
             val base = settings.credentials(kind)
             val credentials = object : ProviderCredentials {
                 override suspend fun apiKey() = base.apiKey()
@@ -102,6 +102,7 @@ class AiProviders(private val http: OkHttpClient, val settings: KeystoreAiSettin
             AiProviderKind.Gemini -> GeminiKeyChecker(http).check(key ?: throw VisionError.MissingKey(), id)
             AiProviderKind.Claude -> ClaudeKeyChecker(http).check(key ?: throw VisionError.MissingKey(), id)
             AiProviderKind.OpenAi -> OpenAiKeyChecker(http).check(key, id, OpenAiConfig.OPENAI_BASE_URL)
+            AiProviderKind.OpenRouter -> OpenAiKeyChecker(http).check(key ?: throw VisionError.MissingKey(), id, OpenAiConfig.OPENROUTER_BASE_URL)
             AiProviderKind.OpenAiCompatible -> {
                 val base = baseUrl?.trim()?.takeIf { it.isNotEmpty() } ?: settings.baseUrl(kind)
                     ?: throw VisionError.BadResponse("no base URL set")
@@ -120,6 +121,7 @@ class AiProviders(private val http: OkHttpClient, val settings: KeystoreAiSettin
             AiProviderKind.Gemini -> GeminiKeyChecker(http).listModels(key ?: throw VisionError.MissingKey())
             AiProviderKind.Claude -> ClaudeKeyChecker(http).listModels(key ?: throw VisionError.MissingKey())
             AiProviderKind.OpenAi -> OpenAiKeyChecker(http).listModels(key, OpenAiConfig.OPENAI_BASE_URL)
+            AiProviderKind.OpenRouter -> OpenAiKeyChecker(http).listModels(key ?: throw VisionError.MissingKey(), OpenAiConfig.OPENROUTER_BASE_URL)
             AiProviderKind.OpenAiCompatible -> OpenAiKeyChecker(http).listModels(
                 key,
                 baseUrl?.trim()?.takeIf { it.isNotEmpty() } ?: settings.baseUrl(kind) ?: throw VisionError.BadResponse("no base URL set"),

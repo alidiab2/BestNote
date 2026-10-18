@@ -36,7 +36,9 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import app.bestnote.feature.settings.AiAccountViewModel
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -63,10 +65,20 @@ import app.bestnote.feature.settings.data.KeyTestResult
 
 
 @Composable
-internal fun SmartBoardSection(viewModel: SmartBoardViewModel, onOpenTemplates: () -> Unit = {}) {
+internal fun SmartBoardSection(
+    viewModel: SmartBoardViewModel,
+    onOpenTemplates: () -> Unit = {},
+    account: AiAccountViewModel = androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel(),
+) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
     DetailHeader(stringResource(R.string.settings_cat_ai), stringResource(R.string.settings_ai_desc))
+
+    // AI-11: sign in with an AI account first; pasting a key below stays as the advanced path.
+    AiAccountSection(account)
+    val accountChanged by account.changed.collectAsStateWithLifecycle()
+    LaunchedEffect(accountChanged) { if (accountChanged > 0) viewModel.reloadSelected() }
+    LaunchedEffect(state.provider, state.stored.hasKey) { account.onProviderChanged() }
 
     SettingsGroup(stringResource(R.string.settings_templates_group)) {
         row {
@@ -213,6 +225,7 @@ private fun AiProviderKind.label(): String = when (this) {
     AiProviderKind.Gemini -> stringResource(R.string.settings_ai_gemini)
     AiProviderKind.Claude -> stringResource(R.string.settings_ai_claude)
     AiProviderKind.OpenAi -> stringResource(R.string.settings_ai_openai)
+    AiProviderKind.OpenRouter -> stringResource(R.string.settings_ai_openrouter)
     AiProviderKind.OpenAiCompatible -> stringResource(R.string.settings_ai_compatible)
 }
 
@@ -221,6 +234,7 @@ private fun AiProviderKind.subtitle(): String = when (this) {
     AiProviderKind.Gemini -> stringResource(R.string.settings_ai_gemini_sub)
     AiProviderKind.Claude -> stringResource(R.string.settings_ai_claude_sub)
     AiProviderKind.OpenAi -> stringResource(R.string.settings_ai_openai_sub)
+    AiProviderKind.OpenRouter -> stringResource(R.string.settings_ai_openrouter_sub)
     AiProviderKind.OpenAiCompatible -> stringResource(R.string.settings_ai_compatible_sub)
 }
 
