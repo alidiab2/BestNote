@@ -204,7 +204,7 @@ private fun BestNoteNavHost(
                     inbox.pending = InkInsert(
                         result.template, result.pages, afterIndex = result.afterIndex, elements = result.elements,
                         notes = result.notes, templateId = result.templateId, followUpPageIds = result.followUpPageIds,
-                        photos = result.photos,
+                        photos = result.photos, assets = result.assets,
                     )
                     nav.popBackStack()
                 } else {
@@ -216,7 +216,7 @@ private fun BestNoteNavHost(
                             }
                         } ?: PaperFormat()
                         val notebook = library.create(result.title ?: "Smart Board", result.template, format)
-                        inbox.pending = InkInsert(result.template, result.pages, freshNotebook = true, elements = result.elements, notes = result.notes, templateId = result.templateId, photos = result.photos)
+                        inbox.pending = InkInsert(result.template, result.pages, freshNotebook = true, elements = result.elements, notes = result.notes, templateId = result.templateId, photos = result.photos, assets = result.assets)
                         nav.popBackStack()
                         nav.navigateToEditor(notebook.id)
                     }

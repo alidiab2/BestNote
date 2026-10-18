@@ -11,5 +11,7 @@ dependencies {
     implementation(libs.kotlinx.coroutines.core)
 
     testImplementation(libs.okhttp.mockwebserver)
+    // LiveBoardTest only (`ai-live.sh … provider=claude`).
+    testImplementation(projects.ai.visionClaude)
     testImplementation(libs.kotlinx.coroutines.test)
 }

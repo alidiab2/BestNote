@@ -35,6 +35,8 @@ object NoteNormalizer {
     /** A single symbol, number or tiny expression that bidi cannot scramble: `x`, `e^x`, `30!`, `V_0`, `\Delta t`, `-3`. */
     fun isShortAtom(tex: String): Boolean {
         val t = tex.trim()
+        // AI-12: a quantity with its unit ("10\\,(m/s)", "v=10\\,(m/s)", "h_B") stays in the sentence.
+        if (QUANTITY.matches(t)) return true
         if (t.isEmpty() || t.length > ATOM_CHARS) return false
         if (BIG.containsMatchIn(t) || RELATION.containsMatchIn(t)) return false
         // A minus is fine only as the sign of a number ("-3"), not between terms ("a-b").
@@ -86,8 +88,9 @@ object NoteNormalizer {
     }
 
     /** [text] with its non-atomic inline maths removed (added to [moved]) when the sentence is right to left. */
-    internal fun split(text: String, moved: MutableList<String>): String {
-        if (!WritingScript.hasRtl(INLINE.replace(text, " "))) return text
+    internal fun split(text0: String, moved: MutableList<String>): String {
+        if (!WritingScript.hasRtl(INLINE.replace(text0, " "))) return text0
+        val text = protectLtr(text0)
         var changed = false
         val kept = INLINE.replace(text) { m ->
             val tex = (m.groups[1] ?: m.groups[2])!!.value.trim()
@@ -102,6 +105,35 @@ object NoteNormalizer {
         if (!changed) return text
         return kept.replace(Regex("\\s+([.,:;،؛])"), "$1").replace(Regex("\\s{2,}"), " ").trim()
     }
+
+    /**
+     * AI-12 (owner, Hebrew board): in a right-to-left sentence a bare number with its unit ("5 (m)",
+     * "10 (m/s)"), a symbol's value ("v=10 (m/s)") or a subscripted symbol ("h_B") came out scrambled by
+     * bidi. Outside existing inline maths they become inline maths, which is written left to right as one piece.
+     */
+    internal fun protectLtr(text: String): String {
+        val out = StringBuilder()
+        var last = 0
+        for (m in INLINE.findAll(text)) {
+            out.append(wrapAtoms(text.substring(last, m.range.first)))
+            out.append(m.value)
+            last = m.range.last + 1
+        }
+        out.append(wrapAtoms(text.substring(last)))
+        return out.toString()
+    }
+
+    private fun wrapAtoms(plain: String): String = LTR_ATOM.replace(plain) { m ->
+        val v = m.value.trim()
+        val lead = m.value.takeWhile { it == ' ' }
+        val trail = m.value.takeLastWhile { it == ' ' }
+        lead + "\\(" + v.replace(Regex("\\s*(\\\\,)?\\s*\\("), "\\\\,(") + "\\)" + trail
+    }
+
+    private const val UNIT = """\([A-Za-z°/^0-9·.\- ]{1,12}\)"""
+    // A relation ("x = 2") still leaves the sentence unless it carries a unit ("v=10\\,(m/s)").
+    private val QUANTITY = Regex("""([A-Za-z](_\{?[A-Za-z0-9]+\}?)?\s*=\s*)?-?\d+([.,]\d+)?\s*(\\,)?\s*$UNIT|-?\d+([.,]\d+)?|[A-Za-z]_\{?[A-Za-z0-9]{1,3}\}?""")
+    private val LTR_ATOM = Regex("""(?<![\w\\])([A-Za-z](_\{?[A-Za-z0-9]+\}?)?\s*=\s*-?\d+([.,]\d+)?\s*(\\,)?\s*$UNIT|-?\d+([.,]\d+)?\s*(\\,)?\s*$UNIT|[A-Za-z]_\{?[A-Za-z0-9]{1,3}\}?)(?![\w])""")
 
     private val PROSE = setOf(
         NoteElement.Paragraph, NoteElement.Definition, NoteElement.Theorem, NoteElement.Example, NoteElement.Note,

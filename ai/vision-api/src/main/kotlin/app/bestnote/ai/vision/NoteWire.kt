@@ -1,6 +1,15 @@
 package app.bestnote.ai.vision
 
+import app.bestnote.core.model.Vec2
+import app.bestnote.engine.layout.BoardFigure
 import app.bestnote.engine.layout.DiagramKinds
+import app.bestnote.engine.layout.FigureBox
+import app.bestnote.engine.layout.FigureGraph
+import app.bestnote.engine.layout.FigureKind
+import app.bestnote.engine.layout.FigureLabel
+import app.bestnote.engine.layout.FigureRaster
+import app.bestnote.engine.layout.FigureShape
+import app.bestnote.engine.layout.FigureSource
 import app.bestnote.engine.layout.GlossaryTerm
 import app.bestnote.engine.layout.NoteBlock
 import app.bestnote.engine.layout.NoteDocument
@@ -79,7 +88,8 @@ object NoteWire {
 
     private fun NoteBlock.isEmpty(): Boolean =
         text.isNullOrBlank() && head.isNullOrBlank() && math.isNullOrBlank() && items.isEmpty() && steps.isEmpty() &&
-            rows.isEmpty() && terms.isEmpty() && columns.all { it.isEmpty() } && parts.isEmpty() && diagram == null
+            rows.isEmpty() && terms.isEmpty() && columns.all { it.isEmpty() } && parts.isEmpty() && diagram == null &&
+            figure.let { f -> f == null || (f.box == null && f.graph == null && f.shape == null && f.raster == null && f.ref == null) }
 
     fun parse(text: String, notes: MutableList<String> = ArrayList()): NoteDocument {
         val root = AiDocumentParser.parseRoot(text, notes) ?: throw VisionError.BadResponse("the notes are not JSON", raw = text)
@@ -127,7 +137,9 @@ object NoteWire {
         val text = text(o["t"] ?: o["text"])
         val head = text(o["h"] ?: o["head"] ?: o["title"] ?: o["term"])
         val math = latex(o["m"] ?: o["math"] ?: o["latex"])
+        val figure = figure(o)
         val e = type ?: when {
+            figure != null -> NoteElement.Diagram
             math != null -> NoteElement.Formula
             text != null || head != null -> NoteElement.Paragraph
             else -> return null
@@ -180,7 +192,102 @@ object NoteWire {
                 NotePart(text(po["q"]), strings(po["s"]).mapNotNull { AiDocumentParser.restoreLatex(it) }, latex(po["r"]))
             },
             diagram = diagram,
+            figure = figure,
         )
+    }
+
+    /**
+     * AI-12 figure fields: `k` kind, `box` [left, top, right, bottom] 0–1000 in the photo, `lbl` labels
+     * (`[["N", x, y], …]` or plain strings), simple data `graph` / `shape`, `ref` (a kept figure on a
+     * follow-up), and what the app stored after drawing it: `src`, `img` [asset, w, h]. Null when the
+     * element has none of them; a bad box is dropped (the figure then needs data, or is only a caption).
+     */
+    private fun figure(o: JsonObject): BoardFigure? {
+        val boxRaw = o["box"] ?: o["bbox"]
+        val kindRaw = str(o["k"] ?: o["kind"])
+        if (boxRaw == null && kindRaw == null && o["graph"] !is JsonObject && o["shape"] !is JsonObject && o["ref"] == null) return null
+        val box = (boxRaw as? JsonArray)?.mapNotNull { num(it) }?.let(FigureBox::of)
+        val labels = (o["lbl"] ?: o["labels"]).let { it as? JsonArray }.orEmpty().mapNotNull { l ->
+            when (l) {
+                is JsonArray -> str(l.getOrNull(0))?.trim()?.takeIf(String::isNotEmpty)?.let { t ->
+                    val x = num(l.getOrNull(1))
+                    val y = num(l.getOrNull(2))
+                    FigureLabel(AiDocumentParser.restoreLatex(t) ?: t, point(x, y))
+                }
+                is JsonPrimitive -> str(l)?.trim()?.takeIf(String::isNotEmpty)?.let { FigureLabel(AiDocumentParser.restoreLatex(it) ?: it) }
+                else -> null
+            }
+        }.take(MAX_LABELS)
+        val img = (o["img"] as? JsonArray)?.let { a ->
+            val asset = str(a.getOrNull(0)) ?: return@let null
+            val w = num(a.getOrNull(1))?.toInt() ?: return@let null
+            val h = num(a.getOrNull(2))?.toInt() ?: return@let null
+            if (w > 0 && h > 0) FigureRaster(asset, w, h) else null
+        }
+        val source = str(o["src"])?.let { s -> FigureSource.entries.firstOrNull { it.name.equals(s, ignoreCase = true) } } ?: FigureSource.Pending
+        return BoardFigure(
+            kind = FigureKind.of(kindRaw),
+            box = box,
+            labels = labels,
+            graph = (o["graph"] as? JsonObject)?.let(::graph),
+            shape = (o["shape"] as? JsonObject)?.let(::shape),
+            raster = img,
+            source = if (source == FigureSource.Picture && img == null) FigureSource.Pending else source,
+            ref = num(o["ref"])?.toInt(),
+        )
+    }
+
+    /** A wire point (0–1000, or fractions) → photo fractions; null when missing or negative. */
+    private fun point(x: Float?, y: Float?): Vec2? {
+        if (x == null || y == null || x < 0f || y < 0f) return null
+        val k = if (maxOf(x, y) <= 1.0001f) 1f else 1000f
+        return Vec2((x / k).coerceIn(0f, 1f), (y / k).coerceIn(0f, 1f))
+    }
+
+    private fun range(el: JsonElement?): Pair<Float, Float>? = (el as? JsonArray)?.let { a ->
+        val lo = num(a.getOrNull(0)) ?: return null
+        val hi = num(a.getOrNull(1)) ?: return null
+        if (lo == hi) null else minOf(lo, hi) to maxOf(lo, hi)
+    }
+
+    private fun graph(g: JsonObject): FigureGraph? {
+        val x = range(g["x"])
+        val y = range(g["y"])
+        val expr = str(g["f"] ?: g["expr"])?.trim()?.takeIf { it.isNotEmpty() }?.let { AiDocumentParser.restoreLatex(it) ?: it }
+        val pts = (g["pts"] as? JsonArray).orEmpty().mapNotNull { p -> (p as? JsonArray)?.let { q -> num(q.getOrNull(0))?.let { a -> num(q.getOrNull(1))?.let { b -> Vec2(a, b) } } } }
+        if (expr == null && pts.size < 2) return null
+        return FigureGraph(
+            xMin = x?.first ?: pts.minOfOrNull { it.x } ?: -5f,
+            xMax = x?.second ?: pts.maxOfOrNull { it.x } ?: 5f,
+            yMin = y?.first,
+            yMax = y?.second,
+            xLabel = str(g["xl"])?.takeIf { it.isNotBlank() } ?: "x",
+            yLabel = str(g["yl"])?.takeIf { it.isNotBlank() } ?: "y",
+            expr = expr,
+            points = pts,
+        )
+    }
+
+    private fun shape(o: JsonObject): FigureShape? {
+        val raw = str(o["type"] ?: o["t"])?.lowercase()?.filter(Char::isLetter) ?: return null
+        val type = when (raw) {
+            "line", "segment" -> FigureShape.Type.Line
+            "arrow", "vector" -> FigureShape.Type.Arrow
+            "rect", "rectangle", "square", "box" -> FigureShape.Type.Rect
+            "circle" -> FigureShape.Type.Circle
+            "ellipse", "oval" -> FigureShape.Type.Ellipse
+            "triangle" -> FigureShape.Type.Triangle
+            "polygon", "poly" -> FigureShape.Type.Polygon
+            else -> return null
+        }
+        val pts = (o["pts"] as? JsonArray).orEmpty().mapNotNull { p ->
+            (p as? JsonArray)?.let { q ->
+                val x = num(q.getOrNull(0)) ?: return@let null
+                val y = num(q.getOrNull(1)) ?: return@let null
+                point(x, y)
+            }
+        }
+        return if (pts.isEmpty()) null else FigureShape(type, pts)
     }
 
     private fun step(el: JsonElement): NoteStep? = when (el) {
@@ -245,6 +352,7 @@ object NoteWire {
 
     private val NOT_CONTENT = setOf("true", "false", "null", "undefined", "none")
     private const val MAX_NESTING = 3
+    private const val MAX_LABELS = 24
 
     // ------------------------------------------------------------------ encode
 
@@ -286,6 +394,67 @@ object NoteWire {
             ),
         )
         b.diagram?.let { put("d", LegacyNotes.diagramJson(it)) }
+        b.figure?.let { encodeFigure(it, forAi = false) }
+    }
+
+    private fun kotlinx.serialization.json.JsonObjectBuilder.encodeFigure(f: BoardFigure, forAi: Boolean) {
+        put("k", f.kind.name.lowercase())
+        if (!forAi) {
+            f.box?.let { b -> put("box", JsonArray(listOf(b.left, b.top, b.right, b.bottom).map { JsonPrimitive(Math.round(it * 1000)) })) }
+            if (f.source != FigureSource.Pending) put("src", f.source.name.lowercase())
+            f.raster?.let { r -> put("img", buildJsonArray { add(JsonPrimitive(r.asset)); add(JsonPrimitive(r.width)); add(JsonPrimitive(r.height)) }) }
+        }
+        if (f.labels.isNotEmpty()) put(
+            "lbl",
+            JsonArray(
+                f.labels.map { l ->
+                    buildJsonArray {
+                        add(JsonPrimitive(l.text))
+                        if (!forAi) l.at?.let { add(JsonPrimitive(Math.round(it.x * 1000))); add(JsonPrimitive(Math.round(it.y * 1000))) }
+                    }
+                },
+            ),
+        )
+    }
+
+    /**
+     * The notes as sent back to the AI with a follow-up photo: drawings are left out (they are big and
+     * belong to the old photo); each already drawn figure is a short `{"e":"Diagram","k",…,"ref":i}`
+     * the model keeps where it belongs, and [reattach] puts the drawing back.
+     */
+    fun encodeForAi(doc: NoteDocument): String {
+        var n = 0
+        fun strip(b: NoteBlock): JsonObject {
+            val f = b.figure
+            if (b.element != NoteElement.Diagram || (f == null && b.diagram == null)) {
+                return if (b.columns.isEmpty()) encode(b) else JsonObject(encode(b) + ("cols" to JsonArray(b.columns.map { c -> JsonArray(c.map(::strip)) })))
+            }
+            val ref = n++
+            return buildJsonObject {
+                put("e", NoteElement.Diagram.name)
+                b.head?.let { put("h", it) }
+                if (f != null) encodeFigure(f, forAi = true) else put("k", "diagram")
+                put("ref", ref)
+            }
+        }
+        return buildJsonObject {
+            put("elements", JsonArray(doc.elements.map(::strip)))
+            if (doc.terms.isNotEmpty()) put("terms", JsonArray(doc.terms.map { pair(it.term, it.translation) }))
+        }.toString()
+    }
+
+    /** Puts the drawings of [previous] back into the Diagram elements of [merged] that kept a `ref` (see [encodeForAi]). */
+    fun reattach(merged: NoteDocument, previous: NoteDocument?): NoteDocument {
+        if (previous == null) return merged
+        val drawn = previous.flatten().filter { it.element == NoteElement.Diagram && (it.figure != null || it.diagram != null) }
+        if (drawn.isEmpty()) return merged
+        fun fix(b: NoteBlock): NoteBlock {
+            val ref = b.figure?.ref
+            val old = ref?.let { drawn.getOrNull(it) }
+            val base = if (old != null && b.figure?.box == null) old.copy(head = b.head ?: old.head) else b
+            return if (base.columns.isEmpty()) base else base.copy(columns = base.columns.map { c -> c.map(::fix) })
+        }
+        return merged.copy(elements = merged.elements.map(::fix))
     }
 
     /** Parses compact JSON this app wrote ([encode]); null when it is not readable. */

@@ -49,8 +49,11 @@ data class TypeRun(
     val block: String,
 )
 
-/** A page of typed notes: text runs, plus pen strokes for boxes, underlines, arrows, fraction bars and drawings. */
-class TypesetPage(val runs: List<TypeRun>, val ink: List<InkStroke>, val equations: List<EquationRun> = emptyList())
+/** A picture on the page (AI-12: a board drawing that could not be redrawn): notebook image [asset], its box in page points. */
+data class TypeImage(val asset: String, val left: Float, val top: Float, val width: Float, val height: Float, val srcWidth: Int, val srcHeight: Int, val block: String)
+
+/** A page of typed notes: text runs, plus pen strokes for boxes, underlines, arrows, fraction bars and drawings, typeset [equations] and [images]. */
+class TypesetPage(val runs: List<TypeRun>, val ink: List<InkStroke>, val equations: List<EquationRun> = emptyList(), val images: List<TypeImage> = emptyList())
 
 /** A typeset formula ([latex]) whose ink box sits on [baseline] from [left], [ascent] above and [descent] below it. */
 data class EquationRun(
@@ -144,6 +147,7 @@ class FontComposer(
         val ink = InkBuilder(h, PenChoice(colorArgb = penColor))
         val shapes = ShapeWriter(h, ink)
         val marks = ArrayList<InkStroke>() // highlighter strokes, drawn under the text
+        val images = ArrayList<TypeImage>()
         var block: String = ""
 
         fun text(t: String, left: Float, baseline: Float, width: Float, size: Float, color: Int, font: HandFont, rtl: Boolean) {

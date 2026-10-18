@@ -18,6 +18,19 @@ class NoteNormalizerTest {
         }
     }
 
+    @Test fun `quantities with units stay in a Hebrew sentence as left-to-right maths`() {
+        val moved = ArrayList<String>()
+        val out = NoteNormalizer.split("גוף נזרק מגובה 5 (m) עם מהירות v=10 (m/s) כלפי מעלה, הגובה h_B ו v=0.", moved)
+        assertTrue(out, out.contains("\\(5\\,(m)\\)"))
+        assertTrue(out, out.contains("\\(v=10\\,(m/s)\\)"))
+        assertTrue(out, out.contains("\\(h_B\\)"))
+        assertTrue(out, out.contains("v=0"))
+        assertTrue(moved.toString(), moved.isEmpty())
+        // The AI's own unit spacing outside maths (live, Claude, board 4).
+        val spaced = NoteNormalizer.split("גוף נזרק מגובה 5\\,(m) כלפי מעלה", moved)
+        assertTrue(spaced, spaced.contains("\\(5\\,(m)\\)"))
+    }
+
     @Test fun `a limit inside an Arabic sentence becomes its own Formula line right after it`() {
         val doc = NoteDocument(
             listOf(

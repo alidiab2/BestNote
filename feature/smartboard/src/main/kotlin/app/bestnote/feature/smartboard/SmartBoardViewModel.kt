@@ -205,6 +205,8 @@ class SmartBoardResult(
     val followUpPageIds: List<String> = emptyList(),
     /** AI-13: the rectified board photos (JPEG) the notes were read from, kept with the pages. */
     val photos: List<ByteArray> = emptyList(),
+    /** AI-12: picture files the [elements] use (asset path → PNG bytes), stored in the notebook on insert. */
+    val assets: Map<String, ByteArray> = emptyMap(),
 )
 
 @HiltViewModel
@@ -293,6 +295,12 @@ class SmartBoardViewModel @Inject constructor(
     }
 
     private val newId = { UUID.randomUUID().toString() }
+
+    /** AI-12: drawings redrawn from the board (and the pictures of those that could not be). */
+    private val figures = BoardFigures()
+
+    /** Pictures of the review preview (drawings kept as images). */
+    val previewImages: app.bestnote.engine.canvas.document.ElementImages get() = figures.images
 
     /** The text boxes of a typed page, for the review preview (same elements that get inserted). */
     fun previewElements(page: app.bestnote.engine.handwriting.TypesetPage): List<PageElement> = TypesetElements.elements(page, measure, newId)
@@ -497,6 +505,16 @@ class SmartBoardViewModel @Inject constructor(
     val ui: StateFlow<SmartBoardUiState> = state.asStateFlow()
 
     /** Debuggable build, or "Verbose AI logging" on: show "Copy raw AI response" on failures. */
+    /**
+     * Debug builds only: a recorded AI answer (`adb push answer.json /data/local/tmp/` then
+     * `run-as <app> cp /data/local/tmp/answer.json files/debug/smartboard-answer.json`) stands in for the
+     * AI on the photos, with no key and no call, so the real redraw and layout run on the device.
+     */
+    private fun recordedAnswer(hasPhotos: Boolean): java.io.File? {
+        val debuggable = (context.applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0
+        return if (debuggable && hasPhotos) java.io.File(context.filesDir, "debug/smartboard-answer.json").takeIf { it.isFile } else null
+    }
+
     private val showDiagnostics: Boolean
         get() = (context.applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0 || settings.verboseLogging
 
@@ -696,7 +714,8 @@ class SmartBoardViewModel @Inject constructor(
     private fun read(force: Boolean) {
         val s = state.value
         val photos = s.photos
-        val demo = photos.isEmpty() || !s.hasKey
+        val recorded = recordedAnswer(photos.isNotEmpty())
+        val demo = (photos.isEmpty() || !s.hasKey) && recorded == null
         if (!demo && !force && s.modelId in settings.textOnlyModels(s.provider)) {
             // This model ignored a photo before: say so instead of spending a call on invented notes.
             state.update { it.copy(textOnlyWarning = s.modelLabel.ifBlank { s.modelId }) }
@@ -715,21 +734,28 @@ class SmartBoardViewModel @Inject constructor(
                         delay(STEP_MS)
                     }
                 }
+                // The flattened boards are kept: AI-12 redraws the drawings from exactly what the AI saw.
+                val boards = if (demo) emptyList() else withContext(Dispatchers.Default) { photos.map { BoardScan.flatten(it.bitmap, it.quad, s.enhance) } }
                 val images = if (demo) {
                     // Photos without a key still go with the (sample) page, so they can be regenerated later.
                     sentPhotos = withContext(Dispatchers.Default) { photos.map { plainJpeg(BoardScan.flatten(it.bitmap, it.quad, s.enhance)) } }
                     listOf(VisionImage(ByteArray(0), "image/jpeg"))
                 } else {
                     withContext(Dispatchers.Default) {
-                        val flat = photos.map { BoardScan.flatten(it.bitmap, it.quad, s.enhance) }
-                        sentPhotos = flat.map(::plainJpeg)
-                        flat.map { ImageCanary.jpeg(it) }
+                        sentPhotos = boards.map(::plainJpeg)
+                        boards.map { ImageCanary.jpeg(it) }
                     }
                 }
-                val provider: VisionProvider = if (demo) DemoVisionProvider() else providers.create(s.provider)
+                val provider: VisionProvider = when {
+                    recorded != null -> RecordedVisionProvider(NoteWire.answer(recorded.readText()))
+                    demo -> DemoVisionProvider()
+                    else -> providers.create(s.provider)
+                }
                 try {
                     // Regenerate reads the photos afresh; a follow-up photo merges into the page's notes.
-                    notes.read(provider, images, effective(), s.language.rtl, if (s.regenerate != null) null else group?.notes)
+                    notes.read(provider, images, effective(), s.language.rtl, if (s.regenerate != null) null else group?.notes) { doc, i ->
+                        boards.getOrNull(i)?.let { b -> runCatching { figures.resolve(doc, b) }.onFailure { Log.w(TAG, "figures: ${it.javaClass.simpleName}") }.getOrNull() } ?: doc
+                    }
                 } finally {
                     ticker.cancel()
                 }
@@ -784,6 +810,7 @@ class SmartBoardViewModel @Inject constructor(
             template = review.paper.template,
             pages = text?.pages?.pages?.map { it.ink } ?: review.ink!!.pages.pages.map { page -> page.map { it.stroke } },
             elements = text?.pages?.pages?.map { TypesetElements.elements(it, measure, newId) }.orEmpty(),
+            assets = text?.pages?.pages?.flatMap { p -> p.images.map { it.asset } }.orEmpty().distinct().mapNotNull { a -> figures.assets[a]?.let { a to it } }.toMap(),
             afterIndex = route.pageIndex,
             newNotebook = newNotebook,
             title = title?.takeIf { it.isNotBlank() },

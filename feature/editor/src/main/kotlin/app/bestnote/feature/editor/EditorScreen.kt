@@ -194,6 +194,8 @@ class InkInsert(
     val followUpPageIds: List<String> = emptyList(),
     /** AI-13: the rectified board photos (JPEG), kept with the pages ("View original photos", "Regenerate"). */
     val photos: List<ByteArray> = emptyList(),
+    /** AI-12: picture files the [elements] reference (notebook asset path → bytes), stored before inserting. */
+    val assets: Map<String, ByteArray> = emptyMap(),
 )
 
 /**
@@ -758,6 +760,8 @@ fun EditorScreen(
         val base = document.pages.getOrNull(current)?.page ?: document.blankPage ?: return@LaunchedEffect
         val byPage = LinkedHashMap<Int, List<androidx.ink.strokes.Stroke>>()
         pages.forEach { viewModel.session.adopt(it) }
+        // AI-12: pictures of board drawings that could not be redrawn (content-addressed: same path back).
+        insert.assets.forEach { (path, bytes) -> viewModel.session.addImage(bytes, path.substringAfterLast('.')) }
         val emptyFirst = insert.freshNotebook && document.pages.size == 1 && document.pages[0].strokes.isEmpty()
         if (emptyFirst && pages.isNotEmpty()) {
             if (document.pages[0].page.template != insert.template) document.updatePage(0) { it.copy(template = insert.template) }

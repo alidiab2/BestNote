@@ -30,7 +30,9 @@ data class NoteDocument(val elements: List<NoteBlock>, val terms: List<GlossaryT
  * - [terms]: Glossary pairs; [target]: MarginRemark → index of the element it comments on;
  * - [number] (`n`): a NumberedFormula's or Derivation result's number (null = next in order);
  * - [columns] (`cols`): Columns → two lists of elements; [parts]: WorkedExample sub-questions;
- * - [diagram]: Diagram, already drawn as vector shapes (also from the data kinds in [DiagramKinds]).
+ * - [diagram]: Diagram, already drawn as vector shapes (also from the data kinds in [DiagramKinds]);
+ * - [figure]: Diagram, a drawing on the board photo (AI-12): where it is, its kind and labels; the app
+ *   redraws it into [diagram] (see [BoardFigure]).
  */
 data class NoteBlock(
     val element: NoteElement,
@@ -46,6 +48,7 @@ data class NoteBlock(
     val columns: List<List<NoteBlock>> = emptyList(),
     val parts: List<NotePart> = emptyList(),
     val diagram: VectorDiagram? = null,
+    val figure: BoardFigure? = null,
 ) {
     /** All the words of the element (for direction and script detection). */
     fun words(): String = buildString {

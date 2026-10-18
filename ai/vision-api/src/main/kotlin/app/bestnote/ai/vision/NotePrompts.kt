@@ -31,7 +31,7 @@ data class NotesRequest(
  */
 object NotePrompts {
     /** The expert student, without the old format's layout and colour instructions. */
-    const val PERSONA = """You are an elite, meticulous student copying the board into your own notebook — not an OCR engine. Copy what the lecturer MEANT, in the order it was taught (follow numbering, arrows, "⇒", a definition before the example that uses it; panels left to right, right to left on Hebrew/Arabic boards), complete and correct for the exam. Fix slips and spelling, never change the meaning, never invent content, never lose content. Drawings are redrawn ruler-straight; every symbol keeps its unit."""
+    const val PERSONA = """You are an elite, meticulous student copying the board into your own notebook — not an OCR engine. Copy what the lecturer MEANT, in the order it was taught (follow numbering, arrows, "⇒", a definition before the example that uses it; panels left to right, right to left on Hebrew/Arabic boards), complete and correct for the exam. Fix slips and spelling, never change the meaning, never invent content, never lose content. Every drawing is kept; every symbol keeps its unit. Read the WHOLE board, every panel, edge to edge."""
 
     /** One line per element: what goes in which field. */
     private val GUIDE: Map<NoteElement, String> = linkedMapOf(
@@ -57,7 +57,12 @@ object NotePrompts {
         NoteElement.Table to "Table: rows (row 0 = headers)",
         NoteElement.Summary to "Summary: items = 2–4 key points",
         NoteElement.Glossary to "Glossary: terms = [[term, translation]]",
-        NoteElement.Diagram to "Diagram: h = caption and ONE of fbd = [[force label, angle°]] (0 right, 90 up), flow = {nodes, edges [[from, to, label]]}, axes = {x, y, pts [[x, y]]}",
+        // AI-12: the app redraws every drawing from the photo; the model only locates it and reads its labels.
+        NoteElement.Diagram to "Diagram: EVERY drawing (graph, diagram, table grid, shape, sketch) in teaching order: " +
+            "box = [left, top, right, bottom] around it and its labels, 0–1000 (not pixels) from the photo's top-left; k = graph|diagram|table|shape|arrow|drawing; " +
+            "lbl = [[LaTeX, x, y]] for every label, letter, number and angle on it, at its centre. " +
+            "The app redraws it from the photo: never describe it in words; a boxed formula is a KeyResult. Only if very simple also: shape = {type: line|arrow|rect|circle|triangle|polygon, pts [[x, y]]}, " +
+            "graph = {x: [min, max], y: [min, max], f: y(x)}, rows (a table's cells)",
         NoteElement.Columns to "Columns: cols = [[elements], [elements]] — theory/formulas in the first, the worked example beside it",
     )
 
@@ -73,6 +78,8 @@ object NotePrompts {
         append("Maths: inline in t as \\( … \\); display maths in m without delimiters; double every backslash in JSON (\"\\\\frac\").\n")
         append("In Hebrew or Arabic sentences only single symbols stay inline (x, e^x, 30!); put any fraction, limit, sum, root or multi-term expression in its own Formula element after the sentence.\n")
         append("Units in parentheses: 10\\,(m/s).\n")
+        // AI-12 (owner): crossed-out terms and braces were lost; the question was restated as an extra Note.
+        append("Keep \\cancel{…} (crossed out) and \\underbrace{…}_{…} (braces). Write only what is on the board: never restate the question; text on a drawing goes only in its lbl.\n")
         // Live tests (owner's DeepSeek key, thinking off): the same computation came back as both a
         // Derivation and a StepSolution, and Summary/Glossary came back empty.
         val both = NoteElement.Derivation in t.elements && NoteElement.StepSolution in t.elements
@@ -134,9 +141,9 @@ object NotePrompts {
      * the model returns ONE merged list (new content added, duplicates removed, teaching order).
      */
     fun followUpUser(current: NoteDocument): String =
-        "These notes are already on the page:\n" + NoteWire.encode(current) +
+        "These notes are already on the page:\n" + NoteWire.encodeForAi(current) +
             "\nThe photo shows the board later in the same lecture (maybe partly the same). Return ONE merged elements list: " +
-            "keep everything already there, add what is new, remove duplicates, re-order by teaching order, only the allowed elements."
+            "keep everything already there (a Diagram with \"ref\" stays exactly as given), add what is new, remove duplicates, re-order by teaching order, only the allowed elements."
 
     fun user(request: NotesRequest): String = request.current?.takeIf { !it.isEmpty }?.let(::followUpUser) ?: USER
 
