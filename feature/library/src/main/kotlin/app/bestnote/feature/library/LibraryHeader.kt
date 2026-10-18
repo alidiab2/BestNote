@@ -23,6 +23,8 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.outlined.Sell
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -129,7 +131,10 @@ internal fun LibraryHeader(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
-                Text(
+                if (state.loading) {
+                    // The count is unknown until the first load finishes; never show "0 notebooks" meanwhile.
+                    Box(Modifier.padding(top = Spacing.XS).size(88.dp, 14.dp).shimmer(RoundedCornerShape(4.dp)))
+                } else Text(
                     pluralStringResource(R.plurals.library_notebook_count, count, count),
                     style = MaterialTheme.typography.bodyMedium,
                     color = BestNoteTheme.colors.muted,
@@ -402,7 +407,12 @@ private fun LastNotebookCard(item: NotebookItem, now: Long, onClick: () -> Unit,
             .padding(Spacing.L),
         horizontalArrangement = Arrangement.spacedBy(Spacing.L),
     ) {
-        NotebookThumbnail(item.thumbnailPath, item.updatedAtMillis, Modifier.fillMaxHeight().width(108.dp), seed = item.pageCount)
+        if (item.coverImagePath != null) {
+            // LIB-10: the notebook's own cover photo stands in for the page thumbnail.
+            NotebookCover(item.title, item.coverIndex, Modifier.fillMaxHeight().width(108.dp), showLabel = false, shadow = false, scale = 0.6f, imagePath = item.coverImagePath, tags = item.tags)
+        } else {
+            NotebookThumbnail(item.thumbnailPath, item.updatedAtMillis, Modifier.fillMaxHeight().width(108.dp), seed = item.pageCount)
+        }
         Column(Modifier.weight(1f).fillMaxHeight()) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.S)) {
                 Box(Modifier.size(10.dp).clip(BestNoteShapes.Control).background(coverMarkColor(item.coverIndex)))
@@ -554,6 +564,15 @@ internal fun NotebooksHeader(state: LibraryUiState, callbacks: LibraryCallbacks,
     val c = state.controls
     Row(modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         if (state.searching) {
+            // A results header only once there is something to count; while the search runs, say so; no matches: the empty state speaks.
+            if (state.items.isEmpty()) {
+                if (!state.searchSettled) {
+                    Text(stringResource(R.string.library_searching), style = MaterialTheme.typography.titleLarge, color = BestNoteTheme.colors.muted, modifier = Modifier.weight(1f), maxLines = 1)
+                } else {
+                    Spacer(Modifier.weight(1f))
+                }
+                return@Row
+            }
             Text(
                 pluralStringResource(R.plurals.library_results, state.items.size, state.items.size, c.query.trim()),
                 style = MaterialTheme.typography.titleLarge,
@@ -575,13 +594,19 @@ internal fun NotebooksHeader(state: LibraryUiState, callbacks: LibraryCallbacks,
             horizontalArrangement = Arrangement.spacedBy(Spacing.S),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Chip(stringResource(R.string.library_filter_all), c.filter == NotebookFilter.All && c.folderColor == null) { callbacks.clearFilters() }
+            Chip(stringResource(R.string.library_filter_all), c.filter == NotebookFilter.All && c.folderColor == null && c.tag == null) { callbacks.clearFilters() }
             Chip(stringResource(R.string.library_filter_week), c.filter == NotebookFilter.ThisWeek) { callbacks.filter(NotebookFilter.ThisWeek) }
             Chip(stringResource(R.string.library_filter_favorites), c.filter == NotebookFilter.Favorites) { callbacks.filter(NotebookFilter.Favorites) }
             Chip(stringResource(R.string.library_filter_pdfs), c.filter == NotebookFilter.Pdfs) { callbacks.filter(NotebookFilter.Pdfs) }
             if (state.folderColors.isNotEmpty()) {
                 Box(Modifier.padding(horizontal = Spacing.XS).width(Elevation.Hairline).height(22.dp).background(MaterialTheme.colorScheme.outline))
                 state.folderColors.forEach { color -> ColorChip(color, c.folderColor == color) { callbacks.folderColor(color) } }
+            }
+            if (state.tagColors.isNotEmpty()) {
+                // LIB-10: notebook colour tags, marked with a tag glyph so they read apart from folder colors.
+                Box(Modifier.padding(horizontal = Spacing.XS).width(Elevation.Hairline).height(22.dp).background(MaterialTheme.colorScheme.outline))
+                Icon(Icons.Outlined.Sell, null, tint = BestNoteTheme.colors.muted, modifier = Modifier.size(16.dp))
+                state.tagColors.forEach { color -> ColorChip(color, c.tag == color, R.string.library_filter_tag) { callbacks.tag(color) } }
             }
         }
         Spacer(Modifier.width(Spacing.M))
@@ -590,8 +615,8 @@ internal fun NotebooksHeader(state: LibraryUiState, callbacks: LibraryCallbacks,
 }
 
 @Composable
-private fun ColorChip(colorIndex: Int, selected: Boolean, onClick: () -> Unit) {
-    val label = stringResource(R.string.library_filter_color, colorIndex + 1)
+private fun ColorChip(colorIndex: Int, selected: Boolean, labelRes: Int = R.string.library_filter_color, onClick: () -> Unit) {
+    val label = stringResource(labelRes, colorIndex + 1)
     Box(
         Modifier
             .size(36.dp)

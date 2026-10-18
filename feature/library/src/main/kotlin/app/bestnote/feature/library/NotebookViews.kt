@@ -182,7 +182,7 @@ internal fun SelectionMark(selected: Boolean, modifier: Modifier = Modifier) {
 private fun ShelfCover(item: NotebookItem, actions: NotebookActions, openMenu: () -> Unit) {
     val selected = item.id in actions.selected
     Box(Modifier.size(CoverWidth, CoverHeight)) {
-        NotebookCover(item.title, item.coverIndex, Modifier.fillMaxSize(), style = item.coverStyle, locked = item.sealed)
+        NotebookCover(item.title, item.coverIndex, Modifier.fillMaxSize(), style = item.coverStyle, locked = item.sealed, imagePath = item.coverImagePath, tags = item.tags)
         if (item.favorite) FavoriteRibbon(Modifier.align(Alignment.TopEnd).padding(end = Spacing.M))
         if (actions.selecting) {
             if (selected) {
@@ -275,13 +275,14 @@ internal fun GridRow(row: List<NotebookItem>, columns: Int, now: Long, actions: 
                         Modifier.fillMaxWidth().aspectRatio(GRID_ART_RATIO).background(MaterialTheme.colorScheme.surfaceContainerLow),
                         contentAlignment = Alignment.Center,
                     ) {
-                        if (item.thumbnailPath != null && !item.sealed) {
+                        if (item.thumbnailPath != null && !item.sealed && item.coverImagePath == null) {
                             // A real page beats a generic cover once DOC-10 has rendered one.
                             NotebookThumbnail(
                                 item.thumbnailPath,
                                 item.updatedAtMillis,
                                 Modifier.fillMaxWidth(GRID_COVER_FRACTION).aspectRatio(COVER_RATIO),
                             )
+                            if (item.tags.isNotEmpty()) TagDots(item.tags, Modifier.align(Alignment.BottomStart).padding(start = Spacing.M, bottom = Spacing.S))
                         } else {
                             NotebookCover(
                                 item.title,
@@ -290,6 +291,8 @@ internal fun GridRow(row: List<NotebookItem>, columns: Int, now: Long, actions: 
                                 scale = GRID_COVER_SCALE,
                                 style = item.coverStyle,
                                 locked = item.sealed,
+                                imagePath = item.coverImagePath,
+                                tags = item.tags,
                             )
                         }
                         if (actions.selecting) SelectionMark(selected, Modifier.align(Alignment.TopEnd).padding(Spacing.M))
@@ -320,7 +323,7 @@ internal fun ListRow(item: NotebookItem, now: Long, actions: NotebookActions, mo
                 horizontalArrangement = Arrangement.spacedBy(Spacing.L),
             ) {
                 if (actions.selecting) SelectionMark(item.id in actions.selected)
-                NotebookCover(item.title, item.coverIndex, Modifier.size(36.dp, 49.dp), showLabel = false, shadow = false, scale = LIST_COVER_SCALE, style = item.coverStyle, locked = item.sealed)
+                NotebookCover(item.title, item.coverIndex, Modifier.size(36.dp, 49.dp), showLabel = false, shadow = false, scale = LIST_COVER_SCALE, style = item.coverStyle, locked = item.sealed, imagePath = item.coverImagePath, tags = item.tags)
                 Column(Modifier.weight(1f)) {
                     Text(item.title, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onBackground, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     Text(metaLine(item, now), style = BestNoteTheme.type.caption, color = BestNoteTheme.colors.muted, maxLines = 1)

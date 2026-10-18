@@ -5,6 +5,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.EncodeDefault
+import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
@@ -46,12 +48,32 @@ data class NotebookMeta(
     /** Zero-based page the user was last on. */
     val lastPageIndex: Int? = null,
     val kind: NotebookKind = NotebookKind.Notebook,
+    /** LIB-10: file name (inside the covers directory) of a custom cover image, or null for the colored cover. */
+    val coverImage: String? = null,
+    /** LIB-10: colour tags, indexes into `CoverPalette.All`, sorted and distinct. */
+    val tags: List<Int> = emptyList(),
+)
+
+/** Current on-disk format of [MetadataSnapshot]. 1 = folders, covers, favorites; 2 adds [NotebookMeta.coverImage] and [NotebookMeta.tags]. */
+internal const val METADATA_VERSION = 2
+
+/**
+ * Brings a snapshot read from disk up to [METADATA_VERSION]. Every v2 field is optional with a default,
+ * so a v1 file already decodes; this normalizes it (clean tags, no blank image names) and stamps the version.
+ */
+internal fun MetadataSnapshot.migrated(): MetadataSnapshot = copy(
+    version = METADATA_VERSION,
+    notebooks = notebooks.mapValues { (_, m) ->
+        m.copy(coverImage = m.coverImage?.takeIf { it.isNotBlank() }, tags = m.tags.filter { it >= 0 }.distinct().sorted())
+    },
 )
 
 /** Everything [LibraryMetadata] keeps, as written to disk. */
 @Serializable
 data class MetadataSnapshot(
-    val version: Int = 1,
+    @OptIn(ExperimentalSerializationApi::class)
+    @EncodeDefault
+    val version: Int = METADATA_VERSION,
     val folders: List<Folder> = emptyList(),
     val notebooks: Map<String, NotebookMeta> = emptyMap(),
 )
@@ -160,7 +182,7 @@ class FileLibraryMetadata(private val file: File) : InMemoryLibraryMetadata() {
                 null
             }
         }
-        if (loaded != null) replaceAll(loaded)
+        if (loaded != null) replaceAll(loaded.migrated())
     }
 
     override suspend fun persist(value: MetadataSnapshot) = withContext(Dispatchers.IO) {

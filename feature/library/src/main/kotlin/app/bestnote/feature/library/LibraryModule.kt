@@ -67,6 +67,9 @@ object LibraryModule {
         FileLibraryMetadata(File(context.filesDir, METADATA_FILE))
 
     @Provides
+    fun coverImages(impl: FileCoverImages): CoverImages = impl
+
+    @Provides
     fun clock(): LibraryClock = LibraryClock(System::currentTimeMillis)
 
     private const val TRASH_DIR = "trash"

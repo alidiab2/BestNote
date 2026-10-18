@@ -66,7 +66,7 @@ class QuicknoteRequests @Inject constructor() {
 }
 
 /** Short messages the screen shows in a snackbar. */
-enum class Notice { ImportingPdf, ImportPdfFailed, Duplicated, Moved, FolderCreated, FolderDeleted, AddedToFavorites, RemovedFromFavorites }
+enum class Notice { ImportingPdf, ImportPdfFailed, Duplicated, Moved, FolderCreated, FolderDeleted, AddedToFavorites, RemovedFromFavorites, CoverImageFailed }
 
 sealed interface LibraryEvent {
     data class Open(val id: NotebookId) : LibraryEvent
@@ -97,6 +97,7 @@ class LibraryViewModel @Inject constructor(
     private val pageSearch: PageSearch = NoOpPageSearch,
     private val models: HandwritingModels = NoOpHandwritingModels,
     private val locks: LibraryLocks = LibraryLocks.None,
+    private val covers: CoverImages = CoverImages.None,
 ) : ViewModel() {
     private val notebooks = MutableStateFlow<List<Notebook>?>(null)
     private val trash = MutableStateFlow<List<TrashedNotebook>>(emptyList())
@@ -109,22 +110,22 @@ class LibraryViewModel @Inject constructor(
 
     /** Pages matching the typed query (REC-03); searched shortly after typing stops, and again when the models arrive. */
     @OptIn(FlowPreview::class, ExperimentalCoroutinesApi::class)
-    private val pageHits: Flow<List<PageSearchHit>> = combine(controls.map { it.query.trim() }.distinctUntilChanged().debounce(SEARCH_DEBOUNCE_MS), models.state) { q, _ -> q }
-        .mapLatest { q -> if (q.isEmpty()) emptyList() else runCatching { pageSearch.search(q) }.getOrDefault(emptyList()) }
-        .onStart { emit(emptyList()) }
+    private val pageHits: Flow<Pair<String, List<PageSearchHit>>> = combine(controls.map { it.query.trim() }.distinctUntilChanged().debounce(SEARCH_DEBOUNCE_MS), models.state) { q, _ -> q }
+        .mapLatest { q -> q to (if (q.isEmpty()) emptyList() else runCatching { pageSearch.search(q) }.getOrDefault(emptyList())) }
+        .onStart { emit("" to emptyList()) }
 
     private val lockSets = combine(locks.sealed, locks.unlocked) { sealed, unlocked -> sealed to unlocked }
 
     private val base = combine(notebooks, trash, controls, combine(thumbnails, metaVersion) { t, _ -> t }, lockSets) { list, bin, c, thumbs, (sealed, unlocked) ->
-        buildLibraryState(list, bin, c, metadata, CoverPalette.All.size, clock.now(), thumbnails = thumbs, sealed = sealed, unlocked = unlocked)
+        buildLibraryState(list, bin, c, metadata, CoverPalette.All.size, clock.now(), thumbnails = thumbs, sealed = sealed, unlocked = unlocked, coverPath = covers::pathOf)
     }
 
-    val state: StateFlow<LibraryUiState> = combine(base, pageHits, models.state) { state, hits, modelState ->
+    val state: StateFlow<LibraryUiState> = combine(base, pageHits, models.state) { state, (hitsQuery, hits), modelState ->
         val titles = notebooks.value.orEmpty().associate { it.id to it.title }
         // Locked notebooks are never indexed (LIB-11); a stale row of one is dropped here too.
         val sealed = locks.sealed.value
         val results = if (state.searching) hits.filter { it.notebookId !in sealed }.mapNotNull { h -> titles[h.notebookId]?.let { PageResult(h, it) } } else emptyList()
-        state.copy(pageResults = results, models = modelState)
+        state.copy(pageResults = results, models = modelState, searchSettled = !state.searching || hitsQuery == state.controls.query.trim())
     }.stateIn(viewModelScope, SharingStarted.Eagerly, LibraryUiState())
 
     /** One-shot UI events: navigation, the undo snackbar and notices. */
@@ -161,7 +162,7 @@ class LibraryViewModel @Inject constructor(
     // region View controls
 
     fun select(destination: LibraryDestination) = controls.update {
-        it.copy(destination = destination, query = "", selecting = false, selected = emptySet(), folderColor = null)
+        it.copy(destination = destination, query = "", selecting = false, selected = emptySet(), folderColor = null, tag = null)
     }
 
     fun setLayout(layout: LibraryLayout) = controls.update { it.copy(layout = layout) }
@@ -169,7 +170,10 @@ class LibraryViewModel @Inject constructor(
 
     /** Toggles the folder-color filter. */
     fun setFolderColor(colorIndex: Int?) = controls.update { it.copy(folderColor = if (it.folderColor == colorIndex) null else colorIndex) }
-    fun clearFilters() = controls.update { it.copy(filter = NotebookFilter.All, folderColor = null) }
+    fun clearFilters() = controls.update { it.copy(filter = NotebookFilter.All, folderColor = null, tag = null) }
+
+    /** LIB-10: toggles the colour-tag filter. */
+    fun setTag(tag: Int?) = controls.update { it.copy(tag = if (it.tag == tag) null else tag) }
     fun setSort(sort: SortOrder) = controls.update { it.copy(sort = sort) }
     fun setQuery(query: String) = controls.update { it.copy(query = query) }
 
@@ -250,9 +254,56 @@ class LibraryViewModel @Inject constructor(
 
     fun setCover(ids: Collection<NotebookId>, cover: CoverChoice) {
         viewModelScope.launch {
-            metadata.update(ids) { it.copy(coverIndex = cover.colorIndex, coverStyle = cover.style) }
+            val old = ids.mapNotNull { metadata.meta(it).coverImage }
+            metadata.update(ids) { it.copy(coverIndex = cover.colorIndex, coverStyle = cover.style, coverImage = null) }
+            old.forEach { releaseCover(it) }
             metaChanged()
         }
+    }
+
+    /** LIB-10: sets [ids]' cover to the photo at [uri] (centre-cropped, downscaled). Tells the user when it cannot be read. */
+    fun setCoverImage(ids: Collection<NotebookId>, uri: String) {
+        viewModelScope.launch {
+            var failed = false
+            ids.forEach { id ->
+                val name = covers.import(id, uri)
+                if (name == null) {
+                    failed = true
+                } else {
+                    val old = metadata.meta(id).coverImage
+                    metadata.update(id) { it.copy(coverImage = name) }
+                    old?.let { releaseCover(it) }
+                }
+            }
+            metaChanged()
+            if (failed) events.send(LibraryEvent.Message(Notice.CoverImageFailed))
+        }
+    }
+
+    /** LIB-10: back to the colored cover ([setCover] also does this: it clears the image). */
+    fun resetCover(ids: Collection<NotebookId>) {
+        viewModelScope.launch {
+            val old = ids.mapNotNull { metadata.meta(it).coverImage }
+            metadata.update(ids) { it.copy(coverImage = null) }
+            old.forEach { releaseCover(it) }
+            metaChanged()
+        }
+    }
+
+    /** LIB-10: adds or removes colour tag [tag] on [ids]. */
+    fun toggleTag(ids: Collection<NotebookId>, tag: Int) {
+        if (ids.isEmpty()) return
+        val all = ids.all { tag in metadata.meta(it).tags }
+        viewModelScope.launch {
+            metadata.update(ids) { m -> m.copy(tags = (if (all) m.tags - tag else m.tags + tag).distinct().sorted()) }
+            metaChanged()
+        }
+    }
+
+    /** Deletes a cover file once no notebook uses it any more. */
+    private suspend fun releaseCover(name: String) {
+        val used = notebooks.value.orEmpty().any { metadata.meta(it.id).coverImage == name }
+        if (!used) covers.delete(name)
     }
 
     /** Duplicates [id] as "[copyTitle]"; the copy keeps the cover, folder and favorite state. */
@@ -260,7 +311,8 @@ class LibraryViewModel @Inject constructor(
         viewModelScope.launch {
             val copy = repository.duplicate(id, copyTitle) ?: return@launch
             val meta = metadata.meta(id)
-            metadata.update(copy.id) { meta.copy(lastPageIndex = 0, quicknote = false) }
+            val image = meta.coverImage?.let { covers.copy(it, copy.id) }
+            metadata.update(copy.id) { meta.copy(lastPageIndex = 0, quicknote = false, coverImage = image) }
             reload()
             events.send(LibraryEvent.Message(Notice.Duplicated, name = copy.title))
         }
