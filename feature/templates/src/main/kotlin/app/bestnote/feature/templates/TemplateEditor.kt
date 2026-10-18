@@ -53,7 +53,6 @@ import app.bestnote.core.designsystem.theme.Spacing
 import app.bestnote.core.fonts.FontPickerDialog
 import app.bestnote.core.fonts.FontRegistry
 import app.bestnote.core.fonts.FontScript
-import app.bestnote.core.model.PaperTemplate
 import app.bestnote.engine.layout.Decoration
 import app.bestnote.engine.layout.DetailLevel
 import app.bestnote.engine.layout.HandFont
@@ -63,7 +62,6 @@ import app.bestnote.engine.layout.NoteElement
 import app.bestnote.engine.layout.NoteRole
 import app.bestnote.engine.layout.NoteTemplate
 import app.bestnote.engine.layout.RoleStyle
-import app.bestnote.engine.layout.RuledPaper
 import app.bestnote.engine.layout.TermsStyle
 import app.bestnote.engine.templates.TemplateClamp
 import app.bestnote.engine.templates.TemplateJson
@@ -201,29 +199,7 @@ private fun LookSection(t: NoteTemplate, update: ((NoteTemplate) -> NoteTemplate
             }
         }
     }
-
-    SectionTitle(R.string.tpl_look_paper)
-    Text(stringResource(R.string.tpl_look_paper_hint), style = MaterialTheme.typography.bodySmall, color = BestNoteTheme.colors.muted)
-    FlowRow(horizontalArrangement = Arrangement.spacedBy(Spacing.S)) {
-        FilterChip(t.look.paper == null, { look { it.copy(paper = null) } }, label = { Text(stringResource(R.string.tpl_paper_notebook)) })
-        RuledPaper.writable.forEach { p ->
-            FilterChip(t.look.paper == p, { look { it.copy(paper = p) } }, label = { Text(paperName(p)) })
-        }
-    }
 }
-
-@Composable
-private fun paperName(p: PaperTemplate) = stringResource(
-    when (p) {
-        PaperTemplate.Ruled -> R.string.tpl_paper_ruled
-        PaperTemplate.RuledNarrow -> R.string.tpl_paper_narrow
-        PaperTemplate.RuledWide -> R.string.tpl_paper_wide
-        PaperTemplate.Grid -> R.string.tpl_paper_grid
-        PaperTemplate.Dotted -> R.string.tpl_paper_dotted
-        PaperTemplate.Cornell -> R.string.tpl_paper_cornell
-        else -> R.string.tpl_paper_blank
-    },
-)
 
 @Composable
 private fun FontRow(script: FontScript, fontId: String, registry: FontRegistry, onPick: (String) -> Unit) {

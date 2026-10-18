@@ -52,15 +52,6 @@
     <string name="tpl_look_space_before">Blank lines before a heading</string>
     <string name="tpl_look_margin_arrows">Arrows from margin notes</string>
     <string name="tpl_look_paper">Paper</string>
-    <string name="tpl_look_paper_hint">Optional. By default pages are written on the notebook\'s own paper.</string>
-    <string name="tpl_paper_notebook">Notebook\'s own</string>
-    <string name="tpl_paper_ruled">Ruled</string>
-    <string name="tpl_paper_narrow">Narrow ruled</string>
-    <string name="tpl_paper_wide">Wide ruled</string>
-    <string name="tpl_paper_grid">Grid</string>
-    <string name="tpl_paper_dotted">Dotted</string>
-    <string name="tpl_paper_cornell">Cornell</string>
-    <string name="tpl_paper_blank">Blank</string>
     <string name="tpl_font_latin">Latin letters</string>
     <string name="tpl_font_arabic">Arabic</string>
     <string name="tpl_font_hebrew">Hebrew</string>

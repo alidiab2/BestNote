@@ -4,6 +4,7 @@ import android.graphics.Paint
 import android.graphics.Typeface
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -11,6 +12,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
@@ -118,7 +120,9 @@ internal fun TemplatePreview(template: NoteTemplate, modifier: Modifier = Modifi
     val colors = BestNoteTheme.colors.paper
     val painter = remember { ElementPainter() }
     val aspect = (p?.paper?.let { it.width / it.height }) ?: (595f / 842f)
-    Canvas(modifier.aspectRatio(aspect).shadow(6.dp).semantics { contentDescription = "Template preview" }) {
+    // wrapContentSize drops the caller's minimum size so the page always fits inside BOTH the width and the
+    // height it is given (a fixed width alone made a tall page overflow onto the controls above it).
+    Canvas(modifier.wrapContentSize(Alignment.TopCenter).aspectRatio(aspect).shadow(6.dp).semantics { contentDescription = "Template preview" }) {
         drawRect(colors.page)
         p ?: return@Canvas
         val k = size.width / p.paper.width
