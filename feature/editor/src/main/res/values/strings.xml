@@ -343,6 +343,7 @@
     <string name="pages_hint">Tap a page to open it · long-press and drag to reorder · Select for more</string>
     <string name="pages_select_hint">Tap pages to select them</string>
     <string name="pages_added">Page added</string>
+    <string name="editor_paper_template">Paper template</string>
     <string name="pages_paper">Paper</string>
     <string name="pages_move_start">To the start</string>
     <string name="pages_move_after">After page %1$d</string>

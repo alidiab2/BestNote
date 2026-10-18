@@ -355,6 +355,7 @@
     <string name="pages_hint">اضغط على صفحة لفتحها · اضغط مطولًا واسحب لإعادة الترتيب · «تحديد» لمزيد من الخيارات</string>
     <string name="pages_select_hint">اضغط على الصفحات لتحديدها</string>
     <string name="pages_added">أُضيفت صفحة</string>
+    <string name="editor_paper_template">قالب الورقة</string>
     <string name="pages_paper">الورق</string>
     <string name="pages_move_start">إلى البداية</string>
     <string name="pages_move_after">بعد الصفحة %1$d</string>
