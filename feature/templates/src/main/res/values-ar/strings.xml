@@ -52,15 +52,6 @@
     <string name="tpl_look_space_before">أسطر فارغة قبل العنوان</string>
     <string name="tpl_look_margin_arrows">أسهم من ملاحظات الهامش</string>
     <string name="tpl_look_paper">الورق</string>
-    <string name="tpl_look_paper_hint">اختياري. افتراضيًا تُكتب الصفحات على ورق الدفتر نفسه.</string>
-    <string name="tpl_paper_notebook">ورق الدفتر</string>
-    <string name="tpl_paper_ruled">مسطّر</string>
-    <string name="tpl_paper_narrow">مسطّر ضيّق</string>
-    <string name="tpl_paper_wide">مسطّر واسع</string>
-    <string name="tpl_paper_grid">مربعات</string>
-    <string name="tpl_paper_dotted">منقّط</string>
-    <string name="tpl_paper_cornell">كورنيل</string>
-    <string name="tpl_paper_blank">فارغ</string>
     <string name="tpl_font_latin">الحروف اللاتينية</string>
     <string name="tpl_font_arabic">العربية</string>
     <string name="tpl_font_hebrew">العبرية</string>

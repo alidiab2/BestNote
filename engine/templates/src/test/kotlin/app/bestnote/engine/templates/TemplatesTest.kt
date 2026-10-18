@@ -177,6 +177,9 @@ class TemplateExchangeTest {
 }
 
 class DesignWithAiTest {
+    @get:Rule val tmp = TemporaryFolder()
+
+    private fun store() = TemplateStore(File(tmp.root, "templates")) { fontsWithOwn }
     private val current = custom().let { it.copy(look = it.look.copy(id = it.id)) }
 
     @Test fun parsesAFencedAnswerAndShowsWhatChanged() {
@@ -248,6 +251,43 @@ class DesignWithAiTest {
         val user = DesignWithAi.userMessage("bigger headings", current)
         assertTrue("CURRENT TEMPLATE" in user && "bigger headings" in user && "Calculus cheat sheet" in user)
         assertFalse("user-1" in user) // the id is not sent
+    }
+
+    @Test fun thePaperFollowsTheNotebookAndTheAiCannotChangeIt() {
+        assertEquals(PaperTemplate.Grid, current.look.paper)
+        assertFalse("\"paper\"" in DesignWithAi.system(fontsWithOwn))
+        assertFalse("\"paper\"" in DesignWithAi.userMessage("dotted paper please", current))
+        val out = DesignWithAi.parse("""{"reply":"ok","template":{"look":{"paper":"Dotted","roles":{"title":{"color":"#00796B"}}}}}""", current, fontsWithOwn)
+        assertEquals(PaperTemplate.Grid, out.template.look.paper) // kept as it was
+        assertEquals(0xFF00796BL, out.template.look.role(NoteRole.Title).color)
+        assertFalse(out.changes.any { it.key == "paper" })
+        val none = current.copy(look = current.look.copy(paper = null))
+        assertNull(DesignWithAi.parse("""{"template":{"look":{"paper":"Cornell"}}}""", none, fontsWithOwn).template.look.paper)
+    }
+
+    @Test fun anArabicRequestAndReplyKeepTheirWords() {
+        val user = DesignWithAi.userMessage("ملخص للامتحان، عناوين زرقاء", current)
+        assertTrue(user.endsWith("ملخص للامتحان، عناوين زرقاء"))
+        val out = DesignWithAi.parse(
+            """{"reply":"جعلت العناوين زرقاء.","template":{"name":"ملخص الامتحان","look":{"roles":{"heading":{"color":"#2A4BD7"}}},"ai":{"notesLanguage":"AR","detail":"cheatSheet","note":"اكتب القوانين فقط"}}}""",
+            current, fontsWithOwn,
+        )
+        assertEquals("جعلت العناوين زرقاء.", out.message)
+        assertEquals("ملخص الامتحان", out.template.name)
+        assertEquals("ar", out.template.ai.notesLanguage) // tag normalised
+        assertEquals(DetailLevel.CheatSheet, out.template.ai.detail)
+        assertEquals("اكتب القوانين فقط", out.template.ai.note) // the user's note stays verbatim
+        assertEquals(0xFF2A4BD7L, out.template.look.role(NoteRole.Heading).color)
+    }
+
+    @Test fun anAiDesignedTemplateIsSavedAndReadBack() {
+        val s = store()
+        val base = s.create("Mine")
+        val out = DesignWithAi.parse("""{"template":{"look":{"layout":"flow","roles":{"result":{"decoration":"box","scale":1.3}}},"elements":["Title","Heading","Formula","KeyResult"]}}""", base, fontsWithOwn)
+        s.save(out.template)
+        val back = store().find(base.id)!!
+        assertEquals(out.template, back)
+        assertEquals(setOf(NoteElement.Title, NoteElement.Heading, NoteElement.Formula, NoteElement.KeyResult), back.elements)
     }
 
     @Test fun theSampleFollowsTheNotesLanguage() {

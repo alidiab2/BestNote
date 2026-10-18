@@ -5,7 +5,6 @@ import app.bestnote.engine.layout.NoteElement
 import app.bestnote.engine.layout.NoteRole
 import app.bestnote.engine.layout.NoteTemplate
 import app.bestnote.engine.layout.TermsStyle
-import app.bestnote.engine.layout.RuledPaper
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -35,6 +34,7 @@ data class DesignOutcome(
  */
 object DesignWithAi {
     private val json = Json { ignoreUnknownKeys = true; isLenient = true }
+    private val prettyJson = Json { prettyPrint = true; prettyPrintIndent = "  " }
 
     /** What each role is, so "blue headings, red formulas" maps to the right keys. */
     private val roleHelp = mapOf(
@@ -66,7 +66,7 @@ object DesignWithAi {
         appendLine("- scale 0.7..2.2 (1 = body size; titles ~1.4, headings ~1.2). bodyScale 0.6..1.3. spaceBeforeHeading 0..3. layout: packed (topics in side-by-side columns, dashed dividers — many things on one page) or flow (one column). density: airy, normal, dense. decoration: none, underline, doubleUnderline, highlight, box.")
         appendLine("- Roles: " + NoteRole.entries.joinToString("; ") { "${TemplateJson.roleKeys.getValue(it)} = ${roleHelp[it]}" } + ".")
         appendLine("- Fonts, by script, by id ONLY from these lists: " + ScriptKey.entries.joinToString("; ") { s -> "${s.name.lowercase()}: " + fonts.ids(s).joinToString(", ") { "${it} (${fonts.nameOf(it)})" } } + ". Use \"system\" only if asked for a plain font.")
-        appendLine("- paper: null (the notebook's own paper, the default) or one of " + RuledPaper.writable.joinToString(", ") { "\"${it.name}\"" } + ". Leave it null unless the user asks for paper.")
+        appendLine("- There is no paper key: pages are always written on the notebook's own paper. Ignore requests about paper and say so in reply.")
         appendLine("- ai.notesLanguage: null = same language as the board, else a code such as \"ar\", \"he\", \"en\". ai.termsLanguage: null or a code (technical terms also given in this language). termsStyle: ${TermsStyle.entries.joinToString("|") { it.name.replaceFirstChar(Char::lowercase) }}. detail: ${DetailLevel.entries.joinToString("|") { it.name.replaceFirstChar(Char::lowercase) }} (cheatSheet = very short). stepByStep, glossary: booleans.")
         appendLine("- ai.note: the user's own instruction to the note-writing AI, in plain words, written in English or the user's language (max 400 characters); put wishes about CONTENT there (e.g. \"exam cheat sheet, only formulas and traps\").")
         appendLine("- elements: names from this list only: " + NoteElement.entries.joinToString(", ") { "${it.name} (${elementHelp[it]})" } + ". Keep Title and Heading. A cheat sheet drops Paragraph and Example; a lecture keeps everything.")
@@ -75,7 +75,13 @@ object DesignWithAi {
 
     /** The user's words, with the template as it is now. */
     fun userMessage(words: String, current: NoteTemplate): String =
-        "CURRENT TEMPLATE:\n" + TemplateJson.encodeToString(current, includeId = false) + "\n\nREQUEST:\n" + words.trim()
+        "CURRENT TEMPLATE:\n" + prettyJson.encodeToString(JsonObject.serializer(), withoutPaper(TemplateJson.encode(current, includeId = false))) + "\n\nREQUEST:\n" + words.trim()
+
+    /** The paper follows the notebook and is never asked (owner's design), so the AI never sees or sets it. */
+    private fun withoutPaper(o: JsonObject): JsonObject {
+        val look = o["look"] as? JsonObject ?: return o
+        return JsonObject(o + ("look" to JsonObject(look - "paper")))
+    }
 
     /**
      * Turns the model's answer into a [DesignOutcome]: finds the JSON (tolerates code fences and prose),
@@ -86,8 +92,8 @@ object DesignWithAi {
         val body = (root["template"] as? JsonObject) ?: root.takeIf { "look" in it || "ai" in it || "elements" in it }
             ?: throw DesignParseException("no template in the answer")
         val message = (root["reply"] as? JsonPrimitive)?.contentOrNull?.trim().orEmpty()
-        val decoded = TemplateJson.decode(JsonObject(body - "id"), current)
-        val clamped = TemplateClamp.clamp(decoded.copy(id = current.id, builtIn = false, look = decoded.look.copy(id = current.id)), fonts)
+        val decoded = TemplateJson.decode(withoutPaper(JsonObject(body - "id")), current)
+        val clamped = TemplateClamp.clamp(decoded.copy(id = current.id, builtIn = false, look = decoded.look.copy(id = current.id, paper = current.look.paper)), fonts)
         return DesignOutcome(clamped.template, message, TemplateDiff.between(current, clamped.template), clamped.adjusted)
     }
 
@@ -121,7 +127,7 @@ object DesignWithAi {
     }
 
     private val SHAPE = """
-{"name":"...","look":{"fonts":{"latin":"<id>","arabic":"<id>","hebrew":"<id>"},"bodyScale":0.9,"spaceBeforeHeading":1,"marginArrows":true,"layout":"packed","density":"normal","highlight":"#FFE066","paper":null,
+{"name":"...","look":{"fonts":{"latin":"<id>","arabic":"<id>","hebrew":"<id>"},"bodyScale":0.9,"spaceBeforeHeading":1,"marginArrows":true,"layout":"packed","density":"normal","highlight":"#FFE066",
 "roles":{"title":{"color":"#1E2A5A","scale":1.45,"decoration":"doubleUnderline"},"heading":{...},"subheading":{...},"definition":{...},"theorem":{...},"formula":{...},"result":{...},"example":{...},"step":{...},"note":{...},"warning":{...},"margin":{...},"body":{"color":null,"scale":1,"decoration":"none"}}},
 "ai":{"notesLanguage":null,"termsLanguage":null,"termsStyle":"inParentheses","detail":"full","stepByStep":true,"glossary":true,"note":""},
 "elements":["Title","Heading","Paragraph"]}
