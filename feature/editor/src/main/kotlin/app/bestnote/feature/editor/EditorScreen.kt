@@ -48,6 +48,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Snackbar
 import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
 import androidx.compose.runtime.Composable
@@ -573,7 +574,7 @@ fun EditorScreen(
         RecorderHub.finished.collect { f ->
             if (f.notebookId != viewModel.notebookId.value) return@collect
             snackbar.currentSnackbarData?.dismiss()
-            if (snackbar.showSnackbar(micSaved, actionLabel = micList) == SnackbarResult.ActionPerformed) recordingsOpen = true
+            if (snackbar.showSnackbar(micSaved, actionLabel = micList, duration = SnackbarDuration.Long) == SnackbarResult.ActionPerformed) recordingsOpen = true
         }
     }
     val comingSoonFormat = stringResource(R.string.editor_coming_soon)
@@ -590,7 +591,7 @@ fun EditorScreen(
         canvas?.let { document.clearPage(it.currentPage) }
         scope.launch {
             snackbar.currentSnackbarData?.dismiss()
-            if (snackbar.showSnackbar(clearedText, actionLabel = undoText) == SnackbarResult.ActionPerformed) document.undo()
+            if (snackbar.showSnackbar(clearedText, actionLabel = undoText, duration = SnackbarDuration.Long) == SnackbarResult.ActionPerformed) document.undo()
         }
     }
     fun toggleLasso() {
@@ -761,7 +762,7 @@ fun EditorScreen(
             if (written != null) {
                 written.firstOrNull()?.let { first -> canvas?.scrollToPage(first) }
                 snackbar.currentSnackbarData?.dismiss()
-                if (snackbar.showSnackbar(insertedFormat.format(written.size), actionLabel = undoText) == SnackbarResult.ActionPerformed) document.undo()
+                if (snackbar.showSnackbar(insertedFormat.format(written.size), actionLabel = undoText, duration = SnackbarDuration.Long) == SnackbarResult.ActionPerformed) document.undo()
                 return@LaunchedEffect
             }
         }
@@ -774,7 +775,7 @@ fun EditorScreen(
         SmartBoardPages.recordInsert(viewModel.session, byPage.keys.sorted().map { document.pages[it].id }, insert)
         byPage.keys.firstOrNull()?.let { first -> canvas?.scrollToPage(first) }
         snackbar.currentSnackbarData?.dismiss()
-        if (snackbar.showSnackbar(insertedFormat.format(byPage.size), actionLabel = undoText) == SnackbarResult.ActionPerformed) document.undo()
+        if (snackbar.showSnackbar(insertedFormat.format(byPage.size), actionLabel = undoText, duration = SnackbarDuration.Long) == SnackbarResult.ActionPerformed) document.undo()
     }
 
     // REC-03: arriving from a search result, jump to the page and mark what matched.
@@ -799,7 +800,7 @@ fun EditorScreen(
         if (!state.input.autoStylusOnly) return
         scope.launch {
             snackbar.currentSnackbarData?.dismiss()
-            if (snackbar.showSnackbar(penDetectedText, actionLabel = settingsText) == SnackbarResult.ActionPerformed) onOpenSettings()
+            if (snackbar.showSnackbar(penDetectedText, actionLabel = settingsText, duration = SnackbarDuration.Long) == SnackbarResult.ActionPerformed) onOpenSettings()
         }
     }
 

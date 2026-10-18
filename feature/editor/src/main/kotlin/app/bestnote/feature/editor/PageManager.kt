@@ -47,6 +47,7 @@ import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -200,7 +201,8 @@ internal fun PageManager(
     fun say(text: String, undoable: Boolean = true) {
         scope.launch {
             snackbar.currentSnackbarData?.dismiss()
-            val result = snackbar.showSnackbar(text, actionLabel = if (undoable) undoLabel else null)
+            val result = snackbar.showSnackbar(text, actionLabel = if (undoable) undoLabel else null,
+                duration = if (undoable) SnackbarDuration.Long else SnackbarDuration.Short)
             if (result == SnackbarResult.ActionPerformed) document.undo()
         }
     }

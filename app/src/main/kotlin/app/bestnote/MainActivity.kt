@@ -169,6 +169,8 @@ private fun BestNoteNavHost(
     showOnboarding: Boolean,
 ) {
     val nav = rememberNavController()
+    // A double tap on an in-app back arrow must not pop the library too (that leaves an empty, blank screen).
+    val back: () -> Unit = { if (nav.previousBackStackEntry != null) nav.popBackStack() }
     val quicknoteRequested by quicknotes.requested.collectAsStateWithLifecycle()
     // A Quicknote request while the editor is open: go back to the library, which opens the note.
     LaunchedEffect(quicknoteRequested) {
@@ -189,13 +191,13 @@ private fun BestNoteNavHost(
             onOpenPage = { id, pageId, query -> nav.navigateToEditor(id, pageId, query) },
         )
         editorScreen(
-            onBack = nav::popBackStack,
+            onBack = back,
             onOpenSettings = { nav.navigate(SettingsRoute) },
             onSmartBoard = { notebook, page, continuePageId, reserved -> nav.navigateToSmartBoard(notebook, page, continuePageId, reserved) },
             takeInsert = inbox::take,
         )
         smartBoardScreen(
-            onClose = nav::popBackStack,
+            onClose = back,
             onManageTemplates = { nav.navigateToTemplates() },
             onInsert = { result ->
                 if (!result.newNotebook) {
@@ -220,8 +222,8 @@ private fun BestNoteNavHost(
                 }
             },
         )
-        settingsScreen(onBack = nav::popBackStack, onOpenTemplates = { nav.navigateToTemplates() })
-        templatesScreen(onBack = nav::popBackStack)
+        settingsScreen(onBack = back, onOpenTemplates = { nav.navigateToTemplates() })
+        templatesScreen(onBack = back)
     }
     if (showOnboarding) {
         val firstTitle = stringResource(R.string.onboarding_first_notebook)
