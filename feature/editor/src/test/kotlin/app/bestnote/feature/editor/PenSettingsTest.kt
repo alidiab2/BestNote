@@ -5,6 +5,7 @@ import app.bestnote.core.datastore.PenPreferences
 import app.bestnote.core.datastore.PenState
 import app.bestnote.core.datastore.UserPreferences
 import app.bestnote.core.datastore.UserPreferencesSerializer
+import app.bestnote.core.model.LineDash
 import app.bestnote.engine.ink.InkPalette
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
@@ -104,5 +105,28 @@ class PenSettingsTest {
         assertEquals(PenDefaults.sizeRange(PenKind.Brush).endInclusive, box.settingsOf(PenKind.Brush).size)
         assertEquals(PenDefaults.settings.getValue(PenKind.Eraser), box.settingsOf(PenKind.Eraser))
         assertTrue(box.favorites.isEmpty())
+    }
+
+    @Test fun lineDashIsPerPenPersistedAndNeverOnTheHighlighter() = runBlocking {
+        val box = Toolbox()
+            .withDash(LineDash.Dashed)
+            .select(PenKind.Pencil).withDash(LineDash.Dotted)
+            .select(PenKind.Highlighter).withDash(LineDash.Dashed)
+        assertEquals(LineDash.Dashed, box.settingsOf(PenKind.Fountain).dash)
+        assertEquals(LineDash.Dotted, box.settingsOf(PenKind.Pencil).dash)
+        assertEquals(LineDash.Solid, box.settingsOf(PenKind.Ballpoint).dash)
+        assertEquals(LineDash.Solid, box.settingsOf(PenKind.Highlighter).dash)
+        val out = ByteArrayOutputStream()
+        UserPreferencesSerializer.writeTo(UserPreferences(pens = PenStore.toPrefs(box.addFavorite("hl").select(PenKind.Pencil).addFavorite("pc"))), out)
+        val read = UserPreferencesSerializer.readFrom(ByteArrayInputStream(out.toByteArray())).pens
+        val restored = PenStore.restore(Toolbox(), read)
+        assertEquals(LineDash.Dashed, restored.settingsOf(PenKind.Fountain).dash)
+        assertEquals(LineDash.Dotted, restored.settingsOf(PenKind.Pencil).dash)
+        assertEquals(LineDash.Dotted, restored.favorites.single { it.id == "pc" }.settings.dash)
+        // Settings files from before INK-07 (no dash), unknown names and a dashed highlighter read as solid.
+        val old = PenStore.restore(Toolbox(), PenPreferences(pens = listOf(PenState("Fountain", custom, 5f), PenState("Brush", custom, 5f, dash = "Wavy"), PenState("Highlighter", custom, 5f, dash = "Dashed"))))
+        assertEquals(LineDash.Solid, old.settingsOf(PenKind.Fountain).dash)
+        assertEquals(LineDash.Solid, old.settingsOf(PenKind.Brush).dash)
+        assertEquals(LineDash.Solid, old.settingsOf(PenKind.Highlighter).dash)
     }
 }

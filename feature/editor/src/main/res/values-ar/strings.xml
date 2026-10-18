@@ -66,6 +66,10 @@
     <string name="picker_preset">إعداد جاهز %1$d</string>
     <string name="picker_pressure">حساسية الضغط</string>
     <string name="picker_stabilization">تثبيت الخط</string>
+    <string name="picker_line">الخط</string>
+    <string name="picker_line_solid">خط متصل</string>
+    <string name="picker_line_dashed">خط متقطع</string>
+    <string name="picker_line_dotted">خط منقط</string>
     <string name="picker_percent">%1$d%%</string>
     <string name="picker_saved_colors">الألوان المحفوظة</string>
     <string name="picker_save_color">حفظ اللون الحالي</string>

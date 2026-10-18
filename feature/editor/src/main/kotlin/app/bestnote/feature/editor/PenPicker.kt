@@ -1,6 +1,7 @@
 package app.bestnote.feature.editor
 
 import app.bestnote.engine.canvas.EraserMode
+import app.bestnote.core.model.LineDash
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -176,8 +177,53 @@ internal fun PenPickerContent(
                 wedge = false,
             )
         }
+        if (kind.dashes) LineStyle(kind, settings, toolbox, onToolbox)
         if (kind.inks) PenFeel(kind, settings, toolbox, onToolbox)
         if (kind.inks) FavoriteButton(toolbox, onToolbox)
+    }
+}
+
+/** INK-07: solid, dashed or dotted line, each choice drawn as a short sample line in the pen's color. */
+@Composable
+private fun LineStyle(kind: PenKind, settings: PenSettings, toolbox: Toolbox, onToolbox: (Toolbox) -> Unit) {
+    Overline(stringResource(R.string.picker_line))
+    val ring = MaterialTheme.colorScheme.onSurface
+    val ink = Color(settings.colorArgb)
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Spacing.S)) {
+        for (dash in LineDash.entries) {
+            val selected = settings.dash == dash
+            val label = stringResource(
+                when (dash) {
+                    LineDash.Solid -> R.string.picker_line_solid
+                    LineDash.Dashed -> R.string.picker_line_dashed
+                    LineDash.Dotted -> R.string.picker_line_dotted
+                },
+            )
+            Box(
+                Modifier
+                    .weight(1f)
+                    .height(40.dp)
+                    .clip(BestNoteShapes.Pill)
+                    .border(if (selected) 2.dp else 1.dp, if (selected) ring else MaterialTheme.colorScheme.outlineVariant, BestNoteShapes.Pill)
+                    .clickable(role = Role.RadioButton, onClickLabel = label) { onToolbox(toolbox.withDash(dash, kind)) }
+                    .semantics { contentDescription = label },
+                contentAlignment = Alignment.Center,
+            ) {
+                Canvas(Modifier.fillMaxWidth().height(40.dp).padding(horizontal = 14.dp)) {
+                    val w = 3.dp.toPx()
+                    val effect = when (dash) {
+                        LineDash.Solid -> null
+                        LineDash.Dashed -> androidx.compose.ui.graphics.PathEffect.dashPathEffect(floatArrayOf(w * 3f, w * 2f))
+                        LineDash.Dotted -> androidx.compose.ui.graphics.PathEffect.dashPathEffect(floatArrayOf(0.01f, w * 2f))
+                    }
+                    drawLine(
+                        ink, Offset(w, size.height / 2), Offset(size.width - w, size.height / 2), strokeWidth = w,
+                        cap = if (dash == LineDash.Dashed) androidx.compose.ui.graphics.StrokeCap.Butt else androidx.compose.ui.graphics.StrokeCap.Round,
+                        pathEffect = effect,
+                    )
+                }
+            }
+        }
     }
 }
 

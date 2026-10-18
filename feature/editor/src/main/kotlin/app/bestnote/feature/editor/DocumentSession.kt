@@ -449,7 +449,7 @@ internal class DocumentSession(
      * The brush captured at pen-down for [stroke]. The fallback (a stroke the canvas has no record
      * of) identifies the family from the stroke's own androidx.ink brush, never from the toolbar.
      */
-    private fun brushOf(stroke: Stroke): InkBrush = (view?.brushOf(stroke) ?: InkConversion.brushFromInk(stroke.brush)).let { b ->
+    private fun brushOf(stroke: Stroke): InkBrush = (view?.brushOf(stroke) ?: InkConversion.brushFromInk(stroke.brush).copy(dash = app.bestnote.engine.ink.StrokeDashes.of(stroke))).let { b ->
         StrokeFills.of(stroke)?.let { b.copy(fillArgb = it) } ?: b
     }
 

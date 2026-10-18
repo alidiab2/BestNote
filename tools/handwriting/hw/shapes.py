@@ -146,7 +146,7 @@ def axes(doc, w, ox, oy, xl, yl, gap="shape"):
     doc.add(geom.wobble(geom.catmull_rom(pts, 0.08), rng, 0.08, 10.0), gap="shape", speed=1.3)
 
 
-def scribble(doc, w, x, y, sw, sh, spacing=1.1, angle_deg=40.0, gap="shape"):
+def scribble(doc, w, x, y, sw, sh, spacing=1.1, angle_deg=40.0, gap="shape", tilt_deg=None, pressure=1.1):
     """Back-and-forth hatching that fills a box: one long fast stroke with rounded turnarounds."""
     rng = w.rng
     ang = math.radians(angle_deg)
@@ -172,7 +172,7 @@ def scribble(doc, w, x, y, sw, sh, spacing=1.1, angle_deg=40.0, gap="shape"):
             k += 1
         s += spacing * rng.uniform(0.8, 1.25)
     dense = geom.catmull_rom(pts, 0.1)
-    doc.add(geom.wobble(dense, rng, 0.12, 6.0), gap=gap, speed=1.8, pressure=1.1)
+    doc.add(geom.wobble(dense, rng, 0.12, 6.0), gap=gap, speed=1.8, pressure=pressure, tilt_deg=tilt_deg)
 
 
 def _clip(a, b, x, y, sw, sh):

@@ -368,8 +368,64 @@ def arabic_moved():
 
 REC = [para_tight, slanted, numbers, arabic_para, mixed, para_moved, arabic_moved]
 
+def _wobbly(w, a, b, amp, periods):
+    """A slow, shaky ruled line: a hand-drawn line with a sideways wobble of [amp] mm."""
+    pts = shapes._line(a, b, w, bow=0.004)
+    dx, dy = b[0] - a[0], b[1] - a[1]
+    L = math.hypot(dx, dy)
+    nx, ny = -dy / L, dx / L
+    out = []
+    for i, (x, y) in enumerate(pts):
+        u = i / max(1, len(pts) - 1)
+        off = amp * math.sin(2 * math.pi * periods * u + 0.6)
+        out.append((x + nx * off, y + ny * off))
+    return out
+
+
+def pencil_tilt():
+    """INK-02: pencil writing, then shading hatches held ever flatter (tilt 45 -> 80 degrees), a cross-hatch
+    (layers darken), and three lines pressed lighter to harder."""
+    w = writer(61, xh=3.4, name="pencil")
+    d = hwdoc.Document("pencil_tilt", "Pencil: writing, tilt shading 45-80 deg, cross-hatch, pressure ramp", PAGE_W, 92, w)
+    latin.write_paragraph(d, w, "Graphite sketch: light, firm, shaded.", 2, 9, 172)
+    for i, tilt in enumerate((45, 62, 72, 80)):
+        shapes.scribble(d, w, 4 + i * 44, 20, 36, 24, spacing=1.0, angle_deg=35, tilt_deg=tilt, pressure=0.9)
+    shapes.scribble(d, w, 4, 52, 50, 30, spacing=1.6, angle_deg=40, pressure=0.8)
+    shapes.scribble(d, w, 4, 52, 50, 30, spacing=1.6, angle_deg=-40, pressure=0.8)
+    for i, p in enumerate((0.35, 0.8, 1.5)):
+        d.add(shapes._line((66, 58 + i * 10), (172, 60 + i * 10), w, bow=0.01), gap="shape", pressure=p)
+    return d
+
+
+def straighten():
+    """INK-07: wobbly lines held still ~700 ms at the end (they straighten), the same without a hold (they stay
+    hand-drawn), and a word ending in a hold (it must not become a line)."""
+    w = writer(62, xh=3.2, vmax=80.0, name="ruler")
+    d = hwdoc.Document("straighten", "Hold-to-straighten: wobbly lines held vs not, a held word", PAGE_W, 80, w)
+    h = 700.0
+    d.add(_wobbly(w, (8, 10), (120, 13), 1.6, 2.0), gap="shape", hold_ms=h)
+    d.add(_wobbly(w, (8, 22), (150, 20), 2.4, 1.5), gap="shape", hold_ms=h)
+    d.add(_wobbly(w, (130, 30), (170, 70), 1.4, 1.0), gap="shape", hold_ms=h)
+    d.add(_wobbly(w, (8, 36), (110, 38), 1.8, 2.0), gap="shape")
+    latin.write_paragraph(d, w, "notes", 8, 56, 60)
+    d.items[-1].hold_ms = h
+    return d
+
+
+def dash_lines():
+    """INK-07: lines, a curve, a circle and a word to replay with a dashed or dotted pen."""
+    w = writer(63, xh=3.4, name="dashes")
+    d = hwdoc.Document("dash_lines", "Dashed/dotted lines: rules, a wave, a circle, a word", PAGE_W, 70, w)
+    shapes.line(d, w, (6, 8), (170, 9))
+    shapes.line(d, w, (6, 18), (110, 30))
+    d.add(_wobbly(w, (6, 42), (110, 42), 5.0, 1.5), gap="shape")
+    shapes.circle(d, w, (145, 40), 14)
+    latin.write_paragraph(d, w, "dash", 6, 62, 60)
+    return d
+
+
 ALL = [lecture_en, formulas, arabic_text, tiny_fast, slow_large, drawings, scribble, highlight_lecture, hover_erase,
-       shapes_hold, shapes_sloppy, shapes_glue, shapes_ghost, shapes_move] + REC
+       shapes_hold, shapes_sloppy, shapes_glue, shapes_ghost, shapes_move, pencil_tilt, straighten, dash_lines] + REC
 NAMES = {"arabic": arabic_text}
 
 

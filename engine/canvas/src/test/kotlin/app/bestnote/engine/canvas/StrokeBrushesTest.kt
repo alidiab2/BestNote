@@ -1,8 +1,10 @@
 package app.bestnote.engine.canvas
 
 import app.bestnote.core.model.InkBrush
+import app.bestnote.core.model.LineDash
 import app.bestnote.core.model.PenStyle
 import app.bestnote.core.model.Tool
+import app.bestnote.engine.ink.StrokeDashes
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
@@ -65,5 +67,25 @@ class StrokeBrushesTest {
         val loadedCopy = Stroke()
         brushes.derive(loadedCopy, loaded) { it }
         assertEquals(0x40112233, StrokeFills.of(loadedCopy))
+    }
+
+    @Test fun dashIsCapturedForPensFollowsCopiesAndPiecesButNeverHighlights() {
+        val brushes = StrokeBrushes<Int, Stroke>()
+        val pen = StrokeBrushes.capture(Tool.Pencil, PenStyle.Fountain, 0xFF333333.toInt(), 5f, LineDash.Dashed)!!
+        assertEquals(LineDash.Dashed, pen.dash)
+        assertEquals(LineDash.Solid, StrokeBrushes.capture(Tool.Highlighter, PenStyle.Fountain, 0xFFFFD54F.toInt(), 5f, LineDash.Dotted)!!.dash)
+        val stroke = Stroke()
+        brushes.begin(1, pen)
+        brushes.finish(1, stroke)
+        assertEquals(LineDash.Dashed, StrokeDashes.of(stroke))
+        val moved = Stroke()
+        brushes.derive(moved, stroke) { it }
+        assertEquals(LineDash.Dashed, StrokeDashes.of(moved))
+        val piece = Stroke()
+        brushes.inherit(piece, stroke)
+        assertEquals(LineDash.Dashed, StrokeDashes.of(piece))
+        val solid = Stroke()
+        brushes.put(solid, pen.copy(dash = LineDash.Solid))
+        assertEquals(LineDash.Solid, StrokeDashes.of(solid))
     }
 }

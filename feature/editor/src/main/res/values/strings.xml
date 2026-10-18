@@ -66,6 +66,10 @@
     <string name="picker_preset">Preset %1$d</string>
     <string name="picker_pressure">Pressure sensitivity</string>
     <string name="picker_stabilization">Stabilization</string>
+    <string name="picker_line">Line</string>
+    <string name="picker_line_solid">Solid line</string>
+    <string name="picker_line_dashed">Dashed line</string>
+    <string name="picker_line_dotted">Dotted line</string>
     <string name="picker_percent">%1$d%%</string>
     <string name="picker_saved_colors">Saved colors</string>
     <string name="picker_save_color">Save current color</string>

@@ -256,8 +256,10 @@ class ReplayInstaller : ContentProvider() {
                 } else {
                     null
                 }
+                val dash = intent.getStringExtra("dash")?.let { d -> app.bestnote.core.model.LineDash.entries.firstOrNull { it.name.equals(d, ignoreCase = true) } ?: error("unknown dash '$d'") }
                 fun applyPen() = when (canvas) {
                     is PagedDocumentView -> {
+                        canvas.lineDash = dash ?: app.bestnote.core.model.LineDash.Solid
                         canvas.tool = tool
                         canvas.penStyle = style
                         canvas.colorArgb = color

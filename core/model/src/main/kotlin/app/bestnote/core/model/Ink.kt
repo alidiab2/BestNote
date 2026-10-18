@@ -11,6 +11,7 @@ package app.bestnote.core.model
  * @property group id shared by the strokes (and elements) grouped together on the page, or null (CANVAS-14).
  * @property fillArgb packed 0xAARRGGBB fill of the shape a closed stroke outlines (INK-11; alpha is the fill's opacity); null for none.
  * @property shape what the stroke is when it is a clean shape, and what its ends are glued to (CANVAS-17); null for plain ink.
+ * @property dash solid, dashed or dotted line (INK-07).
  */
 data class InkBrush(
     val tool: Tool,
@@ -22,6 +23,7 @@ data class InkBrush(
     val fillArgb: Int? = null,
     val group: String? = null,
     val shape: ShapeInfo? = null,
+    val dash: LineDash = LineDash.Solid,
 ) {
     init {
         require(tool.inks) { "$tool does not lay down ink" }

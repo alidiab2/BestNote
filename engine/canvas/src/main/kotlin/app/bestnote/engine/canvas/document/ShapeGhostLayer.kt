@@ -9,7 +9,9 @@ import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.RectF
 import android.view.View
+import androidx.ink.strokes.InProgressStroke
 import androidx.ink.strokes.Stroke
+import app.bestnote.core.model.LineDash
 import app.bestnote.engine.canvas.shape.AnchorType
 import app.bestnote.engine.canvas.shape.Polyline
 import app.bestnote.engine.canvas.shape.ShapeHint
@@ -116,6 +118,22 @@ internal class ShapeGhostLayer(context: Context) : View(context) {
 
     val showing: Boolean get() = ghost != null
 
+    private var wet: InProgressStroke? = null
+    private var wetDash = LineDash.Solid
+    private val wetToView = Matrix()
+
+    /**
+     * INK-07: draws [stroke], a dashed or dotted pen stroke in progress (page points, through [pageToView]),
+     * clipped to its dashes; null stops. The caller invalidates this view as the stroke grows.
+     */
+    fun showWet(stroke: InProgressStroke?, pageToView: Matrix?, dash: LineDash) {
+        if (stroke == null && wet == null) return
+        wet = stroke
+        wetDash = dash
+        if (pageToView != null) wetToView.set(pageToView)
+        invalidate()
+    }
+
     /** Draws [stroke] (page points, through [pageToView]) as the pen's raw ink; null stops. */
     fun showRaw(stroke: Stroke?, pageToView: Matrix?) {
         if (stroke == null && raw == null) return
@@ -125,6 +143,12 @@ internal class ShapeGhostLayer(context: Context) : View(context) {
     }
 
     override fun onDraw(canvas: Canvas) {
+        wet?.let {
+            val save = canvas.save()
+            canvas.concat(wetToView)
+            ink.drawWet(canvas, it, wetToView, wetDash)
+            canvas.restoreToCount(save)
+        }
         raw?.let { ink.draw(canvas, listOf(it), rawToView) }
         val g = ghost ?: return
         val o = shapeOutline ?: return

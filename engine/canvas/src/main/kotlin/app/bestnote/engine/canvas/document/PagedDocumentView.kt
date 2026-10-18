@@ -29,6 +29,7 @@ import androidx.ink.strokes.Stroke
 import androidx.input.motionprediction.MotionEventPredictor
 import app.bestnote.core.model.AudioSync
 import app.bestnote.core.model.InkBrush
+import app.bestnote.core.model.LineDash
 import app.bestnote.core.model.PageElement
 import app.bestnote.core.model.PageRect
 import app.bestnote.core.model.PaperSizes
@@ -48,9 +49,11 @@ import app.bestnote.engine.canvas.shape.ShapeEdits
 import app.bestnote.engine.canvas.shape.ShapePreview
 import app.bestnote.engine.canvas.shape.ShapeSnapper
 import app.bestnote.engine.canvas.erase.InkEraser
+import app.bestnote.engine.canvas.TiltFeed
 import app.bestnote.engine.canvas.WetHighlighter
 import app.bestnote.engine.ink.BrushCatalog
 import app.bestnote.engine.ink.InkPalette
+import app.bestnote.engine.ink.InkTextures
 import app.bestnote.engine.ink.PenTuning
 import app.bestnote.engine.layout.document.DocumentMetrics
 import app.bestnote.engine.stylus.HoverButtonGestures
@@ -103,6 +106,9 @@ class PagedDocumentView(context: Context) : FrameLayout(context), InProgressStro
     var eraserMode: EraserMode = EraserMode.Stroke
     var penStyle: PenStyle = PenStyle.Fountain
     var colorArgb: Int = InkPalette.BLACK
+
+    /** INK-07: solid, dashed or dotted line for pens and the pencil (highlighters stay solid). Captured at pen-down. */
+    var lineDash: LineDash = LineDash.Solid
 
     /** INK-08 Shapes tool: every pen stroke that is a shape snaps to its clean form (no hold needed). */
     var shapeTool: Boolean = false
@@ -540,6 +546,9 @@ class PagedDocumentView(context: Context) : FrameLayout(context), InProgressStro
     private var temporaryShown: Tool? = null
     private var lastIndicator = -2 to -2
 
+    /** INK-02: pointerId -> the tilt-carrying input feed of its wet pencil stroke. */
+    private val tiltFeeds = HashMap<Int, TiltFeed>()
+
     /** pointerId -> (page, wet stroke). */
     private val inking = HashMap<Int, Pair<Int, InProgressStrokeId>>()
 
@@ -696,6 +705,8 @@ class PagedDocumentView(context: Context) : FrameLayout(context), InProgressStro
     }
 
     init {
+        // Without it the wet pencil draws without its paper grain and only gets it once dry (INK-02).
+        wet.textureBitmapStore = InkTextures
         setOnDragListener(dragListener)
         addView(pages, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
         addView(highlights, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
@@ -807,14 +818,28 @@ class PagedDocumentView(context: Context) : FrameLayout(context), InProgressStro
                         selection.owns(id) -> selectAlong(id, se)
                         id in erasing -> eraseAlong(id, se)
                         id in inking -> {
-                            withShaped(event, id, predicted) { e, p -> wet.addToStroke(e, id, inking.getValue(id).second, p) }
+                            val strokeId = inking.getValue(id).second
+                            val feed = tiltFeeds[id]
+                            withShaped(event, id, predicted) { e, p ->
+                                if (feed == null) {
+                                    wet.addToStroke(e, id, strokeId, p)
+                                } else {
+                                    // Real samples first: the prediction continues from them.
+                                    val real = feed.real(e, id)
+                                    val ahead = feed.predicted(p, id)
+                                    // A prediction androidx.ink rejects must never cost the real samples.
+                                    if (ahead == null || runCatching { wet.addToStroke(real, strokeId, ahead) }.isFailure) {
+                                        runCatching { wet.addToStroke(real, strokeId) }
+                                    }
+                                }
+                            }
                             trackHold(id, se)
                         }
                         // Under a ghost: the raw ink is off the wet layer; its samples keep being recorded.
                         id in detached -> trackHold(id, se)
                         highlighting?.second?.pointerId == id -> highlighting?.let { (page, h) ->
                             withShaped(event, id, predicted) { e, p -> h.add(e, p) }
-                            pages.invalidatePage(page)
+                            refreshWet(page, h)
                             trackHold(id, se)
                         }
                         id in scrolling -> {
@@ -835,7 +860,16 @@ class PagedDocumentView(context: Context) : FrameLayout(context), InProgressStro
                             // A cancelled ghost leaves free ink; the Shapes tool snaps everything else.
                             shapeTool && !(previewPointer == id && preview.cancelled) -> snapRequested += strokeId
                         }
-                        withShaped(event, id, null, last = true) { e, _ -> wet.finishStroke(e, id, strokeId) }
+                        val feed = tiltFeeds.remove(id)
+                        withShaped(event, id, null, last = true) { e, _ ->
+                            if (feed == null) {
+                                wet.finishStroke(e, id, strokeId)
+                            } else {
+                                runCatching { wet.addToStroke(feed.real(e, id, current = false), strokeId) }
+                                val last = feed.last(e, id)
+                                if (last == null || runCatching { wet.finishStroke(last, strokeId) }.isFailure) wet.finishStroke(e, id, strokeId)
+                            }
+                        }
                         shaper.end(id)
                     }
                     detached.remove(id)?.let { d -> finishDetached(id, d) }
@@ -1206,8 +1240,19 @@ class PagedDocumentView(context: Context) : FrameLayout(context), InProgressStro
         if (!pageToView(page, strokeToView)) return
         shaper.begin(pointerId, penTuning)
         if (strokeTool == Tool.Highlighter) return startHighlight(event, pointerId, strokeTool, page, brush, strokeToView, sizePt)
+        // A dashed line is drawn clipped above the wet layer, which can't clip (INK-07).
+        val dash = StrokeBrushes.dashFor(strokeTool, lineDash)
+        if (dash != LineDash.Solid) return startHighlight(event, pointerId, strokeTool, page, brush, strokeToView, sizePt, dash)
         // World = view pixels; the stroke itself is recorded in page points.
-        val strokeId = withShaped(event, pointerId, null) { e, _ -> wet.startStroke(e, pointerId, brush, IDENTITY, strokeToView) }
+        val strokeId = if (strokeTool == Tool.Pencil) {
+            // INK-02: the pencil's wet inputs carry the pen's tilt even when the digitizer declares no tilt range.
+            val feed = TiltFeed(event.downTime, Matrix().also { strokeToView.invert(it) })
+            val first = withShaped(event, pointerId, null) { e, _ -> feed.first(e, pointerId)?.let { wet.startStroke(it, brush, strokeToView) } } ?: return
+            tiltFeeds[pointerId] = feed
+            first
+        } else {
+            withShaped(event, pointerId, null) { e, _ -> wet.startStroke(e, pointerId, brush, IDENTITY, strokeToView) }
+        }
         inking[pointerId] = page to strokeId
         wetBrushes[pointerId] = brush
         startHold(event, pointerId)
@@ -1217,20 +1262,37 @@ class PagedDocumentView(context: Context) : FrameLayout(context), InProgressStro
 
     /** The brush a stroke starting with [event] is stored with, including its audio stamp. */
     private fun captureBrush(event: MotionEvent, strokeTool: Tool, sizePt: Float): InkBrush? {
-        val brush = StrokeBrushes.capture(strokeTool, penStyle, colorArgb, sizePt) ?: return null
+        val brush = StrokeBrushes.capture(strokeTool, penStyle, colorArgb, sizePt, lineDash) ?: return null
         val stamp = audioStamper?.invoke(event.downTime) ?: return brush
         return brush.copy(audio = stamp)
     }
 
-    private fun startHighlight(event: MotionEvent, pointerId: Int, strokeTool: Tool, page: Int, brush: androidx.ink.brush.Brush, strokeToView: Matrix, sizePt: Float) {
+    /**
+     * A highlighter stroke (drawn by its page, under the ink), or with a [dash] a dashed pen stroke (drawn clipped
+     * above the wet layer, INK-07). Both are wet strokes the view draws itself, one at a time.
+     */
+    private fun startHighlight(event: MotionEvent, pointerId: Int, strokeTool: Tool, page: Int, brush: androidx.ink.brush.Brush, strokeToView: Matrix, sizePt: Float, dash: LineDash = LineDash.Solid) {
         highlighting?.let { cancelHighlight(it.second.pointerId) } // one wet highlight at a time
         val viewToStroke = Matrix().also { strokeToView.invert(it) }
-        val h = WetHighlighter(pointerId, brush, event.downTime, viewToStroke)
+        val h = WetHighlighter(pointerId, brush, event.downTime, viewToStroke, opaqueWhileWet = dash == LineDash.Solid, dash = dash)
         highlighting = page to h
         captureBrush(event, strokeTool, sizePt)?.let { strokeBrushes.begin(h.id, it) }
         withShaped(event, pointerId, null) { e, _ -> h.add(e, null) }
-        pages.setWetHighlight(page, h.stroke, brush.colorIntArgb)
+        if (dash == LineDash.Solid) pages.setWetHighlight(page, h.stroke, brush.colorIntArgb) else ghosts.showWet(h.stroke, strokeToView, dash)
         startHold(event, pointerId)
+    }
+
+    /** The view-drawn wet stroke [h] on [page] grew: redraw it. */
+    private fun refreshWet(page: Int, h: WetHighlighter) {
+        if (h.dash == LineDash.Solid) pages.invalidatePage(page) else ghosts.invalidate()
+    }
+
+    private fun clearWet(page: Int, h: WetHighlighter) {
+        if (h.dash == LineDash.Solid) {
+            pages.setWetHighlight(page, null, 0)
+        } else {
+            ghosts.showWet(null, null, h.dash)
+        }
     }
 
     private fun finishHighlight(pointerId: Int, event: MotionEvent) {
@@ -1239,7 +1301,7 @@ class PagedDocumentView(context: Context) : FrameLayout(context), InProgressStro
         val stroke = withShaped(event, pointerId, null, last = true) { e, _ -> h.finish(e) }
         shaper.end(pointerId)
         strokeBrushes.finish(h.id, stroke)
-        pages.setWetHighlight(page, null, 0)
+        clearWet(page, h)
         holds.remove(pointerId)
         val ghost = ghostForHighlight
         val snap = shapeTool && !(previewPointer == pointerId && preview.cancelled)
@@ -1254,7 +1316,7 @@ class PagedDocumentView(context: Context) : FrameLayout(context), InProgressStro
         val (page, h) = highlighting?.takeIf { it.second.pointerId == pointerId } ?: return
         highlighting = null
         strokeBrushes.cancel(h.id)
-        pages.setWetHighlight(page, null, 0)
+        clearWet(page, h)
     }
 
     /** Runs [block] with [event] (and [predicted]) shaped by [pointerId]'s pen tuning (INK-04/05), recycling the copies. */
@@ -1274,6 +1336,7 @@ class PagedDocumentView(context: Context) : FrameLayout(context), InProgressStro
         holds.remove(pointerId)
         endPreview(pointerId)
         cancelHighlight(pointerId)
+        tiltFeeds.remove(pointerId)
         inking.remove(pointerId)?.let { (_, strokeId) ->
             wet.cancelStroke(strokeId, event)
             strokePages.remove(strokeId)
@@ -1290,6 +1353,7 @@ class PagedDocumentView(context: Context) : FrameLayout(context), InProgressStro
             strokeBrushes.cancel(strokeId)
         }
         inking.clear()
+        tiltFeeds.clear()
         detached.values.forEach { strokeBrushes.cancel(it.strokeId) }
         detached.clear()
         wetBrushes.clear()
@@ -1507,6 +1571,7 @@ class PagedDocumentView(context: Context) : FrameLayout(context), InProgressStro
         val (page, strokeId) = inking.remove(pointerId) ?: return
         val brush = wetBrushes[pointerId] ?: return run { inking[pointerId] = page to strokeId }
         wet.cancelStroke(strokeId, null)
+        tiltFeeds.remove(pointerId)
         strokePages.remove(strokeId)
         detached[pointerId] = Detached(page, strokeId, brush)
     }

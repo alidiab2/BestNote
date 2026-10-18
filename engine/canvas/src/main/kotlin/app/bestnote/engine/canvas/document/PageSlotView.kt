@@ -371,9 +371,9 @@ internal class PageSlotView(context: Context, private val style: SheetStyle) : V
         return if (cached != null && cached.brush.colorIntArgb == want) {
             cached
         } else if (s === morphFrame) {
-            s.copy(s.brush.copyWithColorIntArgb(want)).also { StrokeFills.copy(it, s) } // a frame is drawn once: don't cache it
+            s.copy(s.brush.copyWithColorIntArgb(want)).also { StrokeFills.copy(it, s); app.bestnote.engine.ink.StrokeDashes.copy(it, s) } // a frame is drawn once: don't cache it
         } else {
-            s.copy(s.brush.copyWithColorIntArgb(want)).also { tinted[s] = it; StrokeFills.copy(it, s) }
+            s.copy(s.brush.copyWithColorIntArgb(want)).also { tinted[s] = it; StrokeFills.copy(it, s); app.bestnote.engine.ink.StrokeDashes.copy(it, s) }
         }
     }
 }
