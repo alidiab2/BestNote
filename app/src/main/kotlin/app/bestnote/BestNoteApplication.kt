@@ -63,7 +63,8 @@ class BestNoteApplication : Application() {
         setUpAiDiagnostics()
         // Smart Board writes with the bundled handwriting fonts; the page renderer resolves them by id.
         runCatching { HandwritingTypefaces.init(this) }.onFailure { Log.w("BestNote", "Handwriting fonts unavailable", it) }
-        ElementPainter.Fonts.resolve = HandwritingTypefaces::of
+        // TEXT-05: a font this device lacks falls back to one of the same kind (serif, mono, hand, sans).
+        ElementPainter.Fonts.resolve = app.bestnote.core.fonts.FontRegistry::typefaceOrFallback
         // Equations (MATH-01): parse the math font off the main thread before the first one is drawn.
         app.bestnote.engine.canvas.document.EquationRendering.warmUp()
         // Downloaded and own fonts (TPL-02): registered with the typefaces so pages and previews resolve them by id.

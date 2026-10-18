@@ -20,6 +20,13 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.FileDownload
+import androidx.compose.material.icons.rounded.Search
+import androidx.compose.material.icons.rounded.Star
+import androidx.compose.material.icons.rounded.StarBorder
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -89,9 +96,11 @@ private fun errorText(e: Throwable?): String? = when (e) {
 }
 
 /**
- * Picks a font for [script] (template look) or for any script when null (text boxes). Lists the bundled
- * hands, fonts downloaded earlier, "My fonts" with "Add my own font…", and the curated "More fonts" that
- * download when tapped. [selectedId] null = the default sans (shown when [allowDefault]).
+ * Picks a font for [script] (template look) or for any script when null (text boxes, the keyboard format bar and the
+ * lasso's text bar, TEXT-05). Search by name, filter by script, starred favourites and recent picks first, then the
+ * fonts on this device (bundled text fonts and hands, downloaded ones) previewed in the font itself, "My fonts" with
+ * "Add my own font…", and the curated Google Fonts catalogue: tapping one downloads it and picks it.
+ * [selectedId] null = the default sans (shown when [allowDefault]).
  */
 @Composable
 fun FontPickerDialog(
@@ -104,43 +113,83 @@ fun FontPickerDialog(
 ) {
     val fonts by registry.fonts.collectAsState()
     val downloading by registry.downloading.collectAsState()
+    val recents by registry.recents.collectAsState()
+    val favourites by registry.favourites.collectAsState()
     val scope = rememberCoroutineScope()
     var error by remember { mutableStateOf<Throwable?>(null) }
     var added by remember { mutableStateOf<String?>(null) }
+    var query by remember { mutableStateOf("") }
+    var filter by remember { mutableStateOf(script) }
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) scope.launch {
             registry.import(uri).onSuccess { added = it.name; error = null }.onFailure { error = it }
         }
     }
+    fun pick(id: String?) {
+        registry.noteUsed(id)
+        onSelect(id)
+    }
     fun fits(f: AppFont) = script == null || script in f.scripts
-    val hands = fonts.filter { it.origin != FontOrigin.Mine && fits(it) }
-    val mine = fonts.filter { it.origin == FontOrigin.Mine }
-    val more = (if (script == null) FontCatalogue.all else FontCatalogue.forScript(script)).filter { c -> fonts.none { it.id == c.id } }
+    val shown = FontChoices.filter(fonts, query, filter)
+    val installed = shown.filter { it.origin != FontOrigin.Mine && fits(it) }.sortedBy { it.category.ordinal }
+    val starred = installed.filter { it.id in favourites }
+    val recent = recents.mapNotNull { id -> installed.firstOrNull { it.id == id } }.filter { it.id !in favourites }
+    val mine = shown.filter { it.origin == FontOrigin.Mine }
+    val more = FontChoices.filterCatalogue(if (script == null) FontCatalogue.all else FontCatalogue.forScript(script), query, filter)
+        .filter { c -> fonts.none { it.id == c.id } }
+    val sample: (AppFont) -> String = { f -> sampleFor(filter ?: script ?: f.scripts.firstOrNull()) }
+    val row: @Composable (AppFont, String) -> Unit = { f, key ->
+        FontRow(
+            f.name, f.id, sample(f), f.id == selectedId,
+            note = categoryName(f.category),
+            favourite = f.id in favourites,
+            onFavourite = { registry.toggleFavourite(f.id) },
+        ) { pick(f.id) }
+    }
     Dialog(onDismissRequest = onDismiss) {
         Surface(shape = BestNoteShapes.Sheet, color = MaterialTheme.colorScheme.surface, tonalElevation = 2.dp) {
             Column(Modifier.padding(Spacing.L), verticalArrangement = Arrangement.spacedBy(Spacing.S)) {
-                Text(
-                    stringResource(R.string.fonts_title),
-                    style = MaterialTheme.typography.titleLarge,
+                Text(stringResource(R.string.fonts_title), style = MaterialTheme.typography.titleLarge)
+                OutlinedTextField(
+                    value = query,
+                    onValueChange = { query = it },
+                    singleLine = true,
+                    leadingIcon = { Icon(Icons.Rounded.Search, null) },
+                    placeholder = { Text(stringResource(R.string.fonts_search)) },
+                    modifier = Modifier.fillMaxWidth(),
                 )
-                script?.let { Text(scriptName(it), style = MaterialTheme.typography.labelMedium, color = BestNoteTheme.colors.muted) }
-                LazyColumn(Modifier.heightIn(max = 480.dp).fillMaxWidth()) {
-                    if (allowDefault) item("default") {
-                        FontRow(stringResource(R.string.fonts_default), null, sampleFor(script), selectedId == null) { onSelect(null) }
+                Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(Spacing.XS)) {
+                    if (script == null) FilterChip(filter == null, onClick = { filter = null }, label = { Text(stringResource(R.string.fonts_all_scripts)) })
+                    (if (script == null) FontScript.entries else listOf(script)).forEach { s ->
+                        FilterChip(filter == s, onClick = { filter = if (filter == s && script == null) null else s }, label = { Text(scriptName(s)) })
                     }
-                    item("h-hand") { Section(stringResource(R.string.fonts_section_handwriting)) }
-                    items(hands, key = { it.id }) { f ->
-                        FontRow(f.name, f.id, sampleFor(script ?: f.scripts.firstOrNull()), f.id == selectedId) { onSelect(f.id) }
+                }
+                LazyColumn(Modifier.heightIn(max = 460.dp).fillMaxWidth()) {
+                    if (allowDefault && query.isBlank()) item("default") {
+                        FontRow(stringResource(R.string.fonts_default), null, sampleFor(filter ?: script), selectedId == null) { pick(null) }
+                    }
+                    if (starred.isNotEmpty()) {
+                        item("h-fav") { Section(stringResource(R.string.fonts_section_favourites)) }
+                        items(starred, key = { "fav-" + it.id }) { row(it, "fav") }
+                    }
+                    if (recent.isNotEmpty() && query.isBlank()) {
+                        item("h-recent") { Section(stringResource(R.string.fonts_section_recent)) }
+                        items(recent, key = { "recent-" + it.id }) { row(it, "recent") }
+                    }
+                    item("h-fonts") { Section(stringResource(R.string.fonts_section_fonts)) }
+                    items(installed, key = { it.id }) { row(it, "all") }
+                    if (installed.isEmpty() && more.isEmpty()) item("none") {
+                        Text(stringResource(R.string.fonts_none_found), style = MaterialTheme.typography.bodyMedium, color = BestNoteTheme.colors.muted, modifier = Modifier.padding(vertical = Spacing.S))
                     }
                     item("h-mine") { Section(stringResource(R.string.fonts_section_mine)) }
                     items(mine, key = { it.id }) { f ->
                         val ok = fits(f)
                         FontRow(
-                            f.name, f.id, sampleFor(script ?: f.scripts.firstOrNull()), f.id == selectedId,
+                            f.name, f.id, sample(f), f.id == selectedId,
                             note = if (!ok && script != null) stringResource(R.string.fonts_missing_script, scriptName(script)) else null,
                             enabled = ok,
                             onDelete = { scope.launch { registry.delete(f.id) } },
-                        ) { onSelect(f.id) }
+                        ) { pick(f.id) }
                     }
                     item("add") {
                         Column(Modifier.padding(vertical = Spacing.S)) {
@@ -150,28 +199,36 @@ fun FontPickerDialog(
                             Text(stringResource(R.string.fonts_add_hint), style = MaterialTheme.typography.bodySmall, color = BestNoteTheme.colors.muted)
                         }
                     }
-                    item("h-more") {
+                    if (more.isNotEmpty()) item("h-more") {
                         Section(stringResource(R.string.fonts_section_more))
                         Text(stringResource(R.string.fonts_more_hint), style = MaterialTheme.typography.bodySmall, color = BestNoteTheme.colors.muted, modifier = Modifier.padding(bottom = Spacing.XS))
                     }
                     items(more, key = { it.id }) { c ->
                         val busy = c.id in downloading
+                        val download = {
+                            scope.launch {
+                                registry.download(c).onSuccess { added = it.name; error = null; pick(it.id) }.onFailure { error = it }
+                            }
+                            Unit
+                        }
                         Row(
-                            Modifier.fillMaxWidth().padding(vertical = Spacing.XS),
+                            Modifier.fillMaxWidth().clickable(enabled = !busy, onClick = download).padding(vertical = Spacing.XS),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             Column(Modifier.weight(1f)) {
                                 Text(c.family, style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                Text(c.scripts.joinToString(" · ") { it.name }, style = MaterialTheme.typography.labelSmall, color = BestNoteTheme.colors.muted)
+                                Text(
+                                    (listOf(categoryName(c.category)) + c.scripts.map { scriptName(it) }).joinToString(" · "),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = BestNoteTheme.colors.muted,
+                                )
                             }
                             if (busy) {
                                 CircularProgressIndicator(Modifier.size(24.dp), strokeWidth = 2.dp)
                                 Spacer(Modifier.width(Spacing.S))
                                 Text(stringResource(R.string.fonts_downloading), style = MaterialTheme.typography.labelMedium)
                             } else {
-                                TextButton(onClick = {
-                                    scope.launch { registry.download(c).onSuccess { added = it.name; error = null }.onFailure { error = it } }
-                                }) {
+                                TextButton(onClick = download) {
                                     Icon(Icons.Rounded.FileDownload, null, Modifier.size(18.dp))
                                     Spacer(Modifier.width(Spacing.XS))
                                     Text(stringResource(R.string.fonts_download, "%.0f KB".format(c.bytes / 1024f)))
@@ -191,6 +248,17 @@ fun FontPickerDialog(
 }
 
 @Composable
+private fun categoryName(c: FontCategory) = stringResource(
+    when (c) {
+        FontCategory.Sans -> R.string.fonts_cat_sans
+        FontCategory.Serif -> R.string.fonts_cat_serif
+        FontCategory.Mono -> R.string.fonts_cat_mono
+        FontCategory.Handwriting -> R.string.fonts_cat_hand
+        FontCategory.Display -> R.string.fonts_cat_display
+    },
+)
+
+@Composable
 private fun Section(title: String) {
     Column(Modifier.padding(top = Spacing.S)) {
         HorizontalDivider()
@@ -207,6 +275,8 @@ private fun FontRow(
     note: String? = null,
     enabled: Boolean = true,
     onDelete: (() -> Unit)? = null,
+    favourite: Boolean = false,
+    onFavourite: (() -> Unit)? = null,
     onClick: () -> Unit,
 ) {
     val family = rememberFontFamily(fontId)
@@ -227,7 +297,16 @@ private fun FontRow(
                 overflow = TextOverflow.Ellipsis,
                 color = if (enabled) MaterialTheme.colorScheme.onSurface else BestNoteTheme.colors.muted,
             )
-            note?.let { Text(it, style = MaterialTheme.typography.labelSmall, color = BestNoteTheme.colors.warning) }
+            note?.let { Text(it, style = MaterialTheme.typography.labelSmall, color = if (enabled) BestNoteTheme.colors.muted else BestNoteTheme.colors.warning) }
+        }
+        onFavourite?.let {
+            IconButton(onClick = it) {
+                Icon(
+                    if (favourite) Icons.Rounded.Star else Icons.Rounded.StarBorder,
+                    stringResource(if (favourite) R.string.fonts_unfavourite else R.string.fonts_favourite, name),
+                    tint = if (favourite) MaterialTheme.colorScheme.primary else BestNoteTheme.colors.muted,
+                )
+            }
         }
         onDelete?.let {
             IconButton(onClick = it) { Icon(Icons.Rounded.Delete, stringResource(R.string.fonts_delete, name)) }

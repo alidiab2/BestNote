@@ -27,7 +27,10 @@ import app.bestnote.engine.canvas.select.SnapGuides
 import app.bestnote.engine.canvas.select.FillGeometry
 import app.bestnote.engine.canvas.select.InkClipboard
 import app.bestnote.engine.canvas.select.PenType
+import app.bestnote.engine.canvas.select.LassoFilter
+import app.bestnote.engine.canvas.select.LassoPick
 import app.bestnote.engine.canvas.select.LassoPolygon
+import app.bestnote.engine.canvas.select.TextBulkStyle
 import app.bestnote.engine.canvas.select.ObjectOrder
 import app.bestnote.engine.canvas.select.PastePlacement
 import app.bestnote.engine.canvas.select.SpatialGrid
@@ -84,6 +87,9 @@ internal class SelectionLayer(
     var elementTapListener: ((PageElement) -> Unit)? = null
 
     val hasSelection: Boolean get() = selection != null
+
+    /** CANVAS-20: what the lasso (loop, tap and "Select all") picks up. */
+    var filter: LassoFilter = LassoFilter.All
 
     /** A lasso or a transform is under the pen. */
     val active: Boolean get() = draft != null || gesture != null
@@ -350,8 +356,8 @@ internal class SelectionLayer(
         val index = indexOf(d.page)
         if (index < 0) return invalidate()
         if (d.screenLength < TAP_DP * density) {
-            // A tap on a text box or picture selects it.
-            val hit = d.page.elements.lastOrNull { ElementTransforms.contains(it, d.xs[0], d.ys[0]) }
+            // A tap on a text box, picture or equation (of a kind the filter takes) selects it.
+            val hit = LassoPick.tappedElement(d.page.elements, d.xs[0], d.ys[0], filter)
             if (hit != null) {
                 // A locked picture is selected alone (so it can be unlocked); otherwise its group comes with it.
                 if (hit.locked) {
@@ -363,6 +369,19 @@ internal class SelectionLayer(
                 }
                 return invalidate()
             }
+            // CANVAS-20: a tap on a shape (its line, or inside a closed one) selects that shape and its group.
+            val tolerance = TAP_HIT_DP * density / (pages.layout?.scale ?: 1f)
+            val x0 = d.xs[0]
+            val y0 = d.ys[0]
+            val shape = LassoPick.tappedShape(
+                index(d.page).query(Box(x0 - tolerance, y0 - tolerance, x0 + tolerance, y0 + tolerance)), x0, y0, tolerance, filter,
+                isShape = ::isShape, closed = ::isClosed, outline = ::outlineOf,
+            )
+            if (shape != null) {
+                val (strokes, elements) = withGroupMates(d.page, listOf(shape), emptyList())
+                select(d.page, strokes, elements)
+                return invalidate()
+            }
             // Otherwise nothing to select. With ink on the clipboard, offer Paste right here.
             if (InkClipboard.hasContent) pasteOffer = Triple(d.page, d.xs[0], d.ys[0])
             notifyMenu()
@@ -370,12 +389,10 @@ internal class SelectionLayer(
         }
         val poly = LassoPolygon(d.xs.copyOf(d.count), d.ys.copyOf(d.count))
         val bounds = poly.bounds ?: return invalidate()
-        val chosen = index(d.page).query(bounds).filter { s ->
-            val o = outlines.of(s)
-            poly.selects(o.xs, o.ys)
-        }
+        // CANVAS-20: every kind at once (ink, shapes, text, pictures, equations), through the lasso filter.
+        val chosen = LassoPick.strokes(index(d.page).query(bounds), poly, filter, ::isShape, ::outlineOf)
         // Locked pictures and text ignore the lasso: only a tap on one selects it.
-        val chosenElements = d.page.elements.filter { ElementTransforms.lassoPicks(poly, it) }
+        val chosenElements = LassoPick.elements(d.page.elements, poly, filter)
         if (chosen.isNotEmpty() || chosenElements.isNotEmpty()) {
             val (strokes, elements) = withGroupMates(d.page, chosen, chosenElements)
             select(d.page, strokes, elements)
@@ -497,6 +514,40 @@ internal class SelectionLayer(
         edit { doc.editContent(index, addedStrokes = pasted, elements = page.elements + shapes) }
         select(page, pasted, shapes)
         return true
+    }
+
+    private fun isShape(stroke: Stroke): Boolean = brushes.brushOf(stroke)?.shape != null
+
+    private fun outlineOf(stroke: Stroke): Pair<FloatArray, FloatArray> = outlines.of(stroke).let { it.xs to it.ys }
+
+    /**
+     * CANVAS-20: selects everything on page [pageIndex] (-1: the page in view) that the lasso filter takes, with
+     * group mates; locked things stay out. @return true when something was selected.
+     */
+    fun selectAll(pageIndex: Int): Boolean {
+        val doc = document ?: return false
+        val index = pageIndex.takeIf { it >= 0 } ?: pages.layout?.currentPage(pages.scrollY, pages.height) ?: return false
+        val page = doc.pages.getOrNull(index) ?: return false
+        val (strokes, elements) = LassoPick.all(page.strokes, page.elements, filter, ::isShape)
+        if (strokes.isEmpty() && elements.isEmpty()) return false
+        cancelInput()
+        clear()
+        val (s, e) = withGroupMates(page, strokes, elements)
+        select(page, s, e)
+        return true
+    }
+
+    /**
+     * CANVAS-20: applies [style] to every selected, unlocked text box at once (font, size, B/I/U, colour, alignment),
+     * re-fitting each box to its text; the rest of the selection stays. One undo step.
+     */
+    fun styleTexts(style: TextBulkStyle) {
+        val sel = selection ?: return
+        if (sel.elements.none { it is TextElement && !it.locked }) return
+        replace(sel, { it }) { e ->
+            if (e !is TextElement || e.locked) e else style.applyTo(e).let { n -> if (n === e) e else elementPainter.fitted(n) }
+        }
+        notifyMenu()
     }
 
     /** The stored group of [stroke], or null. */
@@ -810,6 +861,7 @@ internal class SelectionLayer(
                     canGroup = canGroup(sel),
                     grouped = isGrouped(sel),
                     onlyLocked = sel.strokes.isEmpty() && sel.elements.all { it.locked },
+                    textBoxes = sel.elements.filterIsInstance<TextElement>().filter { !it.locked },
                 ),
             )
         }
@@ -1046,6 +1098,9 @@ internal class SelectionLayer(
         private const val GLUE_MARK_DP = 7f
         private const val MIN_STEP_DP = 1.5f
         private const val TAP_DP = 12f
+
+        /** A lasso tap this close (screen dp) to a shape's line selects the shape (CANVAS-20). */
+        private const val TAP_HIT_DP = 10f
         private const val MOVE_EPS = 0.5f
         private const val INITIAL_POINTS = 256
     }

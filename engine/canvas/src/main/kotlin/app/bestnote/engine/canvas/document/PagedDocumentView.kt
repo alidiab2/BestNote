@@ -297,6 +297,8 @@ class PagedDocumentView(context: Context) : FrameLayout(context), InProgressStro
         val grouped: Boolean = false,
         /** Only locked pictures or text are selected (a tap selected one so it can be unlocked, CANVAS-13). */
         val onlyLocked: Boolean = false,
+        /** CANVAS-20: the selected (unlocked) text boxes, for the bulk text bar. */
+        val textBoxes: List<app.bestnote.core.model.TextElement> = emptyList(),
     )
 
     var selectionListener: SelectionListener?
@@ -395,6 +397,19 @@ class PagedDocumentView(context: Context) : FrameLayout(context), InProgressStro
     fun fitted(element: app.bestnote.core.model.EquationElement): app.bestnote.core.model.EquationElement = EquationRendering.fitted(element)
 
     fun clearSelection() = selection.clear()
+
+    /** CANVAS-20: what the lasso picks up (all kinds, or only handwriting / text / pictures / shapes). */
+    var lassoFilter: app.bestnote.engine.canvas.select.LassoFilter
+        get() = selection.filter
+        set(value) {
+            selection.filter = value
+        }
+
+    /** CANVAS-20: selects everything the lasso filter takes on page [pageIndex] (-1: the page in view). @return true if anything was selected. */
+    fun selectAllOnPage(pageIndex: Int = -1): Boolean = selection.selectAll(pageIndex)
+
+    /** CANVAS-20: the same font / size / style / colour / alignment change for every selected text box. One undo step. */
+    fun styleSelectedTexts(style: app.bestnote.engine.canvas.select.TextBulkStyle) = selection.styleTexts(style)
     fun deleteSelection() = selection.delete()
     fun copySelection() = selection.copy()
     fun cutSelection() = selection.cut()

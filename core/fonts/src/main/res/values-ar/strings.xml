@@ -29,4 +29,17 @@
     <string name="fonts_license_show">عرض الرخصة</string>
     <string name="fonts_license_hide">إخفاء الرخصة</string>
     <string name="fonts_license_source">المصدر: %1$s</string>
+    <string name="fonts_search">ابحث عن خط</string>
+    <string name="fonts_all_scripts">الكل</string>
+    <string name="fonts_section_favourites">المفضلة</string>
+    <string name="fonts_section_recent">المستخدمة مؤخرًا</string>
+    <string name="fonts_section_fonts">على هذا الجهاز</string>
+    <string name="fonts_favourite">أضف %1$s إلى المفضلة</string>
+    <string name="fonts_unfavourite">أزل %1$s من المفضلة</string>
+    <string name="fonts_none_found">لا توجد خطوط مطابقة.</string>
+    <string name="fonts_cat_sans">بلا زوائد</string>
+    <string name="fonts_cat_serif">بزوائد</string>
+    <string name="fonts_cat_mono">ثابت العرض</string>
+    <string name="fonts_cat_hand">خط يد</string>
+    <string name="fonts_cat_display">عناوين</string>
 </resources>

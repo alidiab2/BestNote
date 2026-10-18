@@ -64,6 +64,11 @@ private val FontLicenses = listOf(
     "IBM Plex Sans Arabic" to "licenses/OFL-IBMPlexSansArabic.txt",
     "Caveat" to "licenses/OFL-Caveat.txt",
     "Gveret Levin" to "licenses/OFL-GveretLevin.txt",
+    "Lora" to "licenses/OFL-Lora.txt",
+    "JetBrains Mono" to "licenses/OFL-JetBrainsMono.txt",
+    "Noto Naskh Arabic" to "licenses/OFL-NotoNaskhArabic.txt",
+    "Heebo" to "licenses/OFL-Heebo.txt",
+    "Frank Ruhl Libre" to "licenses/OFL-FrankRuhlLibre.txt",
     "STIX Two Math (equations)" to "licenses/OFL-STIXTwoMath.txt",
 )
 
