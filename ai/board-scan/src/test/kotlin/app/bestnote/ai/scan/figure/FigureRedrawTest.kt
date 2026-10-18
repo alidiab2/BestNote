@@ -2,6 +2,7 @@ package app.bestnote.ai.scan.figure
 
 import app.bestnote.ai.scan.Enhance
 import app.bestnote.ai.scan.Raster
+import app.bestnote.core.model.InkSemantic
 import app.bestnote.core.model.Vec2
 import app.bestnote.core.model.VectorDiagram
 import app.bestnote.core.model.VectorShape
@@ -121,7 +122,26 @@ class FigureRedrawTest {
         assertTrue("the side is vertical", long.any { abs(angleDeg(it) - 90f) < 0.01f })
         assertTrue("the incline rises at about 37°", long.any { val a = 180f - angleDeg(it); abs(a - 37f) < 6f })
         assertTrue("force arrows", segs.count { it.head } >= 3)
+        // AI-12b: the block is rebuilt on the slope, F is drawn once, only the two arcs the teacher drew (α, 37°).
+        assertEquals("F, N, f_k and mg, each once", 4, segs.count { it.head })
+        val block = r.prims.filterIsInstance<Prim.Block>().single()
+        val side = atan2(block.corners[1].y - block.corners[0].y, block.corners[1].x - block.corners[0].x)
+        assertTrue("the block is turned to the slope", long.any { FigureFit.angleDiff(it.angle, side) < 1f })
+        assertEquals("only the drawn angle arcs", 2, r.prims.count { it is Prim.Arc && it.mark })
+        assertTrue("a dashed normal", segs.any { it.dashed })
         assertTrue("accepted", r.accepted)
+    }
+
+    @Test fun `a force drawn as two lines is one arrow, and an arrow found twice is drawn once`() {
+        val fit = FigureFit(2f, 500f)
+        val rod = fit.rods(listOf(Prim.Seg(XY(0f, 0f), XY(100f, 0f), InkSemantic.Regular), Prim.Seg(XY(5f, 7f), XY(95f, 7f), InkSemantic.Regular, head = true)))
+        assertEquals(1, rod.size)
+        assertTrue((rod.single() as Prim.Seg).head)
+        assertEquals(3.5f, (rod.single() as Prim.Seg).a.y, 0.01f)
+        val twins = fit.withoutTwins(listOf(Prim.Seg(XY(0f, 0f), XY(100f, 0f), InkSemantic.Regular, head = true), Prim.Seg(XY(10f, 3f), XY(98f, 3f), InkSemantic.Regular, head = true)))
+        assertEquals(1, twins.size)
+        // Opposite ways are two forces, not one found twice.
+        assertEquals(2, fit.withoutTwins(listOf(Prim.Seg(XY(0f, 0f), XY(100f, 0f), InkSemantic.Regular, head = true), Prim.Seg(XY(98f, 3f), XY(10f, 3f), InkSemantic.Regular, head = true))).size)
     }
 
     @Test fun `springs become coils, with dimension arrows and the block`() {

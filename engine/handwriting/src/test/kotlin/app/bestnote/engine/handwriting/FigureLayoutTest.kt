@@ -77,6 +77,11 @@ class FigureLayoutTest {
         }
     }
 
+    @Test fun `a unit is bracketed once, however the AI wrote it`() {
+        for (u in listOf("m", "(m)", "[m]", "\\((m)\\)", " (m/s) ")) assertEquals(u, u.trim().let { if (it.contains("m/s")) "m/s" else "m" }, bareUnit(u))
+        assertEquals("(m)(s)", bareUnit("(m)(s)"))
+    }
+
     @Test fun `a label with words is written without its LaTeX`() {
         assertEquals("מצב B", plainLabel("\\text{מצב } B"))
         assertEquals("v = 10 (m/s)", plainLabel("v = 10\\,(m/s)"))

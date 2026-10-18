@@ -60,7 +60,7 @@ object NotePrompts {
         // AI-12: the app redraws every drawing from the photo; the model only locates it and reads its labels.
         NoteElement.Diagram to "Diagram: EVERY drawing (graph, diagram, table grid, shape, sketch) in teaching order: " +
             "box = [left, top, right, bottom] around it and its labels, 0–1000 (not pixels) from the photo's top-left; k = graph|diagram|table|shape|arrow|drawing; " +
-            "lbl = [[LaTeX, x, y]] for every label, letter, number and angle on it, at its centre. " +
+            "lbl = [[LaTeX, x, y]] for every label, letter, number and angle on it (a single tick number such as 0 too), at its centre; the box holds every part of it (each block, each spring). " +
             "The app redraws it from the photo: never describe it in words; a boxed formula is a KeyResult. Only if very simple also: shape = {type: line|arrow|rect|circle|triangle|polygon, pts [[x, y]]}, " +
             "graph = {x: [min, max], y: [min, max], f: y(x)}, rows (a table's cells)",
         NoteElement.Columns to "Columns: cols = [[elements], [elements]] — theory/formulas in the first, the worked example beside it",

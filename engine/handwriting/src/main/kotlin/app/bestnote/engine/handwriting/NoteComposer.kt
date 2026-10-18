@@ -410,7 +410,7 @@ class NoteComposer(
         val symW = (symbols.maxOfOrNull { it.width } ?: 0f) + 0.6f * body
         val color = colorOf(NoteRole.Formula)
         return b.rows.mapIndexed { i, cells ->
-            val unit = cells.getOrNull(2)?.takeIf { it.isNotBlank() }?.let { " \\((${it})\\)" }.orEmpty()
+            val unit = cells.getOrNull(2)?.let(::bareUnit)?.takeIf { it.isNotBlank() }?.let { " \\(($it)\\)" }.orEmpty()
             val words = "— " + cells.getOrElse(1) { "" } + unit
             val encoded = InlineMath.encode(words, fc.inlineTex)
             val wrapped = fc.wrap(encoded, fc.usable(width) - symW - gap, size)
@@ -520,7 +520,7 @@ class NoteComposer(
         b.text?.let { out += fc.textRows(it, width, body, fc.penColor) }
         if (b.rows.isNotEmpty()) {
             val given = b.rows.joinToString("   ") { r ->
-                val unit = r.getOrNull(2)?.takeIf { it.isNotBlank() }?.let { "\\,($it)" }.orEmpty()
+                val unit = r.getOrNull(2)?.let(::bareUnit)?.takeIf { it.isNotBlank() }?.let { "\\,($it)" }.orEmpty()
                 "\\(" + r.getOrElse(0) { "" } + " = " + r.getOrElse(1) { "" } + unit + "\\)"
             }
             out += fc.textRows(givenWord() + ": " + given, width, body * CELL_SCALE, ink)
@@ -639,4 +639,11 @@ class NoteComposer(
         const val MAX_COLUMNS = 6
         val BARE_TEX = Regex("""\\[a-zA-Z]+|[\^_]\{?\w""")
     }
+}
+
+/** A unit as the AI wrote it ("(m)", "[N]", "\\((m)\\)", "m") → bare ("m"): the page adds its own brackets once. */
+internal fun bareUnit(u: String): String {
+    var t = u.trim().removePrefix("\\(").removeSuffix("\\)").trim().removeSurrounding("$").trim()
+    while (t.length >= 2 && ((t.first() == '(' && t.last() == ')') || (t.first() == '[' && t.last() == ']')) && t.count { it == t.first() } == 1) t = t.substring(1, t.length - 1).trim()
+    return t
 }
