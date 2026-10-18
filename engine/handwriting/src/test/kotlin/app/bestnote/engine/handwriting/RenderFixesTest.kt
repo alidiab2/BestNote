@@ -95,7 +95,11 @@ class RenderFixesTest {
     @Test fun `the owner's partial fractions board packs onto one page in two balanced columns`() {
         for (paper in listOf(grid, RuledPaper.of(PaperTemplate.Ruled, PageSize.A4))) {
             val pages = write(Fixtures.partialFractionsWithHebrewTerms(), paper)
-            assertEquals("one page on ${paper.template}", 1, pages.pages.pages.size)
+            // LAYOUT-QA: the notes themselves stay on one page; rows now clear each other's real ink, so on
+            // ruled paper only the closing glossary may go on to the next page.
+            val later = pages.placed.filter { it.first > 0 }.map { it.second.block.element }.toSet()
+            assertTrue("one page on ${paper.template}: $later", later.isEmpty() || later == setOf(NoteElement.Glossary))
+            assertEquals("no overlapping writing on ${paper.template}", emptyList<Any>(), LayoutQa.check(pages))
             val packed = PackedLayoutCheck(pages)
             packed.assertInsidePage()
             packed.assertColumnsDoNotOverlap()

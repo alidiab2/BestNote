@@ -1,10 +1,12 @@
 package app.bestnote.engine.handwriting
 
 import kotlin.math.PI
+import kotlin.math.abs
 import kotlin.math.atan2
 import kotlin.math.cos
 import kotlin.math.hypot
 import kotlin.math.max
+import kotlin.math.min
 import kotlin.math.sin
 
 /**
@@ -16,13 +18,19 @@ internal class ShapeWriter(private val hand: Hand, private val ink: InkBuilder) 
     private val rnd get() = hand.rnd
 
     /** A hand-drawn straight line. [ruler] keeps it almost perfectly straight, as along a ruler. */
-    fun linePath(a: P, b: P, bow: Float = 0.012f, ruler: Boolean = false): Poly {
+    /**
+     * @param outward a side of a box drawn clockwise: it bows only away from the box's inside, and only a
+     *   little, so it never sags into the writing it encloses or far into what is around it.
+     */
+    fun linePath(a: P, b: P, bow: Float = 0.012f, ruler: Boolean = false, outward: Boolean = false): Poly {
         val len = Geom.dist(a, b)
         if (len < 1e-3f) return listOf(a)
         val n = max(4, (len / (2f * mm)).toInt())
         val nx = -(b.y - a.y) / len
         val ny = (b.x - a.x) / len
-        val bowAmt = rnd.gauss(0f, if (ruler) bow * 0.25f else bow) * len
+        val drawn = rnd.gauss(0f, if (ruler) bow * 0.25f else bow) * len
+        // (+ offsets along the left normal: for a clockwise box on the page that is inwards.)
+        val bowAmt = if (outward) -min(abs(drawn), 0.8f * mm) else drawn
         val pts = (0..n).map { i ->
             val u = i.toFloat() / n
             val off = bowAmt * sin(PI.toFloat() * u)
@@ -83,7 +91,7 @@ internal class ShapeWriter(private val hand: Hand, private val ink: InkBuilder) 
         val c = listOf(P(left + j(), top + j()), P(right + j(), top + j()), P(right + j(), bottom + j()), P(left + j(), bottom + j()))
         val pts = ArrayList<P>()
         for (i in 0 until 4) {
-            val seg = linePath(c[i], c[(i + 1) % 4])
+            val seg = linePath(c[i], c[(i + 1) % 4], outward = true)
             if (pts.isEmpty()) pts += seg else pts += seg.drop(1)
         }
         pts += linePath(c[0], P(c[0].x + rnd.uniform(1f, 2.5f) * mm, c[0].y + j() * 0.3f)).drop(1)

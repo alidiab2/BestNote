@@ -31,6 +31,18 @@ internal class PaintMeasure : TextMeasure {
 
     override fun descent(font: HandFont): Float = paint(font).fontMetrics.descent / REF
 
+    private val inkCache = HashMap<Pair<String, HandFont>, FloatArray>()
+    private val bounds = android.graphics.Rect()
+
+    override fun ink(text: String, font: HandFont, sizePt: Float): FloatArray {
+        val unit = inkCache.getOrPut(text to font) {
+            val p = paint(font)
+            p.getTextBounds(text, 0, text.length, bounds)
+            floatArrayOf(-bounds.top / REF, bounds.bottom / REF, -bounds.left / REF, (bounds.right - p.measureText(text)) / REF)
+        }
+        return FloatArray(4) { unit[it] * sizePt }
+    }
+
     companion object {
         private const val REF = 100f
 

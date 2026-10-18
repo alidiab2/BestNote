@@ -69,6 +69,8 @@ class WrittenStroke(
     val startMs: Long,
     /** Key of the block it belongs to (for tests and replays), null for page furniture. */
     val block: String?,
+    /** The row of [block] that drew it (layout QA), -1 = unknown. */
+    val part: Int = -1,
 ) {
     val endMs: Long get() = startMs + stroke.samples.last().timeMillis
 }
@@ -88,25 +90,26 @@ data class PenChoice(val penStyle: PenStyle = PenStyle.Fountain, val size: Float
 internal class InkBuilder(private val hand: Hand, private val pen: PenChoice) {
     private class Item(
         val pts: Poly, val dot: Boolean, val gap: Gap, val speed: Float, val pressure: Float, val color: Int, val width: Float, val block: String?,
-        val shape: ShapeInfo? = null, val dash: LineDash = LineDash.Solid,
+        val shape: ShapeInfo? = null, val dash: LineDash = LineDash.Solid, val part: Int = -1,
     )
 
     private val items = ArrayList<Item>()
     var block: String? = null
+    var part: Int = -1
 
     fun add(pts: Poly, gap: Gap, color: Int, speed: Float = 1f, pressure: Float = 1f, width: Float = 1f) {
         if (pts.isEmpty()) return
-        items += Item(pts, dot = pts.size == 1, gap, speed, pressure, color, width, block)
+        items += Item(pts, dot = pts.size == 1, gap, speed, pressure, color, width, block, part = part)
     }
 
     /** AI-12: a clean shape stroke (a redrawn figure): CANVAS-17 [shape] metadata and its [dash]. */
     fun addShape(pts: Poly, color: Int, shape: ShapeInfo, dash: LineDash = LineDash.Solid, width: Float = 1f) {
         if (pts.size < 2) return
-        items += Item(pts, dot = false, Gap.Ruler, 0.9f, 1f, color, width, block, shape, dash)
+        items += Item(pts, dot = false, Gap.Ruler, 0.9f, 1f, color, width, block, shape, dash, part)
     }
 
     fun dot(at: P, gap: Gap, color: Int, pressure: Float = 1f, width: Float = 1f) {
-        items += Item(listOf(at), dot = true, gap, 1f, pressure, color, width, block)
+        items += Item(listOf(at), dot = true, gap, 1f, pressure, color, width, block, part = part)
     }
 
     val isEmpty: Boolean get() = items.isEmpty()
@@ -126,7 +129,7 @@ internal class InkBuilder(private val hand: Hand, private val pen: PenChoice) {
             val begin = t
             val brush = InkBrush(Tool.Pen, if (it.shape != null) PenStyle.Ball else pen.penStyle, it.color, pen.size * it.width, shape = it.shape, dash = it.dash)
             val rebased = samples.map { s -> s.copy(timeMillis = s.timeMillis) }
-            out += WrittenStroke(InkStroke(brush, rebased), begin.roundToLong(), it.block)
+            out += WrittenStroke(InkStroke(brush, rebased), begin.roundToLong(), it.block, it.part)
             t = begin + samples.last().timeMillis
             last = P(samples.last().x, samples.last().y)
         }

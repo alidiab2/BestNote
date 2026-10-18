@@ -14,6 +14,7 @@ import app.bestnote.engine.layout.NoteElement
 import app.bestnote.engine.layout.NoteNormalizer
 import app.bestnote.engine.layout.NotebookGlossary
 import app.bestnote.engine.layout.NoteRole
+import app.bestnote.engine.layout.RowInk
 import app.bestnote.engine.layout.RuledPaper
 import app.bestnote.engine.layout.StyleTemplate
 import app.bestnote.engine.layout.WritingScript
@@ -50,13 +51,14 @@ class NoteComposer(
     data class Placed(val key: String, val block: NoteBlock, val frame: RectPt, val targetKey: String? = null, val rows: IntRange? = null)
 
     /** Rows of [block] at [width] as the packed layout measures them. */
-    fun rowShape(block: NoteBlock, width: Float): List<PackedFlow.Row> = rows(block, width).map { PackedFlow.Row(it.lines, it.blank, it.glue) }
+    fun rowShape(block: NoteBlock, width: Float): List<PackedFlow.Row> = rowsInk(block, width).map { (r, ink) -> PackedFlow.Row(r.lines, r.blank, r.glue, ink) }
 
     /**
      * Compact writing for the packed layout: smaller display maths and steps, maths closer to the
      * column's start; on [fine] lines (every grid line) inline formulas may take two lines.
      */
     fun compact(density: Density, fine: Boolean = false) {
+        edgeCache.clear()
         fc.displayScale = when (density) {
             Density.Airy -> FontComposer.DISPLAY_SCALE
             Density.Normal -> 1.0f
@@ -88,10 +90,15 @@ class NoteComposer(
                     sheet.ink.block = p.key
                     var baseline = p.frame.top
                     val all = rows(p.block, p.frame.width)
-                    for (r in p.rows?.let { range -> all.subList(range.first.coerceIn(0, all.size), (range.last + 1).coerceIn(0, all.size)) } ?: all) {
+                    val from = p.rows?.first?.coerceIn(0, all.size) ?: 0
+                    val to = p.rows?.let { range -> (range.last + 1).coerceIn(0, all.size) } ?: all.size
+                    for (ri in from until to) {
+                        val r = all[ri]
                         baseline += r.lines * gap
+                        sheet.part = ri
                         r.draw(sheet, p.frame.left, p.frame.right, baseline)
                     }
+                    sheet.part = -1
                     val target = p.targetKey
                     if (p.block.element == NoteElement.MarginRemark && style.marginArrows && target != null && target in keys) {
                         val note = PageBlock.MarginNote(BlockId(p.key), p.frame, p.block.text.orEmpty(), BlockId(target))
@@ -101,7 +108,8 @@ class NoteComposer(
                 sheet.block = RULES
                 sheet.ink.block = RULES
                 for (r in rules.filter { it.page == page }) sheet.shapes.dashed(P(r.x0, r.y0), P(r.x1, r.y1), RULE_COLOR)
-                TypesetPage(sheet.runs, sheet.marks + sheet.ink.build().map { it.stroke }, sheet.equations, sheet.images)
+                val written = sheet.ink.build()
+                TypesetPage(sheet.runs, sheet.marks + written.map { it.stroke }, sheet.equations, sheet.images, sheet.marks.map { null to -1 } + written.map { it.block to it.part })
             },
         )
     }
@@ -135,7 +143,10 @@ class NoteComposer(
         }
     }
 
-    internal fun rows(b: NoteBlock, width: Float): List<FontComposer.Row> {
+    internal fun rows(b: NoteBlock, width: Float): List<FontComposer.Row> = rowsInk(b, width).map { it.first }
+
+    /** The rows of [b] at [width] with their real ink ([spacedInk]). */
+    internal fun rowsInk(b: NoteBlock, width: Float): List<Pair<FontComposer.Row, RowInk>> {
         setDirection(b)
         val id = BlockId("x")
         val r = EMPTY
@@ -165,7 +176,95 @@ class NoteComposer(
             NoteElement.WorkedExample -> workedExample(b, width)
             NoteElement.Columns -> columns(b, width)
         }
-        return pinned(built)
+        return spacedInk(pinned(built), width)
+    }
+
+    /**
+     * LAYOUT-QA: rows placed by their REAL ink, not estimates. A unit (a row, or rows glued under one pen
+     * box) moves down by whole lines until its ink clears the ink above it ([RowInk.distance]): a formula
+     * under a heading's underline, a fraction under a boxed result, a tall matrix under a bullet. Ink
+     * hanging below the block's last baseline gets blank lines when it would reach the next block's
+     * letters (the flow layout stacks blocks line by line; the packed layout also checks [RowInk]s).
+     *
+     * @return every row with its ink: for the first row of a glued unit, the whole unit's ink from that
+     *   row's baseline (what the packed layout checks against the column above).
+     */
+    private fun spacedInk(rows: List<FontComposer.Row>, width: Float): List<Pair<FontComposer.Row, RowInk>> {
+        if (rows.isEmpty()) return emptyList()
+        val out = rows.toMutableList()
+        val inks = MutableList(rows.size) { RowInk.None }
+        // Everything written so far, seen from the last baseline.
+        var above = RowInk.None
+        var i = 0
+        while (i < out.size) {
+            var j = i
+            while (out[j].glue && j + 1 < out.size) j++
+            val first = out[i].lines * gap
+            var cum = 0f
+            var unit = RowInk.None
+            for (k in i..j) {
+                cum += out[k].lines * gap
+                if (out[k].blank) continue
+                val e = fc.extentOf(out[k], width)
+                val own = RowInk(e[0], e[1], e[2], e[3])
+                inks[k] = own
+                unit = RowInk.union(unit, RowInk.shifted(own, first - cum))
+            }
+            if (!unit.isEmpty && !above.isEmpty) {
+                val need = RowInk.distance(above, unit, gap)
+                if (need > first + 0.01f * gap) {
+                    val extra = ceil((need - first) / gap - 0.02f).toInt().coerceAtLeast(1)
+                    val r = out[i]
+                    out[i] = FontComposer.Row(r.lines + extra, r.blank, r.glue, r.draw)
+                    cum += extra * gap
+                }
+            }
+            if (!unit.isEmpty) inks[i] = unit
+            val firstNow = out[i].lines * gap
+            above = RowInk.union(RowInk.shifted(above, cum), RowInk.shifted(unit, cum - firstNow).takeUnless { unit.isEmpty } ?: RowInk.None)
+            i = j + 1
+        }
+        // What hangs below the last baseline may reach BELOW_ALLOWED gaps before blank lines follow.
+        val low = listOf(above.penDown, above.textDown).filter { !it.isNaN() }.maxOrNull()?.minus(BELOW_ALLOWED * gap)
+        val result = out.indices.map { out[it] to inks[it] }.toMutableList()
+        if (low != null && low > 0f) repeat(ceil(low / gap - 0.02f).toInt().coerceAtLeast(1)) { result += fc.blankRow() to RowInk.None }
+        return result
+    }
+
+    /** A block's ink at its edges: what hangs below its last baseline, and its first written row's ink with that row's baseline (lines under the frame top). */
+    private class Edges(val tail: RowInk, val head: RowInk, val headLines: Int)
+
+    private val edgeCache = HashMap<Pair<NoteBlock, Float>, Edges>()
+
+    private fun edgesOf(b: NoteBlock, width: Float): Edges = edgeCache.getOrPut(b to width) {
+        val rows = rowsInk(b, width)
+        val total = rows.sumOf { it.first.lines }
+        var cum = 0
+        var tail = RowInk.None
+        var head = RowInk.None
+        var headLines = 0
+        for ((r, ink) in rows) {
+            cum += r.lines
+            if (ink.isEmpty) continue
+            if (head.isEmpty) {
+                head = ink
+                headLines = cum
+            }
+            tail = RowInk.union(tail, RowInk.shifted(ink, (total - cum) * gap))
+        }
+        Edges(tail, head, headLines)
+    }
+
+    /**
+     * LAYOUT-QA: blank lines needed between [prev] and [next] written one under the other at [width] so
+     * their real ink stays clear (the flow layout; the packed one checks [PackedFlow.Row.ink] itself).
+     */
+    fun clearance(prev: NoteBlock, next: NoteBlock, width: Float): Int {
+        val a = edgesOf(prev, width)
+        val b = edgesOf(next, width)
+        if (a.tail.isEmpty || b.head.isEmpty) return 0
+        val need = RowInk.distance(a.tail, b.head, gap)
+        return max(0, ceil(need / gap - b.headLines - 0.01f).toInt())
     }
 
     private fun colorOf(role: NoteRole) = fc.colorOf(style.role(role))
@@ -227,7 +326,8 @@ class NoteComposer(
             val markerW = fc.widthOf("$marker ", fc.style.latinFont, body) + 0.3f * body
             val why = s.why?.takeIf { it.isNotBlank() }?.let { "($it)" }
             val whySize = body * 0.85f
-            val whyW = why?.let { fc.widthOf(InlineMath.flatten(it), fc.fontFor(it), whySize) } ?: 0f
+            // Measured as it is written: bidi pieces, each script in its own font.
+            val whyW = why?.let { fc.lineWidth(InlineMath.encode(it, fc.inlineTex), whySize) } ?: 0f
             val prose = s.text?.takeIf { it.isNotBlank() }?.let { fc.bulletRows(it, marker, width, ink) }.orEmpty()
             val math = s.math?.takeIf { it.isNotBlank() }?.let { fc.mathRows(it, width, ink, boxed = false, indent = markerW, scale = stepScale) }.orEmpty()
             val mathRows = if (prose.isEmpty() && math.isNotEmpty()) {
@@ -278,17 +378,24 @@ class NoteComposer(
         content += heading(b.head ?: fc.label(CalloutTone.Summary), inner, NoteRole.Note)
         b.text?.let { content += fc.textRows(it, inner, body, fc.penColor) }
         for (item in b.items) content += fc.bulletRows(item, "•", inner, fc.penColor)
-        return boxed(content, pad, color)
+        return boxed(content, inner, pad, color)
     }
 
-    /** [content] (laid out [pad] narrower) inside a box from its first line's top to just below its last line. */
-    private fun boxed(content: List<FontComposer.Row>, pad: Float, color: Int): List<FontComposer.Row> {
-        if (content.isEmpty()) return content
+    /**
+     * [content] (laid out [inner] wide, [pad] in from each side) inside a box from its first line's top to
+     * just below its last line. The rows inside are spaced by their real ink first (the box glues them
+     * together, so they cannot move later), and the box's top clears the first row's ink.
+     */
+    private fun boxed(rows: List<FontComposer.Row>, inner: Float, pad: Float, color: Int): List<FontComposer.Row> {
+        if (rows.isEmpty()) return rows
+        val content = spacedInk(rows, inner).map { it.first }
         val total = content.sumOf { it.lines }
+        val firstUp = fc.extentOf(content.first(), inner).let { e -> listOf(e[0], e[2]).filter { !it.isNaN() }.maxOrNull() } ?: 0f
+        val above = max(0.75f * gap, firstUp + RowInk.CLEAR * gap + FontComposer.PEN_HALF)
         return content.dropLast(1).map { r -> FontComposer.Row(r.lines, r.blank, glue = true) { l, rt, base -> r.draw(this, l + pad, rt - pad, base) } } +
             FontComposer.Row(content.last().lines) { l, rt, base ->
                 content.last().draw(this, l + pad, rt - pad, base)
-                shapes.box(l + 0.15f * gap, base - total * gap + 0.25f * gap, rt - 0.15f * gap, base + 0.32f * gap, color)
+                shapes.box(l + 0.15f * gap, base - (total - content.first().lines) * gap - above, rt - 0.15f * gap, base + 0.32f * gap, color)
             } + fc.blankRow()
     }
 
@@ -626,13 +733,16 @@ class NoteComposer(
     /** A dashed horizontal rule across the column, between sections. */
     private fun rule(color: Int) = listOf(row(1) { l, r, base -> shapes.dashed(P(l + 0.3f * gap, base - 0.5f * gap), P(r - 0.3f * gap, base - 0.5f * gap), color) })
 
-    private companion object {
+    internal companion object {
         const val FIGURE_GROWTH = 3f
         const val FIGURE_MIN = 0.7f
         val EMPTY = RectPt(0f, 0f, 0f, 0f)
 
         /** Block key of the packed layout's dashed dividers. */
         const val RULES = "rules"
+
+        /** Ink below a block's last baseline may reach this far (line gaps) before blank lines follow. */
+        internal const val BELOW_ALLOWED = 0.42f
         const val RULE_COLOR = 0xFF7D8696.toInt()
         const val HANG = 0.3f
         const val CELL_SCALE = 0.9f

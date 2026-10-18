@@ -31,6 +31,14 @@ interface TextMeasure {
 
     /** Descent below the baseline, as a fraction of the size. */
     fun descent(font: HandFont): Float
+
+    /**
+     * The real ink of [text] at [sizePt], in points: above (`[0]`) and below (`[1]`) the baseline, and how
+     * far it sticks out left of the pen's start (`[2]`) and right of start + [width] (`[3]`), e.g. a
+     * hand's swash on a first or last letter. Null when unknown (the layout then estimates the height
+     * from [ascent] and [descent] and assumes no overhang).
+     */
+    fun ink(text: String, font: HandFont, sizePt: Float): FloatArray? = null
 }
 
 /**
@@ -47,15 +55,24 @@ data class TypeRun(
     val font: HandFont,
     val rtl: Boolean,
     val block: String,
+    /** The row of [block] that wrote it (layout QA: ink of different rows must never touch); -1 = unknown. */
+    val part: Int = -1,
 )
 
 /** A picture on the page (AI-12: a board drawing that could not be redrawn): notebook image [asset], its box in page points. */
 data class TypeImage(val asset: String, val left: Float, val top: Float, val width: Float, val height: Float, val srcWidth: Int, val srcHeight: Int, val block: String)
 
 /** A page of typed notes: text runs, plus pen strokes for boxes, underlines, arrows, fraction bars and drawings, typeset [equations] and [images]. */
-class TypesetPage(val runs: List<TypeRun>, val ink: List<InkStroke>, val equations: List<EquationRun> = emptyList(), val images: List<TypeImage> = emptyList())
+class TypesetPage(
+    val runs: List<TypeRun>,
+    val ink: List<InkStroke>,
+    val equations: List<EquationRun> = emptyList(),
+    val images: List<TypeImage> = emptyList(),
+    /** Per [ink] stroke: the element that drew it (null: highlighter marks, unknown) and its row (-1 unknown). For layout QA. */
+    val inkOwners: List<Pair<String?, Int>> = emptyList(),
+)
 
-/** A typeset formula ([latex]) whose ink box sits on [baseline] from [left], [ascent] above and [descent] below it. */
+/** A typeset formula ([latex]) whose ink box sits on [baseline] from [left], [ascent] above and [descent] below it; [block] and its row [part] wrote it (layout QA). */
 data class EquationRun(
     val latex: String,
     val left: Float,
@@ -66,6 +83,8 @@ data class EquationRun(
     val sizePt: Float,
     val color: Int,
     val boxed: Boolean = false,
+    val block: String = "",
+    val part: Int = -1,
 ) {
     /** The page element for this formula: a typeset [app.bestnote.core.model.EquationElement] whose frame is the formula plus its margin. */
     fun toElement(id: String): app.bestnote.core.model.EquationElement {
@@ -150,8 +169,15 @@ class FontComposer(
         val images = ArrayList<TypeImage>()
         var block: String = ""
 
+        /** The row being drawn (see [TypeRun.part]). */
+        var part: Int = -1
+            set(v) {
+                field = v
+                ink.part = v
+            }
+
         fun text(t: String, left: Float, baseline: Float, width: Float, size: Float, color: Int, font: HandFont, rtl: Boolean) {
-            if (t.isNotBlank()) runs += TypeRun(t, left, baseline, width, size * scaleOf(font), color, font, rtl, block)
+            if (t.isNotBlank()) runs += TypeRun(t, left, baseline, width, size * scaleOf(font), color, font, rtl, block, part)
         }
 
         fun highlight(x0: Float, x1: Float, baseline: Float, size: Float) {
@@ -169,6 +195,39 @@ class FontComposer(
     internal class Row(val lines: Int, val blank: Boolean = false, val glue: Boolean = false, val draw: Sheet.(left: Float, right: Float, baseline: Float) -> Unit)
 
     internal fun blankRow() = Row(1, blank = true) { _, _, _ -> }
+
+    /**
+     * The real ink of [row] written on a baseline at 0 in a column [width] wide: text above (`[0]`) and
+     * below (`[1]`) the baseline, pen strokes above (`[2]`) and below (`[3]`); NaN where there is none.
+     * Measured by drawing the row on a scratch sheet, so it is exactly what [compose] writes.
+     */
+    internal fun extentOf(row: Row, width: Float): FloatArray {
+        val probe = Sheet(0)
+        probe.block = PROBE
+        probe.ink.block = PROBE
+        val (r0, s0) = rtl to script
+        row.draw(probe, 0f, width, 0f)
+        rtl = r0
+        script = s0
+        val out = floatArrayOf(Float.NaN, Float.NaN, Float.NaN, Float.NaN)
+        for (r in probe.runs) {
+            val e = measure.ink(r.text, r.font, r.sizePt) ?: floatArrayOf(measure.ascent(r.font) * r.sizePt * 0.78f, measure.descent(r.font) * r.sizePt * 0.6f)
+            out[0] = maxOf(out[0], e[0] - r.baseline)
+            out[1] = maxOf(out[1], r.baseline + e[1])
+        }
+        // Typeset maths (MATH-02): its box metrics are its ink.
+        for (q in probe.equations) {
+            out[0] = maxOf(out[0], q.ascent - q.baseline)
+            out[1] = maxOf(out[1], q.baseline + q.descent)
+        }
+        probe.ink.boundsOf(PROBE)?.let { b ->
+            out[2] = -b[1] + PEN_HALF
+            out[3] = b[3] + PEN_HALF
+        }
+        return out
+    }
+
+    private fun maxOf(a: Float, b: Float) = if (a.isNaN()) b else max(a, b)
 
     // ------------------------------------------------------------------ public
 
@@ -280,25 +339,84 @@ class FontComposer(
 
     internal fun space(size: Float) = widthOf(" ", style.latinFont, size).coerceAtLeast(size * 0.22f)
 
+    /**
+     * Greedy line breaking, each candidate line measured as [writeLine] writes it (bidi pieces, each
+     * script in its own hand, maths boxes), so a line never comes out wider than [width].
+     */
     internal fun wrap(text: String, width: Float, size: Float, firstIndent: Float = 0f): List<String> {
         val lines = ArrayList<String>()
         val cur = ArrayList<String>()
-        var curW = 0f
-        for (word in text.split(Regex("\\s+")).filter { it.isNotEmpty() }) {
-            val w = wordWidth(word, size)
+        val narrowest = width - max(firstIndent, 0f)
+        for (word in text.split(Regex("\\s+")).filter { it.isNotEmpty() }.flatMap { breakWord(it, size, narrowest) }) {
             val limit = if (lines.isEmpty()) width - firstIndent else width
-            if (cur.isNotEmpty() && curW + space(size) + w > limit) {
+            if (cur.isNotEmpty() && lineWidth((cur + word).joinToString(" "), size) > limit) {
                 lines += cur.joinToString(" ")
                 cur.clear()
-                curW = 0f
             }
-            if (cur.isNotEmpty()) curW += space(size)
             cur += word
-            curW += w
         }
         if (cur.isNotEmpty()) lines += cur.joinToString(" ")
         return lines
     }
+
+    /** Width of an encoded line as [writeLine] writes it, with the ink sticking out of its ends. */
+    internal fun lineWidth(line: String, size: Float): Float {
+        val clean = line.split(' ').filter { it.isNotEmpty() }.joinToString(" ")
+        if (clean.isEmpty()) return 0f
+        val pieces = LineBidi.visual(clean, rtl)
+        val (lo, ro) = lineOverhang(pieces, size)
+        return lo + ro + pieces.sumOf { p -> (if (p.token != null) mathBox(p.token, size).width else widthOf(p.text, fontOf(p), size)).toDouble() }.toFloat()
+    }
+
+    private fun mirrored(t: String) = String(CharArray(t.length) { i -> MIRROR[t[i]] ?: t[i] })
+
+    /** How far the ink of a line's leftmost and rightmost text pieces sticks out of their advance (points, ≥ 0). */
+    private fun lineOverhang(pieces: List<LineBidi.Piece>, size: Float): Pair<Float, Float> {
+        // A right-to-left run draws brackets mirrored: measure the glyphs it really writes. Maths: its
+        // first or last letter in the maths hand (an italic f swashes past its box).
+        fun ink(p: LineBidi.Piece?, first: Boolean): FloatArray? {
+            if (p == null) return null
+            val token = p.token
+            val e = if (token != null) {
+                val letters = inlineTex.getOrElse(token) { "" }.replace(TEX_COMMAND, "").filter { it.isLetterOrDigit() }
+                val c = (if (first) letters.firstOrNull() else letters.lastOrNull()) ?: return null
+                measure.ink(c.toString(), mathFont, size)
+            } else {
+                if (p.text.isBlank()) return null
+                measure.ink(if (p.rtl) mirrored(p.text) else p.text, fontOf(p), size * scaleOf(fontOf(p)))
+            }
+            return e?.takeIf { it.size >= 4 }
+        }
+        val lo = ink(pieces.firstOrNull(), first = true)?.get(2)?.coerceAtLeast(0f) ?: 0f
+        val ro = ink(pieces.lastOrNull(), first = false)?.get(3)?.coerceAtLeast(0f) ?: 0f
+        return lo to ro
+    }
+
+    /**
+     * A word wider than a whole line (a long word in a narrow column or table cell at a big font scale)
+     * in pieces that fit, a Latin piece ending in a hyphen; a word with maths is never cut, its maths is written narrower.
+     */
+    internal fun breakWord(word: String, size: Float, limit: Float): List<String> {
+        if (limit <= 0f || word.length < 2 || wordWidth(word, size) <= limit) return listOf(word)
+        if (InlineMath.hasToken(word)) {
+            // Maths can't be cut: its tokens get narrower (see [mathBox]) so the word fits.
+            val k = limit / wordWidth(word, size)
+            for ((token, _) in InlineMath.segments(word)) if (token != null) tokenCap[token] = mathBox(token, size).width * k * 0.98f
+            return listOf(word)
+        }
+        val out = ArrayList<String>()
+        var start = 0
+        while (start < word.length) {
+            var end = start + 1
+            fun piece(e: Int) = word.substring(start, e) + if (e < word.length && word[e - 1].isLatinLetter()) "-" else ""
+            while (end < word.length && wordWidth(piece(end + 1), size) <= limit) end++
+            out += piece(end)
+            start = end
+        }
+        return out
+    }
+
+    private fun Char.isLatinLetter() = this in 'a'..'z' || this in 'A'..'Z'
 
     internal fun textRows(
         content: String,
@@ -310,13 +428,15 @@ class FontComposer(
         decoration: Decoration = Decoration.None,
     ): List<Row> {
         val encoded = InlineMath.encode(content, inlineTex)
-        val lines = wrap(encoded, usable(width) - indent, size, firstIndent)
+        // A boxed line's pen box sits around the writing: the writing moves in so the box stays in the column.
+        val inset = if (decoration == Decoration.Box) BOX_SIDE * size + PEN_HALF else 0f
+        val lines = wrap(encoded, usable(width) - indent - 2 * inset, size, firstIndent)
         val n = linesForSize(size, fontFor(content))
         return lines.flatMapIndexed { i, line ->
             // A tall inline atom (e^{x^2}, a subscript under a superscript) gets the lines it needs.
             val (above, below) = inlineExtent(line, size)
             val row = Row(max(n, above)) { left, right, baseline ->
-                val off = indent + if (i == 0) firstIndent else 0f
+                val off = indent + inset + if (i == 0) firstIndent else 0f
                 val (x0, x1) = writeLine(this, line, left, right, off, baseline, size, color)
                 decorate(this, decoration, x0, x1, baseline, size, color)
             }
@@ -352,7 +472,7 @@ class FontComposer(
                 sheet.shapes.underline(lo, hi, baseline + 0.34f * size, color)
             }
             Decoration.Highlight -> sheet.highlight(lo, hi, baseline, size)
-            Decoration.Box -> sheet.shapes.box(lo - 0.25f * size, baseline - 0.85f * size, hi + 0.25f * size, baseline + 0.3f * size, color)
+            Decoration.Box -> sheet.shapes.box(lo - BOX_SIDE * size, baseline - 0.85f * size, hi + BOX_SIDE * size, baseline + 0.3f * size, color)
         }
     }
 
@@ -367,7 +487,9 @@ class FontComposer(
         val pieces = LineBidi.visual(clean, rtl)
         val widths = pieces.map { p -> if (p.token != null) mathBox(p.token, size).width else widthOf(p.text, fontOf(p), size) }
         val total = widths.sum()
-        val start = if (rtl) right - indent else left + indent
+        // A swash sticking out of the line's first letter stays inside the column (the line start moves in).
+        val (lo, ro) = lineOverhang(pieces, size)
+        val start = if (rtl) right - indent - ro else left + indent + lo
         var x = if (rtl) start - total else start
         val x0 = x
         for ((i, p) in pieces.withIndex()) {
@@ -472,7 +594,8 @@ class FontComposer(
             decorate(this, role.decoration, x0, x1, baseline, body, color)
             if (fitsAfter && bodyRows.isNotEmpty()) bodyRows[0].draw(this, left, right, baseline)
         }
-        return if (fitsAfter) listOf(labelRow) + bodyRows.drop(1) else listOf(labelRow) + bodyRows
+        // A label too long to share its line goes on lines of its own, wrapped like any text.
+        return if (fitsAfter) listOf(labelRow) + bodyRows.drop(1) else textRows(text, width, body, color, decoration = role.decoration) + bodyRows
     }
 
     internal fun proofRows(b: PageBlock.Proof, width: Float): List<Row> {
@@ -531,25 +654,72 @@ class FontComposer(
     /** One box per line of [latex], in the template's equation style, shrunk to fit [avail]. */
     internal fun displayBoxes(latex: String, avail: Float, size: Float): List<MBox> {
         if (style.equationStyle == EquationStyle.Typeset) {
-            return MathParser.rowsOf(latex).map { raw ->
+            return MathParser.rowsOf(latex).flatMap { raw ->
                 val row = if ("\\begin" in raw) raw else raw.replace("&", " ")
-                var sz = size
-                var l = typesetter.typeset(row, sz, display = true)
-                if (l.width > avail && l.width > 0f) {
-                    sz = size * max(0.55f, avail / l.width)
-                    l = typesetter.typeset(row, sz, display = true)
-                }
-                val tex = l
-                val fontSize = sz
-                MBox(tex.width, tex.ascent, tex.descent) { x, baseline, color ->
-                    equations += EquationRun(row, x, baseline, tex.width, tex.ascent, tex.descent, fontSize, color)
+                fitTypeset(row, size, avail).map { (piece, sz) ->
+                    val tex = typesetter.typeset(piece, sz, display = true)
+                    MBox(tex.width, tex.ascent, tex.descent) { x, baseline, color ->
+                        equations += EquationRun(piece, x, baseline, tex.width, tex.ascent, tex.descent, sz, color, block = block, part = part)
+                    }
                 }
             }
         }
-        return MathParser.parse(latex).map { nodes ->
-            val b = layout(nodes, size)
-            if (b.width > avail && b.width > 0f) layout(nodes, size * max(0.55f, avail / b.width)) else b
+        return MathParser.parse(latex).flatMap { nodes -> fitLine(nodes, size, avail) }
+    }
+
+    /**
+     * A typeset display row in [avail] points, as [fitLine] does for handwritten maths: whole when it fits
+     * or a little smaller is enough, else cut before its top-level relations (then binary + and −), all
+     * pieces at one size. Returns (LaTeX, size) per line.
+     */
+    private fun fitTypeset(row: String, size: Float, avail: Float): List<Pair<String, Float>> {
+        fun w(t: String, sz: Float) = typesetter.typeset(t, sz, display = true).width
+        val whole = w(row, size)
+        if (whole <= avail || whole <= 0f || avail <= 0f) return listOf(row to size)
+        // (An environment, cases or a matrix, is never cut: it only shrinks.)
+        if (avail / whole >= MIN_SHRINK || "\\begin" in row) return listOf(row to size * min(1f, max(MIN_FIT, avail / whole)))
+        val small = size * MIN_SHRINK
+        fun pack(parts: List<String>): List<String> {
+            val out = ArrayList<String>()
+            var cur = ""
+            for (p in parts) cur = if (cur.isEmpty()) p else if (w(cur + p, small) <= avail) cur + p else { out += cur; p }
+            if (cur.isNotEmpty()) out += cur
+            return out
         }
+        var pieces = pack(texCut(row, "=<>").ifEmpty { listOf(row) })
+        if (pieces.any { w(it, small) > avail }) pieces = pieces.flatMap { p -> if (w(p, small) <= avail) listOf(p) else pack(texCut(p, "+-")) }
+        if (pieces.size < 2) return listOf(row to size * max(MIN_FIT, avail / whole))
+        val widest = pieces.maxOf { w(it, size) }
+        val sz = size * min(1f, max(MIN_FIT, avail / widest))
+        return pieces.map { it to sz }
+    }
+
+    /** [tex] cut before every top-level (outside braces and \left…\right) character of [ops]; a sign right after an operator or bracket is not cut. */
+    private fun texCut(tex: String, ops: String): List<String> {
+        val out = ArrayList<String>()
+        var depth = 0
+        var from = 0
+        var i = 0
+        while (i < tex.length) {
+            val c = tex[i]
+            when {
+                tex.startsWith("\\left", i) -> { depth++; i += 5; continue }
+                tex.startsWith("\\right", i) -> { depth--; i += 6; continue }
+                c == '\\' -> { i += 2; continue }
+                c == '{' -> depth++
+                c == '}' -> depth--
+                depth == 0 && c in ops && i > from -> {
+                    val prev = tex.substring(from, i).trimEnd().lastOrNull()
+                    if (prev != null && prev !in "=<>+-({[,") {
+                        out += tex.substring(from, i)
+                        from = i
+                    }
+                }
+            }
+            i++
+        }
+        out += tex.substring(from)
+        return out.filter { it.isNotBlank() }
     }
 
     internal fun mathRows(latex: String, width: Float, color: Int, boxed: Boolean, indent: Float = mathIndent, scale: Float = 1f): List<Row> {
@@ -557,8 +727,10 @@ class FontComposer(
         val avail = usable(width) - indent - 2 * pad
         val size = displaySize() * scale
         val boxes = displayBoxes(latex, avail, size)
-        val rows = boxes.map { box ->
-            val lines = max(1, ceil((box.ascent + 0.12f * gap) / gap - 0.02f).toInt())
+        val rows = boxes.mapIndexed { i, box ->
+            // Inside a box the rows are glued (nothing spaces them later): a broken formula's next line clears the one above.
+            val prevDown = if (boxed && i > 0) boxes[i - 1].descent + 0.06f * gap else 0f
+            val lines = max(1, ceil((box.ascent + 0.12f * gap + prevDown) / gap - 0.02f).toInt())
             Row(lines) { left, right, baseline ->
                 val x = if (rtl) right - indent - pad - box.width else left + indent + pad
                 box.draw(this, x, baseline, color)
@@ -567,7 +739,9 @@ class FontComposer(
         if (rows.isEmpty()) return rows
         if (!boxed) return rows + hangRows(boxes.last().descent)
         val widest = boxes.maxOf { it.width }
-        val firstAscent = boxes.first().ascent
+        // The box's top clears the first line's REAL ink (a tall letter reaches above the maths metrics).
+        val firstUp = extentOf(rows.first(), width).let { e -> listOf(e[0], e[2]).filter { !it.isNaN() }.maxOrNull() } ?: 0f
+        val firstTop = max(boxes.first().ascent + 0.25f * gap, firstUp + 0.06f * gap + PEN_HALF)
         val lastDescent = boxes.last().descent
         val total = rows.sumOf { it.lines }
         val below = if (max(lastDescent, 0.1f * gap) + 0.22f * gap > 0.3f * gap) listOf(blankRow()) else emptyList()
@@ -575,10 +749,68 @@ class FontComposer(
         return listOf(Row(1, blank = true, glue = true) { _, _, _ -> }) + rows.dropLast(1).map { r -> Row(r.lines, r.blank, glue = true, r.draw) } + Row(rows.last().lines) { left, right, baseline ->
             rows.last().draw(this, left, right, baseline)
             val x0 = if (rtl) right - indent - widest - 2 * pad else left + indent
-            val top = baseline - (total - 1) * gap - firstAscent - 0.25f * gap
+            val top = baseline - (total - rows.first().lines) * gap - firstTop
             val bottom = baseline + max(lastDescent, 0.1f * gap) + 0.2f * gap
             shapes.box(x0, top, x0 + widest + 2 * pad, bottom, color)
         } + below
+    }
+
+    /**
+     * One display line of maths at [size] in [avail] points: as it is when it fits, a little smaller
+     * (down to [MIN_SHRINK]) when that is enough, else broken before its top-level relations (=, <, ⇒…;
+     * then before binary + and −, then between any atoms) into lines that each start with their operator, all at one size
+     * (never below [MIN_FIT]), so a long formula never runs into the next column or off the page.
+     */
+    internal fun fitLine(nodes: List<MathParser.Node>, size: Float, avail: Float): List<MBox> {
+        val whole = layout(nodes, size)
+        if (whole.width <= avail || whole.width <= 0f || avail <= 0f) return listOf(whole)
+        if (avail / whole.width >= MIN_SHRINK) return listOf(layout(nodes, size * avail / whole.width))
+        val small = size * MIN_SHRINK
+        var pieces = pack(cut(nodes) { k -> isRelation(nodes[k]) }, small, avail)
+        if (pieces.any { layout(it, small).width > avail }) {
+            pieces = pieces.flatMap { p -> if (layout(p, small).width <= avail) listOf(p) else pack(cut(p) { k -> isBinary(p, k) }, small, avail) }
+        }
+        // Still too wide (no operator to break at): between any two atoms.
+        if (pieces.any { layout(it, small).width > avail }) {
+            pieces = pieces.flatMap { p -> if (layout(p, small).width <= avail) listOf(p) else pack(cut(p) { true }, small, avail) }
+        }
+        if (pieces.size < 2) return listOf(layout(nodes, size * max(MIN_FIT, avail / whole.width)))
+        val widest = pieces.maxOf { layout(it, size).width }
+        val s = size * min(1f, max(MIN_FIT, avail / widest))
+        return pieces.map { layout(it, s) }
+    }
+
+    private fun isRelation(n: MathParser.Node) = n is MathParser.Text && n.s.length == 1 && n.s[0] in "=<>≤≥≈≠⇒→⇔≡"
+
+    /** A + or − between two terms (not a sign: "= −1", "(−x"). */
+    private fun isBinary(nodes: List<MathParser.Node>, k: Int): Boolean {
+        val n = nodes[k]
+        if (k == 0 || n !is MathParser.Text || n.s !in setOf("+", "-", "−", "±")) return false
+        val prev = nodes[k - 1]
+        return !(prev is MathParser.Text && (isOp(prev) || prev.s == "(" || prev.s == "[" || prev.s == ","))
+    }
+
+    /** [nodes] cut before every index [at] accepts (never at 0). */
+    private fun cut(nodes: List<MathParser.Node>, at: (Int) -> Boolean): List<List<MathParser.Node>> {
+        val out = ArrayList<List<MathParser.Node>>()
+        var from = 0
+        for (k in 1 until nodes.size) if (at(k)) {
+            out += nodes.subList(from, k)
+            from = k
+        }
+        out += nodes.subList(from, nodes.size)
+        return out
+    }
+
+    /** Neighbouring [parts] joined while they fit [avail] at [size]. */
+    private fun pack(parts: List<List<MathParser.Node>>, size: Float, avail: Float): List<List<MathParser.Node>> {
+        val out = ArrayList<List<MathParser.Node>>()
+        var cur: List<MathParser.Node> = emptyList()
+        for (p in parts) {
+            cur = if (cur.isEmpty()) p else if (layout(cur + p, size).width <= avail) cur + p else { out += cur; p }
+        }
+        if (cur.isNotEmpty()) out += cur
+        return out
     }
 
     /** Blank lines under a formula whose writing hangs below its line (a fraction, limits under lim). */
@@ -592,15 +824,24 @@ class FontComposer(
     /** A laid-out piece of maths: its size and how to draw it from a pen position on a baseline. */
     internal class MBox(val width: Float, val ascent: Float, val descent: Float, val draw: Sheet.(x: Float, baseline: Float, color: Int) -> Unit)
 
+    /** Widest an inline maths token may be written (token → points): set when it would not fit its line. */
+    private val tokenCap = HashMap<Int, Float>()
+
     internal fun mathBox(token: Int, size: Float): MBox {
         val nodes = MathParser.parse(inlineTex.getOrElse(token) { "" }).flatten()
         val b = layout(nodes, size)
         // Inline maths may not hit the lines above and below: shrink tall fractions.
-        val fit = minOf(1f, (inlineLines - 0.15f) * gap / b.ascent.coerceAtLeast(0.01f), (0.45f + 0.5f * (inlineLines - 1)) * gap / b.descent.coerceAtLeast(0.01f))
-        return if (fit < 0.98f) layout(nodes, size * max(0.6f, fit)) else b
+        val tall = minOf(1f, (inlineLines - 0.15f) * gap / b.ascent.coerceAtLeast(0.01f), (0.45f + 0.5f * (inlineLines - 1)) * gap / b.descent.coerceAtLeast(0.01f))
+        // Nor be wider than its line (a long formula alone in a table cell): it is written smaller.
+        val wide = tokenCap[token]?.let { min(1f, it / b.width.coerceAtLeast(0.01f)) } ?: 1f
+        val fit = min(max(0.6f, tall), max(MIN_INLINE_FIT, wide))
+        return if (fit < 0.98f) layout(nodes, size * fit) else b
     }
 
     internal val mathFont get() = style.latinFont
+
+    /** A sub/superscript's size: [factor] of its base, but never smaller than [MIN_SCRIPT_PT] (a script of a script on a dense page). */
+    internal fun scriptSize(size: Float, factor: Float) = max(size * factor, min(size, MIN_SCRIPT_PT))
 
     internal fun isOp(n: MathParser.Node) = n is MathParser.Text && n.s.length == 1 && n.s[0] in "=+−-×·<>≤≥≈≠⇒→±÷"
 
@@ -659,7 +900,7 @@ class FontComposer(
     /** lim, Σ, max…: the limits written under (and over) the operator, the way it is written by hand. */
     internal fun underLimits(n: MathParser.Scripts, size: Float): MBox {
         val base = node(n.base!!, size)
-        val ss = size * 0.6f
+        val ss = scriptSize(size, 0.6f)
         val sub = layout(n.sub!!, ss)
         val sup = n.sup?.let { layout(it, ss) }
         val w = maxOf(base.width, sub.width, sup?.width ?: 0f) + 0.15f * size
@@ -805,7 +1046,7 @@ class FontComposer(
         }
         is MathParser.Scripts -> if ((n.base as? MathParser.Text)?.s in UNDER_LIMITS && n.sub != null) underLimits(n, size) else {
             val base = n.base?.let { node(it, size) } ?: MBox(0f, 0f, 0f) { _, _, _ -> }
-            val ss = size * 0.62f
+            val ss = scriptSize(size, 0.62f)
             val sup = n.sup?.let { layout(it, ss) }
             val sub = n.sub?.let { layout(it, ss) }
             val raise = 0.42f * size
@@ -960,6 +1201,29 @@ class FontComposer(
         const val INK = 0xFF1E2433.toInt()
         internal const val DISPLAY_SCALE = 1.1f
         internal const val HANG = 0.3f
+
+        /** A display formula may shrink this far to stay on one line before it is broken… */
+        internal const val MIN_SHRINK = 0.8f
+
+        /** …and its broken lines this far (a single huge atom: a matrix). */
+        internal const val MIN_FIT = 0.55f
+
+        /** An inline formula wider than its whole line may shrink this far (a narrow Cornell column at a big scale). */
+        internal const val MIN_INLINE_FIT = 0.4f
+        internal const val PROBE = "\u0000probe"
+
+        /** Half a written stroke's width plus the hand's wobble (points): a stroke is drawn again, a little differently, on the page. */
+        internal const val PEN_HALF = 2.0f
+
+        /** The smallest script size (points) still readable on a tablet at arm's length. */
+        internal const val MIN_SCRIPT_PT = 4.5f
+
+        private val TEX_COMMAND = Regex("""\\[a-zA-Z]+""")
+
+        private val MIRROR = mapOf('(' to ')', ')' to '(', '[' to ']', ']' to '[', '{' to '}', '}' to '{', '<' to '>', '>' to '<')
+
+        /** A boxed line's box reaches this far (sizes) past its writing on each side. */
+        internal const val BOX_SIDE = 0.25f
         internal const val SYSTEM_SCALE = 0.86f
         internal const val INLINE_DESCENT = 0.55f
 
