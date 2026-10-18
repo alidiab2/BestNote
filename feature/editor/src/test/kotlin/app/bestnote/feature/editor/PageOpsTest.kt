@@ -1,6 +1,12 @@
 package app.bestnote.feature.editor
 
+import app.bestnote.core.model.NotebookId
+import app.bestnote.core.model.Page
+import app.bestnote.core.model.PaperColor
 import app.bestnote.core.model.PaperTemplate
+import app.bestnote.engine.canvas.document.PagedDocument
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -67,5 +73,98 @@ class PageOpsTest {
         assertEquals(setOf("a", "b", "c"), PageOps.selectAll(ids, setOf("b")))
         assertEquals(emptySet<String>(), PageOps.selectAll(ids, setOf("a", "b", "c")))
         assertEquals(listOf(0, 2), PageOps.indicesOf(ids, setOf("c", "a")))
+    }
+
+    // PAGES-11: change paper from inside the editor.
+    private val nid = NotebookId("nb")
+    private fun document(count: Int = 4) = PagedDocument().apply { reset(List(count) { Page(nid, it) }, List(count) { "p$it" }) }
+    private fun PagedDocument.templates() = pages.map { it.page.template }
+    private val toGrid: (Page) -> Page = { it.copy(template = PaperTemplate.Grid) }
+
+    @Test
+    fun `this page changes only the current page and undo restores it`() {
+        val d = document()
+        assertEquals(listOf(2), PageOps.applyPaper(d, PaperScope.ThisPage, 2, d.pages[2].page, toGrid))
+        assertEquals(listOf(Ruled, Ruled, PaperTemplate.Grid, Ruled), d.templates())
+        d.undo()
+        assertEquals(List(4) { Ruled }, d.templates())
+        d.redo()
+        assertEquals(PaperTemplate.Grid, d.pages[2].page.template)
+    }
+
+    @Test
+    fun `all pages is one undo step`() {
+        val d = document()
+        PageOps.applyPaper(d, PaperScope.AllPages, 1, d.pages[1].page, toGrid)
+        assertEquals(List(4) { PaperTemplate.Grid }, d.templates())
+        d.undo()
+        assertEquals(List(4) { Ruled }, d.templates())
+        assertFalse(d.canUndo)
+    }
+
+    @Test
+    fun `new pages leaves existing pages alone, drives add page, and undoes`() {
+        val d = document()
+        val cream = { p: Page -> p.copy(template = PaperTemplate.Dotted, paperColor = PaperColor.Cream) }
+        assertEquals(emptyList<Int>(), PageOps.applyPaper(d, PaperScope.NewPages, 0, d.pages[0].page, cream))
+        assertEquals(List(4) { Ruled }, d.templates())
+        val at = d.addPage()
+        assertEquals(PaperTemplate.Dotted, d.pages[at].page.template)
+        assertEquals(PaperColor.Cream, d.pages[at].page.paperColor)
+        d.undo() // the added page
+        d.undo() // the default
+        assertNull(d.newPagePaper)
+        assertEquals(Ruled, d.pages[d.addPage()].page.template)
+    }
+
+    @Test
+    fun `default paper change notifies listeners also on undo`() {
+        val d = document()
+        var calls = 0
+        d.addListener(object : PagedDocument.Listener { override fun onNewPagePaperChanged() { calls++ } })
+        d.setNewPagePaper(Page(nid, 0, PaperTemplate.Cornell))
+        d.undo()
+        d.redo()
+        assertEquals(3, calls)
+    }
+
+    @Test
+    fun `a no-op paper change records nothing`() {
+        val d = document()
+        assertEquals(emptyList<Int>(), PageOps.applyPaper(d, PaperScope.AllPages, 0, d.pages[0].page) { it })
+        assertFalse(d.canUndo)
+    }
+
+    @Test
+    fun `selected pages change as one step`() {
+        val d = document()
+        assertEquals(listOf(1, 3), PageOps.applyToPages(d, listOf(3, 1, 9), toGrid))
+        assertEquals(listOf(Ruled, PaperTemplate.Grid, Ruled, PaperTemplate.Grid), d.templates())
+        d.undo()
+        assertEquals(List(4) { Ruled }, d.templates())
+    }
+
+    @Test
+    fun `ink stays when paper changes`() {
+        val d = document(2)
+        PageOps.applyPaper(d, PaperScope.AllPages, 0, d.pages[0].page) { it.copy(template = PaperTemplate.Blank, widthPt = 400f, heightPt = 300f) }
+        assertEquals(400f, d.pages[0].page.widthPt)
+        assertEquals(0, d.pages[0].strokes.size)
+    }
+
+    @Test
+    fun `default paper survives storage and bad data reads as none`() {
+        val paper = Page(nid, 5, PaperTemplate.MusicStaff, 420f, 595f, PaperColor.Dark)
+        val back = PageOps.decodeDefaultPaper(PageOps.encodeDefaultPaper(paper), nid)!!
+        assertEquals(paper.copy(index = 0), back)
+        assertNull(PageOps.decodeDefaultPaper(null, nid))
+        assertNull(PageOps.decodeDefaultPaper(PageOps.encodeDefaultPaper(null), nid))
+        assertNull(PageOps.decodeDefaultPaper("garbage".encodeToByteArray(), nid))
+        assertNull(PageOps.decodeDefaultPaper("""{"template":"Nope","color":"White","width":1,"height":1}""".encodeToByteArray(), nid))
+        assertNull(PageOps.decodeDefaultPaper("""{"template":"Grid","color":"White","width":-1,"height":9}""".encodeToByteArray(), nid))
+    }
+
+    private companion object {
+        val Ruled = PaperTemplate.Ruled
     }
 }

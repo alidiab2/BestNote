@@ -364,6 +364,15 @@
         <item quantity="one">Page deleted</item>
         <item quantity="other">%1$d pages deleted</item>
     </plurals>
+    <string name="pages_paper_apply">Apply</string>
+    <plurals name="pages_paper_for">
+        <item quantity="one">Applies to the selected page</item>
+        <item quantity="other">Applies to the %1$d selected pages</item>
+    </plurals>
+    <plurals name="pages_repapered">
+        <item quantity="one">Paper changed on 1 page</item>
+        <item quantity="other">Paper changed on %1$d pages</item>
+    </plurals>
     <plurals name="pages_rotated">
         <item quantity="one">Page rotated</item>
         <item quantity="other">%1$d pages rotated</item>

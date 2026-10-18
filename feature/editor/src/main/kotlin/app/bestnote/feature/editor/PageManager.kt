@@ -156,6 +156,8 @@ internal fun PageManager(
     /** The gap a page is being inserted into: the page index it will get. */
     var insertingAt by remember { mutableStateOf<Int?>(null) }
     var moving by remember { mutableStateOf(false) }
+    /** The "Paper" dialog for the selected pages is open (PAGES-11). */
+    var repapering by remember { mutableStateOf(false) }
     val reorder = remember { ReorderState() }
     val progress = remember { Animatable(if (reduce) 1f else 0f) }
     val compact = with(LocalDensity.current) { androidx.compose.ui.platform.LocalWindowInfo.current.containerSize.width.toDp() } < COMPACT_WIDTH_DP.dp
@@ -339,6 +341,7 @@ internal fun PageManager(
                         document.rotatePages(selectedIndices)
                         say(res.getQuantityString(R.plurals.pages_rotated, n, n))
                     },
+                    onPaper = { repapering = true },
                     onMove = { moving = true },
                     onExport = { onExport?.invoke(selectedIndices) },
                     onDelete = {
@@ -377,6 +380,19 @@ internal fun PageManager(
             select(listOf(index))
             scope.launch { grid.animateScrollToItem(index) }
             say(res.getString(R.string.pages_added))
+        }
+    }
+
+    if (repapering) {
+        val picked = selectedIndices
+        PaperForPagesDialog(
+            initial = picked.firstOrNull()?.let { pages.getOrNull(it)?.page },
+            count = picked.size,
+            onDismiss = { repapering = false },
+        ) { template, color ->
+            repapering = false
+            val changed = PageOps.applyToPages(document, picked) { it.copy(template = template, paperColor = color) }
+            say(res.getQuantityString(R.plurals.pages_repapered, changed.size, changed.size))
         }
     }
 
@@ -775,6 +791,7 @@ private fun SelectionBar(
     canExport: Boolean,
     onDuplicate: () -> Unit,
     onRotate: () -> Unit,
+    onPaper: () -> Unit,
     onMove: () -> Unit,
     onExport: () -> Unit,
     onDelete: () -> Unit,
@@ -790,6 +807,7 @@ private fun SelectionBar(
     ) {
         BarAction(AtelierIcons.Duplicate, stringResource(R.string.pages_duplicate), enabled, compact, onClick = onDuplicate)
         BarAction(AtelierIcons.Rotate, stringResource(R.string.pages_rotate), enabled, compact, onClick = onRotate)
+        BarAction(AtelierIcons.Paper, stringResource(R.string.pages_paper), enabled, compact, onClick = onPaper)
         BarAction(AtelierIcons.Move, stringResource(R.string.pages_move), enabled, compact, onClick = onMove)
         if (canExport) BarAction(AtelierIcons.Export, stringResource(R.string.pages_export), enabled, compact, onClick = onExport)
         Box(Modifier.padding(horizontal = Spacing.XS).size(1.dp, 28.dp).background(MaterialTheme.colorScheme.outlineVariant))
@@ -867,6 +885,37 @@ private fun InsertPageDialog(
                     TextButton(onClick = onDismiss) { Text(stringResource(R.string.insert_cancel)) }
                     Spacer(Modifier.width(Spacing.S))
                     PillButton(stringResource(R.string.insert_action), AtelierIcons.Plus, strong = true) { onInsert(template, color) }
+                }
+            }
+        }
+    }
+}
+
+/** "Paper" for the selected pages (PAGES-11): template and color, applied to all of them as one undo step. */
+@Composable
+private fun PaperForPagesDialog(initial: Page?, count: Int, onDismiss: () -> Unit, onApply: (PaperTemplate, PaperColor) -> Unit) {
+    var template by remember { mutableStateOf(initial?.template ?: PaperTemplate.Ruled) }
+    var color by remember { mutableStateOf(initial?.paperColor ?: PaperColor.White) }
+    var group by remember { mutableStateOf(groupOf(template)) }
+    val base = (initial ?: previewPage()).copy(paperColor = color, pdf = null)
+    Dialog(onDismissRequest = onDismiss) {
+        Surface(shape = BestNoteShapes.Sheet, color = MaterialTheme.colorScheme.surface, tonalElevation = 0.dp) {
+            Column(
+                Modifier.verticalScroll(rememberScrollState()).padding(Spacing.XL),
+                verticalArrangement = Arrangement.spacedBy(Spacing.L),
+            ) {
+                Column {
+                    Text(stringResource(R.string.editor_paper), style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold))
+                    Text(pluralStringResource(R.plurals.pages_paper_for, count, count), style = BestNoteTheme.type.caption, color = BestNoteTheme.colors.muted)
+                }
+                GroupTabs(group) { group = it }
+                TemplateGrid(PageOps.groups.getValue(group), base.copy(template = template)) { template = it }
+                SheetOverline(stringResource(R.string.paper_color))
+                PaperColorChips(base) { color = it }
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                    TextButton(onClick = onDismiss) { Text(stringResource(R.string.insert_cancel)) }
+                    Spacer(Modifier.width(Spacing.S))
+                    PillButton(stringResource(R.string.pages_paper_apply), AtelierIcons.Paper, strong = true) { onApply(template, color) }
                 }
             }
         }

@@ -168,14 +168,8 @@ internal fun PaperMenuButton(view: PagedDocumentView?, onManage: () -> Unit = {}
     }
 }
 
-/** Applies [transform] to the pages [scope] covers, as one undo step; [PaperScope.NewPages] sets the paper of pages added later. */
 private fun applyPaper(doc: PagedDocument, scope: PaperScope, index: Int, shown: Page, transform: (Page) -> Page) {
-    if (scope == PaperScope.NewPages) {
-        doc.newPagePaper = transform(shown)
-        return
-    }
-    val targets = PageOps.paperTargets(scope, index, doc.size)
-    doc.asOneStep { targets.forEach { doc.updatePage(it, transform) } }
+    PageOps.applyPaper(doc, scope, index, shown, transform)
 }
 
 @Composable
@@ -192,6 +186,10 @@ private fun PaperSheet(
     DisposableEffect(document) {
         val listener = object : PagedDocument.Listener {
             override fun onPagesChanged() {
+                rev++
+            }
+
+            override fun onNewPagePaperChanged() {
                 rev++
             }
         }
