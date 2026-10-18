@@ -9,6 +9,7 @@ import androidx.ink.strokes.InProgressStroke
 import androidx.ink.strokes.MutableStrokeInputBatch
 import androidx.ink.strokes.Stroke
 import androidx.ink.strokes.StrokeInput
+import app.bestnote.core.model.LineDash
 import app.bestnote.engine.ink.BrushCatalog
 
 /**
@@ -19,6 +20,10 @@ import app.bestnote.engine.ink.BrushCatalog
  *
  * The stroke is built with an opaque copy of [brush] (highlight layers are drawn opaque and
  * composited translucent); [finish] returns it with the real brush, so the dry stroke is identical.
+ *
+ * INK-07 also draws dashed and dotted pen strokes this way ([dash] not solid, [opaqueWhileWet] false): the
+ * front-buffered wet view can't clip a stroke to its dashes, so they are drawn above it, clipped, from the first
+ * frame, and look exactly like the dry stroke.
  */
 internal class WetHighlighter(
     val pointerId: Int,
@@ -26,9 +31,12 @@ internal class WetHighlighter(
     private val downTimeMillis: Long,
     /** View -> stroke coordinates (e.g. page points); null = the same. */
     private val viewToStroke: Matrix? = null,
+    /** Highlighters are built opaque (their layer adds the alpha); a dashed pen stroke is built as it will dry. */
+    opaqueWhileWet: Boolean = true,
+    val dash: LineDash = LineDash.Solid,
 ) {
     val id = InProgressStrokeId()
-    val stroke = InProgressStroke().also { it.start(BrushCatalog.opaque(brush)) }
+    val stroke = InProgressStroke().also { it.start(if (opaqueWhileWet) BrushCatalog.opaque(brush) else brush) }
     private val real = MutableStrokeInputBatch()
     private val predicted = MutableStrokeInputBatch()
     private val gate = SampleGate()

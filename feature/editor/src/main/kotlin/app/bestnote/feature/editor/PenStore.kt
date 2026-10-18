@@ -3,10 +3,11 @@ package app.bestnote.feature.editor
 import app.bestnote.core.datastore.FavoritePen
 import app.bestnote.core.datastore.PenPreferences
 import app.bestnote.core.datastore.PenState
+import app.bestnote.core.model.LineDash
 
 /**
- * Toolbox <-> settings file (INK-04..06): every pen's color, size, opacity, pressure sensitivity and
- * stabilization, the saved custom colors and the favorite pens survive restarts. Session state (the
+ * Toolbox <-> settings file (INK-04..06): every pen's color, size, opacity, pressure sensitivity,
+ * stabilization and line dash, the saved custom colors and the favorite pens survive restarts. Session state (the
  * pen in hand, lasso, shapes, recent color dots) is not persisted.
  */
 internal object PenStore {
@@ -35,10 +36,11 @@ internal object PenStore {
     private fun kind(name: String): PenKind? = PenKind.entries.firstOrNull { it.name == name }
 
     private fun state(kind: PenKind, s: PenSettings) =
-        PenState(kind.name, s.colorArgb, s.size, s.opacity, s.pressureSensitivity, s.stabilization)
+        PenState(kind.name, s.colorArgb, s.size, s.opacity, s.pressureSensitivity, s.stabilization, s.dash.name)
 
     private fun settings(kind: PenKind, s: PenState): PenSettings {
         val range = PenDefaults.sizeRange(kind)
-        return PenSettings(s.colorArgb, s.sizePx.coerceIn(range.start, range.endInclusive), s.opacity, s.pressureSensitivity, s.stabilization)
+        val dash = LineDash.entries.firstOrNull { it.name == s.dash && kind.dashes } ?: LineDash.Solid
+        return PenSettings(s.colorArgb, s.sizePx.coerceIn(range.start, range.endInclusive), s.opacity, s.pressureSensitivity, s.stabilization, dash)
     }
 }

@@ -1016,7 +1016,7 @@ internal class SelectionLayer(
         val paper = PaperColors.of(page.page.paperColor)
         return strokes.map { s ->
             val want = PaperInk.colorOn(s.brush.colorIntArgb, paper)
-            if (want == s.brush.colorIntArgb) s else s.copy(s.brush.copyWithColorIntArgb(want)).also { StrokeFills.copy(it, s) }
+            if (want == s.brush.colorIntArgb) s else s.copy(s.brush.copyWithColorIntArgb(want)).also { StrokeFills.copy(it, s); app.bestnote.engine.ink.StrokeDashes.copy(it, s) }
         }
     }
 

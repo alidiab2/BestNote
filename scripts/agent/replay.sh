@@ -4,6 +4,7 @@
 #   color: #RRGGBB / #AARRGGBB                                    (default: the tool's colour)
 #   extra: e.g. --ez clear true --ef size 8 --ef batch 0 --ef slow 2
 #          --ef sensitivity 0 --ei stabilization 100   (INK-04/05 tuning for this replay)
+#          --es dash dashed|dotted|solid               (INK-07 line style for this replay)
 # Replays a handwriting stroke file (tools/handwriting) through the debug build's real touch
 # pipeline on the shared emulator, and waits until it has finished. A notebook must be open.
 # PKG=<applicationId> targets a side-by-side debug build (default app.bestnote.debug).
@@ -14,7 +15,7 @@ ADB=${ADB:-$HOME/Library/Android/sdk/platform-tools/adb}
 SERIAL=${ANDROID_SERIAL:-$($ADB devices | awk '/emulator-/{print $1; exit}')}
 [ -z "$SERIAL" ] && { echo "no emulator running (ask the lead to boot one)"; exit 3; }
 case $SERIAL in emulator-*) ;; *) echo "refusing to replay on a non-emulator device ($SERIAL)"; exit 3 ;; esac
-[ $# -ge 1 ] || { sed -n 2,8p "$0"; exit 2; }
+[ $# -ge 1 ] || { sed -n 2,9p "$0"; exit 2; }
 file=$1; pen=${2:-fountain}; color=${3:-}; shift $(( $# >= 3 ? 3 : $# ))
 [ -f "$file" ] || { echo "no such file: $file"; exit 2; }
 PKG=${PKG:-app.bestnote.debug}   # e.g. PKG=app.bestnote.debug.qaink for a -PdebugIdSuffix build

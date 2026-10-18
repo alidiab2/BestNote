@@ -3,6 +3,7 @@ package app.bestnote.core.storage
 import app.bestnote.core.model.AudioSync
 import app.bestnote.core.model.InkBrush
 import app.bestnote.core.model.InkStroke
+import app.bestnote.core.model.LineDash
 import app.bestnote.core.model.PenStyle
 import app.bestnote.core.model.ShapeInfo
 import app.bestnote.core.model.ShapeLink
@@ -30,7 +31,11 @@ interface StrokeChunkCodec {
 }
 
 /**
- * `.ink` chunk, v6 (v1..v5 are still read). v6 adds the clean-shape record after the group id (CANVAS-17):
+ * `.ink` chunk, v7 (v1..v6 are still read). v7 adds the line dash after the shape record (INK-07):
+ * `u8 dash` (0 solid, 1 dashed, 2 dotted; unknown codes read as solid). A chunk whose strokes are all solid is
+ * still written as v6 or older, so older apps keep reading notebooks without dashed lines.
+ *
+ * v6 (v1..v5 are still read). v6 adds the clean-shape record after the group id (CANVAS-17):
  * `u8 hasShape (0 or 1)`, then when 1: `u8 idLength | id | u8 kindLength | kind | u16 floatCount | floatCount x f32 points |
  * link start | link end`, each link `u8 idLength (0 = none) | id | f32 at (only when idLength > 0)`. A chunk without
  * shapes is still written as v5 (or v4 without groups), so older apps keep reading notebooks that have none.
@@ -52,7 +57,8 @@ interface StrokeChunkCodec {
  * ```
  */
 object InkChunkCodec : StrokeChunkCodec {
-    const val VERSION = 6
+    const val VERSION = 7
+    private const val VERSION_SHAPES = 6
     private const val VERSION_GROUPS = 5
     private const val VERSION_NO_GROUPS = 4
     private const val MAX_SHAPE_FLOATS = 0xFFFF
@@ -65,6 +71,8 @@ object InkChunkCodec : StrokeChunkCodec {
     // Stable on-disk codes; never reuse or renumber.
     private val TOOL_CODES = mapOf(Tool.Pen to 0, Tool.Pencil to 1, Tool.Highlighter to 2, Tool.Eraser to 3, Tool.Lasso to 4)
     private val STYLE_CODES = mapOf(PenStyle.Fountain to 0, PenStyle.Ball to 1, PenStyle.Brush to 2)
+    private val DASH_CODES = mapOf(LineDash.Solid to 0, LineDash.Dashed to 1, LineDash.Dotted to 2)
+    private val DASHES = DASH_CODES.entries.associate { (k, v) -> v to k }
     private val EMPTY = ByteArray(0)
     private val TOOLS = TOOL_CODES.entries.associate { (k, v) -> v to k }
     private val STYLES = STYLE_CODES.entries.associate { (k, v) -> v to k }
@@ -87,15 +95,17 @@ object InkChunkCodec : StrokeChunkCodec {
         }
         val shapes = strokes.map { s -> s.brush.shape?.let(::shapeBytes) }
         val version = when {
-            shapes.any { it != null } -> VERSION
+            strokes.any { it.brush.dash != LineDash.Solid } -> VERSION
+            shapes.any { it != null } -> VERSION_SHAPES
             groups.any { it.isNotEmpty() } -> VERSION_GROUPS
             else -> VERSION_NO_GROUPS
         }
         val withGroups = version >= VERSION_GROUPS
-        val withShapes = version >= VERSION
+        val withShapes = version >= VERSION_SHAPES
+        val withDash = version >= VERSION
         val payloadSize = 4 + strokes.indices.sumOf { i ->
             STROKE_HEADER.toLong() + 1 + families[i].size + 1 + audioIds[i].size + 1 + (if (strokes[i].brush.fillArgb == null) 0 else 4) + (if (withGroups) 1 + groups[i].size else 0) + (if (audioIds[i].isEmpty()) 0 else 8) +
-                (if (withShapes) 1 + (shapes[i]?.size ?: 0) else 0) +
+                (if (withShapes) 1 + (shapes[i]?.size ?: 0) else 0) + (if (withDash) 1 else 0) +
                 strokes[i].samples.size.toLong() * SAMPLE_SIZE
         }
         require(payloadSize <= Int.MAX_VALUE - HEADER_SIZE) { "Page too large for one chunk" }
@@ -126,6 +136,7 @@ object InkChunkCodec : StrokeChunkCodec {
                 buf.put((if (shape == null) 0 else 1).toByte())
                 if (shape != null) buf.put(shape)
             }
+            if (withDash) buf.put(DASH_CODES.getValue(s.brush.dash).toByte())
             buf.putInt(s.samples.size)
             for (p in s.samples) {
                 buf.putFloat(p.x); buf.putFloat(p.y); buf.putFloat(p.pressure)
@@ -192,14 +203,15 @@ object InkChunkCodec : StrokeChunkCodec {
             } else {
                 null
             }
-            val shape = if (version >= VERSION && buf.get().toInt() != 0) readShape(buf) else null
+            val shape = if (version >= VERSION_SHAPES && buf.get().toInt() != 0) readShape(buf) else null
+            val dash = if (version >= VERSION) DASHES[buf.get().toInt() and 0xFF] ?: LineDash.Solid else LineDash.Solid
             val n = buf.int
             if (n < 0 || n.toLong() * SAMPLE_SIZE > buf.remaining()) throw CorruptChunkException("Bad sample count $n")
             val samples = ArrayList<StylusSample>(n)
             repeat(n) {
                 samples += StylusSample(buf.float, buf.float, buf.float, buf.float, buf.float, buf.long)
             }
-            strokes += InkStroke(InkBrush(tool, style, color, size, family, audio, fill, group, shape), samples)
+            strokes += InkStroke(InkBrush(tool, style, color, size, family, audio, fill, group, shape, dash), samples)
         }
         if (buf.hasRemaining()) throw CorruptChunkException("${buf.remaining()} trailing bytes")
         return strokes

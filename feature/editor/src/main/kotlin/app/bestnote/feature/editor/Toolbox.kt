@@ -1,6 +1,7 @@
 package app.bestnote.feature.editor
 
 import app.bestnote.engine.canvas.EraserMode
+import app.bestnote.core.model.LineDash
 import app.bestnote.core.model.PenStyle
 import app.bestnote.core.model.Tool
 import app.bestnote.engine.ink.BrushCatalog
@@ -19,12 +20,15 @@ enum class PenKind(val tool: Tool, val style: PenStyle) {
     ;
 
     val inks: Boolean get() = tool.inks
+
+    /** INK-07: pens and the pencil can draw dashed or dotted lines; a highlight is always solid. */
+    val dashes: Boolean get() = tool == Tool.Pen || tool == Tool.Pencil
 }
 
 /**
  * One pen's settings. [size] is in stroke units (the canvas brush size), [opacity] 0..1,
  * [pressureSensitivity] 0..1 (INK-04: 1 = the pen's own curve, 0 = constant width) and
- * [stabilization] 0..100 (INK-05).
+ * [stabilization] 0..100 (INK-05). [dash] solid, dashed or dotted line (INK-07; the highlighter is always solid).
  */
 data class PenSettings(
     val colorArgb: Int,
@@ -32,6 +36,7 @@ data class PenSettings(
     val opacity: Float = 1f,
     val pressureSensitivity: Float = 1f,
     val stabilization: Int = 0,
+    val dash: LineDash = LineDash.Solid,
 ) {
     /** Color handed to the brush: the user's opacity goes into alpha (the brush adds its own on top). */
     val brushColorArgb: Int get() = BrushCatalog.applyOpacity(colorArgb or OPAQUE, opacity)
@@ -110,6 +115,10 @@ data class Toolbox(
 
     fun withStabilization(stabilization: Int, kind: PenKind = active): Toolbox =
         copy(settings = settings + (kind to settingsOf(kind).copy(stabilization = stabilization.coerceIn(0, PenTuning.MAX_STABILIZATION))))
+
+    /** INK-07: the line style of [kind] (pens and the pencil; the highlighter stays solid). */
+    fun withDash(dash: LineDash, kind: PenKind = active): Toolbox =
+        if (!kind.dashes) this else copy(settings = settings + (kind to settingsOf(kind).copy(dash = dash)))
 
     /** Saves [colorArgb] as a custom color (first, no duplicates, at most [MAX_SAVED_COLORS]). */
     fun saveColor(colorArgb: Int): Toolbox {

@@ -22,8 +22,8 @@ object WidthModel {
         min((1f - s) * DASH_LENGTH / (DASH_LENGTH - DASH_FULL), 1f)
     }
 
-    /** Width multiplier (of the pen's full width) at one point of a stroke. */
-    fun multiplier(family: InkFamily, pressure: Float, speed: Float, traveled: Float, remaining: Float): Float {
+    /** Width multiplier (of the pen's full width) at one point of a stroke; [tiltRad] only matters for the pencil. */
+    fun multiplier(family: InkFamily, pressure: Float, speed: Float, traveled: Float, remaining: Float, tiltRad: Float = 0f): Float {
         val long = longness(traveled, remaining)
         val dot = 1f - long
         val dash = dashness(traveled, remaining)
@@ -47,7 +47,7 @@ object WidthModel {
                     range(TAPER_TIP_WIDTH, 1f, taper(easeOut(remaining / TAPER_LENGTH)))
             }
             // Tilt shading only widens; at a normal writing angle the pencil follows pressure.
-            InkFamily.Pencil -> range(BrushTuning.Pencil.MIN_PRESSURE_WIDTH, 1f, lifted(p))
+            InkFamily.Pencil, InkFamily.PencilV1 -> range(BrushTuning.Pencil.MIN_PRESSURE_WIDTH, 1f, lifted(p)) * PencilModel.tiltWidth(tiltRad)
             InkFamily.Highlighter -> return 1f
         }
         return width * boost

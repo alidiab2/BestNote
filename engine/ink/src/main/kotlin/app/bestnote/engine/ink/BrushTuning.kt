@@ -151,7 +151,10 @@ object BrushTuning {
         /** Grain: tile size in stroke units (fixed to the page, so it doesn't swim), and its strength 0..1. */
         const val GRAIN_TILE = 48f
         const val GRAIN_STRENGTH = 0.55f
-        const val GRAIN_TEXTURE_PX = 128
+        const val GRAIN_TEXTURE_PX = 256
+
+        /** The first pencil's ([InkFamily.PencilV1]) grain bitmap size. */
+        const val GRAIN_TEXTURE_PX_V1 = 128
     }
 
     /** Highlighter: flat chisel tip, translucent, composited under ink with multiply. */

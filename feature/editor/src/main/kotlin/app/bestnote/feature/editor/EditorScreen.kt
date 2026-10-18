@@ -876,6 +876,7 @@ fun EditorScreen(
                 colorArgb = toolbox.current.brushColorArgb,
                 brushSize = toolbox.current.size,
                 penTuning = toolbox.current.tuning(state.pressureGamma),
+                lineDash = toolbox.current.dash,
                 eraserMode = toolbox.eraserMode,
                 shapeTool = toolbox.snapsShapes,
                 input = state.input,

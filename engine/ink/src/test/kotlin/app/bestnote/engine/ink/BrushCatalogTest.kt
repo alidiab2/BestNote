@@ -25,6 +25,20 @@ class BrushCatalogTest {
         assertEquals(InkFamily.Pencil, BrushCatalog.spec(Tool.Pencil)!!.family)
     }
 
+    @Test fun newPencilStrokesAreV2AndV1StrokesKeepTheirFamily() {
+        assertEquals("pencil.v2", BrushCatalog.spec(Tool.Pencil)!!.family.key)
+        val v1 = InkFamily.entries.single { it.key == "pencil.v1" }
+        assertEquals(InkFamily.PencilV1, v1)
+        assertTrue(v1.isPencil && InkFamily.Pencil.isPencil && !InkFamily.Fountain.isPencil)
+        assertEquals(InkFamily.entries.size, InkFamily.entries.map { it.key }.toSet().size)
+        // Both versions shade with tilt the same way in the vector export.
+        assertEquals(
+            WidthModel.multiplier(InkFamily.Pencil, 0.5f, 0f, 20f, 20f, 1.4f),
+            WidthModel.multiplier(InkFamily.PencilV1, 0.5f, 0f, 20f, 20f, 1.4f),
+            0f,
+        )
+    }
+
     @Test fun brushPenIsWiderAndBallpointFinerThanFountain() {
         val fountain = BrushCatalog.spec(Tool.Pen, PenStyle.Fountain)!!.sizeScale
         assertTrue(BrushCatalog.spec(Tool.Pen, PenStyle.Brush)!!.sizeScale > fountain)

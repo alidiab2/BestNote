@@ -3,6 +3,7 @@ package app.bestnote.core.storage
 import app.bestnote.core.model.AudioSync
 import app.bestnote.core.model.InkBrush
 import app.bestnote.core.model.InkStroke
+import app.bestnote.core.model.LineDash
 import app.bestnote.core.model.PenStyle
 import app.bestnote.core.model.ShapeInfo
 import app.bestnote.core.model.ShapeLink
@@ -174,6 +175,40 @@ class InkChunkCodecTest {
         assertEquals(5, java.nio.ByteBuffer.wrap(v5).getShort(4).toInt())
         assertEquals(listOf(null, null), InkChunkCodec.decode(v5).map { it.brush.shape })
         assertEquals(4, java.nio.ByteBuffer.wrap(InkChunkCodec.encode(a)).getShort(4).toInt())
+    }
+
+    @Test fun lineDashRoundTripsAndSolidChunksKeepTheOlderLayout() {
+        val a = randomStrokes(4, seed = 23).map { it.copy(brush = it.brush.copy(group = null, shape = null)) }
+        val box = ShapeInfo("s-box", "Rectangle", listOf(10f, 10f, 60f, 10f, 60f, 40f, 10f, 40f))
+        val dashed = listOf(
+            a[0].copy(brush = a[0].brush.copy(dash = LineDash.Dashed)),
+            a[1].copy(brush = a[1].brush.copy(dash = LineDash.Dotted, shape = box, group = "g")),
+            a[2],
+            a[3].copy(brush = a[3].brush.copy(tool = Tool.Pencil, family = "pencil.v1", dash = LineDash.Dashed)),
+        )
+        val bytes = InkChunkCodec.encode(dashed)
+        assertEquals(7, java.nio.ByteBuffer.wrap(bytes).getShort(4).toInt())
+        val back = InkChunkCodec.decode(bytes)
+        assertEquals(dashed, back)
+        assertEquals(listOf(LineDash.Dashed, LineDash.Dotted, LineDash.Solid, LineDash.Dashed), back.map { it.brush.dash })
+        // All solid: the older layouts, which apps from before INK-07 read; they decode solid.
+        val shapedOnly = listOf(a[0].copy(brush = a[0].brush.copy(shape = box)), a[2])
+        val v6 = InkChunkCodec.encode(shapedOnly)
+        assertEquals(6, java.nio.ByteBuffer.wrap(v6).getShort(4).toInt())
+        assertEquals(listOf(LineDash.Solid, LineDash.Solid), InkChunkCodec.decode(v6).map { it.brush.dash })
+        assertEquals(4, java.nio.ByteBuffer.wrap(InkChunkCodec.encode(a)).getShort(4).toInt())
+    }
+
+    @Test fun unknownDashCodeFromANewerMinorReadsAsSolid() {
+        val stroke = randomStrokes(1, seed = 5).single().let { it.copy(brush = it.brush.copy(group = null, shape = null, audio = null, fillArgb = null, family = null, dash = LineDash.Dotted)) }
+        val bytes = InkChunkCodec.encode(listOf(stroke))
+        // Layout: header, u32 count, u8 tool, u8 style, i32 color, f32 size, u8 family(0), u8 audio(0), u8 fill(0), u8 group(0), u8 shape(0), u8 dash.
+        val dashAt = InkChunkCodec.HEADER_SIZE + 4 + 1 + 1 + 4 + 4 + 5
+        assertEquals(2, bytes[dashAt].toInt())
+        bytes[dashAt] = 9
+        val crc = java.util.zip.CRC32().apply { update(bytes, InkChunkCodec.HEADER_SIZE, bytes.size - InkChunkCodec.HEADER_SIZE) }.value
+        java.nio.ByteBuffer.wrap(bytes).putInt(12, crc.toInt())
+        assertEquals(LineDash.Solid, InkChunkCodec.decode(bytes).single().brush.dash)
     }
 
     /** The original v1 layout (no family key), as written by DOC-01 builds. */

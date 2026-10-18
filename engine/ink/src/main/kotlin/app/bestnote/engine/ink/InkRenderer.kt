@@ -4,10 +4,13 @@ import android.graphics.BlendMode
 import android.graphics.Canvas
 import android.graphics.Matrix
 import android.graphics.Paint
+import android.graphics.Path
 import android.graphics.RectF
 import androidx.ink.rendering.android.canvas.CanvasStrokeRenderer
 import androidx.ink.strokes.InProgressStroke
+import androidx.ink.strokes.MutableStrokeInputBatch
 import androidx.ink.strokes.Stroke
+import app.bestnote.core.model.LineDash
 import java.util.WeakHashMap
 
 /**
@@ -17,6 +20,9 @@ import java.util.WeakHashMap
  * A highlighter stroke in progress is drawn inside its color's layer too ([draw] with `wet`, or
  * [drawHighlightGroup]), so it sits under the ink from its first frame. Start such a stroke with a
  * [BrushCatalog.opaque] brush; it is composited at the real color's alpha.
+ *
+ * Dashed and dotted strokes ([StrokeDashes], INK-07) are drawn through their [DashClip], so every caller (page
+ * tiles, previews, selection) shows the dashes. The clip of a finished stroke is built once and cached.
  */
 class InkRenderer(private val renderer: CanvasStrokeRenderer = CanvasStrokeRenderer.create(InkTextures)) {
     /** Highlighter stroke -> same stroke with an opaque color, drawn inside its group's layer. */
@@ -24,6 +30,10 @@ class InkRenderer(private val renderer: CanvasStrokeRenderer = CanvasStrokeRende
     private val layerPaint = Paint().apply { blendMode = BlendMode.MULTIPLY }
     private val bounds = RectF()
     private val strokeBounds = RectF()
+    private val dashClip = DashClip()
+    private val dashPaths = WeakHashMap<Stroke, Pair<LineDash, Path>>()
+    private val wetInputs = MutableStrokeInputBatch()
+    private val wetPath = Path()
 
     /**
      * @param wet a highlighter stroke in progress, started with an opaque color; [wetColorArgb] is
@@ -56,7 +66,38 @@ class InkRenderer(private val renderer: CanvasStrokeRenderer = CanvasStrokeRende
     }
 
     fun drawInk(canvas: Canvas, ink: List<Stroke>, transform: Matrix) {
-        for (stroke in ink) renderer.draw(canvas, stroke, transform)
+        for (stroke in ink) {
+            val dash = StrokeDashes.of(stroke)
+            if (dash == LineDash.Solid) {
+                renderer.draw(canvas, stroke, transform)
+                continue
+            }
+            val clip = dashPaths[stroke]?.takeIf { it.first == dash }?.second
+                ?: dashClip.of(stroke.inputs, dash, stroke.brush.size, DashPattern.maxWidthScale(BrushCatalog.familyOf(stroke.brush)))
+                    ?.also { dashPaths[stroke] = dash to it }
+            val save = canvas.save()
+            if (clip != null) canvas.clipPath(clip)
+            renderer.draw(canvas, stroke, transform)
+            canvas.restoreToCount(save)
+        }
+    }
+
+    /**
+     * A pen stroke in progress drawn with [dash] (INK-07). Its clip is rebuilt from its inputs every call: one
+     * stroke's samples, never the page's. Canvas coordinates are the stroke's, as for [drawInk].
+     */
+    fun drawWet(canvas: Canvas, wet: InProgressStroke, transform: Matrix, dash: LineDash) {
+        val brush = wet.brush ?: return
+        val clip = if (dash == LineDash.Solid) {
+            null
+        } else {
+            wet.populateInputs(wetInputs)
+            dashClip.of(wetInputs, dash, brush.size, DashPattern.maxWidthScale(BrushCatalog.familyOf(brush)), wetPath)
+        }
+        val save = canvas.save()
+        if (clip != null) canvas.clipPath(clip)
+        renderer.draw(canvas, wet, transform)
+        canvas.restoreToCount(save)
     }
 
     private fun opaque(stroke: Stroke, color: Int): Stroke {

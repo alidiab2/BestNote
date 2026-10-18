@@ -12,6 +12,7 @@ File format (version 1), units in millimetres from the page's top-left corner, y
 t_ms is absolute from the start of the file and strictly increasing across all strokes.
 """
 import json
+import math
 
 from . import dynamics, geom
 
@@ -27,11 +28,12 @@ GAPS = {
 
 
 class Item:
-    __slots__ = ("pts", "kind", "gap", "speed", "pressure", "button", "hold_ms")
+    __slots__ = ("pts", "kind", "gap", "speed", "pressure", "button", "hold_ms", "tilt_deg")
 
-    def __init__(self, pts, kind, gap, speed, pressure, button, hold_ms=0.0):
+    def __init__(self, pts, kind, gap, speed, pressure, button, hold_ms=0.0, tilt_deg=None):
         self.pts, self.kind, self.gap, self.speed, self.pressure, self.button = pts, kind, gap, speed, pressure, button
         self.hold_ms = hold_ms
+        self.tilt_deg = tilt_deg
 
 
 class Document:
@@ -42,6 +44,7 @@ class Document:
         self.hover = hover
         self.items = []
         self.expect = None  # the written text, one entry per line (saved as <name>.expect.txt)
+        self.labels = None  # optional: what each ink stroke is (accuracy tests)
 
     def move_to_end(self, spans):
         """Moves the items of [spans] (first, end) to the end, in span order: what the page's stroke list (z-order)
@@ -58,11 +61,13 @@ class Document:
         self.items = [it for i, it in enumerate(self.items) if i not in moved] + tail
         self.labels = None  # optional: what each ink stroke is (accuracy tests)
 
-    def add(self, pts, gap="letter", kind="stroke", speed=1.0, pressure=1.0, button=False, hold_ms=0.0):
-        """hold_ms: the pen stays down and still that long at the end (hold-to-snap)."""
+    def add(self, pts, gap="letter", kind="stroke", speed=1.0, pressure=1.0, button=False, hold_ms=0.0, tilt_deg=None):
+        """hold_ms: the pen stays down and still that long at the end (hold-to-snap).
+        tilt_deg: hold the pen at this tilt (degrees from upright) for the stroke, e.g. 75 to shade with the side
+        of a pencil lead; None = the writer's natural 35-55 degrees."""
         if not pts:
             return
-        self.items.append(Item(list(pts), kind, gap, speed, pressure, button, hold_ms))
+        self.items.append(Item(list(pts), kind, gap, speed, pressure, button, hold_ms, tilt_deg))
 
     def add_dot(self, center, gap="deferred", pressure=1.0):
         self.items.append(Item([center], "dot", gap, 1.0, pressure, False))
@@ -91,6 +96,9 @@ class Document:
                 samples, t = dynamics.tap(first, w, t, heavy=it.pressure)
             else:
                 samples, t = dynamics.stroke(it.pts, w, t, speed=it.speed, pressure_scale=it.pressure, hold_ms=it.hold_ms)
+                if it.tilt_deg is not None:
+                    for s in samples:  # a slow 2-degree drift, like a hand holding the pen low
+                        s["tiltRad"] = round(math.radians(min(89.0, it.tilt_deg + 2.0 * math.sin(s["t_ms"] / 700.0))), 4)
             strokes.append({"type": "ink", "button": bool(it.button), "samples": samples})
             last = (samples[-1]["x"], samples[-1]["y"])
         return {

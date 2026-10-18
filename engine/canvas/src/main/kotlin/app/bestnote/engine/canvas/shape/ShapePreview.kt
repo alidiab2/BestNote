@@ -23,7 +23,8 @@ enum class ShapeHint { PerfectCircle, RightAngles, Horizontal, Vertical, Diagona
 
 /**
  * CANVAS-17: the live "this is what you'll get" ghost of hold-to-shape. When the pen pauses, [begin] recognizes the
- * stroke so far and snaps it (angles, squares, glue to nearby shapes); while the pen stays down, [move] adjusts it
+ * stroke so far and snaps it (angles, squares, glue to nearby shapes; a line-like stroke that is no shape straightens,
+ * INK-07 [Straighten]); while the pen stays down, [move] adjusts it
  * (a line's end follows the pen, a closed shape grows and shrinks about its center) and keeps it glued; moving far
  * away or shaking the pen cancels it, so the stroke stays free ink. Lifting commits exactly [ghost].
  * Pure Kotlin, page points; cheap enough to run per pen event on the main thread (no lag under the pen).
@@ -77,8 +78,10 @@ class ShapePreview(private val recognizer: GeometricShapeRecognizer = GeometricS
      */
     fun begin(xs: FloatArray, ys: FloatArray, count: Int, penX: Float, penY: Float, targets: List<ShapeInfo>, tolerance: Float, minCancel: Float): Ghost? {
         if (cancelled) return null
-        val match = recognizer.match(xs.copyOf(count), ys.copyOf(count)) ?: return null.also { ghost = null }
-        start(match.shape, penX, penY, targets, tolerance, minCancel)
+        // INK-07: a wobbly line the recognizer doesn't call a line is still straightened by the hold.
+        val shape = Straighten.resolve(recognizer.match(xs.copyOf(count), ys.copyOf(count))?.shape, xs, ys, count)
+            ?: return null.also { ghost = null }
+        start(shape, penX, penY, targets, tolerance, minCancel)
         ghost = build(penX, penY)
         return ghost
     }

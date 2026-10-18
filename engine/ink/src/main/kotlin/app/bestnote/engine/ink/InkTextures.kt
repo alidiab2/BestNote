@@ -12,20 +12,46 @@ import kotlin.random.Random
  * `CanvasStrokeRenderer.create(InkTextures)`), or textured pens draw untextured.
  */
 object InkTextures : TextureBitmapStore {
+    /** The first pencil's grain ([InkFamily.PencilV1]); kept so its strokes look as drawn. */
     const val PENCIL_GRAIN = "bestnote:pencil-grain"
+
+    /** INK-02 pencil grain: twice the resolution over the same tile, so it stays crisp when zoomed in. */
+    const val PENCIL_GRAIN_V2 = "bestnote:pencil-grain.v2"
 
     private val bitmaps = HashMap<String, Bitmap>()
 
     @Synchronized
     override fun get(clientTextureId: String): Bitmap? = when (clientTextureId) {
-        PENCIL_GRAIN -> bitmaps.getOrPut(clientTextureId) { grainBitmap(BrushTuning.Pencil.GRAIN_TEXTURE_PX, BrushTuning.Pencil.GRAIN_STRENGTH) }
+        PENCIL_GRAIN -> bitmaps.getOrPut(clientTextureId) { grainBitmap(BrushTuning.Pencil.GRAIN_TEXTURE_PX_V1, BrushTuning.Pencil.GRAIN_STRENGTH) }
+        PENCIL_GRAIN_V2 -> bitmaps.getOrPut(clientTextureId) { grainBitmap(BrushTuning.Pencil.GRAIN_TEXTURE_PX, BrushTuning.Pencil.GRAIN_STRENGTH) }
         else -> null
     }
 
+    private val tinted = LinkedHashMap<Int, Bitmap>(16, 0.75f, true)
+
+    /**
+     * The pencil grain as an opaque-color tile: [colorArgb]'s RGB with the grain as alpha. For renderers
+     * that can't use androidx.ink textures (the PDF/PNG export draws it as a repeating bitmap shader, tiled
+     * [BrushTuning.Pencil.GRAIN_TILE] page points wide, so it matches the live grain). Shared; don't recycle.
+     */
+    @Synchronized
+    fun grainTile(colorArgb: Int): Bitmap {
+        val rgb = colorArgb and 0x00FFFFFF
+        tinted[rgb]?.let { return it }
+        val size = BrushTuning.Pencil.GRAIN_TEXTURE_PX
+        val alpha = grainAlpha(size, BrushTuning.Pencil.GRAIN_STRENGTH)
+        val bitmap = Bitmap.createBitmap(IntArray(size * size) { (alpha[it] shl 24) or rgb }, size, size, Bitmap.Config.ARGB_8888)
+        tinted[rgb] = bitmap
+        if (tinted.size > MAX_TINTED) tinted.remove(tinted.keys.first())
+        return bitmap
+    }
+
+    private const val MAX_TINTED = 16
+
     /** Paper-grain layer for the pencil: tiled in page (stroke) coordinates so it never swims. */
     @OptIn(ExperimentalInkCustomBrushApi::class)
-    internal fun pencilGrainLayer(): BrushPaint.TextureLayer = BrushPaint.TilingTexture.builder()
-        .setClientTextureId(PENCIL_GRAIN)
+    internal fun pencilGrainLayer(textureId: String = PENCIL_GRAIN_V2): BrushPaint.TextureLayer = BrushPaint.TilingTexture.builder()
+        .setClientTextureId(textureId)
         .setSizeX(BrushTuning.Pencil.GRAIN_TILE)
         .setSizeY(BrushTuning.Pencil.GRAIN_TILE)
         .setSizeUnit(BrushPaint.TextureLayer.SizeUnit.STROKE_COORDINATES)

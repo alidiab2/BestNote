@@ -1,9 +1,11 @@
 package app.bestnote.engine.canvas
 
 import app.bestnote.core.model.InkBrush
+import app.bestnote.core.model.LineDash
 import app.bestnote.core.model.PenStyle
 import app.bestnote.core.model.Tool
 import app.bestnote.engine.ink.BrushCatalog
+import app.bestnote.engine.ink.StrokeDashes
 import java.util.WeakHashMap
 
 /**
@@ -28,7 +30,10 @@ class StrokeBrushes<I : Any, S : Any> {
 
     /** The in-progress stroke [id] became [stroke]. */
     fun finish(id: I, stroke: S) {
-        inProgress.remove(id)?.let { finished[stroke] = it }
+        inProgress.remove(id)?.let {
+            finished[stroke] = it
+            StrokeDashes.set(stroke, it.dash)
+        }
     }
 
     fun brushOf(stroke: S): InkBrush? = finished[stroke]
@@ -36,13 +41,17 @@ class StrokeBrushes<I : Any, S : Any> {
     /** [piece] was cut from [original] (pixel eraser): it is stored with the same brush. */
     fun inherit(piece: S, original: S) {
         // A cut-off piece is no longer a closed outline (nor a clean shape): it keeps the pen, not the fill.
-        finished[original]?.let { finished[piece] = it.copy(fillArgb = null, shape = null) }
+        finished[original]?.let {
+            finished[piece] = it.copy(fillArgb = null, shape = null)
+            StrokeDashes.set(piece, it.dash)
+        }
     }
 
     /** [stroke] (pasted or restyled) is stored with [brush]. */
     fun put(stroke: S, brush: InkBrush) {
         finished[stroke] = brush
         StrokeFills.set(stroke, brush.fillArgb)
+        StrokeDashes.set(stroke, brush.dash)
     }
 
     /** [copy] was made from [original] (moved, resized, restyled): stored with [original]'s brush changed by [change]. */
@@ -52,14 +61,21 @@ class StrokeBrushes<I : Any, S : Any> {
             put(copy, change(brush))
         } else {
             StrokeFills.copy(copy, original)
+            StrokeDashes.copy(copy, original)
         }
     }
 
     companion object {
-        /** The full brush for a stroke starting now with these canvas settings, or null if [tool] doesn't ink. */
-        fun capture(tool: Tool, penStyle: PenStyle, colorArgb: Int, size: Float): InkBrush? {
+        /**
+         * The full brush for a stroke starting now with these canvas settings, or null if [tool] doesn't ink.
+         * [dash] applies to pens and the pencil (INK-07); a highlight is always solid.
+         */
+        fun capture(tool: Tool, penStyle: PenStyle, colorArgb: Int, size: Float, dash: LineDash = LineDash.Solid): InkBrush? {
             val spec = BrushCatalog.spec(tool, penStyle) ?: return null
-            return InkBrush(tool, penStyle, colorArgb, size, spec.family.key)
+            return InkBrush(tool, penStyle, colorArgb, size, spec.family.key, dash = dashFor(tool, dash))
         }
+
+        /** The dash a [tool] stroke gets when the pen is set to [dash]: highlighters stay solid. */
+        fun dashFor(tool: Tool, dash: LineDash): LineDash = if (tool == Tool.Highlighter) LineDash.Solid else dash
     }
 }

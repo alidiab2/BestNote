@@ -62,6 +62,7 @@ internal fun PagedDocumentHost(
     colorArgb: Int,
     brushSize: Float,
     penTuning: PenTuning,
+    lineDash: app.bestnote.core.model.LineDash,
     eraserMode: EraserMode,
     shapeTool: Boolean,
     input: FingerInput,
@@ -106,6 +107,7 @@ internal fun PagedDocumentHost(
                 view.colorArgb = colorArgb
                 view.brushSize = brushSize
                 view.penTuning = penTuning
+                view.lineDash = lineDash
                 view.eraserMode = eraserMode
                 view.shapeTool = shapeTool
                 view.quickPaletteEnabled = quickPalette

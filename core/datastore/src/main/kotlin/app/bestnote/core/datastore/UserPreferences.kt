@@ -150,6 +150,7 @@ data class StoragePreferences(
  * @property sizePx brush size in the ink engine's units.
  * @property pressureSensitivity 0..1 (1 = the pen's own pressure curve, 0 = constant width).
  * @property stabilization 0..100.
+ * @property dash the line style name (INK-07: "Solid", "Dashed" or "Dotted"; unknown names read as solid).
  */
 @Serializable
 data class PenState(
@@ -159,6 +160,7 @@ data class PenState(
     val opacity: Float = 1f,
     val pressureSensitivity: Float = 1f,
     val stabilization: Int = 0,
+    val dash: String = "Solid",
 )
 
 /** A favorite pen in the tray (INK-06): pen type + color + size (+ feel), picked in one tap. */

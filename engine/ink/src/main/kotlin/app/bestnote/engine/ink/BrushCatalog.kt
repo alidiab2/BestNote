@@ -25,12 +25,21 @@ enum class InkFamily(val key: String) {
     /** Wide pressure range, tapered ends. */
     BrushPen("brush-pen.v1"),
 
-    /** Graphite: pressure darkens, paper grain texture, tilt shades. */
-    Pencil("pencil.v1"),
+    /**
+     * Graphite (INK-02): pressure darkens, a fine paper grain fixed to the page, tilt widens and softens, and
+     * retracing a stroke over itself darkens it like real graphite.
+     */
+    Pencil("pencil.v2"),
+
+    /** The first pencil (coarser grain, self-overlaps don't darken); kept so its strokes render as drawn. */
+    PencilV1("pencil.v1"),
 
     /** Flat chisel; translucent, drawn under ink, overlaps don't darken. */
     Highlighter("highlighter-chisel.v1"),
     ;
+
+    /** True for every version of the pencil. */
+    val isPencil: Boolean get() = this == Pencil || this == PencilV1
 
     /** Namespaced id to persist with strokes (androidx.ink 1.1 keeps its own family ids internal). */
     val clientId: String get() = ID_PREFIX + key
@@ -93,7 +102,8 @@ object BrushCatalog {
      */
     fun modelBrush(brush: Brush): app.bestnote.core.model.InkBrush {
         val family = familyOf(brush)
-        val (tool, style) = inkSpecs.firstOrNull { (t, s) -> spec(t, s)?.family == family } ?: (Tool.Pen to PenStyle.Fountain)
+        val current = if (family == InkFamily.PencilV1) InkFamily.Pencil else family
+        val (tool, style) = inkSpecs.firstOrNull { (t, s) -> spec(t, s)?.family == current } ?: (Tool.Pen to PenStyle.Fountain)
         val spec = spec(tool, style)!!
         val alpha = ((brush.colorIntArgb ushr 24) / spec.opacity).toInt().coerceIn(0, 255)
         val color = (alpha shl 24) or (brush.colorIntArgb and 0x00FFFFFF)

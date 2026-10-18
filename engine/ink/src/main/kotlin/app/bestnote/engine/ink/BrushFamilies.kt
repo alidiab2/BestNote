@@ -66,6 +66,19 @@ internal object BrushFamilies {
             ),
             BrushPaint(textureLayers = listOf(InkTextures.pencilGrainLayer()), colorFunctions = emptyList()),
         )
+        InkFamily.PencilV1 -> custom(
+            BrushTip(
+                behaviors = listOf(
+                    pressureTo(TargetNode.Target.SIZE_MULTIPLIER, BrushTuning.Pencil.MIN_PRESSURE_WIDTH, BrushTuning.Pencil.RESPONSE_MS),
+                    pressureTo(TargetNode.Target.OPACITY_MULTIPLIER, BrushTuning.Pencil.MIN_PRESSURE_OPACITY, BrushTuning.Pencil.RESPONSE_MS),
+                    tilt(TargetNode.Target.SIZE_MULTIPLIER, BrushTuning.Pencil.TILT_MAX_WIDTH),
+                    tilt(TargetNode.Target.OPACITY_MULTIPLIER, BrushTuning.Pencil.TILT_MIN_OPACITY),
+                    dotBoost,
+                    predictionFadeOut,
+                ),
+            ),
+            BrushPaint(textureLayers = listOf(InkTextures.pencilGrainLayer(InkTextures.PENCIL_GRAIN)), colorFunctions = emptyList()),
+        )
         InkFamily.Ballpoint -> custom(
             BrushTip(
                 behaviors = listOf(
