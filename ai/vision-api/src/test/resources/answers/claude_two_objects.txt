@@ -1,0 +1,5 @@
+{"seen":"5685","elements":[{"e":{"t":"Title","t_":""}}]}
+
+```json
+{"seen":"5685","elements":[{"e":"Title","t":"עבודה של כוח לא קבוע"},{"e":"Heading","t":"עבודה כשטח"},{"e":"Diagram","h":"F כפונקציה של Δx","axes":{"x":"\\Delta x","y":"F","pts":[[0,0],[5,100],[10,100],[15,0]]}},{"e":"Formula","m":"W = 1000\\,(J)"},{"e":"KeyResult","m":"W_{A\\to B}=\\int_A^B F\\,dr"}]}
+```

@@ -107,7 +107,22 @@ object NoteWire {
 
     // ------------------------------------------------------------------ decode
 
-    private fun element(o: JsonObject): NoteBlock? {
+    /**
+     * AI-12a (Claude without its schema, real device): every element came wrapped one level deeper,
+     * `{"e":{"e":"Title","t":"…"}}`. The inner object's fields (and its own `e`) are lifted up.
+     */
+    private fun unwrap(o: JsonObject): JsonObject {
+        var cur = o
+        repeat(MAX_NESTING) {
+            val key = listOf("e", "element").firstOrNull { cur[it] is JsonObject } ?: return cur
+            val inner = cur[key] as JsonObject
+            cur = JsonObject(cur.filterKeys { it != key } + inner)
+        }
+        return cur
+    }
+
+    private fun element(raw: JsonObject): NoteBlock? {
+        val o = unwrap(raw)
         val type = elementOf(str(o["e"] ?: o["element"] ?: o["type"]))
         val text = text(o["t"] ?: o["text"])
         val head = text(o["h"] ?: o["head"] ?: o["title"] ?: o["term"])
@@ -229,6 +244,7 @@ object NoteWire {
     }
 
     private val NOT_CONTENT = setOf("true", "false", "null", "undefined", "none")
+    private const val MAX_NESTING = 3
 
     // ------------------------------------------------------------------ encode
 
