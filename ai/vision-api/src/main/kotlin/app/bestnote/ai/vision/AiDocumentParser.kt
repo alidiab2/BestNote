@@ -65,6 +65,20 @@ object AiDocumentParser {
     }
 
     internal fun parseRoot(text: String, notes: MutableList<String>): JsonElement? {
+        // AI-12a (Claude, real device): a small junk object, a blank line, then the real answer. Every
+        // complete top-level value is read and the richest one wins (the later one on a tie).
+        val values = topLevelValues(stripFences(text))
+        if (values.size > 1) {
+            val parsed = values.mapNotNull { v -> parseOne(v, ArrayList())?.let { it to v } }
+            if (parsed.size > 1) {
+                notes += "picked the fullest of ${values.size} JSON values"
+                return parsed.withIndex().maxWith(compareBy({ richness(it.value.first) }, { it.index })).value.first
+            }
+        }
+        return parseOne(text, notes)
+    }
+
+    private fun parseOne(text: String, notes: MutableList<String>): JsonElement? {
         val extracted = extractJson(text)
         if (extracted != text.trim()) notes += "stripped text around the JSON"
         // "\frac" written with one backslash is valid JSON (form feed + "rac"): protect LaTeX first.
@@ -196,6 +210,48 @@ object AiDocumentParser {
 
     private val NEWLINE_COMMAND = Regex("\n(abla|eq|u|ot|otin|e|ewline|leq|geq|ewcommand|i|exists|subset|mid|parallel|cong|sim|rightarrow|leftarrow|Rightarrow|Leftarrow)(?![a-z])")
     private const val VALID_ESCAPES = "\"\\/bfnrtu"
+
+    /** [text] with every ``` fence line removed (the JSON inside is kept). */
+    private fun stripFences(text: String): String = text.lines().filterNot { it.trim().startsWith("```") }.joinToString("\n")
+
+    /**
+     * The complete top-level JSON objects/arrays in [text], in order (strings and escapes respected;
+     * prose between them skipped). An unfinished last value is not returned.
+     */
+    internal fun topLevelValues(text: String): List<String> {
+        val out = ArrayList<String>()
+        var depth = 0
+        var start = -1
+        var inString = false
+        var escape = false
+        for ((i, c) in text.withIndex()) {
+            if (inString) {
+                when {
+                    escape -> escape = false
+                    c == '\\' -> escape = true
+                    c == '"' -> inString = false
+                }
+                continue
+            }
+            when (c) {
+                '"' -> if (depth > 0) inString = true
+                '{', '[' -> { if (depth == 0) start = i; depth++ }
+                '}', ']' -> if (depth > 0) {
+                    depth--
+                    if (depth == 0 && start >= 0) { out += text.substring(start, i + 1); start = -1 }
+                }
+            }
+        }
+        return out
+    }
+
+    /** How much content a parsed answer carries: the number of string characters in it. */
+    private fun richness(e: JsonElement): Int = when (e) {
+        is JsonObject -> e.values.sumOf(::richness)
+        is JsonArray -> e.sumOf(::richness)
+        is JsonPrimitive -> if (e.isString) e.content.length else 0
+        else -> 0
+    }
 
     /** The JSON part of a model answer: inside a ``` fence if there is one, else from the first `{`/`[`. */
     internal fun extractJson(text: String): String {
