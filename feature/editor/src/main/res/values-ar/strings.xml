@@ -311,7 +311,7 @@
     <string name="paper_apply_to">تطبيق على</string>
     <string name="paper_scope_this">هذه الصفحة</string>
     <string name="paper_scope_all">كل الصفحات</string>
-    <string name="paper_scope_new">الصفحات الجديدة</string>
+    <string name="paper_scope_new">الجديدة</string>
     <string name="paper_scope_new_hint">الصفحات التي تضيفها من الآن تستخدم هذا الورق.</string>
     <string name="paper_color">لون الورق</string>
     <string name="paper_white">أبيض</string>
@@ -355,6 +355,7 @@
     <string name="pages_hint">اضغط على صفحة لفتحها · اضغط مطولًا واسحب لإعادة الترتيب · «تحديد» لمزيد من الخيارات</string>
     <string name="pages_select_hint">اضغط على الصفحات لتحديدها</string>
     <string name="pages_added">أُضيفت صفحة</string>
+    <string name="editor_paper_template">قالب الورقة</string>
     <string name="pages_paper">الورق</string>
     <string name="pages_move_start">إلى البداية</string>
     <string name="pages_move_after">بعد الصفحة %1$d</string>
@@ -391,6 +392,23 @@
         <item quantity="few">حُذفت %1$d صفحات</item>
         <item quantity="many">حُذفت %1$d صفحة</item>
         <item quantity="other">حُذفت %1$d صفحة</item>
+    </plurals>
+    <string name="pages_paper_apply">تطبيق</string>
+    <plurals name="pages_paper_for">
+        <item quantity="zero">لم تُحدَّد صفحات</item>
+        <item quantity="one">يُطبَّق على الصفحة المحددة</item>
+        <item quantity="two">يُطبَّق على الصفحتين المحددتين</item>
+        <item quantity="few">يُطبَّق على %1$d صفحات محددة</item>
+        <item quantity="many">يُطبَّق على %1$d صفحة محددة</item>
+        <item quantity="other">يُطبَّق على %1$d صفحة محددة</item>
+    </plurals>
+    <plurals name="pages_repapered">
+        <item quantity="zero">لم يتغير ورق أي صفحة</item>
+        <item quantity="one">تغيّر ورق صفحة واحدة</item>
+        <item quantity="two">تغيّر ورق صفحتين</item>
+        <item quantity="few">تغيّر ورق %1$d صفحات</item>
+        <item quantity="many">تغيّر ورق %1$d صفحة</item>
+        <item quantity="other">تغيّر ورق %1$d صفحة</item>
     </plurals>
     <plurals name="pages_rotated">
         <item quantity="zero">لم تُدوَّر صفحات</item>

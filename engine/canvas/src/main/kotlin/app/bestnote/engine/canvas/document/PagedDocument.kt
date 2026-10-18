@@ -51,6 +51,16 @@ class PagedDocument {
 
         /** The text boxes or images of page [index] changed (also by undo and redo). */
         fun onPageElementsChanged(index: Int) {}
+
+        /** The paper for pages added from now on changed (also by undo and redo), PAGES-11. */
+        fun onNewPagePaperChanged() {}
+    }
+
+    /** The paper of pages added from now on, before and after one change (PAGES-11). */
+    private class DefaultPaperEdit(private val before: Page?, private val after: Page?) : Command<PagedDocument> {
+        override val retainedBytes: Long get() = SLOT_BYTES
+        override fun apply(target: PagedDocument) = target.installNewPagePaper(after)
+        override fun revert(target: PagedDocument) = target.installNewPagePaper(before)
     }
 
     /** A page's elements before and after one change. */
@@ -108,6 +118,26 @@ class PagedDocument {
      * "New pages" scope (PAGES-10); null continues the last page's paper.
      */
     var newPagePaper: Page? = null
+        private set
+
+    /** Sets the paper of pages added from now on without touching the undo history (loading a notebook). */
+    fun loadNewPagePaper(paper: Page?) {
+        newPagePaper = paper
+    }
+
+    /** Sets the paper of pages added from now on as an undoable step (PAGES-11); null goes back to following the last page. */
+    fun setNewPagePaper(paper: Page?) {
+        val before = newPagePaper
+        if (before == paper) return
+        record(DefaultPaperEdit(before, paper))
+        installNewPagePaper(paper)
+        notifyHistory()
+    }
+
+    private fun installNewPagePaper(paper: Page?) {
+        newPagePaper = paper
+        listeners.forEach { it.onNewPagePaperChanged() }
+    }
 
     /** True once [reset] has supplied pages (an empty document shows only the add-page card). */
     var isLoaded: Boolean = false

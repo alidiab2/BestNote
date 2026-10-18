@@ -1,6 +1,8 @@
 package app.bestnote.feature.editor
 
+import app.bestnote.core.model.Page
 import app.bestnote.core.model.PaperTemplate
+import app.bestnote.engine.canvas.document.PagedDocument
 
 /** Which pages a paper change in the paper sheet applies to (PAGES-10). */
 internal enum class PaperScope { ThisPage, AllPages, NewPages }
@@ -29,6 +31,27 @@ internal object PageOps {
         PaperScope.ThisPage -> if (current in 0 until count) listOf(current) else emptyList()
         PaperScope.AllPages -> (0 until count).toList()
         PaperScope.NewPages -> emptyList()
+    }
+
+    /**
+     * Applies [transform] to the paper the [scope] covers, as ONE undo step; ink is never touched.
+     * [PaperScope.NewPages] changes the paper of pages added later ([shown] is what the sheet was
+     * showing for them) instead of any existing page. @return the zero-based pages rewritten.
+     */
+    fun applyPaper(doc: PagedDocument, scope: PaperScope, current: Int, shown: Page, transform: (Page) -> Page): List<Int> {
+        if (scope == PaperScope.NewPages) {
+            doc.setNewPagePaper(transform(shown))
+            return emptyList()
+        }
+        return applyToPages(doc, paperTargets(scope, current, doc.size), transform)
+    }
+
+    /** Applies [transform] to the paper of [indices] (page manager selection) as ONE undo step. @return the pages that changed. */
+    fun applyToPages(doc: PagedDocument, indices: Collection<Int>, transform: (Page) -> Page): List<Int> {
+        val targets = indices.filter { it in 0 until doc.size }.toSortedSet().toList()
+        val changed = targets.filter { transform(doc.pages[it].page).copy(index = it) != doc.pages[it].page }
+        if (changed.isNotEmpty()) doc.asOneStep { changed.forEach { doc.updatePage(it, transform) } }
+        return changed
     }
 
     /**
@@ -69,4 +92,24 @@ internal object PageOps {
 
     /** Zero-based indices of the [selected] ids in document order. */
     fun <T> indicesOf(ids: List<T>, selected: Set<T>): List<Int> = ids.indices.filter { ids[it] in selected }
+
+    /** Name of the notebook extra that keeps the paper of new pages (PAGES-11). */
+    const val DEFAULT_PAPER_EXTRA = "newpage.json"
+
+    /** The stored form of the new-pages paper: a tiny JSON object. Notebooks written before it simply have no such extra. */
+    fun encodeDefaultPaper(paper: Page?): ByteArray =
+        if (paper == null) ByteArray(0)
+        else """{"template":"${paper.template.name}","color":"${paper.paperColor.name}","width":${paper.widthPt},"height":${paper.heightPt}}""".encodeToByteArray()
+
+    /** Reads [encodeDefaultPaper]; null for nothing stored or anything unusable (never throws). */
+    fun decodeDefaultPaper(bytes: ByteArray?, notebookId: app.bestnote.core.model.NotebookId): Page? {
+        if (bytes == null || bytes.isEmpty()) return null
+        val text = bytes.decodeToString()
+        fun field(key: String) = Regex("\"$key\"\\s*:\\s*\"?([^\",}\\s]+)").find(text)?.groupValues?.get(1)
+        val template = PaperTemplate.entries.firstOrNull { it.name == field("template") } ?: return null
+        val color = app.bestnote.core.model.PaperColor.entries.firstOrNull { it.name == field("color") } ?: app.bestnote.core.model.PaperColor.White
+        val w = field("width")?.toFloatOrNull()?.takeIf { it.isFinite() && it > 0f } ?: return null
+        val h = field("height")?.toFloatOrNull()?.takeIf { it.isFinite() && it > 0f } ?: return null
+        return Page(notebookId, 0, template, w, h, color)
+    }
 }

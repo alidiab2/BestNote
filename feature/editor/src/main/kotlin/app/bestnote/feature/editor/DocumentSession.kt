@@ -290,6 +290,7 @@ internal class DocumentSession(
         }
         document.backgrounds = pdf
         document.reset(savedLayout.map { it.second }, savedLayout.map { it.first }, strokes = { strokes[it] }, elements = { pages[it].elements })
+        document.loadNewPagePaper(PageOps.decodeDefaultPaper(open.autosaver.extra(PageOps.DEFAULT_PAPER_EXTRA), notebookId))
         document.addListener(this)
         // What each page holds on disk, so autosave appends only the difference (DOC-11).
         document.pages.forEach { page -> open.autosaver.adoptBaseline(page.id, modelsOf(page)) }
@@ -374,6 +375,11 @@ internal class DocumentSession(
             if (page.strokes.isNotEmpty()) saver.updatePage(page.id, modelsOf(page))
             if (page.elements.isNotEmpty()) saver.updateElements(page.id, page.elements)
         }
+    }
+
+    /** The paper of new pages changed (PAGES-11, also by undo): keep it with the notebook. */
+    override fun onNewPagePaperChanged() {
+        saver?.updateExtra(PageOps.DEFAULT_PAPER_EXTRA, PageOps.encodeDefaultPaper(document.newPagePaper))
     }
 
     /** Gets every pending edit on disk (before exporting), so a file holds what is on screen. */

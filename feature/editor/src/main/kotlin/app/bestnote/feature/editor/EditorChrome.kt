@@ -55,7 +55,7 @@ internal data class ChromeActions(
     val onClearPage: () -> Unit,
     val onSmartBoard: () -> Unit,
     /** The Paper button and its sheet: template, color and size (PAGES-10). */
-    val pagesMenu: @Composable () -> Unit,
+    val pagesMenu: @Composable (open: Boolean, setOpen: (Boolean) -> Unit) -> Unit,
     /** The Pages button: opens the page manager (PAGES-10). */
     val onPages: () -> Unit = {},
     val onOpenSettings: () -> Unit = {},
@@ -119,15 +119,16 @@ internal fun ActionPills(
         if (!compact) SmartBoardPill { actions.onSmartBoard() }
         val layers = stringResource(R.string.editor_layers)
         val export = stringResource(R.string.editor_export)
+        var paperOpen by remember { mutableStateOf(false) }
         Row(Modifier.chromeSurface().padding(horizontal = 2.dp)) {
             ChromeIconButton(AtelierIcons.Pages, stringResource(R.string.editor_pages), actions.onPages, size = 44.dp)
-            actions.pagesMenu()
+            actions.pagesMenu(paperOpen) { paperOpen = it }
             // Compact windows keep only Pages and More here: Smart Board, Layers and Export move into More.
             if (!compact) {
                 ChromeIconButton(AtelierIcons.Layers, layers, { actions.onComingSoon(layers) }, size = 44.dp)
                 ChromeIconButton(AtelierIcons.Export, export, { actions.onExport() }, size = 44.dp)
             }
-            MoreMenu(dock, leftHanded, actions, compact)
+            MoreMenu(dock, leftHanded, actions, compact, onPaper = { paperOpen = true })
         }
     }
 }
@@ -153,7 +154,7 @@ private fun SmartBoardPill(onClick: () -> Unit) {
 }
 
 @Composable
-private fun MoreMenu(dock: ToolbarDock, leftHanded: Boolean, actions: ChromeActions, compact: Boolean) {
+private fun MoreMenu(dock: ToolbarDock, leftHanded: Boolean, actions: ChromeActions, compact: Boolean, onPaper: () -> Unit) {
     var open by remember { mutableStateOf(false) }
     Box {
         ChromeIconButton(AtelierIcons.More, stringResource(R.string.editor_more), { open = true }, size = 44.dp)
@@ -163,6 +164,13 @@ private fun MoreMenu(dock: ToolbarDock, leftHanded: Boolean, actions: ChromeActi
             shape = BestNoteShapes.Card,
             containerColor = MaterialTheme.colorScheme.surface,
         ) {
+            // PAGES-11: the paper sheet is also one labelled tap away, first in the menu.
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.editor_paper_template)) },
+                leadingIcon = { Icon(AtelierIcons.Paper, null, modifier = Modifier.size(20.dp)) },
+                onClick = { open = false; onPaper() },
+            )
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
             if (compact) {
                 DropdownMenuItem(
                     text = { Text(stringResource(R.string.editor_smart_board)) },

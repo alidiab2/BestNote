@@ -30,6 +30,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.PlainTooltip
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -134,16 +135,28 @@ private val TwoPaneMinWidth = 840.dp
  * all pages as one undo step, or pages added from now on), and inserting pages from a PDF or an image.
  */
 @Composable
-internal fun PaperMenuButton(view: PagedDocumentView?, onManage: () -> Unit = {}, insert: PageInsertFlow? = null) {
-    var open by remember { mutableStateOf(false) }
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+internal fun PaperMenuButton(
+    view: PagedDocumentView?,
+    open: Boolean,
+    setOpen: (Boolean) -> Unit,
+    onManage: () -> Unit = {},
+    insert: PageInsertFlow? = null,
+) {
     var custom by remember { mutableStateOf<Page?>(null) }
     var customScope by remember { mutableStateOf(PaperScope.ThisPage) }
     Box {
-        ChromeIconButton(AtelierIcons.Paper, stringResource(R.string.editor_paper), { open = !open }, enabled = view != null, size = 44.dp)
+        androidx.compose.material3.TooltipBox(
+            positionProvider = androidx.compose.material3.TooltipDefaults.rememberPlainTooltipPositionProvider(),
+            tooltip = { PlainTooltip { Text(stringResource(R.string.editor_paper)) } },
+            state = androidx.compose.material3.rememberTooltipState(),
+        ) {
+            ChromeIconButton(AtelierIcons.Paper, stringResource(R.string.editor_paper), { setOpen(!open) }, enabled = view != null, size = 44.dp)
+        }
         val doc = view?.document
         val index = view?.currentPage ?: -1
         if (open && doc != null && index in 0 until doc.size) {
-            AnchoredPopover(TraySide.Top, onDismissed = { open = false }) { dismiss ->
+            AnchoredPopover(TraySide.Top, onDismissed = { setOpen(false) }) { dismiss ->
                 PaperSheet(
                     document = doc,
                     index = index,
@@ -168,14 +181,8 @@ internal fun PaperMenuButton(view: PagedDocumentView?, onManage: () -> Unit = {}
     }
 }
 
-/** Applies [transform] to the pages [scope] covers, as one undo step; [PaperScope.NewPages] sets the paper of pages added later. */
 private fun applyPaper(doc: PagedDocument, scope: PaperScope, index: Int, shown: Page, transform: (Page) -> Page) {
-    if (scope == PaperScope.NewPages) {
-        doc.newPagePaper = transform(shown)
-        return
-    }
-    val targets = PageOps.paperTargets(scope, index, doc.size)
-    doc.asOneStep { targets.forEach { doc.updatePage(it, transform) } }
+    PageOps.applyPaper(doc, scope, index, shown, transform)
 }
 
 @Composable
@@ -192,6 +199,10 @@ private fun PaperSheet(
     DisposableEffect(document) {
         val listener = object : PagedDocument.Listener {
             override fun onPagesChanged() {
+                rev++
+            }
+
+            override fun onNewPagePaperChanged() {
                 rev++
             }
         }

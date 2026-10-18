@@ -343,6 +343,7 @@
     <string name="pages_hint">Tap a page to open it · long-press and drag to reorder · Select for more</string>
     <string name="pages_select_hint">Tap pages to select them</string>
     <string name="pages_added">Page added</string>
+    <string name="editor_paper_template">Paper template</string>
     <string name="pages_paper">Paper</string>
     <string name="pages_move_start">To the start</string>
     <string name="pages_move_after">After page %1$d</string>
@@ -363,6 +364,15 @@
     <plurals name="pages_deleted">
         <item quantity="one">Page deleted</item>
         <item quantity="other">%1$d pages deleted</item>
+    </plurals>
+    <string name="pages_paper_apply">Apply</string>
+    <plurals name="pages_paper_for">
+        <item quantity="one">Applies to the selected page</item>
+        <item quantity="other">Applies to the %1$d selected pages</item>
+    </plurals>
+    <plurals name="pages_repapered">
+        <item quantity="one">Paper changed on 1 page</item>
+        <item quantity="other">Paper changed on %1$d pages</item>
     </plurals>
     <plurals name="pages_rotated">
         <item quantity="one">Page rotated</item>

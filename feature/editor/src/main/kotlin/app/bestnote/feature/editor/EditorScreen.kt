@@ -634,7 +634,7 @@ fun EditorScreen(
                 page?.page?.let { onSmartBoard(viewModel.notebookId, it, null, null) }
             }
         },
-        pagesMenu = { PaperMenuButton(canvas, onManage = ::openPages, insert = pageInsert) },
+        pagesMenu = { open, setOpen -> PaperMenuButton(canvas, open, setOpen, onManage = ::openPages, insert = pageInsert) },
         onPages = ::openPages,
         onOpenSettings = onOpenSettings,
         onExport = { picker = null; lock.beforeExport { exporting = true } },
