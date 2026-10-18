@@ -5,7 +5,9 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -88,8 +90,13 @@ internal fun NotebookCover(
     style: CoverStyle = CoverStyle.Plain,
     /** LIB-11: a lock badge on the cover; a locked notebook never shows a page. */
     locked: Boolean = false,
+    /** LIB-10: stored custom cover image; replaces the cloth pattern. Never passed for a locked notebook. */
+    imagePath: String? = null,
+    /** LIB-10: colour tags, drawn as small dots on the cover's lower edge. */
+    tags: List<Int> = emptyList(),
 ) {
     val cover = coverColor(coverIndex)
+    val photo = rememberCoverImage(imagePath)
     val paper = BestNoteTheme.colors.paper.page
     val edge = if (isDarkChrome(MaterialTheme.colorScheme.surface)) EDGE_LIGHTEN_DARK else EDGE_LIGHTEN
     val shape = BestNoteShapes.NotebookCover
@@ -99,14 +106,15 @@ internal fun NotebookCover(
             .then(if (shadow) Modifier.softShadow(Elevation.High, shape) else Modifier)
             .clip(shape)
             .background(cover)
-            .coverPattern(style, cover, paper, scale)
+            .coverPattern(if (photo != null) CoverStyle.Plain else style, cover, paper, scale)
             // A faint edge, so dark covers (black, navy) still read on the graphite theme.
             .border(Elevation.Hairline, lerp(cover, paper, edge), shape),
     ) {
+        if (photo != null) Image(photo, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.matchParentSize())
         // Inset spine: a darker band with a thin light crease where it meets the cover board.
         Box(
             Modifier.align(Alignment.CenterStart).fillMaxHeight().width(spineWidth)
-                .background(lerp(cover, MaterialTheme.colorScheme.scrim, SPINE_SHADE)),
+                .background(lerp(cover, MaterialTheme.colorScheme.scrim, SPINE_SHADE).copy(alpha = if (photo != null) PHOTO_SPINE_ALPHA else 1f)),
         )
         Box(
             Modifier.align(Alignment.CenterStart).padding(start = spineWidth).fillMaxHeight().width(1.dp)
@@ -136,7 +144,34 @@ internal fun NotebookCover(
                 )
             }
         }
+        if (tags.isNotEmpty()) TagDots(tags, Modifier.align(Alignment.BottomStart).padding(start = spineWidth + 6.dp * scale, bottom = 7.dp * scale), scale)
         if (locked) LockBadge(Modifier.align(Alignment.BottomCenter).padding(bottom = 18.dp * scale), scale)
+    }
+}
+
+private const val PHOTO_SPINE_ALPHA = 0.42f
+private const val MAX_TAG_DOTS = 4
+
+/** The cover image at [path], decoded off the main thread; null while loading, when there is none, or when it cannot be read. */
+@Composable
+internal fun rememberCoverImage(path: String?): ImageBitmap? {
+    val bitmap by produceState<ImageBitmap?>(null, path) {
+        value = path?.let { p ->
+            withContext(Dispatchers.IO) { runCatching { BitmapFactory.decodeFile(p)?.asImageBitmap() }.getOrNull() }
+        }
+    }
+    return if (path == null) null else bitmap
+}
+
+/** LIB-10: a row of small colour dots with a paper ring, so each reads on any cover color or photo. */
+@Composable
+internal fun TagDots(tags: List<Int>, modifier: Modifier = Modifier, scale: Float = 1f) {
+    val size = (9.dp * scale).coerceAtLeast(5.dp)
+    val ring = BestNoteTheme.colors.paper.page
+    Row(modifier, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+        tags.take(MAX_TAG_DOTS).forEach { tag ->
+            Box(Modifier.size(size).clip(CircleShape).background(ring).padding(1.2.dp).clip(CircleShape).background(coverColor(tag)))
+        }
     }
 }
 

@@ -276,4 +276,14 @@
     <string name="library_template_planner_daily">مخطِّط · يومي</string>
     <string name="library_template_planner_weekly">مخطِّط · أسبوعي</string>
     <string name="library_template_graph">ورق رسم بياني</string>
+    <!-- LIB-10 covers, tags; loading and search states -->
+    <string name="library_cover_photo">غلاف من صورة</string>
+    <string name="library_cover_photo_short">من صورة</string>
+    <string name="library_cover_reset">استخدم غلافًا ملوّنًا بدلًا منها</string>
+    <string name="library_cover_image_failed">تعذّر استخدام هذه الصورة غلافًا</string>
+    <string name="library_tags">وسوم الألوان</string>
+    <string name="library_tag_n">وسم اللون %1$d</string>
+    <string name="library_filter_tag">دفاتر بوسم اللون %1$d</string>
+    <string name="library_loading">جارٍ تحميل دفاترك</string>
+    <string name="library_searching">جارٍ البحث…</string>
 </resources>

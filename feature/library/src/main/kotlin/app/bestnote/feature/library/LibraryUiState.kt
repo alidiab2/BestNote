@@ -57,6 +57,10 @@ data class NotebookItem(
     val sealed: Boolean = false,
     /** LIB-11: sealed and not unlocked this session: drawn with a lock, left out of search, Recent and Continue writing. */
     val locked: Boolean = false,
+    /** LIB-10: stored custom cover image, or null (always null while [locked]: a locked notebook keeps its cover hidden). */
+    val coverImagePath: String? = null,
+    /** LIB-10: colour tags (indexes into `CoverPalette.All`). */
+    val tags: List<Int> = emptyList(),
 ) {
     /** Share of the notebook read/written so far, in 0..1. */
     val progress: Float get() = (lastPageIndex + 1f) / pageCount
@@ -77,6 +81,8 @@ data class LibraryControls(
     val filter: NotebookFilter = NotebookFilter.All,
     /** Only notebooks in folders of this color (index into `CoverPalette.All`), or null for any. */
     val folderColor: Int? = null,
+    /** LIB-10: only notebooks with this colour tag (index into `CoverPalette.All`), or null for any. */
+    val tag: Int? = null,
     val sort: SortOrder = SortOrder.Modified,
     val query: String = "",
     val selecting: Boolean = false,
@@ -107,6 +113,10 @@ data class LibraryUiState(
     val subfolders: List<FolderItem> = emptyList(),
     /** Folder colors in use, for the color filter. */
     val folderColors: List<Int> = emptyList(),
+    /** LIB-10: colour tags in use on notebooks, for the tag filter. */
+    val tagColors: List<Int> = emptyList(),
+    /** Whether the page search for the typed query has finished (title matches are instant, page matches follow). */
+    val searchSettled: Boolean = true,
     val emptyKind: EmptyKind = EmptyKind.NoNotebooks,
     /** Pages whose handwriting, typed text or PDF text match the query (REC-03). */
     val pageResults: List<PageResult> = emptyList(),
@@ -119,7 +129,7 @@ data class LibraryUiState(
     val showContinueWriting: Boolean
         get() = controls.destination == LibraryDestination.Library && !searching && !controls.selecting && continueWith != null
 
-    val filtersActive: Boolean get() = controls.filter != NotebookFilter.All || controls.folderColor != null
+    val filtersActive: Boolean get() = controls.filter != NotebookFilter.All || controls.folderColor != null || controls.tag != null
 }
 
 internal val RECENT_WINDOW_MILLIS: Long = TimeUnit.DAYS.toMillis(7)
@@ -137,6 +147,7 @@ internal fun buildLibraryState(
     locale: Locale = Locale.getDefault(),
     sealed: Set<NotebookId> = emptySet(),
     unlocked: Set<NotebookId> = emptySet(),
+    coverPath: (String?) -> String? = { null },
 ): LibraryUiState {
     val folders = metadata.folders()
     val folderById = folders.associateBy { it.id }
@@ -160,6 +171,8 @@ internal fun buildLibraryState(
             folderPath = if (folder == null) emptyList() else folderPath(folder.id, folderById),
             sealed = nb.id in sealed,
             locked = nb.id in sealed && nb.id !in unlocked,
+            coverImagePath = if (nb.id in sealed && nb.id !in unlocked) null else coverPath(meta.coverImage),
+            tags = meta.tags.map { it.mod(paletteSize) }.distinct().sorted(),
         )
     }
     val recentCutoff = now - RECENT_WINDOW_MILLIS
@@ -195,11 +208,12 @@ internal fun buildLibraryState(
                 NotebookFilter.Favorites -> item.favorite
                 NotebookFilter.Pdfs -> item.kind == NotebookKind.Pdf
             }
-            byKind && (controls.folderColor == null || item.folder?.colorIndex == controls.folderColor)
+            byKind && (controls.folderColor == null || item.folder?.colorIndex == controls.folderColor) &&
+                (controls.tag == null || controls.tag in item.tags)
         }
         items = sortItems(filtered, controls.sort, locale)
         emptyKind = when {
-            inDestination.isNotEmpty() -> if (controls.filter == NotebookFilter.Pdfs && controls.folderColor == null) EmptyKind.NoPdfs else EmptyKind.NoMatches
+            inDestination.isNotEmpty() -> if (controls.filter == NotebookFilter.Pdfs && controls.folderColor == null && controls.tag == null) EmptyKind.NoPdfs else EmptyKind.NoMatches
             destination is LibraryDestination.InFolder -> EmptyKind.EmptyFolder
             destination == LibraryDestination.Favorites -> EmptyKind.NoFavorites
             destination == LibraryDestination.Quicknotes -> EmptyKind.NoQuicknotes
@@ -233,6 +247,7 @@ internal fun buildLibraryState(
         lastSavedAtMillis = all.maxOfOrNull { it.updatedAtMillis },
         breadcrumb = folderPath(openFolder, folderById),
         subfolders = if (openFolder == null) emptyList() else tree.filter { it.folder.parentId == openFolder },
+        tagColors = all.filter { !it.locked }.flatMap { it.tags }.distinct().sorted(),
         folderColors = folders.map { it.colorIndex.mod(paletteSize) }.distinct().sorted(),
         emptyKind = emptyKind,
     )

@@ -73,6 +73,7 @@ import app.bestnote.core.ui.keys.ShortcutHandler
 import app.bestnote.core.ui.keys.ShortcutScope
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -202,6 +203,10 @@ fun LibraryScreen(
             downloadModels = viewModel::downloadModels,
             rename = { id, title -> whenUnlocked(id) { viewModel.rename(id, title) } },
             setCover = viewModel::setCover,
+            setCoverImage = { ids, uri -> viewModel.setCoverImage(ids, uri) },
+            resetCover = viewModel::resetCover,
+            toggleTag = viewModel::toggleTag,
+            tag = viewModel::setTag,
             duplicate = { id, title -> whenUnlocked(id) { viewModel.duplicate(id, title) } },
             move = viewModel::moveToFolder,
             favorite = viewModel::setFavorite,
@@ -280,6 +285,7 @@ private fun noticeText(resources: android.content.res.Resources, event: LibraryE
     Notice.FolderDeleted -> resources.getString(R.string.library_folder_deleted, event.name)
     Notice.AddedToFavorites -> resources.getQuantityString(R.plurals.library_favorited, event.count, event.count)
     Notice.RemovedFromFavorites -> resources.getQuantityString(R.plurals.library_unfavorited, event.count, event.count)
+    Notice.CoverImageFailed -> resources.getString(R.string.library_cover_image_failed)
 }
 
 /** Everything the stateless [LibraryContent] can ask for. */
@@ -303,6 +309,12 @@ internal data class LibraryCallbacks(
     val downloadModels: () -> Unit = {},
     val rename: (NotebookId, String) -> Unit = { _, _ -> },
     val setCover: (Collection<NotebookId>, CoverChoice) -> Unit = { _, _ -> },
+    /** LIB-10: cover from the photo at this URI. */
+    val setCoverImage: (Collection<NotebookId>, String) -> Unit = { _, _ -> },
+    val resetCover: (Collection<NotebookId>) -> Unit = {},
+    val toggleTag: (Collection<NotebookId>, Int) -> Unit = { _, _ -> },
+    /** LIB-10: filter by colour tag. */
+    val tag: (Int?) -> Unit = {},
     val duplicate: (NotebookId, String) -> Unit = { _, _ -> },
     val move: (Collection<NotebookId>, String?) -> Unit = { _, _ -> },
     val favorite: (Collection<NotebookId>, Boolean) -> Unit = { _, _ -> },
@@ -534,6 +546,12 @@ private fun onDrop(payload: DragPayload, destination: LibraryDestination, ui: Li
 @Composable
 private fun LibraryDialogs(dialog: LibraryDialog?, state: LibraryUiState, ui: LibraryCallbacks, set: (LibraryDialog?) -> Unit) {
     val dismiss = { set(null) }
+    // LIB-10: the system photo picker needs no storage permission. The launcher lives here, not in the cover
+    // dialog, which closes while the picker is up.
+    var photoIds by remember { mutableStateOf<List<NotebookId>>(emptyList()) }
+    val pickPhoto = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+        if (uri != null) ui.setCoverImage(photoIds, uri.toString())
+    }
     val notebook = { id: NotebookId -> state.items.firstOrNull { it.id == id } ?: state.continueWith?.takeIf { it.id == id } }
     val folder = { id: String -> state.folders.firstOrNull { it.folder.id == id } }
     when (dialog) {
@@ -570,10 +588,28 @@ private fun LibraryDialogs(dialog: LibraryDialog?, state: LibraryUiState, ui: Li
         }
         is LibraryDialog.Cover -> {
             val first = notebook(dialog.ids.first())
-            CoverDialog(first?.title.orEmpty(), CoverChoice(first?.coverIndex ?: 0, first?.coverStyle ?: CoverStyle.Plain), dismiss) { cover ->
-                ui.setCover(dialog.ids, cover)
-                set(null)
-            }
+            val items = dialog.ids.mapNotNull(notebook)
+            CoverDialog(
+                title = first?.title.orEmpty(),
+                current = CoverChoice(first?.coverIndex ?: 0, first?.coverStyle ?: CoverStyle.Plain),
+                imagePath = first?.coverImagePath,
+                tags = items.map { it.tags.toSet() }.reduceOrNull { a, b -> a intersect b }.orEmpty(),
+                onDismiss = dismiss,
+                onPick = { cover ->
+                    ui.setCover(dialog.ids, cover)
+                    set(null)
+                },
+                onPickPhoto = {
+                    photoIds = dialog.ids
+                    pickPhoto.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                    set(null)
+                },
+                onReset = {
+                    ui.resetCover(dialog.ids)
+                    set(null)
+                },
+                onToggleTag = { ui.toggleTag(dialog.ids, it) },
+            )
         }
         is LibraryDialog.Move -> {
             val current = dialog.ids.map { notebook(it)?.folder?.id }.distinct().singleOrNull()
@@ -681,10 +717,14 @@ private fun LazyListScope.notebooksSection(
     item(key = "notebooks-header", contentType = "section") {
         NotebooksHeader(state, callbacks, Modifier.padding(top = Spacing.XXL, bottom = Spacing.XL))
     }
-    if (state.loading) return
+    if (state.loading) {
+        item(key = "loading", contentType = "loading") { LibraryLoadingShelf() }
+        return
+    }
     handwritingModelsPrompt(state, callbacks)
     if (state.items.isEmpty()) {
-        if (!state.searching || state.pageResults.isEmpty()) {
+        // While the page search is still running there is nothing to call "no results" yet.
+        if ((!state.searching || state.pageResults.isEmpty()) && (!state.searching || state.searchSettled)) {
             item(key = "empty") {
                 NotebooksEmpty(state.emptyKind, state.controls.query, state.breadcrumb.lastOrNull()?.name, callbacks)
             }

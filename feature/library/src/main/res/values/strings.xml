@@ -225,4 +225,14 @@
     <string name="library_template_planner_daily">Planner · daily</string>
     <string name="library_template_planner_weekly">Planner · weekly</string>
     <string name="library_template_graph">Graph paper</string>
+    <!-- LIB-10 covers, tags; loading and search states -->
+    <string name="library_cover_photo">Cover from a photo</string>
+    <string name="library_cover_photo_short">From photo</string>
+    <string name="library_cover_reset">Use a color cover instead</string>
+    <string name="library_cover_image_failed">Couldn\'t use that photo as a cover</string>
+    <string name="library_tags">Color tags</string>
+    <string name="library_tag_n">Tag color %1$d</string>
+    <string name="library_filter_tag">Notebooks tagged %1$d</string>
+    <string name="library_loading">Loading your notebooks</string>
+    <string name="library_searching">Searching…</string>
 </resources>

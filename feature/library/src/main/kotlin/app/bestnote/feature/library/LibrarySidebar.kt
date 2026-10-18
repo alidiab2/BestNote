@@ -127,7 +127,7 @@ internal fun LibrarySidebar(
                 Icons.AutoMirrored.Outlined.LibraryBooks,
                 stringResource(R.string.library_nav_library),
                 selected == LibraryDestination.Library,
-                count = state.totalCount,
+                count = state.totalCount.takeUnless { state.loading },
                 hovered = hovered == LibraryDestination.Library,
                 modifier = Modifier.dropTarget(LibraryDestination.Library),
             ) {
@@ -140,13 +140,13 @@ internal fun LibrarySidebar(
                 Icons.Outlined.StarOutline,
                 stringResource(R.string.library_nav_favorites),
                 selected == LibraryDestination.Favorites,
-                count = state.favoritesCount,
+                count = state.favoritesCount.takeUnless { state.loading },
                 hovered = hovered == LibraryDestination.Favorites,
                 modifier = Modifier.dropTarget(LibraryDestination.Favorites),
             ) {
                 onSelect(LibraryDestination.Favorites)
             }
-            NavItem(Icons.Outlined.EditNote, stringResource(R.string.library_nav_quicknotes), selected == LibraryDestination.Quicknotes, count = state.quicknotesCount) {
+            NavItem(Icons.Outlined.EditNote, stringResource(R.string.library_nav_quicknotes), selected == LibraryDestination.Quicknotes, count = state.quicknotesCount.takeUnless { state.loading }) {
                 onSelect(LibraryDestination.Quicknotes)
             }
             NavItem(

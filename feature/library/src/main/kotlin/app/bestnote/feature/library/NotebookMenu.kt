@@ -7,6 +7,11 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.outlined.AddPhotoAlternate
+import androidx.compose.material.icons.outlined.Restore
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
@@ -145,7 +150,7 @@ internal fun NotebookMenu(item: NotebookItem, expanded: Boolean, onDismiss: () -
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(Spacing.M),
         ) {
-            NotebookCover(item.title, item.coverIndex, Modifier.size(30.dp, 41.dp), showLabel = false, shadow = false, scale = 0.35f, style = item.coverStyle, locked = item.sealed)
+            NotebookCover(item.title, item.coverIndex, Modifier.size(30.dp, 41.dp), showLabel = false, shadow = false, scale = 0.35f, style = item.coverStyle, locked = item.sealed, imagePath = item.coverImagePath)
             Column {
                 Text(item.title, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Text(
@@ -310,14 +315,104 @@ internal fun RenameDialog(initial: String, onDismiss: () -> Unit, onConfirm: (St
     }
 }
 
-/** Cover picker: every [CoverChoices] cover; tap applies. */
+/**
+ * Cover picker: every [CoverChoices] cover, "From photo" (LIB-10, system photo picker) with a reset to the
+ * colored cover, and the colour tags. A cover tap applies and closes; tags toggle in place.
+ */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-internal fun CoverDialog(title: String, current: CoverChoice, onDismiss: () -> Unit, onPick: (CoverChoice) -> Unit) {
+internal fun CoverDialog(
+    title: String,
+    current: CoverChoice,
+    imagePath: String?,
+    tags: Set<Int>,
+    onDismiss: () -> Unit,
+    onPick: (CoverChoice) -> Unit,
+    onPickPhoto: () -> Unit,
+    onReset: () -> Unit,
+    onToggleTag: (Int) -> Unit,
+) {
     AtelierDialog(title = stringResource(R.string.library_cover_title), onDismiss = onDismiss) {
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(Spacing.M), verticalArrangement = Arrangement.spacedBy(Spacing.M)) {
-            CoverChoices.all.forEach { choice ->
-                CoverSwatch(title, choice, choice == current, Modifier.size(64.dp, 87.dp)) { onPick(choice) }
+        Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(Spacing.L)) {
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(Spacing.M), verticalArrangement = Arrangement.spacedBy(Spacing.M)) {
+                PhotoSwatch(title, current, imagePath, Modifier.size(64.dp, 87.dp), onPickPhoto)
+                CoverChoices.all.forEach { choice ->
+                    CoverSwatch(title, choice, imagePath == null && choice == current, Modifier.size(64.dp, 87.dp)) { onPick(choice) }
+                }
+            }
+            if (imagePath != null) {
+                Row(
+                    Modifier.heightIn(min = 48.dp).clip(BestNoteShapes.Control).clickable(role = Role.Button, onClick = onReset).padding(horizontal = Spacing.S),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(Spacing.S),
+                ) {
+                    Icon(Icons.Outlined.Restore, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
+                    Text(stringResource(R.string.library_cover_reset), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+                }
+            }
+            Text(stringResource(R.string.library_tags).uppercase(), style = BestNoteTheme.type.overline, color = BestNoteTheme.colors.muted)
+            TagRow(tags, onToggleTag)
+        }
+    }
+}
+
+/** "From photo": the current photo cover (selected) or an add-image tile. */
+@Composable
+private fun PhotoSwatch(title: String, current: CoverChoice, imagePath: String?, modifier: Modifier, onClick: () -> Unit) {
+    val desc = stringResource(R.string.library_cover_photo)
+    Box(
+        modifier
+            .semantics {
+                selected = imagePath != null
+                contentDescription = desc
+            }
+            .clip(BestNoteShapes.NotebookCover)
+            .background(MaterialTheme.colorScheme.surfaceContainer)
+            .border(Elevation.Hairline, MaterialTheme.colorScheme.outline, BestNoteShapes.NotebookCover)
+            .clickable(role = Role.Button, onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        if (imagePath != null) {
+            NotebookCover(title, current.colorIndex, Modifier.matchParentSize(), shadow = false, scale = 0.45f, showLabel = false, imagePath = imagePath)
+            Box(Modifier.matchParentSize().border(3.dp, MaterialTheme.colorScheme.primary, BestNoteShapes.NotebookCover))
+        } else {
+            Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Icon(Icons.Outlined.AddPhotoAlternate, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(24.dp))
+                Text(stringResource(R.string.library_cover_photo_short), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center)
+            }
+        }
+    }
+}
+
+/** LIB-10: the colour tags as toggles (several can be on). */
+@Composable
+internal fun TagRow(selected: Set<Int>, onToggle: (Int) -> Unit) {
+    Row(horizontalArrangement = Arrangement.spacedBy(Spacing.S)) {
+        CoverPalette.All.indices.forEach { i ->
+            val label = stringResource(R.string.library_tag_n, i + 1)
+            val on = i in selected
+            Box(
+                Modifier
+                    .size(44.dp)
+                    .clip(BestNoteShapes.Pill)
+                    .clickable(role = Role.Checkbox, onClickLabel = label, onClick = { onToggle(i) })
+                    .semantics {
+                        this.selected = on
+                        contentDescription = label
+                    },
+                contentAlignment = Alignment.Center,
+            ) {
+                Box(
+                    Modifier
+                        .size(30.dp)
+                        .then(if (on) Modifier.border(2.dp, MaterialTheme.colorScheme.onSurface, BestNoteShapes.Pill).padding(4.dp) else Modifier)
+                        .clip(BestNoteShapes.Pill)
+                        .background(coverColor(i))
+                        .swatchOutline(coverColor(i), BestNoteShapes.Pill),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    if (on) Icon(Icons.Outlined.Check, null, tint = BestNoteTheme.colors.paper.page, modifier = Modifier.size(14.dp))
+                }
             }
         }
     }

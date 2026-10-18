@@ -15,5 +15,5 @@
 | [x] LIB-07 | Title search with instant results | M2 | S | — | Arabic normalization (أ/إ/آ → ا, ة → ه) |
 | [ ] LIB-08 | Home-screen widgets: Favorites, Quicknote (Glance) | M3 | M | LIB-05 | — |
 | [ ] LIB-09 | Drop PDFs/images from other apps into the library | M3 | S | PDF-01 | — |
-| [ ] LIB-10 | Notebook color tags and custom covers from image | M2 | S | — | — |
+| [x] LIB-10 | Notebook color tags and custom covers from image | M2 | S | — | — |
 | [x] LIB-11 | Lock a notebook or folder: biometric / screen lock (app PIN without one), AES-GCM encryption at rest, optional recovery password, relock timer | M3 | L | DOC-11 | Locked = lock cover, not in search / Continue writing / Recent, FLAG_SECURE; files on disk not plaintext; lock → unlock → remove lock keeps every byte ([design](../architecture/locked-notebooks.md)). LIB-11b gaps closed: recordings encrypted while recorded and played, PDFs opened without a plain copy, no plaintext caches / index / AI log for a locked notebook |
