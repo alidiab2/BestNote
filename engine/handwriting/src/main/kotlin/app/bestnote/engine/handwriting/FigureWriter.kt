@@ -22,7 +22,7 @@ internal const val MAX_FIGURE_LINES = 20f
  * dashed lines keep their dash. Labels are typeset centred where the teacher wrote them. The drawing
  * is [frac] of the column wide (at most [MAX_FIGURE_LINES] lines tall), centred in the column.
  */
-internal fun FontComposer.figureRows(d: VectorDiagram, frac: Float, width: Float, recolour: (Long) -> Int): List<FontComposer.Row> {
+internal fun FontComposer.figureRows(d: VectorDiagram, frac: Float, width: Float, recolour: (Long) -> Int, labelsPlaced: Boolean = false): List<FontComposer.Row> {
     val vb = d.viewBox
     if (vb.isEmpty) return emptyList()
     val scale = min(usable(width) * frac / vb.width, gap * MAX_FIGURE_LINES / vb.height)
@@ -34,12 +34,20 @@ internal fun FontComposer.figureRows(d: VectorDiagram, frac: Float, width: Float
             val top = baseline - lines * gap + 0.4f * gap
             val ox = left + (right - left - w) / 2
             fun map(x: Float, y: Float) = P(ox + (x - vb.left) * scale, top + (y - vb.top) * scale)
-            val labelSize = body * LABEL_SCALE
+            // A library drawing shrunk to fit the column keeps its labels in proportion (they were placed at that size).
+            val labelSize = if (labelsPlaced) min(body * LABEL_SCALE, app.bestnote.engine.layout.figlib.Pen.FONT * scale) else body * LABEL_SCALE
             for (s in d.shapes) if (s !is VectorShape.Label) drawFigureShape(this, s, ::map, scale, recolour(s.style.colorArgb), labelSize)
-            placeLabels(this, d, ::map, labelSize, recolour, left, right)
+            placeLabels(this, d, ::map, labelSize, recolour, left, right, labelsPlaced)
         },
     )
 }
+
+/**
+ * FIG-LIB: the column share at which a library drawing's labels ([app.bestnote.engine.layout.figlib.Pen.FONT]
+ * units) come out at the note's label size; small drawings are not shrunk below a readable share.
+ */
+internal fun FontComposer.libraryFrac(d: VectorDiagram, width: Float): Float =
+    (d.viewBox.width * (body * LABEL_SCALE / app.bestnote.engine.layout.figlib.Pen.FONT) / usable(width)).coerceIn(LIBRARY_MIN_FRAC, 1f)
 
 /** A board drawing kept as a cleaned picture (the flagged last resort), as wide as [frac] of the column. */
 internal fun FontComposer.pictureRows(r: FigureRaster, frac: Float, width: Float): List<FontComposer.Row> {
@@ -59,8 +67,9 @@ internal fun FontComposer.pictureRows(r: FigureRaster, frac: Float, width: Float
 /**
  * Labels where the teacher wrote them, but never on a line: each label's box is tested against the
  * drawing's strokes and the labels already placed, and moves to the nearest free spot around it.
+ * [placed0]: the labels were placed by the figure library already and are written where they are.
  */
-private fun FontComposer.placeLabels(sheet: FontComposer.Sheet, d: VectorDiagram, map: (Float, Float) -> P, size: Float, recolour: (Long) -> Int, left: Float, right: Float) {
+private fun FontComposer.placeLabels(sheet: FontComposer.Sheet, d: VectorDiagram, map: (Float, Float) -> P, size: Float, recolour: (Long) -> Int, left: Float, right: Float, placed0: Boolean = false) {
     val obstacles = ArrayList<P>()
     fun seg(a: P, b: P) {
         val n = max(1, (kotlin.math.hypot(b.x - a.x, b.y - a.y) / 0.8f).toInt())
@@ -99,7 +108,8 @@ private fun FontComposer.placeLabels(sheet: FontComposer.Sheet, d: VectorDiagram
             return placed.none { o -> r[0] < o[2] && o[0] < r[2] && r[1] < o[3] && o[1] < r[3] }
         }
         var c = P(at.x.coerceIn(left + w / 2, max(left + w / 2, right - w / 2)), at.y)
-        search@ for (ring in 0..LABEL_RINGS) {
+        // FIG-LIB drawings come with their labels already placed beside their shapes (at this size).
+        if (!placed0) search@ for (ring in 0..LABEL_RINGS) {
             val rad = ring * 0.5f * size
             val dirs = if (ring == 0) 1 else 12
             for (k in 0 until dirs) {
@@ -184,5 +194,6 @@ private fun FontComposer.drawFigureShape(sheet: FontComposer.Sheet, s: VectorSha
 private const val HEAD_SPREAD = 0.45f
 private const val ELLIPSE_STEPS = 72
 private const val LABEL_SCALE = 0.85f
+private const val LIBRARY_MIN_FRAC = 0.35f
 private const val ASCII = 128
 private const val LABEL_RINGS = 6

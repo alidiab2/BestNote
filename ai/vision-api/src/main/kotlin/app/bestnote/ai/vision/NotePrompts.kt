@@ -6,6 +6,7 @@ import app.bestnote.engine.layout.NoteDocument
 import app.bestnote.engine.layout.NoteElement
 import app.bestnote.engine.layout.NoteTemplate
 import app.bestnote.engine.layout.TermsStyle
+import app.bestnote.engine.layout.figlib.FigureLibrary
 import java.util.Locale
 
 /** What a provider needs to write a board into a template's elements. [current]: the page's notes, for a follow-up photo. */
@@ -59,12 +60,17 @@ object NotePrompts {
         NoteElement.Glossary to "Glossary: terms = [[term, translation]]",
         // AI-12: the app redraws every drawing from the photo; the model only locates it and reads its labels.
         NoteElement.Diagram to "Diagram: EVERY drawing (graph, diagram, table grid, shape, sketch) in teaching order: " +
-            "box = [left, top, right, bottom] around it and its labels, 0–1000 (not pixels) from the photo's top-left; k = graph|diagram|table|shape|arrow|drawing; " +
+            "box = [left, top, right, bottom] around it and its labels, 0–1000 (not pixels) from the photo's top-left; " +
+            "k = a figure kind below if it is one, else graph|diagram|table|shape|arrow|drawing; " +
             "lbl = [[LaTeX, x, y]] for every label, letter, number and angle on it (ticks' 0 too), at its centre. " +
-            "The app redraws it from the photo: never describe it in words; a boxed formula is a KeyResult. Only if very simple also: shape = {type: line|arrow|rect|circle|triangle|polygon, pts [[x, y]]}, " +
-            "graph = {x: [min, max], y: [min, max], f: y(x)}, rows (a table's cells)",
+            "The app draws it: never describe it in words; a boxed formula is a KeyResult. A table grid: rows (its cells)",
         NoteElement.Columns to "Columns: cols = [[elements], [elements]] — theory/formulas in the first, the worked example beside it",
     )
+
+    /** FIG-LIB: the figure kinds and their parameter rows (one line each; a row may repeat). */
+    val FIGURE_KINDS: String by lazy {
+        "Figure kinds (k: p = rows [key, values…] as on the board, c = confidence 0–1; a number not written, e.g. an angle marked θ, is measured from the drawing):\n" + FigureLibrary.catalogue() + "\n"
+    }
 
     /** System instruction for writing a board into [request]'s template. */
     fun system(request: NotesRequest): String = buildString {
@@ -75,6 +81,7 @@ object NotePrompts {
         append(". ONE JSON object, nothing before or after it. Each element is one flat object whose \"e\" is the element's name, e.g. {\"e\":\"Heading\",\"t\":\"…\"}.")
         append(" No coordinates, colours, sizes or ids: the app lays out and styles everything.\nElements you may use:\n")
         for ((e, line) in GUIDE) if (e in t.elements) append("- ").append(line).append('\n')
+        if (NoteElement.Diagram in t.elements) append(FIGURE_KINDS)
         append("Maths: inline in t as \\( … \\); display maths in m without delimiters; double every backslash in JSON (\"\\\\frac\").\n")
         append("In Hebrew or Arabic sentences only single symbols stay inline (x, e^x, 30!); put any fraction, limit, sum, root or multi-term expression in its own Formula element after the sentence.\n")
         append("Units in parentheses: 10\\,(m/s).\n")

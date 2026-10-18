@@ -85,9 +85,32 @@ class FigureWireTest {
         val system = NotePrompts.system(NotesRequest(t))
         assertTrue(system.contains("box = [left, top, right, bottom]"))
         assertTrue(system.contains("lbl"))
-        assertFalse(system.contains("fbd"))
+        assertFalse(system.contains("fbd ="))
         val schema = NoteSchema.document(t).toString()
         assertTrue(schema.contains("\"box\"") && schema.contains("\"lbl\""))
         assertFalse(schema.contains("\"fbd\""))
+    }
+    @Test fun `a library kind with parameter rows is read, stored and sent back to the AI`() {
+        val doc = NoteWire.parse(
+            """{"elements":[{"e":"Diagram","box":[400,200,600,500],"k":"Inclined plane","p":[["a","37°"],["f","N","n"],["f","mg","g"],["ang","37^\\circ"]],"c":0.8}]}""",
+        )
+        val f = doc.elements.single().figure!!
+        val spec = f.spec!!
+        assertEquals("incline", spec.kind)
+        assertEquals(0.8f, spec.confidence!!, 1e-4f)
+        assertEquals(37f, spec.params.num("a", default = 0f), 1e-4f)
+        assertEquals("37^\\circ", spec.params.str("ang"))
+        // Stored and read back unchanged; the follow-up sends the kind and rows (not the box).
+        val back = NoteWire.parse(NoteWire.encode(doc)).elements.single().figure!!.spec!!
+        assertEquals(spec.kind, back.kind)
+        assertEquals(spec.rows.map { r -> r.map { it.toString() } }, back.rows.map { r -> r.map { it.toString() } })
+        val forAi = NoteWire.encodeForAi(doc)
+        assertTrue(forAi.contains("\"k\":\"incline\"") && forAi.contains("\"p\":"))
+        assertFalse(forAi.contains("\"box\""))
+    }
+
+    @Test fun `an unknown kind or empty rows is no spec, the figure stays`() {
+        val doc = NoteWire.parse("""{"elements":[{"e":"Diagram","box":[0,0,500,500],"k":"teleporter","p":[["a",1]]},{"e":"Diagram","box":[0,0,500,500],"k":"incline","p":[]}]}""")
+        assertTrue(doc.elements.all { it.figure != null && it.figure!!.spec == null })
     }
 }

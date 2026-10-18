@@ -19,6 +19,7 @@ import app.bestnote.engine.layout.NoteBlock
 import app.bestnote.engine.layout.NoteDocument
 import app.bestnote.engine.layout.NoteElement
 import app.bestnote.engine.layout.NotebookPalette
+import app.bestnote.engine.layout.figlib.FigureLibrary
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.floor
@@ -170,6 +171,11 @@ object FigureRedraw {
                 if (onInk(pixels, ink) > onInk(permille, ink)) pixels else permille
             }
             if (f.kind == FigureKind.Table && b.rows.isNotEmpty()) return b.copy(element = NoteElement.Table, figure = f.copy(source = FigureSource.FromData))
+            // FIG-LIB: a drawing the AI recognised as a library kind is drawn from its parameters (crisp, editable,
+            // labels beside their shapes); only a low-confidence one lets the photo's strokes try first.
+            val library = f.spec?.let(FigureLibrary::render)
+            val sure = f.spec?.confidence?.let { it >= FigureLibrary.MIN_CONFIDENCE } ?: true
+            if (library != null && sure) return b.copy(diagram = library.diagram, figure = f.copy(source = FigureSource.FromData))
             val box = f.box
             val result = if (board != null && box != null) runCatching { redraw(board, box, f.labels) }.getOrNull() else null
             if (System.getProperty("figure.debug") != null) {
@@ -178,6 +184,7 @@ object FigureRedraw {
             }
             // Its box becomes the drawing's own extent: the page sizes it by its share of the board.
             if (result?.accepted == true) return b.copy(diagram = result.diagram, figure = f.copy(box = result.content ?: f.box, source = FigureSource.Redrawn))
+            if (library != null) return b.copy(diagram = library.diagram, figure = f.copy(source = FigureSource.FromData))
             val data = f.shape?.let { s -> box?.let { FigureVectors.shape(s, it) } } ?: f.graph?.let(FigureVectors::graph)
             if (data != null) return b.copy(diagram = data, figure = f.copy(source = FigureSource.FromData))
             val picture = result?.cleaned?.let(store)

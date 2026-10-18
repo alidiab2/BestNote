@@ -53,10 +53,12 @@ object NoteSchema {
             if (NoteElement.Diagram in has) {
                 // AI-12: where the drawing is and what is written on it; the app redraws it from the photo.
                 props += "box" to arr(num())
-                props += "k" to enumStr(listOf("graph", "diagram", "table", "shape", "arrow", "drawing"))
+                // FIG-LIB: a library kind or a coarse one; `p` = the kind's parameter rows, `c` = confidence. The library's
+                // plot/geo/sketch kinds replace the old simple `shape`/`graph` data (still read from older answers and storage).
+                props += "k" to str()
+                props += "p" to arr(strArr)
+                props += "c" to num()
                 props += "lbl" to arr(arr(str()))
-                props += "shape" to obj(listOf("type" to str(), "pts" to arr(arr(num()))), emptyList())
-                props += "graph" to obj(listOf("x" to arr(num()), "y" to arr(num()), "f" to str()), emptyList())
                 if (!any(NoteElement.Table, NoteElement.Comparison, NoteElement.VariableLegend, NoteElement.WorkedExample)) props += "rows" to arr(strArr)
             }
             return obj(props, listOf("e"))
