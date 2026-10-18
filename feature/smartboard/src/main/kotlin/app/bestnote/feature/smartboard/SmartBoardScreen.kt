@@ -109,6 +109,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.IntOffset
@@ -170,6 +171,7 @@ private fun SmartBoardContent(onClose: () -> Unit, onInsert: (SmartBoardResult) 
             dismissButton = { TextButton(onClick = viewModel::readAnyway) { Text(stringResource(R.string.smartboard_try_anyway)) } },
         )
     }
+    state.viewer?.let { PhotoViewer(it, state.secure, viewModel::closeViewer) }
     if (keyDialog) KeyDialog(state.provider, state.keyHint, onSave = { viewModel.saveKey(it); keyDialog = false }, onDismiss = { keyDialog = false })
 }
 
@@ -315,6 +317,13 @@ private fun CaptureStage(state: SmartBoardUiState, viewModel: SmartBoardViewMode
                 if (state.followUp && state.canRefinePage) {
                     // AI-13: change the page (template, font, "make headings red"…) without a new photo.
                     OutlinedButton(onClick = viewModel::openForRefine) { IconLabel(Icons.Rounded.AutoAwesome, stringResource(R.string.smartboard_refine_page)) }
+                    if (state.storedPhotos > 0) {
+                        FlowRow(horizontalArrangement = Arrangement.spacedBy(Spacing.S, Alignment.CenterHorizontally), verticalArrangement = Arrangement.spacedBy(Spacing.S)) {
+                            OutlinedButton(onClick = viewModel::viewPhotos) { IconLabel(Icons.Rounded.PhotoLibrary, pluralStringResource(R.plurals.smartboard_photos_view_n, state.storedPhotos, state.storedPhotos)) }
+                            OutlinedButton(onClick = { viewModel.regenerate(Regenerate.ThisPage) }) { IconLabel(Icons.Rounded.Replay, stringResource(R.string.smartboard_regenerate_page)) }
+                            OutlinedButton(onClick = { viewModel.regenerate(Regenerate.NewPage) }) { IconLabel(Icons.Rounded.Replay, stringResource(R.string.smartboard_regenerate_new)) }
+                        }
+                    }
                 } else {
                     OutlinedButton(onClick = viewModel::read) { IconLabel(Icons.Rounded.AutoAwesome, stringResource(R.string.smartboard_try_sample)) }
                 }

@@ -143,3 +143,13 @@ class RefineEngineTest {
         }
     }
 }
+
+class SmartBoardPhotosRecordTest {
+    @Test fun `group photos survive encode and decode, old records have none`() {
+        val g = SmartBoardGroup("classic", listOf("p1"), NoteDocument(emptyList()), photos = listOf("assets/a.jpg", "assets/b.jpg"))
+        val back = SmartBoardRecord.decode(SmartBoardRecord().withInsert(g).encode())
+        assertEquals(listOf("assets/a.jpg", "assets/b.jpg"), back.groups.single().photos)
+        val old = SmartBoardRecord.decode(SmartBoardRecord().withInsert(g.copy(photos = emptyList())).encode())
+        assertTrue(old.groups.single().photos.isEmpty())
+    }
+}

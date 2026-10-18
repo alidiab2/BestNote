@@ -140,4 +140,16 @@
     <string name="smartboard_refine_not_understood">لم تستطع السبورة الذكية تحويل الطلب إلى تعديل. جرّب صياغته بشكل أدق.</string>
     <string name="smartboard_refine_failed">لم ينجح التعديل. صفحتك لم تتغير؛ حاول مرة أخرى.</string>
     <string name="smartboard_refine_partial">تم. تعذّر تطبيق %1$d جزء من الطلب.</string>
+    <string name="smartboard_photos_view">الصور الأصلية</string>
+    <plurals name="smartboard_photos_view_n">
+        <item quantity="zero">عرض الصور الأصلية</item>
+        <item quantity="one">عرض الصورة الأصلية</item>
+        <item quantity="two">عرض الصورتين الأصليتين</item>
+        <item quantity="few">عرض %1$d صور أصلية</item>
+        <item quantity="many">عرض %1$d صورة أصلية</item>
+        <item quantity="other">عرض %1$d صورة أصلية</item>
+    </plurals>
+    <string name="smartboard_photos_close">إغلاق الصور</string>
+    <string name="smartboard_regenerate_page">إعادة إنشاء هذه الصفحة</string>
+    <string name="smartboard_regenerate_new">إعادة الإنشاء في صفحة جديدة</string>
 </resources>

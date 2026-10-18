@@ -24,6 +24,8 @@ data class SmartBoardGroup(
     val notes: NoteDocument,
     val elementIds: Set<String> = emptySet(),
     val strokeKeys: Set<String> = emptySet(),
+    /** AI-13: archive paths of the rectified board photos the pages were written from (package assets). */
+    val photos: List<String> = emptyList(),
 )
 
 /**
@@ -61,6 +63,7 @@ data class SmartBoardRecord(val glossary: NotebookGlossary = NotebookGlossary(),
                         put("pages", JsonArray(g.pageIds.map(::JsonPrimitive)))
                         put("elements", JsonArray(g.elementIds.map(::JsonPrimitive)))
                         put("strokes", JsonArray(g.strokeKeys.map(::JsonPrimitive)))
+                        if (g.photos.isNotEmpty()) put("photos", JsonArray(g.photos.map(::JsonPrimitive)))
                         put("notes", NoteWire.encodeTree(g.notes))
                     }
                 },
@@ -94,6 +97,7 @@ data class SmartBoardRecord(val glossary: NotebookGlossary = NotebookGlossary(),
                         notes = (g["notes"] as? JsonObject)?.let { NoteWire.decodeStored(it.toString()) } ?: NoteDocument(emptyList()),
                         elementIds = list("elements").toSet(),
                         strokeKeys = list("strokes").toSet(),
+                        photos = list("photos"),
                     )
                 }
                 SmartBoardRecord(NotebookGlossary(glossary), groups)

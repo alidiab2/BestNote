@@ -192,6 +192,8 @@ class InkInsert(
     val templateId: String? = null,
     /** A follow-up photo: these Smart Board pages are re-laid out instead of inserting new ones. */
     val followUpPageIds: List<String> = emptyList(),
+    /** AI-13: the rectified board photos (JPEG), kept with the pages ("View original photos", "Regenerate"). */
+    val photos: List<ByteArray> = emptyList(),
 )
 
 /**

@@ -15,6 +15,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.Send
 import androidx.compose.material.icons.automirrored.rounded.Undo
 import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.PhotoLibrary
 import androidx.compose.material.icons.rounded.TextFields
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.CircularProgressIndicator
@@ -68,6 +69,13 @@ internal fun RefineBar(state: SmartBoardUiState, viewModel: SmartBoardViewModel,
                     label = { Text(stringResource(R.string.smartboard_refine_font)) },
                     leadingIcon = { Icon(Icons.Rounded.TextFields, null, Modifier.size(18.dp)) },
                 )
+                if (state.storedPhotos > 0 || state.photos.isNotEmpty()) {
+                    AssistChip(
+                        onClick = viewModel::viewPhotos,
+                        label = { Text(stringResource(R.string.smartboard_photos_view)) },
+                        leadingIcon = { Icon(Icons.Rounded.PhotoLibrary, null, Modifier.size(18.dp)) },
+                    )
+                }
                 refine.requests.forEach { r ->
                     AssistChip(onClick = { text = r }, label = { Text(r, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.widthIn(max = 220.dp)) })
                 }

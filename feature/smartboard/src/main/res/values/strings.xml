@@ -140,4 +140,12 @@
     <string name="smartboard_refine_not_understood">Smart Board could not turn that into a change. Try saying it more specifically.</string>
     <string name="smartboard_refine_failed">That change did not work. Your page is unchanged; try again.</string>
     <string name="smartboard_refine_partial">Done. %1$d part(s) of the request could not be applied.</string>
+    <string name="smartboard_photos_view">Original photo(s)</string>
+    <plurals name="smartboard_photos_view_n">
+        <item quantity="one">View original photo</item>
+        <item quantity="other">View %1$d original photos</item>
+    </plurals>
+    <string name="smartboard_photos_close">Close photos</string>
+    <string name="smartboard_regenerate_page">Regenerate this page</string>
+    <string name="smartboard_regenerate_new">Regenerate into a new page</string>
 </resources>

@@ -146,9 +146,17 @@ data class SmartBoardUiState(
     val refineOnly: Boolean = false,
     /** On a follow-up: the page's notes are known, so "Edit this page" can open it without a photo. */
     val canRefinePage: Boolean = false,
+    /** AI-13: board photos stored with the page being continued (0 when none, or the notebook is locked). */
+    val storedPhotos: Int = 0,
+    /** AI-13: the photos shown in the original-photo viewer, while it is open. */
+    val viewer: List<Bitmap>? = null,
+    /** AI-13: re-running Smart Board on the stored photos (this page, or into a new page). */
+    val regenerate: Regenerate? = null,
+    /** The notebook is locked: keep its photos out of screenshots and recents. */
+    val secure: Boolean = false,
 ) {
     /** The look of [noteTemplate]. */
-    val style: StyleTemplate get() = noteTemplate.look
+    val style: StyleTemplate get() = look.applyTo(noteTemplate.look)
 }
 
 /** AI-13 "Ask Smart Board…": busy, the last friendly error, recent requests, undo. */
@@ -160,6 +168,8 @@ data class RefineUi(
     /** Ops the last AI edit could not apply (shown as a count, never the raw JSON). */
     val skipped: Int = 0,
 )
+
+enum class Regenerate { ThisPage, NewPage }
 
 enum class RefineError { NeedsKey, NotUnderstood, Network, RateLimited, Other }
 
@@ -193,6 +203,8 @@ class SmartBoardResult(
     val templateId: String? = null,
     /** A follow-up: these Smart Board pages are re-laid out (their user ink kept); extra pages go after the last. */
     val followUpPageIds: List<String> = emptyList(),
+    /** AI-13: the rectified board photos (JPEG) the notes were read from, kept with the pages. */
+    val photos: List<ByteArray> = emptyList(),
 )
 
 @HiltViewModel
@@ -309,6 +321,56 @@ class SmartBoardViewModel @Inject constructor(
         state.update { it.copy(equationStyle = style) }
         rerender()
     }
+
+    // ------------------------------------------------------------ AI-13 · original photos, regenerate
+
+    /** The stored photos of the page being continued (JPEG), and the photos the last reading sent. */
+    private var storedPhotos: List<ByteArray> = emptyList()
+    private var sentPhotos: List<ByteArray> = emptyList()
+
+    private suspend fun loadStoredPhotos() {
+        val paths = group?.photos.orEmpty()
+        val id = NotebookId(route.notebookId)
+        val secure = runCatching { store.isSealed(id) }.getOrDefault(false)
+        if (paths.isEmpty()) return state.update { it.copy(secure = secure) }
+        // A locked notebook that is not unlocked throws here: no photos, nothing shown.
+        val assets = withContext(Dispatchers.IO) { runCatching { store.read(id)?.assets }.getOrNull() }.orEmpty()
+        storedPhotos = paths.mapNotNull { assets[it] }
+        state.update { it.copy(storedPhotos = storedPhotos.size, secure = secure) }
+    }
+
+    /** Opens the zoomable viewer on the page's stored photos (else this session's photos). */
+    fun viewPhotos() {
+        viewModelScope.launch {
+            val shown = if (storedPhotos.isNotEmpty()) {
+                withContext(Dispatchers.Default) { storedPhotos.mapNotNull { BitmapFactory.decodeByteArray(it, 0, it.size) } }
+            } else {
+                state.value.photos.map { it.bitmap }
+            }
+            if (shown.isNotEmpty()) state.update { it.copy(viewer = shown) }
+        }
+    }
+
+    fun closeViewer() = state.update { it.copy(viewer = null) }
+
+    /**
+     * Reads the stored photos again with the current template, prompt and parser: [Regenerate.ThisPage]
+     * replaces the page's content (one undo step in the editor), [Regenerate.NewPage] inserts new pages.
+     */
+    fun regenerate(how: Regenerate) {
+        if (storedPhotos.isEmpty()) return
+        viewModelScope.launch {
+            val photos = withContext(Dispatchers.Default) {
+                storedPhotos.mapNotNull { BitmapFactory.decodeByteArray(it, 0, it.size) }.map { BoardPhoto(nextPhotoId++, it, Quad.full(0f), detected = true) }
+            }
+            if (photos.isEmpty()) return@launch
+            // The stored photos are already flattened and cleaned.
+            state.update { it.copy(photos = photos, current = 0, enhance = false, regenerate = how, refineOnly = true) }
+            read()
+        }
+    }
+
+    private fun plainJpeg(bitmap: Bitmap): ByteArray = java.io.ByteArrayOutputStream().also { bitmap.compress(Bitmap.CompressFormat.JPEG, PHOTO_QUALITY, it) }.toByteArray()
 
     // ------------------------------------------------------------ AI-13 · Ask Smart Board
 
@@ -444,6 +506,7 @@ class SmartBoardViewModel @Inject constructor(
             group = route.continuePageId?.let(record::groupFor)
             group?.let { g -> state.update { it.copy(noteTemplate = templateStore.byId(g.templateId), template = templateStore.byId(g.templateId).look.paper ?: startTemplate, canRefinePage = !g.notes.isEmpty) } }
             state.update { it.copy(glossarySize = record.glossary.terms.size) }
+            loadStoredPhotos()
         }
         viewModelScope.launch {
             refreshKey()
@@ -608,7 +671,7 @@ class SmartBoardViewModel @Inject constructor(
     /** Starts over without photos. */
     fun retake() {
         job?.cancel()
-        state.update { it.copy(stage = SmartBoardStage.Capture, photos = emptyList(), current = 0, flatPreview = null) }
+        state.update { it.copy(stage = SmartBoardStage.Capture, photos = emptyList(), current = 0, flatPreview = null, regenerate = null) }
     }
 
     fun saveKey(key: String?) {
@@ -653,13 +716,20 @@ class SmartBoardViewModel @Inject constructor(
                     }
                 }
                 val images = if (demo) {
+                    // Photos without a key still go with the (sample) page, so they can be regenerated later.
+                    sentPhotos = withContext(Dispatchers.Default) { photos.map { plainJpeg(BoardScan.flatten(it.bitmap, it.quad, s.enhance)) } }
                     listOf(VisionImage(ByteArray(0), "image/jpeg"))
                 } else {
-                    withContext(Dispatchers.Default) { photos.map { ImageCanary.jpeg(BoardScan.flatten(it.bitmap, it.quad, s.enhance)) } }
+                    withContext(Dispatchers.Default) {
+                        val flat = photos.map { BoardScan.flatten(it.bitmap, it.quad, s.enhance) }
+                        sentPhotos = flat.map(::plainJpeg)
+                        flat.map { ImageCanary.jpeg(it) }
+                    }
                 }
                 val provider: VisionProvider = if (demo) DemoVisionProvider() else providers.create(s.provider)
                 try {
-                    notes.read(provider, images, effective(), s.language.rtl, group?.notes)
+                    // Regenerate reads the photos afresh; a follow-up photo merges into the page's notes.
+                    notes.read(provider, images, effective(), s.language.rtl, if (s.regenerate != null) null else group?.notes)
                 } finally {
                     ticker.cancel()
                 }
@@ -721,7 +791,11 @@ class SmartBoardViewModel @Inject constructor(
             heightPt = review.paper.height,
             notes = NoteWire.encode(review.notes),
             templateId = state.value.noteTemplate.id,
-            followUpPageIds = if (newNotebook) emptyList() else group?.pageIds.orEmpty(),
+            followUpPageIds = if (newNotebook || state.value.regenerate == Regenerate.NewPage) emptyList() else group?.pageIds.orEmpty(),
+            photos = when {
+                state.value.regenerate != null || group == null -> sentPhotos
+                else -> storedPhotos + sentPhotos
+            },
         )
     }
 
@@ -761,5 +835,6 @@ class SmartBoardViewModel @Inject constructor(
         private const val TAG = "BestNoteSmartBoard"
         private const val DETAIL_CHARS = 400
         private const val SWITCHER_LIST = 8
+        private const val PHOTO_QUALITY = 85
     }
 }

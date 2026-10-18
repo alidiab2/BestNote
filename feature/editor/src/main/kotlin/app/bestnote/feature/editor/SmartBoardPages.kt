@@ -29,6 +29,7 @@ internal object SmartBoardPages {
             notes = notes,
             elementIds = insert.elements.flatten().mapTo(HashSet()) { it.id },
             strokeKeys = insert.pages.flatten().mapNotNullTo(HashSet(), ::key),
+            photos = insert.photos.map { session.addImage(it, "jpg") },
         )
         session.saveSmartBoardRecord(session.smartBoardRecord().withInsert(group))
     }
@@ -98,6 +99,8 @@ internal object SmartBoardPages {
             notes = notes,
             elementIds = insert.elements.flatten().mapTo(HashSet()) { it.id },
             strokeKeys = insert.pages.flatten().mapNotNullTo(HashSet(), ::key),
+            // AI-13: the photos of the page as Smart Board sent them (same bytes → same asset path).
+            photos = if (insert.photos.isEmpty()) group.photos else insert.photos.map { session.addImage(it, "jpg") },
         )
         session.saveSmartBoardRecord(record.replace(group, updated))
         return written
