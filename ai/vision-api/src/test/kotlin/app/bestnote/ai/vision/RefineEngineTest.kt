@@ -125,6 +125,16 @@ class RefineEngineTest {
         assertNull(LocalRefineCommands.parse("add the missing step in example 2 and make headings red please", templates, fonts))
     }
 
+    @Test fun `recorded DeepSeek answer applies`() {
+        // Live DeepSeek answer (AI-13) to "make headings red, translate the terms to Arabic and remove the second graph".
+        val answer = """{"ops":[{"op":"color","role":"Heading","color":"#FF0000"},{"op":"terms","terms":[["velocity","السرعة"],["position","الموضع"]]},{"op":"delete","id":4}]}"""
+        val r = RefineEngine.apply(answer, doc)
+        assertEquals(3, r.applied)
+        assertEquals(4, r.doc.elements.size)
+        assertEquals("السرعة", r.doc.terms.first().translation)
+        assertEquals(0xFFFF0000L, r.look.colors[NoteRole.Heading])
+    }
+
     private fun expectBad(answer: String, fonts: Set<String> = emptySet()) {
         try {
             RefineEngine.apply(answer, doc, fonts = fonts)
