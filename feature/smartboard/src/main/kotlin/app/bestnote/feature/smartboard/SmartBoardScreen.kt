@@ -109,6 +109,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.IntOffset
@@ -170,6 +171,7 @@ private fun SmartBoardContent(onClose: () -> Unit, onInsert: (SmartBoardResult) 
             dismissButton = { TextButton(onClick = viewModel::readAnyway) { Text(stringResource(R.string.smartboard_try_anyway)) } },
         )
     }
+    state.viewer?.let { PhotoViewer(it, state.secure, viewModel::closeViewer) }
     if (keyDialog) KeyDialog(state.provider, state.keyHint, onSave = { viewModel.saveKey(it); keyDialog = false }, onDismiss = { keyDialog = false })
 }
 
@@ -312,7 +314,19 @@ private fun CaptureStage(state: SmartBoardUiState, viewModel: SmartBoardViewMode
                     Button(onClick = takePhoto) { IconLabel(Icons.Rounded.PhotoCamera, stringResource(R.string.smartboard_take_photo)) }
                     FilledTonalButton(onClick = choose) { IconLabel(Icons.Rounded.PhotoLibrary, stringResource(R.string.smartboard_choose_photo)) }
                 }
-                OutlinedButton(onClick = viewModel::read) { IconLabel(Icons.Rounded.AutoAwesome, stringResource(R.string.smartboard_try_sample)) }
+                if (state.followUp && state.canRefinePage) {
+                    // AI-13: change the page (template, font, "make headings red"…) without a new photo.
+                    OutlinedButton(onClick = viewModel::openForRefine) { IconLabel(Icons.Rounded.AutoAwesome, stringResource(R.string.smartboard_refine_page)) }
+                    if (state.storedPhotos > 0) {
+                        FlowRow(horizontalArrangement = Arrangement.spacedBy(Spacing.S, Alignment.CenterHorizontally), verticalArrangement = Arrangement.spacedBy(Spacing.S)) {
+                            OutlinedButton(onClick = viewModel::viewPhotos) { IconLabel(Icons.Rounded.PhotoLibrary, pluralStringResource(R.plurals.smartboard_photos_view_n, state.storedPhotos, state.storedPhotos)) }
+                            OutlinedButton(onClick = { viewModel.regenerate(Regenerate.ThisPage) }) { IconLabel(Icons.Rounded.Replay, stringResource(R.string.smartboard_regenerate_page)) }
+                            OutlinedButton(onClick = { viewModel.regenerate(Regenerate.NewPage) }) { IconLabel(Icons.Rounded.Replay, stringResource(R.string.smartboard_regenerate_new)) }
+                        }
+                    }
+                } else {
+                    OutlinedButton(onClick = viewModel::read) { IconLabel(Icons.Rounded.AutoAwesome, stringResource(R.string.smartboard_try_sample)) }
+                }
             }
             LanguagePicker(state.language, viewModel::setLanguage)
             PrivacyNote(state.hasKey)
@@ -636,7 +650,8 @@ private fun ReviewStage(review: SmartBoardStage.Review, state: SmartBoardUiState
     val pages = review.pageCount
     var page by remember(review.text, review.ink) { mutableIntStateOf(0) }
     var replay by remember { mutableIntStateOf(0) }
-    BoxWithConstraints(Modifier.fillMaxSize().padding(Spacing.L)) {
+    Column(Modifier.fillMaxSize().padding(Spacing.L), verticalArrangement = Arrangement.spacedBy(Spacing.S)) {
+    BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
         val wide = maxWidth >= 760.dp
         val preview: @Composable (Modifier) -> Unit = { m ->
             Column(m, horizontalAlignment = Alignment.CenterHorizontally) {
@@ -686,9 +701,12 @@ private fun ReviewStage(review: SmartBoardStage.Review, state: SmartBoardUiState
         } else {
             Column(verticalArrangement = Arrangement.spacedBy(Spacing.M)) {
                 preview(Modifier.weight(1f).fillMaxWidth())
-                panel(Modifier.fillMaxWidth().heightIn(max = 420.dp))
+                panel(Modifier.fillMaxWidth().heightIn(max = 360.dp))
             }
         }
+    }
+    // AI-13: "Ask Smart Board…" docked under the result.
+    RefineBar(state, viewModel)
     }
 }
 
@@ -734,7 +752,7 @@ private fun TemplateChips(state: SmartBoardUiState, onTemplate: (NoteTemplate) -
             FilterChip(
                 selected = t.id == state.noteTemplate.id,
                 onClick = { onTemplate(t) },
-                enabled = !state.followUp || t.id == state.noteTemplate.id,
+                enabled = !state.followUp || state.refineOnly || t.id == state.noteTemplate.id,
                 label = { Text(if (t.builtIn) styleName(t.look) else t.name, maxLines = 1) },
                 leadingIcon = {
                     Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {

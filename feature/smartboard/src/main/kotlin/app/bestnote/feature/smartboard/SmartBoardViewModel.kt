@@ -30,6 +30,12 @@ import app.bestnote.engine.layout.TemplateChange
 import app.bestnote.ai.vision.NotesLanguage
 import app.bestnote.ai.vision.DemoVisionProvider
 import app.bestnote.ai.vision.VisionError
+import app.bestnote.ai.vision.FontSlot
+import app.bestnote.ai.vision.LocalRefine
+import app.bestnote.ai.vision.LocalRefineCommands
+import app.bestnote.ai.vision.LookPatch
+import app.bestnote.ai.vision.RefineEngine
+import app.bestnote.core.fonts.FontRegistry
 import app.bestnote.ai.vision.VisionImage
 import app.bestnote.ai.vision.VisionProvider
 import app.bestnote.ai.vision.AiProviderKind
@@ -133,10 +139,39 @@ data class SmartBoardUiState(
     val textOnlyWarning: String? = null,
     /** MATH-02: this notebook's equation style; null = the template's own. */
     val equationStyle: EquationStyle? = null,
+    /** AI-13: colour and font changes on top of [noteTemplate]'s look. */
+    val look: LookPatch = LookPatch(),
+    val refine: RefineUi = RefineUi(),
+    /** AI-13: an existing Smart Board page is open for changes (no photo); its template may change. */
+    val refineOnly: Boolean = false,
+    /** On a follow-up: the page's notes are known, so "Edit this page" can open it without a photo. */
+    val canRefinePage: Boolean = false,
+    /** AI-13: board photos stored with the page being continued (0 when none, or the notebook is locked). */
+    val storedPhotos: Int = 0,
+    /** AI-13: the photos shown in the original-photo viewer, while it is open. */
+    val viewer: List<Bitmap>? = null,
+    /** AI-13: re-running Smart Board on the stored photos (this page, or into a new page). */
+    val regenerate: Regenerate? = null,
+    /** The notebook is locked: keep its photos out of screenshots and recents. */
+    val secure: Boolean = false,
 ) {
     /** The look of [noteTemplate]. */
-    val style: StyleTemplate get() = noteTemplate.look
+    val style: StyleTemplate get() = look.applyTo(noteTemplate.look)
 }
+
+/** AI-13 "Ask Smart Board…": busy, the last friendly error, recent requests, undo. */
+data class RefineUi(
+    val busy: Boolean = false,
+    val error: RefineError? = null,
+    val requests: List<String> = emptyList(),
+    val canUndo: Boolean = false,
+    /** Ops the last AI edit could not apply (shown as a count, never the raw JSON). */
+    val skipped: Int = 0,
+)
+
+enum class Regenerate { ThisPage, NewPage }
+
+enum class RefineError { NeedsKey, NotUnderstood, Network, RateLimited, Other }
 
 /** One choice in the header's quick switcher. [model] is an id, "" (automatic best) or [ModelCatalog.AUTO_FAST]. */
 data class ModelOption(val model: String, val label: String, val selected: Boolean, val favorite: Boolean = false, val textOnly: Boolean = false)
@@ -168,6 +203,8 @@ class SmartBoardResult(
     val templateId: String? = null,
     /** A follow-up: these Smart Board pages are re-laid out (their user ink kept); extra pages go after the last. */
     val followUpPageIds: List<String> = emptyList(),
+    /** AI-13: the rectified board photos (JPEG) the notes were read from, kept with the pages. */
+    val photos: List<ByteArray> = emptyList(),
 )
 
 @HiltViewModel
@@ -226,7 +263,8 @@ class SmartBoardViewModel @Inject constructor(
     /** The template with the notebook's notes language applied (the language picker overrides the template's). */
     private fun effective(s: SmartBoardUiState = state.value): NoteTemplate {
         val t = s.noteTemplate.let { n -> s.equationStyle?.let { n.copy(look = n.look.copy(equationStyle = it)) } ?: n }
-        return if (s.language == NotesLanguage.Board) t else t.copy(ai = t.ai.copy(notesLanguage = s.language.code))
+        val looked = if (s.look.isEmpty) t else t.copy(look = s.look.applyTo(t.look))
+        return if (s.language == NotesLanguage.Board) looked else looked.copy(ai = t.ai.copy(notesLanguage = s.language.code))
     }
     private val measure by lazy {
         HandwritingTypefaces.init(context)
@@ -267,6 +305,7 @@ class SmartBoardViewModel @Inject constructor(
     fun setTemplate(template: NoteTemplate) {
         val before = state.value
         if (template.id == before.noteTemplate.id) return
+        if (before.stage is SmartBoardStage.Review) snapshot()
         styles.setTemplateIdFor(route.notebookId, template.id)
         state.update { it.copy(noteTemplate = template, template = template.look.paper ?: startTemplate) }
         if (before.stage !is SmartBoardStage.Review) return
@@ -282,6 +321,167 @@ class SmartBoardViewModel @Inject constructor(
         state.update { it.copy(equationStyle = style) }
         rerender()
     }
+
+    // ------------------------------------------------------------ AI-13 · original photos, regenerate
+
+    /** The stored photos of the page being continued (JPEG), and the photos the last reading sent. */
+    private var storedPhotos: List<ByteArray> = emptyList()
+    private var sentPhotos: List<ByteArray> = emptyList()
+
+    private suspend fun loadStoredPhotos() {
+        val paths = group?.photos.orEmpty()
+        val id = NotebookId(route.notebookId)
+        val secure = runCatching { store.isSealed(id) }.getOrDefault(false)
+        if (paths.isEmpty()) return state.update { it.copy(secure = secure) }
+        // A locked notebook that is not unlocked throws here: no photos, nothing shown.
+        val assets = withContext(Dispatchers.IO) { runCatching { store.read(id)?.assets }.getOrNull() }.orEmpty()
+        storedPhotos = paths.mapNotNull { assets[it] }
+        state.update { it.copy(storedPhotos = storedPhotos.size, secure = secure) }
+    }
+
+    /** Opens the zoomable viewer on the page's stored photos (else this session's photos). */
+    fun viewPhotos() {
+        viewModelScope.launch {
+            val shown = if (storedPhotos.isNotEmpty()) {
+                withContext(Dispatchers.Default) { storedPhotos.mapNotNull { BitmapFactory.decodeByteArray(it, 0, it.size) } }
+            } else {
+                state.value.photos.map { it.bitmap }
+            }
+            if (shown.isNotEmpty()) state.update { it.copy(viewer = shown) }
+        }
+    }
+
+    fun closeViewer() = state.update { it.copy(viewer = null) }
+
+    /**
+     * Reads the stored photos again with the current template, prompt and parser: [Regenerate.ThisPage]
+     * replaces the page's content (one undo step in the editor), [Regenerate.NewPage] inserts new pages.
+     */
+    fun regenerate(how: Regenerate) {
+        if (storedPhotos.isEmpty()) return
+        viewModelScope.launch {
+            val photos = withContext(Dispatchers.Default) {
+                storedPhotos.mapNotNull { BitmapFactory.decodeByteArray(it, 0, it.size) }.map { BoardPhoto(nextPhotoId++, it, Quad.full(0f), detected = true) }
+            }
+            if (photos.isEmpty()) return@launch
+            // The stored photos are already flattened and cleaned.
+            state.update { it.copy(photos = photos, current = 0, enhance = false, regenerate = how, refineOnly = true) }
+            read()
+        }
+    }
+
+    private fun plainJpeg(bitmap: Bitmap): ByteArray = java.io.ByteArrayOutputStream().also { bitmap.compress(Bitmap.CompressFormat.JPEG, PHOTO_QUALITY, it) }.toByteArray()
+
+    // ------------------------------------------------------------ AI-13 · Ask Smart Board
+
+    private val session = RefineSession()
+    private val fonts by lazy { FontRegistry.get(context) }
+
+    private fun snapshot() {
+        val raw = notes.raw ?: return
+        val s = state.value
+        session.push(RefineSession.Snapshot(raw, s.look, s.noteTemplate.id))
+        state.update { it.copy(refine = it.refine.copy(canUndo = true)) }
+    }
+
+    /** The script whose font "change the font" means: the notes' main script. */
+    fun fontSlot(): FontSlot {
+        val words = (state.value.stage as? SmartBoardStage.Review)?.notes?.elements?.joinToString(" ") { it.words() }.orEmpty()
+        val arabic = words.count { it in '\u0600'..'\u06FF' }
+        val hebrew = words.count { it in '\u0590'..'\u05FF' }
+        val latin = words.count { it in 'a'..'z' || it in 'A'..'Z' }
+        return when {
+            arabic > latin && arabic >= hebrew -> FontSlot.Arabic
+            hebrew > latin -> FontSlot.Hebrew
+            else -> FontSlot.Latin
+        }
+    }
+
+    /** The font id the page writes [slot] with now. */
+    fun currentFont(slot: FontSlot = fontSlot()): String = effective().look.let {
+        when (slot) {
+            FontSlot.Latin -> it.latinFont.id
+            FontSlot.Arabic -> it.arabicFont.id
+            FontSlot.Hebrew -> it.hebrewFont.id
+        }
+    }
+
+    /** Changes the page's handwriting font (no AI call, one undo step). */
+    fun setFont(id: String?, slot: FontSlot = fontSlot()) {
+        if (id == null || id == currentFont(slot)) return
+        snapshot()
+        state.update { it.copy(look = it.look + LookPatch(fonts = mapOf(slot to id)), refine = it.refine.copy(error = null)) }
+        rerender()
+    }
+
+    /** Opens the Smart Board page being continued for changes, without a new photo. */
+    fun openForRefine() {
+        val g = group ?: return
+        state.update { it.copy(refineOnly = true) }
+        notes.restore(g.notes, effective())
+        viewModelScope.launch {
+            val (ink, text, shown) = runCatching { render() }.getOrNull() ?: return@launch
+            state.update { it.copy(stage = SmartBoardStage.Review(ink, text, demo = false, tookMs = 0, notes = shown)) }
+        }
+    }
+
+    /** "Ask Smart Board…": a local command (template, font, colour, undo) or an incremental AI edit of the notes. */
+    fun refine(request: String, selection: Set<Int> = emptySet()) {
+        val s = state.value
+        val raw = notes.raw ?: return
+        if (s.stage !is SmartBoardStage.Review || s.refine.busy || request.isBlank()) return
+        session.remember(request)
+        state.update { it.copy(refine = it.refine.copy(requests = session.requests, error = null, skipped = 0)) }
+        val fontList = fonts.fonts.value.map { it.id to it.name }
+        when (val local = LocalRefineCommands.parse(request, s.templates.map { it.id to it.name }, fontList, fontSlot())) {
+            LocalRefine.Undo -> return undoRefine()
+            is LocalRefine.Template -> return s.templates.firstOrNull { it.id == local.id }?.let(::setTemplate) ?: Unit
+            is LocalRefine.Font -> return setFont(local.id, local.slot)
+            is LocalRefine.Color -> {
+                snapshot()
+                state.update { it.copy(look = it.look + LookPatch(colors = local.roles.associateWith { local.color })) }
+                return rerender()
+            }
+            null -> Unit
+        }
+        if (!s.hasKey) return state.update { it.copy(refine = it.refine.copy(error = RefineError.NeedsKey)) }
+        state.update { it.copy(refine = it.refine.copy(busy = true)) }
+        job?.cancel()
+        job = viewModelScope.launch {
+            try {
+                val out = RefineEngine.refine(providers.create(s.provider), raw, request, selection, s.look, fontList.map { it.first })
+                snapshot()
+                notes.restore(out.doc, effective())
+                state.update { it.copy(look = out.look, refine = it.refine.copy(busy = false, skipped = out.skipped.size)) }
+                out.skipped.forEach { Log.i(TAG, "refine skipped: $it") }
+                rerender()
+            } catch (e: CancellationException) {
+                state.update { it.copy(refine = it.refine.copy(busy = false)) }
+                throw e
+            } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+                Log.w(TAG, "refine failed (${s.provider.id}): ${e.javaClass.simpleName}: ${Redactor.redact(e.message.orEmpty()).take(DETAIL_CHARS)}")
+                val error = when (e) {
+                    is VisionError.MissingKey, is VisionError.InvalidKey -> RefineError.NeedsKey
+                    is VisionError.BadResponse, is VisionError.Truncated -> RefineError.NotUnderstood
+                    is VisionError.Network, is java.io.IOException -> RefineError.Network
+                    is VisionError.RateLimited, is VisionError.ServiceUnavailable -> RefineError.RateLimited
+                    else -> RefineError.Other
+                }
+                state.update { it.copy(refine = it.refine.copy(busy = false, error = error)) }
+            }
+        }
+    }
+
+    /** Undoes the last refine (AI edit, template, font or colour). */
+    fun undoRefine() {
+        val before = session.pop() ?: return
+        val template = state.value.templates.firstOrNull { it.id == before.templateId } ?: state.value.noteTemplate
+        state.update { it.copy(look = before.look, noteTemplate = template, template = template.look.paper ?: startTemplate, notice = null, refine = it.refine.copy(canUndo = session.canUndo, error = null)) }
+        notes.restore(before.notes, effective())
+        rerender()
+    }
+
+    fun dismissRefineError() = state.update { it.copy(refine = it.refine.copy(error = null, skipped = 0)) }
 
     /** Adds the notebook glossary (all its terms) at the end of the page; no AI call. */
     fun insertGlossary(on: Boolean = true) {
@@ -304,8 +504,9 @@ class SmartBoardViewModel @Inject constructor(
         viewModelScope.launch {
             record = runCatching { SmartBoardRecord.decode(store.readExtra(NotebookId(route.notebookId), SmartBoardRecord.EXTRA)) }.getOrDefault(SmartBoardRecord())
             group = route.continuePageId?.let(record::groupFor)
-            group?.let { g -> state.update { it.copy(noteTemplate = templateStore.byId(g.templateId), template = templateStore.byId(g.templateId).look.paper ?: startTemplate) } }
+            group?.let { g -> state.update { it.copy(noteTemplate = templateStore.byId(g.templateId), template = templateStore.byId(g.templateId).look.paper ?: startTemplate, canRefinePage = !g.notes.isEmpty) } }
             state.update { it.copy(glossarySize = record.glossary.terms.size) }
+            loadStoredPhotos()
         }
         viewModelScope.launch {
             refreshKey()
@@ -470,7 +671,7 @@ class SmartBoardViewModel @Inject constructor(
     /** Starts over without photos. */
     fun retake() {
         job?.cancel()
-        state.update { it.copy(stage = SmartBoardStage.Capture, photos = emptyList(), current = 0, flatPreview = null) }
+        state.update { it.copy(stage = SmartBoardStage.Capture, photos = emptyList(), current = 0, flatPreview = null, regenerate = null) }
     }
 
     fun saveKey(key: String?) {
@@ -515,13 +716,20 @@ class SmartBoardViewModel @Inject constructor(
                     }
                 }
                 val images = if (demo) {
+                    // Photos without a key still go with the (sample) page, so they can be regenerated later.
+                    sentPhotos = withContext(Dispatchers.Default) { photos.map { plainJpeg(BoardScan.flatten(it.bitmap, it.quad, s.enhance)) } }
                     listOf(VisionImage(ByteArray(0), "image/jpeg"))
                 } else {
-                    withContext(Dispatchers.Default) { photos.map { ImageCanary.jpeg(BoardScan.flatten(it.bitmap, it.quad, s.enhance)) } }
+                    withContext(Dispatchers.Default) {
+                        val flat = photos.map { BoardScan.flatten(it.bitmap, it.quad, s.enhance) }
+                        sentPhotos = flat.map(::plainJpeg)
+                        flat.map { ImageCanary.jpeg(it) }
+                    }
                 }
                 val provider: VisionProvider = if (demo) DemoVisionProvider() else providers.create(s.provider)
                 try {
-                    notes.read(provider, images, effective(), s.language.rtl, group?.notes)
+                    // Regenerate reads the photos afresh; a follow-up photo merges into the page's notes.
+                    notes.read(provider, images, effective(), s.language.rtl, if (s.regenerate != null) null else group?.notes)
                 } finally {
                     ticker.cancel()
                 }
@@ -583,7 +791,11 @@ class SmartBoardViewModel @Inject constructor(
             heightPt = review.paper.height,
             notes = NoteWire.encode(review.notes),
             templateId = state.value.noteTemplate.id,
-            followUpPageIds = if (newNotebook) emptyList() else group?.pageIds.orEmpty(),
+            followUpPageIds = if (newNotebook || state.value.regenerate == Regenerate.NewPage) emptyList() else group?.pageIds.orEmpty(),
+            photos = when {
+                state.value.regenerate != null || group == null -> sentPhotos
+                else -> storedPhotos + sentPhotos
+            },
         )
     }
 
@@ -623,5 +835,6 @@ class SmartBoardViewModel @Inject constructor(
         private const val TAG = "BestNoteSmartBoard"
         private const val DETAIL_CHARS = 400
         private const val SWITCHER_LIST = 8
+        private const val PHOTO_QUALITY = 85
     }
 }

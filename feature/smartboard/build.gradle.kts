@@ -5,6 +5,8 @@ plugins {
 // AI-04/AI-07: Smart Board capture → expert-student reading → handwritten review → insert.
 dependencies {
     implementation(projects.core.designsystem)
+    // AI-13: the font picker and installed fonts for "change the font".
+    implementation(projects.core.fonts)
     implementation(projects.ai.visionApi)
     implementation(projects.ai.visionProviders)
     implementation(projects.ai.boardScan)
