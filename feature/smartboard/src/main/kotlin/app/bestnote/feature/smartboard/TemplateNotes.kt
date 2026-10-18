@@ -48,6 +48,12 @@ internal class TemplateNotes(private val measure: TextMeasure) {
         return out
     }
 
+    /** AI-13: replaces the cached notes after a refine or an undo (no AI call). */
+    fun restore(doc: NoteDocument, template: NoteTemplate) {
+        raw = doc
+        askedWith = template
+    }
+
     /**
      * Switches to [template]: [TemplateChange.LookOnly] keeps the cached notes (no call),
      * [TemplateChange.NeedsAi] reads [images] again.

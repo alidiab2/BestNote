@@ -129,4 +129,15 @@
     <string name="smartboard_equations">Equations</string>
     <string name="smartboard_eq_handwritten">Handwritten</string>
     <string name="smartboard_eq_typeset">Typeset</string>
+    <!-- AI-13 Ask Smart Board -->
+    <string name="smartboard_refine_hint">Ask Smart Board… (e.g. make headings red)</string>
+    <string name="smartboard_refine_send">Send</string>
+    <string name="smartboard_refine_undo">Undo last change</string>
+    <string name="smartboard_refine_font">Font</string>
+    <string name="smartboard_refine_dismiss">Dismiss</string>
+    <string name="smartboard_refine_page">Edit this page (no photo)</string>
+    <string name="smartboard_refine_needs_key">Free-text changes need an AI key (Settings → Smart Board). Template, font, colours and undo work without one.</string>
+    <string name="smartboard_refine_not_understood">Smart Board could not turn that into a change. Try saying it more specifically.</string>
+    <string name="smartboard_refine_failed">That change did not work. Your page is unchanged; try again.</string>
+    <string name="smartboard_refine_partial">Done. %1$d part(s) of the request could not be applied.</string>
 </resources>
