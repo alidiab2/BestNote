@@ -56,8 +56,12 @@ object FigureRedraw {
     /** A crop of [board] in board pixels plus how its working copy is scaled. */
     class Crop(val left: Int, val top: Int, val right: Int, val bottom: Int, val scale: Float, val inner: FigureBox, val image: Raster)
 
-    /** The working crop of [box] (board fractions), padded, resampled so its long side is [WORK_SIDE]. */
-    fun crop(board: Raster, box: FigureBox): Crop {
+    /**
+     * The working crop of [box] (board fractions), padded, resampled so its long side is [WORK_SIDE].
+     * Its pixels come from [pixels] when given (the full-resolution photo, REQ-001), else from [board];
+     * either way its coordinates are [board]'s.
+     */
+    fun crop(board: Raster, box: FigureBox, pixels: BoardPixels? = null): Crop {
         // REQ-001: a flat box (two blocks on the ground) drawn a little tight loses the ground under them: it is
         // padded by its long side. A squarish box keeps the usual padding.
         val wPx = box.width * board.width
@@ -71,17 +75,18 @@ object FigureRedraw {
         val scale = WORK_SIDE.toFloat() / max(r - l, b - t)
         val w = max(8, ((r - l) * scale).roundToInt())
         val h = max(8, ((b - t) * scale).roundToInt())
-        return Crop(l, t, r, b, scale, box, resample(board, l, t, r, b, w, h))
+        val fine = pixels?.let { runCatching { it.crop(l.toFloat() / board.width, t.toFloat() / board.height, r.toFloat() / board.width, b.toFloat() / board.height, w, h) }.getOrNull() }
+        return Crop(l, t, r, b, scale, box, fine?.takeIf { it.width == w && it.height == h } ?: resample(board, l, t, r, b, w, h))
     }
 
     /** Redraws the figure at [box] of [board]; [labels] are typeset at their places. */
-    fun redraw(board: Raster, box0: FigureBox, labels: List<FigureLabel> = emptyList()): Result {
+    fun redraw(board: Raster, box0: FigureBox, labels: List<FigureLabel> = emptyList(), pixels: BoardPixels? = null, kind: String? = null): Result {
         // The box should hold the drawing and its labels; a label on its edge means the drawing goes on beyond it (live, board 4: h_B's arrow).
         val box = labels.mapNotNull { it.at }.fold(box0) { b, p ->
             val m = LABEL_MARGIN
             FigureBox(min(b.left, p.x - m).coerceAtLeast(0f), min(b.top, p.y - m).coerceAtLeast(0f), max(b.right, p.x + m).coerceAtMost(1f), max(b.bottom, p.y + m).coerceAtMost(1f))
         }
-        val crop = crop(board, box)
+        val crop = crop(board, box, pixels)
         val img = crop.image
         val w = img.width
         val h = img.height
@@ -111,7 +116,7 @@ object FigureRedraw {
         // one, each at its own size: the fitting's tolerances scale with the drawing.
         val fitted = bands(mask, il, ir, paths.map { it.points.toList() }).map { (y0, y1) ->
             fun mine(y: Float) = y in y0..y1
-            val fitter = FigureFit(sw, if (y0 <= 0f && y1 >= h.toFloat()) diag else hypot(w.toFloat(), y1 - y0))
+            val fitter = FigureFit(sw, if (y0 <= 0f && y1 >= h.toFloat()) diag else hypot(w.toFloat(), y1 - y0), kind)
             val idx = labelled.indices.filter { mine(labelled[it].first.y) }
             val prims = fitter.fit(withColour.filter { (pts, _) -> mine(pts.sumOf { it.y.toDouble() }.toFloat() / pts.size) }, idx.map { labelled[it] }, idx.map { words[it] }, dots.filter { mine(it.y) })
             idx.forEachIndexed { k, i -> labelled[i] = fitter.labelPlaces[k] to labelled[i].second }
@@ -163,11 +168,13 @@ object FigureRedraw {
     /**
      * Every figure of [doc] drawn from [board] (the flattened board the AI read). [yScale]: the AI saw the
      * board with a canary strip below it, so its y fractions are multiplied by this (height with strip /
-     * board height). [store] keeps a fallback picture and returns its notebook asset (null: no picture).
-     * A table with rows becomes a Table element; a figure without a usable box is drawn from its data.
+     * board height). [pixels]: where each drawing's crop is cut from, at a finer resolution than [board]
+     * (the full-resolution photo, REQ-001). [store] keeps a fallback picture and returns its notebook asset
+     * (null: no picture). A table with rows becomes a Table element; a figure without a usable box is drawn from its data.
      */
-    fun resolve(doc: NoteDocument, board: Raster?, yScale: Float = 1f, store: (Raster) -> FigureRaster? = { null }): NoteDocument {
+    fun resolve(doc: NoteDocument, board: Raster?, yScale: Float = 1f, pixels: BoardPixels? = null, store: (Raster) -> FigureRaster? = { null }): NoteDocument {
         val boardInk by lazy { board?.let { InkMask.of(it) } }
+
         // Did the model give its numbers in pixels? Decided once, by which reading puts more labels on ink over all the drawings.
         val inPixels by lazy {
             val ink = boardInk ?: return@lazy null
@@ -182,11 +189,11 @@ object FigureRedraw {
             if (b.element != NoteElement.Diagram || f0.source != FigureSource.Pending) return b
             val f = onBoard(f0, yScale).let { permille ->
                 val ink = boardInk ?: return@let permille
-                val pixels = asPixels(f0, ink.width, ink.height) ?: return@let permille
+                val asPx = asPixels(f0, ink.width, ink.height) ?: return@let permille
                 // REQ-001: a model answers in one unit for the whole photo; per drawing, the pixel reading
                 // of a box on a board full of writing lands on some words by chance.
-                val misread = if (PIXELS_GUARD) inPixels == true else onInk(pixels, ink) > onInk(permille, ink)
-                if (misread) pixels else permille
+                val misread = if (PIXELS_GUARD) inPixels == true else onInk(asPx, ink) > onInk(permille, ink)
+                if (misread) asPx else permille
             }
             if (f.kind == FigureKind.Table && b.rows.isNotEmpty()) return b.copy(element = NoteElement.Table, figure = f.copy(source = FigureSource.FromData))
             // FIG-LIB: a drawing the AI recognised as a library kind can be drawn from its parameters (crisp,
@@ -199,7 +206,7 @@ object FigureRedraw {
             // what the photo could not give.
             val photoFirst = PHOTO_FIRST && board != null && box != null
             if (library != null && sure && !photoFirst) return b.copy(diagram = library.diagram, figure = f.copy(source = FigureSource.FromData))
-            val result = if (board != null && box != null) runCatching { redraw(board, box, f.labels) }.getOrNull() else null
+            val result = if (board != null && box != null) runCatching { redraw(board, box, f.labels, pixels, f.spec?.kind ?: f.kind.name) }.getOrNull() else null
             if (System.getProperty("figure.debug") != null) {
                 println("figure ${b.head}: accepted=${result?.accepted} recall=${result?.recall} precision=${result?.precision}")
                 result?.prims?.forEach { println("  $it") }
@@ -316,7 +323,8 @@ object FigureRedraw {
         val lineReach = 0.12f * diag
         fun inWord(p: XY, b: FloatArray) = p.x in b[0] - r..b[2] + r && p.y in b[1] - r..b[3] + r
         val pairs = labels.indices.flatMap { i -> words.indices.map { j -> Triple(i, j, if (inWord(labels[i].first, wordBoxes[j])) 0f else labels[i].first.dist(words[j])) } }
-            .filter { (i, _, d) -> d == 0f || (!onInk(labels[i].first) && d < (if (onLine(labels[i].first)) lineReach else reach)) }.sortedBy { it.third }
+            .filter { (i, _, d) -> d == 0f || (!onInk(labels[i].first) && d < (if (onLine(labels[i].first)) lineReach else reach)) }
+.sortedBy { it.third }
         val out = labels.toMutableList()
         val matched = MutableList<FloatArray?>(labels.size) { null }
         val doneL = HashSet<Int>()

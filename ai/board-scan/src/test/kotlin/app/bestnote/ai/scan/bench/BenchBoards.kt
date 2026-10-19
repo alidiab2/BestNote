@@ -40,7 +40,11 @@ object BenchBoards {
     }
 
     /** Boards stacked top to bottom (same width): one photo for one AI call, fewer calls. */
-    fun stack(vararg names: String): Raster {
+    private val stacks = HashMap<List<String>, Raster>()
+
+    fun stack(vararg names: String): Raster = synchronized(stacks) { stacks.getOrPut(names.toList()) { stacked(*names) } }
+
+    private fun stacked(vararg names: String): Raster {
         val parts = names.map(::board)
         val w = parts.maxOf { it.width }
         val scaled = parts.map { if (it.width == w) it else raster(scale(image(it), w, it.height * w / it.width)) }
@@ -67,6 +71,19 @@ object BenchBoards {
             setRenderingHint(java.awt.RenderingHints.KEY_INTERPOLATION, java.awt.RenderingHints.VALUE_INTERPOLATION_BILINEAR)
             drawImage(src, 0, 0, w, h, null)
             dispose()
+        }
+    }
+
+    private val halves = java.util.IdentityHashMap<Raster, Raster>()
+
+    /** [r] at half size, area-averaged like a camera image scaled down. */
+    fun half(r: Raster): Raster = synchronized(halves) {
+        halves.getOrPut(r) {
+            val src = image(r)
+            val w = r.width / 2
+            val h = r.height / 2
+            val scaled = src.getScaledInstance(w, h, java.awt.Image.SCALE_AREA_AVERAGING)
+            raster(BufferedImage(w, h, BufferedImage.TYPE_INT_RGB).also { it.createGraphics().apply { drawImage(scaled, 0, 0, null); dispose() } })
         }
     }
 

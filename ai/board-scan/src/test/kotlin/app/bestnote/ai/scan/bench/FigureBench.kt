@@ -44,19 +44,21 @@ import kotlin.math.sin
  */
 object FigureBench {
     /** A drawing on a board: its box and its labels (board pixels). */
-    class Truth(val id: String, val board: String, val box: IntArray, val labels: List<Pair<String, IntArray>>)
+    /** [shape]: what it is made of: blocks, arrowheads, dashed lines (structure errors are counted against it). */
+    class Truth(val id: String, val board: String, val box: IntArray, val labels: List<Pair<String, IntArray>>, val shape: IntArray)
 
-    private fun t(id: String, board: String, box: IntArray, vararg labels: Pair<String, IntArray>) = Truth(id, board, box, labels.toList())
+    private fun t(id: String, board: String, shape: IntArray, box: IntArray, vararg labels: Pair<String, IntArray>) = Truth(id, board, box, labels.toList(), shape)
+    private fun parts(blocks: Int, heads: Int, dashed: Int) = intArrayOf(blocks, heads, dashed)
     private fun p(x: Int, y: Int) = intArrayOf(x, y)
 
     val truths = listOf(
-        t("graph-U", "board2", intArrayOf(928, 278, 1278, 502), "U(x)" to p(1003, 293), "30" to p(938, 328), "2" to p(1055, 410), "5" to p(1167, 446), "7" to p(1242, 434), "x" to p(1264, 442)),
-        t("graph-F", "board3", intArrayOf(160, 30, 625, 465), "F\\,(N)" to p(245, 40), "F" to p(170, 165), "\\Delta t" to p(455, 437), "\\Delta t" to p(595, 450)),
-        t("block-vF", "board6", intArrayOf(80, 28, 392, 145), "v" to p(210, 42), "m" to p(212, 113), "F" to p(355, 103)),
-        t("block-v", "board6", intArrayOf(600, 150, 905, 252), "v" to p(740, 170), "m" to p(727, 226)),
-        t("pair-F", "board8", intArrayOf(493, 105, 768, 172), "F_{2,1}" to p(515, 128), "m_1" to p(600, 148), "m_2" to p(645, 150), "F_{1,2}" to p(740, 132)),
-        t("before", "board8", intArrayOf(1100, 72, 1470, 182), "\\vec{v}_1" to p(1193, 92), "\\vec{v}_2" to p(1323, 94), "m_1" to p(1195, 152), "m_2" to p(1335, 152)),
-        t("after", "board8", intArrayOf(1110, 278, 1430, 410), "\\vec{u}_1" to p(1227, 295), "\\vec{u}_2" to p(1318, 298), "m_1" to p(1235, 345), "m_2" to p(1330, 350)),
+        t("graph-U", "board2", parts(0, 2, 3), intArrayOf(928, 278, 1278, 502), "U(x)" to p(1003, 293), "30" to p(938, 328), "2" to p(1055, 410), "5" to p(1167, 446), "7" to p(1242, 434), "x" to p(1264, 442)),
+        t("graph-F", "board3", parts(0, 2, 1), intArrayOf(160, 30, 625, 465), "F\\,(N)" to p(245, 40), "F" to p(170, 165), "\\Delta t" to p(455, 437), "\\Delta t" to p(595, 450)),
+        t("block-vF", "board6", parts(1, 2, 0), intArrayOf(80, 28, 392, 145), "v" to p(210, 42), "m" to p(212, 113), "F" to p(355, 103)),
+        t("block-v", "board6", parts(1, 1, 0), intArrayOf(600, 150, 905, 252), "v" to p(740, 170), "m" to p(727, 226)),
+        t("pair-F", "board8", parts(2, 2, 0), intArrayOf(493, 105, 768, 172), "F_{2,1}" to p(515, 128), "m_1" to p(600, 148), "m_2" to p(645, 150), "F_{1,2}" to p(740, 132)),
+        t("before", "board8", parts(2, 0, 0), intArrayOf(1100, 72, 1470, 182), "\\vec{v}_1" to p(1193, 92), "\\vec{v}_2" to p(1323, 94), "m_1" to p(1195, 152), "m_2" to p(1335, 152)),
+        t("after", "board8", parts(2, 0, 0), intArrayOf(1110, 278, 1430, 410), "\\vec{u}_1" to p(1227, 295), "\\vec{u}_2" to p(1318, 298), "m_1" to p(1235, 345), "m_2" to p(1330, 350)),
     )
 
     /** The two photos sent to the AI (recorded answers in resources/bench). */
@@ -70,9 +72,9 @@ object FigureBench {
     val opus = listOf("live-claude-stack-2-8", "live-claude-stack-3-6")
     val sonnet = listOf("live-sonnet-stack-2-8")
 
-    class Score(val id: String, val source: String, val recall: Float, val precision: Float, val labelsFound: Int, val labelsTotal: Int, val extraLabels: Int, val fineF1: Float = 0f, val kinks: Int = 0, val placed: Int = 0) {
+    class Score(val id: String, val source: String, val recall: Float, val precision: Float, val labelsFound: Int, val labelsTotal: Int, val extraLabels: Int, val fineF1: Float = 0f, val kinks: Int = 0, val placed: Int = 0, val structure: Int = 0, val parts: String = "") {
         val f1: Float get() = if (recall + precision == 0f) 0f else 2 * recall * precision / (recall + precision)
-        override fun toString() = "%-9s %-9s f1=%.2f fine=%.2f kinks=%d recall=%.2f precision=%.2f labels=%d/%d placed=%d extra=%d".format(id, source, f1, fineF1, kinks, recall, precision, labelsFound, labelsTotal, placed, extraLabels)
+        override fun toString() = "%-9s %-9s f1=%.2f fine=%.2f kinks=%d recall=%.2f precision=%.2f labels=%d/%d placed=%d extra=%d structure=%d %s".format(id, source, f1, fineF1, kinks, recall, precision, labelsFound, labelsTotal, placed, extraLabels, structure, parts)
     }
 
     /** One drawing as a pipeline drew it: the diagram and where it sits on its board (board pixels; null = not on the photo, e.g. a library drawing). */
@@ -80,8 +82,24 @@ object FigureBench {
 
     // ------------------------------------------------------------------ pipelines
 
+    /**
+     * Which pixels the redraw gets. [Native]: the bench board. [Half]: the board at half size, as the
+     * app redraws today from the 1600 px copy of a photo twice as fine. [HalfWithPhoto]: the half-size board,
+     * but each figure cut from the full board (BoardPixels), as the app does with the full-resolution photo.
+     */
+    enum class Pixels { Native, Half, HalfWithPhoto }
+
+    @JvmField var pixels = Pixels.Native
+
+    /** The app's resolve on [full] under [pixels]. */
+    fun resolveOn(doc: NoteDocument, full: Raster, yScale: Float = 1f): NoteDocument = when (pixels) {
+        Pixels.Native -> FigureRedraw.resolve(doc, full, yScale)
+        Pixels.Half -> FigureRedraw.resolve(doc, BenchBoards.half(full), yScale)
+        Pixels.HalfWithPhoto -> FigureRedraw.resolve(doc, BenchBoards.half(full), yScale, pixels = app.bestnote.ai.scan.figure.BoardPixels.of(full))
+    }
+
     /** The redraw from the photo with the ground truth's box and labels (the CV alone, a perfect model). */
-    fun oracle(truth: Truth, resolve: (NoteDocument, Raster) -> NoteDocument = { d, r -> FigureRedraw.resolve(d, r) }): Drawn {
+    fun oracle(truth: Truth, resolve: (NoteDocument, Raster) -> NoteDocument = { d, r -> resolveOn(d, r) }): Drawn {
         val b = BenchBoards.board(truth.board)
         fun fx(x: Int) = x / b.width.toFloat()
         fun fy(y: Int) = y / b.height.toFloat()
@@ -91,7 +109,7 @@ object FigureBench {
     }
 
     /** The app's path on a recorded answer: [answer] → figures resolved on the stacked photo; each ground-truth drawing gets the answer's drawing that overlaps it most. */
-    fun live(answer: String, resolve: (NoteDocument, Raster, Float) -> NoteDocument = { d, r, k -> FigureRedraw.resolve(d, r, k) }, edit: (NoteDocument) -> NoteDocument = { it }): Map<String, Drawn?> {
+    fun live(answer: String, resolve: (NoteDocument, Raster, Float) -> NoteDocument = { d, r, k -> resolveOn(d, r, k) }, edit: (NoteDocument) -> NoteDocument = { it }): Map<String, Drawn?> {
         val boards = stacks.getValue(answer)
         val photo = BenchBoards.stack(*boards.toTypedArray())
         val yScale = (photo.height + Canary.stripHeight(photo.width, photo.height)).toFloat() / photo.height
@@ -186,7 +204,15 @@ object FigureBench {
         var extra = 0
         for (t in texts.map(::norm)) if (want.remove(t)) found++ else extra++
         picture(crop, mask, drawn, texts, mapped, File("build/bench/$run/${truth.id}.png"))
-        return Score(truth.id, d?.source?.name ?: "missing", recall, precision, found, truth.labels.size, extra, fineF1, kinks, placed)
+        // Structure: blocks (closed four-cornered outlines), arrowheads and dashed lines, against what the teacher drew.
+        val shapes = d?.diagram?.shapes.orEmpty()
+        val got = intArrayOf(
+            shapes.count { it is VectorShape.Polyline && it.closed && it.points.size == 4 },
+            shapes.count { it is VectorShape.Arrow },
+            shapes.count { (it is VectorShape.Line || it is VectorShape.Polyline) && it.style.dashed },
+        )
+        val structure = if (d?.at == null) truth.shape.sum() else (0..2).sumOf { kotlin.math.abs(got[it] - truth.shape[it]) }
+        return Score(truth.id, d?.source?.name ?: "missing", recall, precision, found, truth.labels.size, extra, fineF1, kinks, placed, structure, "blocks/heads/dashed ${got.joinToString("/")} of ${truth.shape.joinToString("/")}")
     }
 
     /**

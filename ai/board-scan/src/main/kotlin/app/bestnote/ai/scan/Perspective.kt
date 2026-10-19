@@ -37,6 +37,15 @@ object Perspective {
         return Raster(outW, outH, out)
     }
 
+    /** [mapBack] with the homography worked out once: for mapping many points (a figure's crop, REQ-001). */
+    fun mapper(quad: Quad): (Float, Float) -> Pt {
+        val m = homography(listOf(Pt(0f, 0f), Pt(1f, 0f), Pt(1f, 1f), Pt(0f, 1f)), quad.corners)
+        return { u, v ->
+            val d = m[6] * u + m[7] * v + 1.0
+            Pt(((m[0] * u + m[1] * v + m[2]) / d).toFloat(), ((m[3] * u + m[4] * v + m[5]) / d).toFloat())
+        }
+    }
+
     /** Maps a normalised point of the flattened image back onto the photo (for previews and tests). */
     fun mapBack(quad: Quad, u: Float, v: Float): Pt {
         val m = homography(listOf(Pt(0f, 0f), Pt(1f, 0f), Pt(1f, 1f), Pt(0f, 1f)), quad.corners)

@@ -11,6 +11,8 @@ import org.junit.Test
  * scores may not fall below what round 2 reached (docs/research/board-figures.md). Values measured:
  * oracle f1 0.951 / 6 false corners, Sonnet answer 0.894, Opus answer 0.946 with labels 0.96.
  * Before round 2: 0.937 / 13, 0.875 / 13, 0.512 with labels 0.67.
+ * Round 3 (structure errors: blocks, arrowheads, dashed lines against the drawing): oracle 9 → 6, Sonnet
+ * 10 → 7, Opus 16 → 11; drawings cut from the full-resolution photo beat the 1600 px copy.
  */
 class FigureFidelityTest {
     private fun mean(s: List<FigureBench.Score>) = s.map { it.f1 }.average()
@@ -23,6 +25,26 @@ class FigureFidelityTest {
         // Curves are curves: few corners where the teacher's line runs smooth (13 before).
         assertTrue("false corners ${scores.sumOf { it.kinks }}", scores.sumOf { it.kinks } <= 8)
         assertEquals("all labels typeset", scores.sumOf { it.labelsTotal }, scores.sumOf { it.labelsFound })
+        assertTrue("structure errors ${scores.sumOf { it.structure }}", scores.sumOf { it.structure } <= 7)
+    }
+
+    @Test fun `drawings cut from the full-resolution photo beat the copy the model read`() {
+        fun run(p: FigureBench.Pixels): Pair<Double, Double> {
+            FigureBench.pixels = p
+            try {
+                val oracle = FigureBench.truths.map { FigureBench.score(it, FigureBench.oracle(it), "gate/$p") }
+                val drawn = FigureBench.opus.flatMap { FigureBench.live(it).entries }.associate { it.key to it.value }
+                val opus = FigureBench.truths.map { FigureBench.score(it, drawn[it.id], "gate/$p-opus") }
+                return mean(oracle) to mean(opus)
+            } finally {
+                FigureBench.pixels = FigureBench.Pixels.Native
+            }
+        }
+        val copy = run(FigureBench.Pixels.Half)
+        val photo = run(FigureBench.Pixels.HalfWithPhoto)
+        println("copy $copy photo $photo")
+        assertTrue("oracle: $copy vs $photo", photo.first > copy.first + 0.005)
+        assertTrue("Opus answer: $copy vs $photo", photo.second > copy.second + 0.005)
     }
 
     @Test fun `the owner model, Sonnet 5_5, gets the drawings redrawn`() {
@@ -31,6 +53,7 @@ class FigureFidelityTest {
         scores.forEach(::println)
         assertTrue("mean f1 ${mean(scores)}", mean(scores) >= 0.88)
         assertTrue("false corners", scores.sumOf { it.kinks } <= 6)
+        assertTrue("structure errors ${scores.sumOf { it.structure }}", scores.sumOf { it.structure } <= 8)
     }
 
     @Test fun `with library parameters from Opus 5_5 the photo still wins and every drawing is found`() {
@@ -42,6 +65,7 @@ class FigureFidelityTest {
         assertTrue("redrawn from the photo", scores.all { it.source == FigureSource.Redrawn.name })
         assertTrue("mean f1 ${mean(scores)}", mean(scores) >= 0.93)
         assertTrue("no made-up labels", scores.sumOf { it.extraLabels } <= 3)
+        assertTrue("structure errors ${scores.sumOf { it.structure }}", scores.sumOf { it.structure } <= 12)
     }
 
     @Test fun `a library drawing is still the fallback when there is no photo`() {
