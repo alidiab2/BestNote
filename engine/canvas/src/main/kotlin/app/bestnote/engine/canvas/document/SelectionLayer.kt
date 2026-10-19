@@ -418,7 +418,7 @@ internal class SelectionLayer(
         followPreview = emptyList()
         val sel = selection
         val m = g.transform
-        if (commit && sel != null && !nearlyIdentity(m)) {
+        if (commit && sel != null && !nearlyIdentity(m) && !(g.grip == Grip.Move && moveToOtherPage(sel, m))) {
             val k = m.lengthScale
             val moveShape = shapeMover(sel, m)
             replace(sel, { s ->
@@ -431,6 +431,40 @@ internal class SelectionLayer(
         pages.setHiddenElements(-1, emptySet())
         notifyMenu()
         invalidate()
+    }
+
+    /**
+     * REQ-003: a selection dragged by [m] whose center is dropped over another page moves to that page (in its
+     * page points), as one undo step, and stays selected there. @return false when it stays on its own page.
+     */
+    private fun moveToOtherPage(sel: Selected, m: Affine): Boolean {
+        val doc = document ?: return false
+        val layout = pages.layout ?: return false
+        val from = indexOf(sel.page)
+        if (from < 0 || sel.elements.any { it.locked }) return false
+        val cx = m.mapX((sel.box.minX + sel.box.maxX) / 2, (sel.box.minY + sel.box.maxY) / 2)
+        val cy = m.mapY((sel.box.minX + sel.box.maxX) / 2, (sel.box.minY + sel.box.maxY) / 2)
+        val drop = ZoomMath.dropTarget(layout, from, cx, cy) ?: return false
+        val target = doc.pages.getOrNull(drop.page) ?: return false
+        val mm = m.then(Affine.translate(drop.x - cx, drop.y - cy))
+        val ids = sel.strokes.mapNotNullTo(HashSet()) { brushes.brushOf(it)?.shape?.id }
+        val others = shapesOn(target, ids)
+        val tolerance = GLUE_DP * density / layout.scale * RELINK_SHARE
+        val moved = sel.strokes.map { s ->
+            StrokeEdits.transformed(s, mm).also { n -> brushes.derive(n, s) { ShapeEdits.moved(it, mm, ids, others, tolerance) } }
+        }
+        val elements = sel.elements.map { e ->
+            ElementTransforms.transformed(e, mm).let { if (it is TextElement && it !== e) elementPainter.fitted(it) else it }
+        }
+        val gone = sel.elements.mapTo(HashSet()) { it.id }
+        edit {
+            doc.asOneStep {
+                doc.editContent(from, removedStrokes = sel.strokes, elements = sel.page.elements.filter { it.id !in gone })
+                doc.editContent(drop.page, addedStrokes = moved, elements = target.elements + elements)
+            }
+        }
+        select(target, moved, elements)
+        return true
     }
 
     private fun nearlyIdentity(m: Affine): Boolean {

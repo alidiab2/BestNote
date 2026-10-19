@@ -107,6 +107,26 @@ object ZoomMath {
         return PageAnchor(page, (docX - r.left) / layout.scale, (docY - r.top) / layout.scale)
     }
 
+    /**
+     * REQ-003: where a lasso selection dragged on page [from] lands when its center is at page point
+     * ([px], [py]) of that page: the other page it is dropped over, as that page's index and the point
+     * in its own page points. Null when it is still over [from], or over a gap or the desk (it stays).
+     */
+    fun dropTarget(layout: DocumentLayout, from: Int, px: Float, py: Float): PageAnchor? {
+        if (from !in 0 until layout.pageCount) return null
+        val src = layout.pageRect(from)
+        val docX = src.left + px * layout.scale
+        val docY = src.top + py * layout.scale
+        for (i in 0 until layout.pageCount) {
+            if (i == from) continue
+            val r = layout.pageRect(i)
+            if (docX >= r.left && docX <= r.right && docY >= r.top && docY <= r.bottom) {
+                return PageAnchor(i, (docX - r.left) / layout.scale, (docY - r.top) / layout.scale)
+            }
+        }
+        return null
+    }
+
     /** Document pixel of [anchor] in [layout]. */
     fun docX(layout: DocumentLayout, anchor: PageAnchor) = layout.pageRect(anchor.page).left + anchor.x * layout.scale
     fun docY(layout: DocumentLayout, anchor: PageAnchor) = layout.pageRect(anchor.page).top + anchor.y * layout.scale
