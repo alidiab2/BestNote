@@ -44,7 +44,7 @@ class OpenAiRequestsTest {
         val format = body.getValue("response_format").jsonObject
         assertEquals("json_schema", format.getValue("type").jsonPrimitive.content)
         assertEquals("false", format.getValue("json_schema").jsonObject.getValue("strict").jsonPrimitive.content)
-        assertEquals("16000", body.getValue("max_completion_tokens").jsonPrimitive.content)
+        assertEquals("8000", body.getValue("max_completion_tokens").jsonPrimitive.content)
         assertNull(body["max_tokens"])
         assertNull(body["temperature"])
     }
@@ -53,7 +53,7 @@ class OpenAiRequestsTest {
     fun compatibleRequestUsesMaxTokensAndCanDropTheFormat() {
         val body = OpenAiRequests.chat("llava", "sys", "user", png, "image/png", ResponseFormat.None, official = false)
         assertNull(body["response_format"])
-        assertEquals("16000", body.getValue("max_tokens").jsonPrimitive.content)
+        assertEquals("8000", body.getValue("max_tokens").jsonPrimitive.content)
         assertEquals("0.2", body.getValue("temperature").jsonPrimitive.content)
         // Without a schema the prompt spells out the JSON shape.
         assertTrue(body.getValue("messages").jsonArray[0].jsonObject.getValue("content").jsonPrimitive.content.contains("\"blocks\""))
@@ -104,6 +104,7 @@ class OpenAiVisionProviderTest {
 
     @Before
     fun setUp() {
+        OpenAiVisionProvider.forgetNegotiated()
         server.start()
         val base = server.url("/v1").toString() // no trailing slash on purpose
         val creds = object : ProviderCredentials {
@@ -133,8 +134,57 @@ class OpenAiVisionProviderTest {
         server.enqueue(respond(200, fixture("ollama_fenced.json")))
         val doc = provider.reconstructBoard(jpeg, request)
         assertEquals("Newton's second law", doc.title)
+        assertEquals(8_000, takeJson().getValue("max_tokens").jsonPrimitive.content.toInt())
         assertEquals(16_000, takeJson().getValue("max_tokens").jsonPrimitive.content.toInt())
-        assertEquals(32_000, takeJson().getValue("max_tokens").jsonPrimitive.content.toInt())
+    }
+
+    @Test
+    fun answerLostToThinkingTwiceIsNotSentAThirdTime() = runTest {
+        val allThinking = """{"choices":[{"index":0,"message":{"role":"assistant","content":""},"finish_reason":"length"}]}"""
+        server.enqueue(respond(200, allThinking))
+        server.enqueue(respond(200, allThinking))
+        try { provider.reconstructBoard(jpeg, request); fail() } catch (_: VisionError.Truncated) { }
+        assertEquals("one retry at most", 2, server.requestCount)
+    }
+
+    @Test
+    fun cutOffAnswerWithNotesIsSalvagedNotSentAgain() = runTest {
+        server.enqueue(respond(200, fixture("board_truncated.json")))
+        assertEquals(4, provider.reconstructBoard(jpeg, request).blocks.size)
+        assertEquals(1, server.requestCount)
+    }
+
+    @Test
+    fun acceptedResponseFormatIsRememberedPerServerAndModel() = runTest {
+        model = "deepseek-chat"
+        server.enqueue(respond(400, fixture("format_rejected.json")))
+        server.enqueue(respond(200, fixture("deepseek_flash_seen.json")))
+        server.enqueue(respond(200, fixture("deepseek_flash_seen.json")))
+        provider.writeNotes(jpeg, notesRequest)
+        provider.writeNotes(jpeg, notesRequest)
+        assertEquals("no second 400", 3, server.requestCount)
+        assertEquals("json_schema", takeJson().getValue("response_format").jsonObject.getValue("type").jsonPrimitive.content)
+        assertEquals("json_object", takeJson().getValue("response_format").jsonObject.getValue("type").jsonPrimitive.content)
+        assertEquals("json_object", takeJson().getValue("response_format").jsonObject.getValue("type").jsonPrimitive.content)
+        // Another model on the same server negotiates for itself.
+        model = "qwen2.5vl:7b"
+        server.enqueue(respond(200, fixture("ollama_fenced.json")))
+        provider.reconstructBoard(jpeg, request)
+        assertEquals("json_schema", takeJson().getValue("response_format").jsonObject.getValue("type").jsonPrimitive.content)
+    }
+
+    @Test
+    fun deepSeekByNameThroughAProxyGetsThinkingOffAndDropsItWhenRejected() = runTest {
+        model = "deepseek/deepseek-v3.2"
+        server.enqueue(respond(400, """{"error":{"message":"Unrecognized request argument supplied: thinking"}}"""))
+        server.enqueue(respond(200, fixture("ollama_fenced.json")))
+        provider.reconstructBoard(jpeg, request)
+        assertEquals("disabled", takeJson().getValue("thinking").jsonObject.getValue("type").jsonPrimitive.content)
+        assertNull(takeJson()["thinking"])
+        // Remembered: the next board goes without it straight away.
+        server.enqueue(respond(200, fixture("ollama_fenced.json")))
+        provider.reconstructBoard(jpeg, request)
+        assertNull(takeJson()["thinking"])
     }
 
     @Test

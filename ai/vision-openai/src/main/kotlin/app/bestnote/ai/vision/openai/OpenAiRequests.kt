@@ -16,7 +16,11 @@ data class OpenAiConfig(
     val baseUrl: String = OPENAI_BASE_URL,
     val timeoutSeconds: Long = 240,
     val retryDelayMs: Long = 1_500,
-    val maxTokens: Int = 16_000,
+    /**
+     * REQ-002: a page of notes is ~1–4k tokens; 8k leaves room for low thinking without letting a
+     * runaway answer bill 16k. A cut-off answer is salvaged; an empty one is retried once with 2×.
+     */
+    val maxTokens: Int = DEFAULT_MAX_TOKENS,
     /** Thinking models: "low" answers a board well at a fraction of the time and tokens of the default. */
     val reasoningEffort: String = "low",
     /** Sent to compatible endpoints only; OpenAI's reasoning models accept only their default. */
@@ -24,13 +28,20 @@ data class OpenAiConfig(
 ) {
     companion object {
         const val OPENAI_BASE_URL = "https://api.openai.com/v1/"
+        const val DEFAULT_MAX_TOKENS = 8_000
 
         /**
          * Servers whose models think unless told not to, and accept `thinking: {type: disabled}`.
          * DeepSeek ignored `reasoning_effort: low` (owner's key: 4,399 of 5,392 output tokens were
          * thinking); disabled, the same board reads just as well at a fraction of the cost and time.
+         * REQ-002: also a DeepSeek model reached through OpenRouter or a proxy ("deepseek-chat",
+         * "deepseek/deepseek-v3.2"); a server that rejects the field is retried without it.
          */
-        fun turnsThinkingOff(baseUrl: String) = "api.deepseek.com" in baseUrl
+        fun turnsThinkingOff(baseUrl: String, model: String = ""): Boolean {
+            if ("api.deepseek.com" in baseUrl) return true
+            val id = model.trim().lowercase()
+            return id.startsWith("deepseek") || id.substringAfterLast('/').startsWith("deepseek")
+        }
 
         /** Last-resort id when the key's live model list is unavailable (newest flagship, 2026-10). */
         const val DEFAULT_MODEL = "gpt-5.6-terra"

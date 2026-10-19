@@ -69,6 +69,18 @@ class GeminiVisionProviderTest {
     }
 
     @Test
+    fun outputBudgetIsEightThousandAndAnAnswerLostToThinkingIsRetriedOnceOnly() = runTest {
+        server.enqueue(respond(200, Fixtures.ok("", finish = "MAX_TOKENS")))
+        server.enqueue(respond(200, Fixtures.read("board_response.json")))
+        assertEquals("Derivatives", provider.reconstructBoard(jpeg, request).title)
+        assertEquals("8192", takeJson()["generationConfig"]!!.jsonObject["maxOutputTokens"]!!.jsonPrimitive.content)
+        assertEquals("16384", takeJson()["generationConfig"]!!.jsonObject["maxOutputTokens"]!!.jsonPrimitive.content)
+
+        failure<VisionError.Truncated>(respond(200, Fixtures.ok("", finish = "MAX_TOKENS")), respond(200, Fixtures.ok("", finish = "MAX_TOKENS")))
+        assertEquals("never a third request", 4, server.requestCount)
+    }
+
+    @Test
     fun reconstructsABoardWithTheExpertStudentPrompt() = runTest {
         server.enqueue(respond(200, Fixtures.read("board_response.json")))
         val doc = provider.reconstructBoard(jpeg, request)

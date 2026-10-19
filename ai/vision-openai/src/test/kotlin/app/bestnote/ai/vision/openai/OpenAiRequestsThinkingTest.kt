@@ -16,6 +16,18 @@ class OpenAiRequestsThinkingTest {
         assertNull(OpenAiRequests.chat("m", "sys", "user", ByteArray(4), "image/jpeg", ResponseFormat.JsonObject, false)["thinking"])
     }
 
+    @Test fun deepSeekModelsAreRecognisedByNameOnAnyServer() {
+        assertEquals(true, OpenAiConfig.turnsThinkingOff("https://openrouter.ai/api/v1/", "deepseek/deepseek-v3.2"))
+        assertEquals(true, OpenAiConfig.turnsThinkingOff("https://my-proxy.example/v1/", "DeepSeek-Chat"))
+        assertEquals(true, OpenAiConfig.turnsThinkingOff("https://api.fireworks.ai/inference/v1/", "accounts/fireworks/models/deepseek-v3"))
+        assertFalse(OpenAiConfig.turnsThinkingOff("https://openrouter.ai/api/v1/", "qwen/qwen3-vl"))
+        assertFalse(OpenAiConfig.turnsThinkingOff("https://api.openai.com/v1/", "gpt-5-mini"))
+    }
+
+    @Test fun defaultOutputBudgetIsEightThousand() {
+        assertEquals(8_000, OpenAiConfig().maxTokens)
+    }
+
     @Test fun rejectionIsRecognised() {
         assertEquals(true, OpenAiResponses.rejectsThinking(400, """{"error":{"message":"Unrecognized request argument supplied: thinking"}}"""))
         assertFalse(OpenAiResponses.rejectsThinking(400, """{"error":{"message":"response_format is unavailable"}}"""))
