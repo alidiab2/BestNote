@@ -94,6 +94,8 @@ object FigureRedraw {
         val labelAt = snapped.map { it.first }
         val bg = background(img, mask)
         val withColour = paths.map { p -> p.points.toList() to colourOf(img, mask, p.points, bg) }
+        // The speck filter takes a dotted line's dots too: they are looked for in the unfiltered ink.
+        val dots = dots(InkMask.of(img, specks = false), max(4f, 3f * sw))
         val il = (box.left * board.width - crop.left) * crop.scale
         val ir = (box.right * board.width - crop.left) * crop.scale
         val itop = (box.top * board.height - crop.top) * crop.scale
@@ -106,7 +108,7 @@ object FigureRedraw {
             fun mine(y: Float) = y in y0..y1
             val fitter = FigureFit(sw, if (y0 <= 0f && y1 >= h.toFloat()) diag else hypot(w.toFloat(), y1 - y0))
             val idx = labelled.indices.filter { mine(labelled[it].first.y) }
-            val prims = fitter.fit(withColour.filter { (pts, _) -> mine(pts.sumOf { it.y.toDouble() }.toFloat() / pts.size) }, idx.map { labelled[it] }, idx.map { words[it] })
+            val prims = fitter.fit(withColour.filter { (pts, _) -> mine(pts.sumOf { it.y.toDouble() }.toFloat() / pts.size) }, idx.map { labelled[it] }, idx.map { words[it] }, dots.filter { mine(it.y) })
             idx.forEachIndexed { k, i -> labelled[i] = fitter.labelPlaces[k] to labelled[i].second }
             prims to fitter.unsquared
         }
@@ -297,6 +299,22 @@ object FigureRedraw {
             doneW += j
         }
         return out to matched
+    }
+
+    /** Centres of the ink blobs no wider than [size]: the dots a dotted line is drawn with (too small to trace as strokes). */
+    internal fun dots(mask: InkMask, size: Float): List<XY> {
+        val (label, sizes) = mask.components()
+        val n = sizes.size
+        val box = Array(n) { intArrayOf(Int.MAX_VALUE, Int.MAX_VALUE, -1, -1) }
+        for (i in label.indices) {
+            val c = label[i]
+            if (c < 0) continue
+            val b = box[c]
+            val x = i % mask.width
+            val y = i / mask.width
+            b[0] = min(b[0], x); b[1] = min(b[1], y); b[2] = max(b[2], x); b[3] = max(b[3], y)
+        }
+        return box.indices.filter { val b = box[it]; b[2] >= 0 && sizes[it] >= MIN_DOT && b[0] > 1 && b[1] > 1 && b[2] < mask.width - 2 && b[3] < mask.height - 2 && max(b[2] - b[0], b[3] - b[1]) + 1 <= size }.map { box[it] }.map { XY((it[0] + it[2]) / 2f, (it[1] + it[3]) / 2f) }
     }
 
     /** Drops ink that belongs to neighbours: blobs touching the padded crop's edge whose centre lies outside the AI's box, and board dividers crossing the crop. */
@@ -595,6 +613,8 @@ object FigureRedraw {
     /** Long side of the working crop: strokes a few pixels thick, fast to trace. */
     const val WORK_SIDE = 520
     private const val MIN_INK = 40
+    /** Pixels a dot of a dotted line needs (fewer: noise). */
+    private const val MIN_DOT = 3
     /** How far a straight line may bow from its fit, as a share of its length (FigureFit allows 0.05). */
     private const val BOW = 0.03f
     /** Share of the ink a band needs to be a drawing of its own. */
