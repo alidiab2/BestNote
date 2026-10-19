@@ -74,7 +74,11 @@ class FigureFit(
     private val sw: Float,
     /** Diagonal of the figure crop in pixels: tolerances scale with it. */
     private val diag: Float,
+    /** What the model says the drawing is (a FIG-LIB kind such as "plot" or "blocks", or "graph", "diagram"…); null = unknown. */
+    private val kind: String? = null,
 ) {
+    /** REQ-001: a function graph has axes, curves and guides, never blocks (a box of axis and guides is no mass). */
+    private val graphKind = KIND_HINTS && kind?.lowercase()?.let { k -> GRAPH_KINDS.any { it in k } } == true
     private val eps = max(1.6f, max(0.8f * sw, 0.007f * diag))
 
     /** The last [fit] before squaring and welding: what is checked against the photo (squaring is on purpose). */
@@ -90,7 +94,7 @@ class FigureFit(
         labelPlaces = labels.map { it.first }
         var prims = paths.flatMap { (pts, sem) -> fitPath(pts, sem) }
         // A block with its mass written in it first: the spring pushing it must not swallow its sides.
-        prims = blocks(prims, labels, named = true)
+        if (!graphKind) prims = blocks(prims, labels, named = true)
         prims = coils(prims)
         // A block on a slope, before its corners are taken for arrowheads; then shafts drawn as two lines.
         prims = slopeBlocks(prims)
@@ -98,8 +102,9 @@ class FigureFit(
         // Short arrows (a velocity beside a dashed path) first, so their shafts are not taken for dashes.
         prims = arrows(prims, minShaft = 0.03f * diag, twoBarbs = true)
         // Blocks before dashes: a block's side is not a dash of the path beside it.
-        prims = blocks(prims, labels)
-        prims = dashes(prims)
+        if (!graphKind) prims = blocks(prims, labels)
+        prims = dashes(prims, words)
+        if (MASS_BLOCKS && !graphKind) prims = massBlocks(prims, labels)
         prims = dotted(prims, dots, words)
         // Lines split where others cross them are whole again before arrowheads are looked for.
         prims = merged(prims)
@@ -412,7 +417,7 @@ class FigureFit(
     }
 
     /** Three or more short collinear segments with regular gaps → one dashed line. */
-    internal fun dashes(prims: List<Prim>): List<Prim> {
+    internal fun dashes(prims: List<Prim>, words: List<FloatArray?> = emptyList()): List<Prim> {
         val short = prims.filterIsInstance<Prim.Seg>().filter { !it.head && it.length < 0.09f * diag && it.length > 0.8f * sw }
         if (short.size < 3) return prims
         val parent = IntArray(short.size) { it }
@@ -431,6 +436,8 @@ class FigureFit(
         val groups = short.indices.groupBy(::find).values.filter { it.size >= 3 }
         if (groups.isEmpty()) return prims
         val gone = HashSet<Prim.Seg>()
+        val written = words.filterNotNull()
+        val boxes = prims.filterIsInstance<Prim.Block>()
         val dashed = groups.map { g ->
             val members = g.map { short[it] }
             gone += members
@@ -439,7 +446,13 @@ class FigureFit(
             // Extreme projections along the fitted direction.
             val d = (l.b - l.a).unit()
             val ts = pts.map { (it.x - l.a.x) * d.x + (it.y - l.a.y) * d.y }
-            Prim.Seg(l.a + d * ts.min(), l.a + d * ts.max(), l.sem, dashed = true)
+            // REQ-001: a solid line the letters cut (a force drawn through "m₁ m₂" in the blocks): its gaps are
+            // on the writing or inside a block. It stays one solid line.
+            val runs = members.map { m -> listOf(dot(m.a - l.a, d), dot(m.b - l.a, d)).sorted() }.sortedBy { it[0] }
+            val gaps = runs.zipWithNext { p, q -> l.a + d * ((p[1] + q[0]) / 2) }
+            fun covered(x: XY) = written.any { w -> x.x in w[0] - sw..w[2] + sw && x.y in w[1] - sw..w[3] + sw } || boxes.any { inside(x, it.corners, 0f) }
+            val cut = CUT_LINES && gaps.isNotEmpty() && gaps.count(::covered) * 2 >= gaps.size
+            Prim.Seg(l.a + d * ts.min(), l.a + d * ts.max(), l.sem, dashed = !cut)
         }
         return prims.filter { it !in gone } + dashed
     }
@@ -609,6 +622,57 @@ class FigureFit(
     private fun sample(a: XY, b: XY, step: Float): List<XY> {
         val n = max(2, (a.dist(b) / max(1f, step)).toInt())
         return (0 until n).map { a + (b - a) * (it.toFloat() / n) }
+    }
+
+    /**
+     * REQ-001: every mass the model read ("m", "m_1", "2M") is a block. One the box search missed (blocks
+     * side by side sharing a side, a box drawn on a slanted ground, its top taken for a force through it)
+     * is rebuilt from the lines around its label: the nearest upright on each side, and the lines meeting
+     * their tops and their feet (the ground may be one of them). The four corners are where they meet.
+     */
+    internal fun massBlocks(prims: List<Prim>, labels: List<Pair<XY, String>>): List<Prim> {
+        val masses = labels.filter { (_, t) -> MASS.matches(t.replace(" ", "").replace("{", "").replace("}", "")) }
+        if (masses.isEmpty()) return prims
+        // A box around two masses is two blocks side by side: its sides go back into the pool, the blocks are rebuilt one by one.
+        val shared = prims.filterIsInstance<Prim.Block>().filter { b -> masses.count { (at, _) -> inside(at, b.corners, 0f) } >= 2 }
+        val sidesOf = shared.associateWith { b -> b.corners.indices.map { k -> Prim.Seg(b.corners[k], b.corners[(k + 1) % 4], b.sem) } }
+        val sides = sidesOf.values.flatten()
+        val segs = (prims.filterIsInstance<Prim.Seg>() + sides).filter { !it.head && !it.tail && !it.dashed && !it.hatch && it.length >= 2 * sw }
+        val upright = segs.filter { angleDiff(it.angle, PI.toFloat() / 2) < 25f }
+        val level = segs.filter { angleDiff(it.angle, 0f) < 25f }
+        val blocks = prims.filterIsInstance<Prim.Block>().filter { it !in shared }.toMutableList()
+        val used = HashSet<Prim.Seg>()
+        val made = ArrayList<Prim.Block>()
+        for ((at, _) in masses) {
+            if (blocks.any { inside(at, it.corners, 0f) }) continue
+            fun top(s: Prim.Seg) = if (s.a.y < s.b.y) s.a else s.b
+            fun foot(s: Prim.Seg) = if (s.a.y < s.b.y) s.b else s.a
+            fun xAt(s: Prim.Seg, y: Float) = if (kotlin.math.abs(s.b.y - s.a.y) < 1e-3f) s.a.x else s.a.x + (s.b.x - s.a.x) * (y - s.a.y) / (s.b.y - s.a.y)
+            val beside = upright.filter { top(it).y < at.y && foot(it).y > at.y && kotlin.math.abs(xAt(it, at.y) - at.x) < 0.25f * diag }
+            val left = beside.filter { xAt(it, at.y) < at.x }.maxByOrNull { xAt(it, at.y) } ?: continue
+            val right = beside.filter { xAt(it, at.y) > at.x }.minByOrNull { xAt(it, at.y) } ?: continue
+            val width = xAt(right, at.y) - xAt(left, at.y)
+            val height = max(foot(left).y - top(left).y, foot(right).y - top(right).y)
+            if (width < 3 * sw || width > 0.4f * diag || height < 3 * sw || width / height !in 0.3f..3.5f) continue
+            val tol = max(3 * sw, 0.15f * height)
+            // The line through both tops (or both feet): its span reaches both uprights.
+            fun across(p: XY, q: XY) = level.filter { l -> segDist(p, l.a, l.b) < tol && segDist(q, l.a, l.b) < tol }.minByOrNull { l -> segDist(p, l.a, l.b) + segDist(q, l.a, l.b) }
+            val lid = across(top(left), top(right))
+            val floor = across(foot(left), foot(right))
+            fun meet(u: Prim.Seg, l: Prim.Seg?, fallback: XY) = l?.let { intersect(u.a, u.b, it.a, it.b) }?.takeIf { it.dist(fallback) < 2 * tol } ?: fallback
+            val corners = listOf(meet(left, lid, top(left)), meet(right, lid, top(right)), meet(right, floor, foot(right)), meet(left, floor, foot(left)))
+            val block = Prim.Block(corners, majority(listOf(left.sem, right.sem)))
+            made += block
+            blocks += block
+            used += listOf(left, right)
+            lid?.takeIf { it.length < 1.6f * width }?.let { used += it }
+        }
+        if (made.isEmpty()) return prims
+        // A shared box stays only if its masses could not each get their own.
+        val split = shared.filter { b -> masses.filter { (at, _) -> inside(at, b.corners, 0f) }.all { (at, _) -> made.any { inside(at, it.corners, 0f) } } }
+        // The split box's sides not taken by a block (its top running over both, the ground) stay as lines.
+        val keptSides = split.flatMap { sidesOf.getValue(it) }.filter { it !in used }
+        return prims.filter { it !in used && it !in split } + made + keptSides
     }
 
     /**
@@ -1225,6 +1289,13 @@ class FigureFit(
         /** REQ-001 bench switches: arrowheads as long as drawn; long lines need two-sided heads (on in the app). */
         @JvmField internal var HEAD_AS_DRAWN = true
         @JvmField internal var TWO_SIDED_HEADS = true
+        /** REQ-001 round 3 bench switches (on in the app). */
+        @JvmField internal var CUT_LINES = true
+        @JvmField internal var KIND_HINTS = true
+        @JvmField internal var MASS_BLOCKS = true
+        /** A mass's name: "m", "m_1", "M2", "2m". */
+        private val MASS = Regex("""\d*[mM](_?[a-zA-Z0-9]{1,2})?""")
+        private val GRAPH_KINDS = listOf("plot", "graph", "axes", "function", "chart")
         private val SNAP_AXIS = Math.toRadians(7.0).toFloat()
         private val SNAP_REL = Math.toRadians(5.0).toFloat()
 

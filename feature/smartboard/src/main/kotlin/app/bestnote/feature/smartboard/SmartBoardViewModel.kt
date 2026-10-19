@@ -97,7 +97,14 @@ sealed interface SmartBoardStage {
 }
 
 /** One photo of the board and the outline to read on it ([quad], normalised; [detected] when found automatically). */
-data class BoardPhoto(val id: Long, val bitmap: Bitmap, val quad: Quad, val detected: Boolean)
+data class BoardPhoto(
+    val id: Long,
+    val bitmap: Bitmap,
+    val quad: Quad,
+    val detected: Boolean,
+    /** REQ-001: the photo still encoded, for redrawing its drawings at full resolution (null: only [bitmap]). */
+    val original: PhotoOriginal? = null,
+)
 
 data class SmartBoardUiState(
     val stage: SmartBoardStage = SmartBoardStage.Capture,
@@ -606,12 +613,13 @@ class SmartBoardViewModel @Inject constructor(
             var failed = 0
             for (uri in take) {
                 val photo = withContext(Dispatchers.Default) {
-                    val bitmap = runCatching { withContext(Dispatchers.IO) { decode(uri) } }.getOrNull()
+                    val decoded = runCatching { withContext(Dispatchers.IO) { decode(uri) } }.getOrNull()
+                    val bitmap = decoded?.first
                     // The camera's plain copy goes once decoded (LIB-11b: the board may be for a locked notebook).
                     withContext(Dispatchers.IO) { if (uri.authority == context.packageName + ".smartboard.files" && uri.lastPathSegment == CAMERA_FILE) cameraFile().delete() }
                     if (bitmap == null) return@withContext null
                     val found = BoardScan.detect(bitmap)
-                    BoardPhoto(nextPhotoId++, bitmap, found?.quad ?: Quad.full(), found != null)
+                    BoardPhoto(nextPhotoId++, bitmap, found?.quad ?: Quad.full(), found != null, decoded.second)
                 }
                 if (photo == null) failed++
                 state.update { s ->
@@ -764,7 +772,7 @@ class SmartBoardViewModel @Inject constructor(
                         provider, images, effective(), s.language.rtl, if (s.regenerate != null) null else group?.notes,
                         imageKeys = keys, cacheTag = "${s.provider.id}|${s.modelId}",
                     ) { doc, i ->
-                        boards.getOrNull(i)?.let { b -> runCatching { figures.resolve(doc, b) }.onFailure { Log.w(TAG, "figures: ${it.javaClass.simpleName}") }.getOrNull() } ?: doc
+                        boards.getOrNull(i)?.let { b -> runCatching { figures.resolve(doc, b, photos.getOrNull(i), s.enhance) }.onFailure { Log.w(TAG, "figures: ${it.javaClass.simpleName}") }.getOrNull() } ?: doc
                     }
                 } finally {
                     ticker.cancel()
@@ -836,27 +844,36 @@ class SmartBoardViewModel @Inject constructor(
         )
     }
 
-    private fun decode(uri: Uri): Bitmap? {
+    /**
+     * The photo at [uri], upright and at most [MAX_SIDE] on its long side, and (REQ-001) the encoded photo
+     * itself for full-resolution drawings when it is not too big to keep.
+     */
+    private fun decode(uri: Uri): Pair<Bitmap, PhotoOriginal?>? {
         val resolver = context.contentResolver
+        val bytes = resolver.openInputStream(uri)?.use { it.readBytes() } ?: return null
         val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-        resolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, bounds) }
+        BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
         val longSide = max(bounds.outWidth, bounds.outHeight)
         if (longSide <= 0) return null
         var sample = 1
         while (longSide / (sample * 2) >= MAX_SIDE) sample *= 2
-        val raw = resolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, BitmapFactory.Options().apply { inSampleSize = sample }) } ?: return null
+        val raw = BitmapFactory.decodeByteArray(bytes, 0, bytes.size, BitmapFactory.Options().apply { inSampleSize = sample }) ?: return null
         val rotation = runCatching {
-            resolver.openInputStream(uri)?.use {
-                when (ExifInterface(it).getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL)) {
-                    ExifInterface.ORIENTATION_ROTATE_90 -> 90
-                    ExifInterface.ORIENTATION_ROTATE_180 -> 180
-                    ExifInterface.ORIENTATION_ROTATE_270 -> 270
-                    else -> 0
-                }
-            } ?: 0
+            when (ExifInterface(bytes.inputStream()).getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL)) {
+                ExifInterface.ORIENTATION_ROTATE_90 -> 90
+                ExifInterface.ORIENTATION_ROTATE_180 -> 180
+                ExifInterface.ORIENTATION_ROTATE_270 -> 270
+                else -> 0
+            }
         }.getOrDefault(0)
-        if (rotation == 0) return raw
-        return Bitmap.createBitmap(raw, 0, 0, raw.width, raw.height, Matrix().apply { postRotate(rotation.toFloat()) }, true)
+        val turned = rotation == 90 || rotation == 270
+        val original = if (sample > 1 && bytes.size <= MAX_ORIGINAL_BYTES) {
+            PhotoOriginal(bytes, if (turned) bounds.outHeight else bounds.outWidth, if (turned) bounds.outWidth else bounds.outHeight, rotation)
+        } else {
+            null
+        }
+        if (rotation == 0) return raw to original
+        return Bitmap.createBitmap(raw, 0, 0, raw.width, raw.height, Matrix().apply { postRotate(rotation.toFloat()) }, true) to original
     }
 
     companion object {
@@ -867,6 +884,8 @@ class SmartBoardViewModel @Inject constructor(
         private const val STEP_MS = 380L
         /** Board text stays legible; fewer image tiles = fewer tokens and a faster answer (also bounds memory with several photos). */
         private const val MAX_SIDE = 1600
+        /** Larger encoded photos are not kept for full-resolution drawings (memory). */
+        private const val MAX_ORIGINAL_BYTES = 24 * 1024 * 1024
         private const val PREVIEW_SIDE = 1200
         const val MAX_PHOTOS = 6
         private const val TAG = "BestNoteSmartBoard"

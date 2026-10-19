@@ -1,6 +1,9 @@
 package app.bestnote.feature.smartboard
 
 import android.graphics.Bitmap
+import app.bestnote.ai.scan.Quad
+import app.bestnote.ai.scan.Raster
+import app.bestnote.ai.scan.figure.BoardPixels
 import app.bestnote.ai.scan.figure.FigureRedraw
 import app.bestnote.ai.vision.Canary
 import app.bestnote.core.storage.ImageAssets
@@ -20,12 +23,23 @@ import java.util.concurrent.ConcurrentHashMap
 internal class BoardFigures {
     val assets = ConcurrentHashMap<String, ByteArray>()
 
-    /** Redraws the new figures of [doc] from [board], the bitmap sent (before the canary strip). */
-    fun resolve(doc: NoteDocument, board: Bitmap): NoteDocument {
+    /**
+     * Redraws the new figures of [doc] from [board], the bitmap sent (before the canary strip). With the
+     * [photo] it was flattened from (REQ-001), each drawing's pixels come from the photo's full resolution.
+     */
+    fun resolve(doc: NoteDocument, board: Bitmap, photo: BoardPhoto? = null, enhance: Boolean = true): NoteDocument {
         if (doc.flatten().none { it.figure != null }) return doc
         val strip = Canary.stripHeight(board.width, board.height)
         val yScale = (board.height + strip).toFloat() / board.height
-        return FigureRedraw.resolve(doc, BoardScan.raster(board), yScale) { cleaned ->
+        val raster = BoardScan.raster(board)
+        val original = photo?.original ?: return resolve(doc, raster, yScale, null)
+        // The same outline the board was flattened with (BoardScan.flatten).
+        val quad = photo.quad.takeIf { it.isConvex } ?: Quad.full(0f)
+        return PhotoRegions.withPixels(original, quad, enhance, raster) { pixels -> resolve(doc, raster, yScale, pixels) }
+    }
+
+    private fun resolve(doc: NoteDocument, raster: Raster, yScale: Float, pixels: BoardPixels?): NoteDocument =
+        FigureRedraw.resolve(doc, raster, yScale, pixels = pixels, store = { cleaned ->
             val png = ByteArrayOutputStream().use { out ->
                 BoardScan.bitmap(cleaned).compress(Bitmap.CompressFormat.PNG, PNG_QUALITY, out)
                 out.toByteArray()
@@ -33,8 +47,7 @@ internal class BoardFigures {
             val path = ImageAssets.pathFor(png, "png")
             assets[path] = png
             FigureRaster(path, cleaned.width, cleaned.height)
-        }
-    }
+        })
 
     /** The pictures for the review preview's [app.bestnote.core.model.ImageElement]s. */
     val images: ElementImages = AssetImageCache({ assets[it] })

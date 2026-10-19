@@ -98,3 +98,49 @@ made-up labels 22 → 2, and no drawing is lost.
    are not penalised. Add hand-masked references for boards 3 and 6.
 5. More boards in the bench (only 7 drawings now): any new owner report with photos should be added to
    `FigureBench.truths`.
+
+## Round 3: full-resolution crops, kind-guided fitting, label matching
+
+The bench gained a **structure** score: per drawing, the blocks (closed four-cornered outlines),
+arrowheads and dashed lines in the redraw, counted against what the teacher drew. Errors are summed
+(lower is better). This is the topology the f1 cannot see: an arrow merged into a block, a shaft cut into
+dashes. Each cell: mean f1 / fine f1 / false corners / **structure errors** / labels found / labels placed / extra.
+
+There are no full-resolution photos of the owner's boards; the attachments are ≤ 1600 px. So the full-res
+idea is measured with a **proxy**: the model's copy and today's redraw use the bench board at half size, and
+the new path cuts each drawing from the full bench board. That is the same 2× step as a camera photo over
+the 1600 px copy.
+
+| idea | oracle | app, Sonnet answer | app, Opus answer | decision |
+|---|---|---|---|---|
+| round 2 on the bench board | 0.951 / 0.826 / 6 / 9 / 1.00 / 1.00 / 0 | 0.894 / 0.769 / 5 / 10 / 0.94 / 0.72 / 0 | 0.946 / 0.802 / 6 / 16 / 0.96 / 0.70 / 2 | — |
+| round 2 on a half-size board (today's redraw from the 1600 px copy) | 0.949 / 0.841 / 6 / 15 | 0.877 / 0.746 / 6 / 10 | 0.921 / 0.827 / 4 / 11 | — |
+| **F1** each drawing cut from the full-resolution photo | **0.961** / 0.850 / 9 / 11 | **0.883** / 0.752 / 3 / 9 / placed 0.78 | **0.939** / 0.804 / 2 / 15 | **keep** |
+| F2 pale hatching/colour on the full-resolution crop | — | — | — | not measurable: the attached photos are the full resolution we have, and there the hatching is at noise level (round 2). Re-test with a real camera photo |
+| K1 the tightest box around a mass first | = | = | = | rejected (no effect) |
+| **K2** a line cut by letters stays one line (gaps on words/inside blocks) | structure 11 → 10 | = | = | **keep** |
+| **K3** the kind steers the fit (a graph has no blocks) | = | = | structure 15 → 14 | **keep** |
+| **K4** every mass is a block, rebuilt from the uprights around its label (blocks side by side, boxes on a slanted ground) | 0.962 / 0.851 / 9 / **7** | 0.883 / 0.765 / 8 / **7** | 0.942 / 0.814 / 6 / **11** | **keep** |
+| L1 labels matched to words by width, then by the number of marks, best fit first | = (v2) | placed 0.78 → 0.72 (v1), = (v2) | = | rejected: the misplaced labels are 80–100 px off, outside any candidate word |
+| L2 y read with or without the code strip, decided once per answer | = | = | **0.942 → 0.806** | rejected |
+| **round 3, everything, on the bench board** | 0.952 / 0.827 / 7 / **6** | 0.896 / 0.775 / 5 / **7** | 0.942 / 0.801 / 8 / **11** | — |
+
+So structure errors fell by about a third: 9 → 6 (oracle), 10 → 7 (Sonnet), 16 → 11 (Opus), with f1
+unchanged within noise. The full-resolution crop gains +0.012 / +0.006 / +0.018 f1 over the 1600 px copy.
+In the app, the photo is decoded at most 2× above 1600 px today, and the camera's full image is up to
+2.5× larger again, so the real gain should be larger than this proxy shows.
+
+**App path.** `PhotoPixels` (`:ai:board-scan`, pure JVM) maps each drawing's crop through the board's
+outline back onto the photo and asks for that rectangle only. On Android, `PhotoRegions` reads it with
+`BitmapRegionDecoder` from the encoded photo, which is kept in memory for the screen (camera and gallery,
+up to 24 MB). The read is shrunk by a power of two to about the crop's size: one ~520–1040 px region at a
+time, never the whole photo as a bitmap. Rotation (EXIF) is handled. It runs inside the figures step
+(`Dispatchers.Default`). It is used only when the photo is at least 1.15× finer than the copy, and photos
+re-read from a page (regenerate) fall back to the copy.
+
+**Left for excellent quality:**
+- A real camera photo of a board, to measure F1/F2 for real and tune the faint-ink pass on it.
+- Label positions: the remaining misplaced labels come from the model (80–100 px off on stacked photos).
+  A cheap fix would be a per-answer offset fit (labels → nearest written words, least squares); the
+  strip on/off guess (L2) was too coarse.
+- Arrowheads on axes (2 of 3 found on the graphs) and the false head where writing touches a line's end.
