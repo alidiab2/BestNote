@@ -1,5 +1,7 @@
 package app.bestnote.engine.canvas.shape
 
+import app.bestnote.engine.ink.InkFamily
+import app.bestnote.engine.ink.WidthModel
 import app.bestnote.engine.recognition.RecognizedShape
 import kotlin.math.PI
 import kotlin.math.ceil
@@ -61,7 +63,12 @@ class Polyline(val xs: FloatArray, val ys: FloatArray) {
  * Pure Kotlin.
  */
 object ShapeOutline {
-    fun of(shape: RecognizedShape, startX: Float, startY: Float, spacing: Float = DEFAULT_SPACING): Polyline {
+    /**
+     * REQ-007: [closeOverlap] (page points) is how far a closed outline goes on past its start, over the part already
+     * drawn. A pen with tapered ends draws the seam where a closed shape starts and ends thin; going on past it by the
+     * two tapers' length puts full width over the seam, so the line is one thickness all round ([closingOverlap]).
+     */
+    fun of(shape: RecognizedShape, startX: Float, startY: Float, spacing: Float = DEFAULT_SPACING, closeOverlap: Float = 0f): Polyline {
         val out = Builder(spacing)
         when (shape) {
             is RecognizedShape.Line -> { out.moveTo(shape.x0, shape.y0); out.lineTo(shape.x1, shape.y1) }
@@ -73,13 +80,16 @@ object ShapeOutline {
                     out.lineTo(bx, by)
                 }
             }
-            is RecognizedShape.Ellipse -> ellipse(shape, out)
-            is RecognizedShape.Polygon -> if (shape.closed) closedPolygon(shape.points, startX, startY, out) else {
+            is RecognizedShape.Ellipse -> { ellipse(shape, out); out.overlapStart(closeOverlap) }
+            is RecognizedShape.Polygon -> if (shape.closed) { closedPolygon(shape.points, startX, startY, out); out.overlapStart(closeOverlap) } else {
                 shape.points.forEachIndexed { i, (x, y) -> if (i == 0) out.moveTo(x, y) else out.lineTo(x, y) }
             }
         }
         return out.build()
     }
+
+    /** How far (page points) a closed outline drawn with [family] at [brushSize] must overlap its start: both tapers (none for untapered pens). */
+    fun closingOverlap(family: InkFamily?, brushSize: Float): Float = WidthModel.taperSizes(family) * brushSize * OVERLAP_MARGIN
 
     private fun ellipse(e: RecognizedShape.Ellipse, out: Builder) {
         // Ramanujan's perimeter, for the point count.
@@ -141,10 +151,31 @@ object ShapeOutline {
             for (i in 1..steps) add(x0 + (x - x0) * i / steps, y0 + (y - y0) * i / steps)
         }
 
+        /** A closed loop just built goes on along itself from its start for [distance] (at most once round). */
+        fun overlapStart(distance: Float) {
+            if (distance <= 0f || xs.size < 2) return
+            val n = xs.size
+            var left = distance
+            for (i in 1 until n) {
+                val x0 = xs[i - 1]; val y0 = ys[i - 1]
+                val seg = hypot(xs[i] - x0, ys[i] - y0)
+                if (seg >= left) {
+                    val u = left / seg
+                    add(x0 + (xs[i] - x0) * u, y0 + (ys[i] - y0) * u)
+                    return
+                }
+                add(xs[i], ys[i])
+                left -= seg
+            }
+        }
+
         fun build() = Polyline(xs.toFloatArray(), ys.toFloatArray())
     }
 
     /** Page points between outline samples. */
     const val DEFAULT_SPACING = 2f
+
+    /** A little more than the tapers' length, so the seam is fully covered. */
+    private const val OVERLAP_MARGIN = 1.1f
     private const val MIN_ELLIPSE_POINTS = 48
 }

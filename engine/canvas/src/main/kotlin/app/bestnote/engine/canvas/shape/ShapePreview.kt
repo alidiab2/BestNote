@@ -192,6 +192,13 @@ class ShapePreview(private val recognizer: GeometricShapeRecognizer = GeometricS
                 if (label == ShapeLabel.Rectangle) squared(shape as RecognizedShape.Polygon)?.let { shape = it; label = ShapeLabel.Square }
                 if (label == ShapeLabel.Circle) hints += ShapeHint.PerfectCircle
                 if (label == ShapeLabel.Rectangle || label == ShapeLabel.Square) hints += ShapeHint.RightAngles
+                // REQ-007: a side against another shape's edge lies flush on it, at its angle (a block on an incline).
+                val flush = (shape as? RecognizedShape.Polygon)?.takeIf { it.closed }?.let { ShapeGlue.snapFlush(it.points, targets, tolerance) }
+                if (flush != null) {
+                    shape = transform(shape, flush.m)
+                    hints += ShapeHint.Glued
+                    return Ghost(shape, label, hints, flush.markers, null, null, null, null)
+                }
                 val info = ShapeGeometry.infoOf(shape, "")
                 val move = ShapeGlue.movingOf(listOf(info))?.let { (anchors, box) -> ShapeGlue.snapMove(anchors, box, targets, tolerance) } ?: ShapeGlue.Move.NONE
                 if (move.snapped) {

@@ -163,6 +163,16 @@ object ShapeGeometry {
         return best
     }
 
+    /** Straight edges along the outline as (ax, ay, bx, by): polygon sides, a polyline's segments, a connector's shaft; none for ellipses. */
+    fun edges(info: ShapeInfo): List<FloatArray> {
+        if (isEllipse(info)) return emptyList()
+        val n = vertexCount(info)
+        return (0 until edgeCount(info)).map { k ->
+            val q = (k + 1) % n
+            floatArrayOf(x(info, k), y(info, k), x(info, q), y(info, q))
+        }
+    }
+
     fun bounds(info: ShapeInfo): Box {
         if (isEllipse(info)) {
             val cx = x(info, 0); val cy = y(info, 0)

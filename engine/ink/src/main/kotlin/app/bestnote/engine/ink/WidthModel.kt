@@ -53,6 +53,16 @@ object WidthModel {
         return width * boost
     }
 
+    /**
+     * REQ-007: start taper + end taper of [family], in brush sizes (0 for pens without tapers or unknown ones). A
+     * closed shape drawn as one stroke must run on past its start by this much, or its seam is drawn thin.
+     */
+    fun taperSizes(family: InkFamily?): Float = when (family) {
+        InkFamily.Fountain -> BrushTuning.Fountain.TAPER_START + BrushTuning.Fountain.TAPER_END
+        InkFamily.BrushPen -> 2 * BrushTuning.BrushPen.TAPER_LENGTH
+        else -> 0f
+    }
+
     private fun clamp01(v: Float) = v.coerceIn(0f, 1f)
 
     // Close enough to CSS ease-out / ease-in for bounds checks.
