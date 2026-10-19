@@ -1,10 +1,7 @@
 package app.bestnote.feature.library
 
-import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -28,11 +25,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.graphics.Shape
 import app.bestnote.core.designsystem.theme.BestNoteShapes
 import app.bestnote.core.designsystem.theme.BestNoteTheme
+import app.bestnote.core.designsystem.theme.Motion
 import app.bestnote.core.designsystem.theme.Spacing
 
 private const val SHIMMER_LOW = 0.45f
 private const val SHIMMER_HIGH = 0.9f
-private const val SHIMMER_MS = 900
 private const val PLACEHOLDER_COVERS = 6
 
 /** A pulsing placeholder block (a still one under "Remove animations"), from theme tokens only. */
@@ -42,7 +39,7 @@ internal fun Modifier.shimmer(shape: Shape): Modifier {
         SHIMMER_HIGH
     } else {
         val pulse = rememberInfiniteTransition(label = "shimmer")
-        val a by pulse.animateFloat(SHIMMER_LOW, SHIMMER_HIGH, infiniteRepeatable(tween(SHIMMER_MS), RepeatMode.Reverse), label = "shimmer-alpha")
+        val a by pulse.animateFloat(SHIMMER_LOW, SHIMMER_HIGH, Motion.Shimmer.pulse(), label = "shimmer-alpha")
         a
     }
     return clip(shape).background(MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = alpha))

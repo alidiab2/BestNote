@@ -4,6 +4,9 @@ import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.FiniteAnimationSpec
+import androidx.compose.animation.core.InfiniteRepeatableSpec
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -97,6 +100,15 @@ object Motion {
 
     /** Fade spec used everywhere a transform is swapped out under reduced motion. */
     fun <T> fade(): FiniteAnimationSpec<T> = tween(Duration.Short, Easing.Linear)
+
+    /** Loading placeholder shimmer: an ambient repeating pulse (not a transition), reversing each cycle. */
+    object Shimmer {
+        /** One shimmer cycle; slower than any transition duration on purpose. */
+        const val Duration: Int = 900
+
+        /** Reversing pulse spec for `InfiniteTransition.animateFloat`. */
+        fun <T> pulse(): InfiniteRepeatableSpec<T> = infiniteRepeatable(composeTween(Duration), RepeatMode.Reverse)
+    }
 
     /** Pen tray: the active pen lifts out of the tray. Animate with [Spring.snappy]. */
     object TrayLift {
