@@ -248,6 +248,9 @@ internal class DocumentSession(
         view?.setDimmedStrokes(later)
     }
 
+    /** The page the editor is on or reopens on (REQ-006); kept with the notebook as an extra. */
+    private var lastPage = 0
+
     private suspend fun load() {
         val open = try {
             repository.openForEditing(notebookId)
@@ -291,9 +294,20 @@ internal class DocumentSession(
         document.backgrounds = pdf
         document.reset(savedLayout.map { it.second }, savedLayout.map { it.first }, strokes = { strokes[it] }, elements = { pages[it].elements })
         document.loadNewPagePaper(PageOps.decodeDefaultPaper(open.autosaver.extra(PageOps.DEFAULT_PAPER_EXTRA), notebookId))
+        lastPage = LastPage.decode(open.autosaver.extra(LastPage.EXTRA))
         document.addListener(this)
         // What each page holds on disk, so autosave appends only the difference (DOC-11).
         document.pages.forEach { page -> open.autosaver.adoptBaseline(page.id, modelsOf(page)) }
+    }
+
+    /** The page to open on (REQ-006): what the page indicator last saw, this or a previous session. */
+    fun restorePage(): Int = lastPage
+
+    /** The page indicator moved to [index]: remembered and kept with the notebook, so coming back lands on it. */
+    fun trackPage(index: Int) {
+        if (index < 0 || index == lastPage || !document.isLoaded) return
+        lastPage = index
+        saver?.updateExtra(LastPage.EXTRA, LastPage.encode(index))
     }
 
     /** The notebook's Smart Board record (glossary, the notes of every page Smart Board wrote). */
