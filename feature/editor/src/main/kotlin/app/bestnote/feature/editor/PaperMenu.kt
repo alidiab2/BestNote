@@ -355,9 +355,10 @@ internal fun GroupTabs(selected: PaperGroup, onSelect: (PaperGroup) -> Unit) {
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun TemplateGrid(templates: List<PaperTemplate>, page: Page, onPick: (PaperTemplate) -> Unit) {
-    // A fixed height (two rows) so switching groups never resizes the sheet under the finger.
+    // A fixed height (two rows) so switching groups never resizes the sheet under the finger; it
+    // scrolls when a group ever grows past two rows, so every template stays reachable (REQ-004).
     FlowRow(
-        Modifier.height(TileGridHeight),
+        Modifier.height(TileGridHeight).verticalScroll(rememberScrollState()),
         horizontalArrangement = Arrangement.spacedBy(Spacing.M),
         verticalArrangement = Arrangement.spacedBy(Spacing.M),
         maxItemsInEachRow = TILE_COLUMNS,

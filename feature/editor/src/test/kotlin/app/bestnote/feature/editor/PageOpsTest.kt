@@ -8,6 +8,7 @@ import app.bestnote.engine.canvas.document.PagedDocument
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -34,6 +35,29 @@ class PageOpsTest {
         assertEquals(all.size, all.toSet().size)
         assertEquals(PaperGroup.Basic, PageOps.groups.keys.first())
         assertEquals(6, PageOps.groups.getValue(PaperGroup.Basic).size)
+    }
+
+    @Test
+    fun `a template the curated groups forgot still shows up in the picker (REQ-004)`() {
+        val curated = linkedMapOf(
+            PaperGroup.Basic to listOf(PaperTemplate.Ruled, PaperTemplate.Blank),
+            PaperGroup.Study to listOf(PaperTemplate.Cornell),
+        )
+        val groups = PageOps.templateGroups(curated)
+        // The picker offers the same complete list the library derives from the enum, each exactly once.
+        assertEquals(PaperTemplate.entries.toSet(), groups.values.flatten().toSet())
+        assertEquals(PaperTemplate.entries.size, groups.values.flatten().size)
+        // The forgotten ones land in Basic, behind the templates placed there (enum order).
+        val basic = groups.getValue(PaperGroup.Basic)
+        assertEquals(listOf(PaperTemplate.Ruled, PaperTemplate.Blank), basic.take(2))
+        assertEquals(PaperTemplate.Grid, basic[2])
+        assertTrue(groups.getValue(PaperGroup.Study).contains(PaperTemplate.Cornell))
+    }
+
+    @Test
+    fun `complete curated groups pass through untouched`() {
+        val curated = linkedMapOf(PaperGroup.Basic to PaperTemplate.entries.toList())
+        assertSame(curated, PageOps.templateGroups(curated))
     }
 
     @Test
