@@ -290,7 +290,10 @@ class GeometricShapeRecognizer(private val config: Config = Config()) : ShapeRec
         val err = meanDistanceToPolygon(loop, verts) / d
         val kind = when {
             verts.size == 3 -> ShapeKind.Triangle
-            verts.size == 4 && isDiamond(verts) -> ShapeKind.Diamond
+            // REQ-007: a square turned 31..59° (a block on an incline) has one diagonal near level and one near upright
+            // too; calling it a diamond forced it upright and lost its angle. Right angles make it a diamond only when
+            // it stands on its corner (sides within the snap of 45°), else a rectangle at the angle drawn.
+            verts.size == 4 && isDiamond(verts) && (!isRectangular(verts) || onCorner(verts)) -> ShapeKind.Diamond
             verts.size == 4 && isRectangular(verts) -> ShapeKind.Rectangle
             isPentagram(verts) || isStarOutline(verts) -> ShapeKind.Star
             verts.size > MAX_VERTICES -> return null
@@ -437,9 +440,8 @@ class GeometricShapeRecognizer(private val config: Config = Config()) : ShapeRec
         return Pts(ox, oy)
     }
 
-    /** The rectangle closest to quadrilateral [v], snapped upright (or to 45°) when close; corners in [v]'s order. */
-    private fun regularRectangle(v: Pts): Pts {
-        // Mean side direction modulo 90°: average the angles ×4 as unit vectors.
+    /** Mean side direction of quadrilateral [v] modulo 90° (in -45°..45°): the angles ×4 averaged as length-weighted unit vectors. */
+    private fun sideAngle(v: Pts): Double {
         var sx = 0.0; var sy = 0.0
         for (k in 0 until 4) {
             val q = (k + 1) % 4
@@ -447,7 +449,16 @@ class GeometricShapeRecognizer(private val config: Config = Config()) : ShapeRec
             val w = hypot(v.y[q] - v.y[k], v.x[q] - v.x[k])
             sx += cos(4 * a) * w; sy += sin(4 * a) * w
         }
-        val theta = snapAngle(atan2(sy, sx) / 4, QUARTER / 2)
+        return atan2(sy, sx) / 4
+    }
+
+    /** Sides within [Config.angleSnapDeg] of 45°: the quadrilateral stands on a corner. */
+    private fun onCorner(v: Pts): Boolean =
+        abs(abs(sideAngle(v)) - QUARTER / 2) <= Math.toRadians(config.angleSnapDeg.toDouble())
+
+    /** The rectangle closest to quadrilateral [v], snapped upright (or to 45°) when close; corners in [v]'s order. */
+    private fun regularRectangle(v: Pts): Pts {
+        val theta = snapAngle(sideAngle(v), QUARTER / 2)
         val c = cos(theta); val s = sin(theta)
         val u = DoubleArray(4) { v.x[it] * c + v.y[it] * s }
         val w = DoubleArray(4) { -v.x[it] * s + v.y[it] * c }

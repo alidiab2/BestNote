@@ -4,6 +4,7 @@ import androidx.ink.strokes.MutableStrokeInputBatch
 import androidx.ink.strokes.Stroke
 import androidx.ink.strokes.StrokeInput
 import app.bestnote.core.model.StylusSample
+import app.bestnote.engine.ink.BrushCatalog
 import app.bestnote.engine.recognition.RecognizedShape
 import kotlin.math.hypot
 
@@ -35,7 +36,9 @@ internal class ShapeStroke private constructor(
         /** The clean [shape] drawn with [raw]'s brush; [rawSamples] are [raw]'s inputs (see [samplesOf]). */
         fun build(shape: RecognizedShape, raw: Stroke, rawSamples: List<StylusSample>): ShapeStroke {
             val first = rawSamples.first()
-            val outline = ShapeOutline.of(shape, first.x, first.y, spacing = maxOf(ShapeOutline.DEFAULT_SPACING, raw.brush.size / 4))
+            // REQ-007: closed shapes run on past their start so a tapered pen's seam isn't thin.
+            val overlap = ShapeOutline.closingOverlap(BrushCatalog.familyOf(raw.brush), raw.brush.size)
+            val outline = ShapeOutline.of(shape, first.x, first.y, spacing = maxOf(ShapeOutline.DEFAULT_SPACING, raw.brush.size / 4), closeOverlap = overlap)
             val probe = StrokeInput()
             raw.inputs.populate(0, probe)
             val middle = rawSamples.subList(rawSamples.size / 10, rawSamples.size - rawSamples.size / 10).ifEmpty { rawSamples }

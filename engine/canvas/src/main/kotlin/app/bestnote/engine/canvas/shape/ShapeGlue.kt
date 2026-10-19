@@ -2,9 +2,12 @@ package app.bestnote.engine.canvas.shape
 
 import app.bestnote.core.model.ShapeInfo
 import app.bestnote.core.model.ShapeLink
+import app.bestnote.engine.canvas.select.Affine
 import app.bestnote.engine.canvas.select.Box
 import app.bestnote.engine.canvas.select.SnapGuides
+import kotlin.math.PI
 import kotlin.math.abs
+import kotlin.math.atan2
 import kotlin.math.hypot
 
 /**
@@ -16,6 +19,9 @@ import kotlin.math.hypot
 object ShapeGlue {
     /** Edges pull from this share of the snap distance; points (corners, middles, centers) from all of it. */
     const val EDGE_SHARE = 0.6f
+
+    /** A side turns onto a nearby edge's angle when within this much of it (radians, 15°). */
+    val FLUSH_MAX_TURN = Math.toRadians(15.0).toFloat()
 
     /** A visible snap: where to draw the marker, and what was hit. */
     data class Marker(val x: Float, val y: Float, val type: AnchorType?, val attached: Boolean)
@@ -83,6 +89,68 @@ object ShapeGlue {
         val s = SnapGuides.snap(box, SnapGuides.Targets(xs.toFloatArray(), ys.toFloatArray()), tolerance)
         if (!s.snapped) return Move.NONE
         return Move(s.dx, s.dy, emptyList(), s.guideX, s.guideY)
+    }
+
+    /** A side laid flush on another shape's edge: [m] turns and moves the shape; [markers] show where. */
+    data class Flush(val m: Affine, val markers: List<Marker>)
+
+    /**
+     * REQ-007: a closed polygon ([points], in order) drawn against another shape's straight edge (a block on an incline)
+     * lies on it: the nearest of its sides that runs within [FLUSH_MAX_TURN] of a target edge, with its middle within
+     * [tolerance] of that edge's line and over the edge, is turned to the edge's angle and moved onto its line, so the
+     * two share one line (no second, slightly offset line beside it). Then it slides along the edge so a corner meets
+     * the edge's end when that is within [tolerance]. Null when no side is close.
+     */
+    fun snapFlush(points: List<Pair<Float, Float>>, targets: List<ShapeInfo>, tolerance: Float): Flush? {
+        val n = points.size
+        if (n < 3) return null
+        var best: Flush? = null
+        var bestScore = Float.MAX_VALUE
+        for (t in targets) for (e in ShapeGeometry.edges(t)) {
+            val (cx, cy, dx, dy) = e
+            val el = hypot(dx - cx, dy - cy)
+            if (el <= 0f) continue
+            val ux = (dx - cx) / el; val uy = (dy - cy) / el
+            val edgeAngle = atan2(uy, ux)
+            for (k in 0 until n) {
+                val (ax, ay) = points[k]
+                val (bx, by) = points[(k + 1) % n]
+                val sl = hypot(bx - ax, by - ay)
+                if (sl <= 0f) continue
+                // The turn that makes this side parallel to the edge (either direction), in -90°..90°.
+                var turn = edgeAngle - atan2(by - ay, bx - ax)
+                while (turn > PI / 2) turn -= PI.toFloat()
+                while (turn <= -PI / 2) turn += PI.toFloat()
+                if (abs(turn) > FLUSH_MAX_TURN) continue
+                val mx = (ax + bx) / 2; val my = (ay + by) / 2
+                val along = (mx - cx) * ux + (my - cy) * uy
+                if (along < 0f || along > el) continue
+                val off = (mx - cx) * -uy + (my - cy) * ux
+                if (abs(off) > tolerance) continue
+                val score = abs(off) + tolerance * abs(turn) / FLUSH_MAX_TURN
+                if (score >= bestScore) continue
+                bestScore = score
+                // Turn about the side's middle, then move it onto the edge's line.
+                var m = Affine.rotateAbout(turn, mx, my).then(Affine.translate(uy * off, -ux * off))
+                val markers = arrayListOf(Marker(cx + ux * along, cy + uy * along, null, attached = false))
+                // Slide along the edge so a corner meets one of the edge's ends.
+                var slide = Float.MAX_VALUE
+                var corner: Marker? = null
+                for ((px, py) in listOf(ax to ay, bx to by)) {
+                    val qx = m.mapX(px, py); val qy = m.mapY(px, py)
+                    for ((ex, ey) in listOf(cx to cy, dx to dy)) {
+                        val s = (ex - qx) * ux + (ey - qy) * uy
+                        if (abs(s) <= tolerance && abs(s) < abs(slide)) { slide = s; corner = Marker(ex, ey, AnchorType.Corner, attached = false) }
+                    }
+                }
+                if (corner != null) {
+                    m = m.then(Affine.translate(ux * slide, uy * slide))
+                    markers[0] = corner
+                }
+                best = Flush(m, markers)
+            }
+        }
+        return best
     }
 
     /** The glue points of [infos] and their box, as [snapMove] takes them. */
