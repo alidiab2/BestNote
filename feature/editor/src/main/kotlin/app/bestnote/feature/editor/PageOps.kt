@@ -15,8 +15,8 @@ internal enum class PaperGroup { Basic, Study, Planning, Music }
  * multi-page "Move to…" becomes the single-page moves the document records as one undo step.
  */
 internal object PageOps {
-    /** Every template, grouped for the paper sheet; each template is in exactly one group. */
-    val groups: Map<PaperGroup, List<PaperTemplate>> = linkedMapOf(
+    /** The groups as the paper sheet presents them: the common paper first. */
+    private val curatedGroups: Map<PaperGroup, List<PaperTemplate>> = linkedMapOf(
         PaperGroup.Basic to listOf(
             PaperTemplate.Blank, PaperTemplate.RuledNarrow, PaperTemplate.Ruled,
             PaperTemplate.RuledWide, PaperTemplate.Grid, PaperTemplate.Dotted,
@@ -25,6 +25,23 @@ internal object PageOps {
         PaperGroup.Planning to listOf(PaperTemplate.PlannerDaily, PaperTemplate.PlannerWeekly),
         PaperGroup.Music to listOf(PaperTemplate.MusicStaff),
     )
+
+    /** Every template, grouped for the paper sheet; each template is in exactly one group. */
+    val groups: Map<PaperGroup, List<PaperTemplate>> = templateGroups(curatedGroups)
+
+    /**
+     * [curated] with any template of [PaperTemplate.entries] it forgot appended to the Basic group
+     * (REQ-004): the sheet draws from the same source as the library's new-notebook list (the enum),
+     * so a template added there shows up in the editor's picker too instead of vanishing from it.
+     */
+    internal fun templateGroups(curated: Map<PaperGroup, List<PaperTemplate>>): Map<PaperGroup, List<PaperTemplate>> {
+        val placed = curated.values.flatten().toSet()
+        val forgotten = PaperTemplate.entries.filterNot { it in placed }
+        if (forgotten.isEmpty()) return curated
+        val out = LinkedHashMap<PaperGroup, List<PaperTemplate>>(curated)
+        out[PaperGroup.Basic] = out[PaperGroup.Basic].orEmpty() + forgotten
+        return out
+    }
 
     /** Zero-based pages a paper change with [scope] rewrites now. [PaperScope.NewPages] rewrites none: it sets the paper of pages added later. */
     fun paperTargets(scope: PaperScope, current: Int, count: Int): List<Int> = when (scope) {
