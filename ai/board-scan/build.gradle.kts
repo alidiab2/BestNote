@@ -9,4 +9,6 @@ plugins {
 dependencies {
     api(projects.core.model)
     api(projects.engine.layout)
+    // REQ-001 figure bench: reads the recorded model answers (NoteWire); tests only.
+    testImplementation(projects.ai.visionApi)
 }

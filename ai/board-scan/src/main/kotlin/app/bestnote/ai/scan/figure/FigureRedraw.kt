@@ -58,7 +58,12 @@ object FigureRedraw {
 
     /** The working crop of [box] (board fractions), padded, resampled so its long side is [WORK_SIDE]. */
     fun crop(board: Raster, box: FigureBox): Crop {
-        val padded = box.padded(PAD)
+        // REQ-001: a flat box (two blocks on the ground) drawn a little tight loses the ground under them: it is
+        // padded by its long side. A squarish box keeps the usual padding.
+        val wPx = box.width * board.width
+        val hPx = box.height * board.height
+        val flat = max(wPx, hPx) > 1.5f * min(wPx, hPx)
+        val padded = if (PAD_LONG && flat) box.paddedBy(PAD * max(wPx, hPx) / board.width, PAD * max(wPx, hPx) / board.height) else box.padded(PAD)
         val l = floor(padded.left * board.width).toInt().coerceIn(0, board.width - 1)
         val t = floor(padded.top * board.height).toInt().coerceIn(0, board.height - 1)
         val r = (padded.right * board.width).roundToInt().coerceIn(l + 1, board.width)
@@ -163,6 +168,14 @@ object FigureRedraw {
      */
     fun resolve(doc: NoteDocument, board: Raster?, yScale: Float = 1f, store: (Raster) -> FigureRaster? = { null }): NoteDocument {
         val boardInk by lazy { board?.let { InkMask.of(it) } }
+        // Did the model give its numbers in pixels? Decided once, by which reading puts more labels on ink over all the drawings.
+        val inPixels by lazy {
+            val ink = boardInk ?: return@lazy null
+            val figures = doc.flatten().mapNotNull { it.figure }.filter { it.source == FigureSource.Pending }
+            val px = figures.sumOf { f -> asPixels(f, ink.width, ink.height)?.let { onInk(it, ink) } ?: 0 }
+            val pm = figures.sumOf { f -> onInk(onBoard(f, yScale), ink) }
+            px > pm
+        }
         fun one(b: NoteBlock): NoteBlock {
             if (b.columns.isNotEmpty()) return b.copy(columns = b.columns.map { c -> c.map(::one) })
             val f0 = b.figure ?: return b
@@ -170,15 +183,22 @@ object FigureRedraw {
             val f = onBoard(f0, yScale).let { permille ->
                 val ink = boardInk ?: return@let permille
                 val pixels = asPixels(f0, ink.width, ink.height) ?: return@let permille
-                if (onInk(pixels, ink) > onInk(permille, ink)) pixels else permille
+                // REQ-001: a model answers in one unit for the whole photo; per drawing, the pixel reading
+                // of a box on a board full of writing lands on some words by chance.
+                val misread = if (PIXELS_GUARD) inPixels == true else onInk(pixels, ink) > onInk(permille, ink)
+                if (misread) pixels else permille
             }
             if (f.kind == FigureKind.Table && b.rows.isNotEmpty()) return b.copy(element = NoteElement.Table, figure = f.copy(source = FigureSource.FromData))
-            // FIG-LIB: a drawing the AI recognised as a library kind is drawn from its parameters (crisp, editable,
-            // labels beside their shapes); only a low-confidence one lets the photo's strokes try first.
+            // FIG-LIB: a drawing the AI recognised as a library kind can be drawn from its parameters (crisp,
+            // editable, labels beside their shapes).
             val library = f.spec?.let(FigureLibrary::render)
             val sure = f.spec?.confidence?.let { it >= FigureLibrary.MIN_CONFIDENCE } ?: true
-            if (library != null && sure) return b.copy(diagram = library.diagram, figure = f.copy(source = FigureSource.FromData))
             val box = f.box
+            // REQ-001: the teacher's own drawing first. A library drawing is crisp but idealised (made-up
+            // ticks and values, its own proportions); the redraw follows the photo. The library draws only
+            // what the photo could not give.
+            val photoFirst = PHOTO_FIRST && board != null && box != null
+            if (library != null && sure && !photoFirst) return b.copy(diagram = library.diagram, figure = f.copy(source = FigureSource.FromData))
             val result = if (board != null && box != null) runCatching { redraw(board, box, f.labels) }.getOrNull() else null
             if (System.getProperty("figure.debug") != null) {
                 println("figure ${b.head}: accepted=${result?.accepted} recall=${result?.recall} precision=${result?.precision}")
@@ -283,10 +303,20 @@ object FigureRedraw {
         // A label the AI put on a written word belongs to it; one put on other ink (a letter inside a block,
         // touching it) stays where it is. Only labels placed beside any writing move (greedy, closest first).
         val r = max(3, (0.015f * diag).toInt())
-        fun onInk(p: XY) = (-r..r).any { dy -> (-r..r).any { dx -> mask[p.x.toInt() + dx, p.y.toInt() + dy] } }
+        val glyphSet = glyphs.toHashSet()
+        // REQ-001: a label the model put on a line of the drawing (a block's top edge, a few pixels above the
+        // "m" written inside it) is still beside its word: only a label on writing stays where it is.
+        fun onInk(p: XY) = (-r..r).any { dy -> (-r..r).any { dx ->
+            val x = p.x.toInt() + dx
+            val y = p.y.toInt() + dy
+            mask[x, y] && (!LABEL_SNAP || label[y * w + x].let { it >= 0 && it in glyphSet })
+        } }
+        fun onLine(p: XY) = (-r..r).any { dy -> (-r..r).any { dx -> mask[p.x.toInt() + dx, p.y.toInt() + dy] } }
+        // On a line, only a word close by claims it (a letter touching its frame is no word of its own).
+        val lineReach = 0.12f * diag
         fun inWord(p: XY, b: FloatArray) = p.x in b[0] - r..b[2] + r && p.y in b[1] - r..b[3] + r
         val pairs = labels.indices.flatMap { i -> words.indices.map { j -> Triple(i, j, if (inWord(labels[i].first, wordBoxes[j])) 0f else labels[i].first.dist(words[j])) } }
-            .filter { (i, _, d) -> d == 0f || (d < reach && !onInk(labels[i].first)) }.sortedBy { it.third }
+            .filter { (i, _, d) -> d == 0f || (!onInk(labels[i].first) && d < (if (onLine(labels[i].first)) lineReach else reach)) }.sortedBy { it.third }
         val out = labels.toMutableList()
         val matched = MutableList<FloatArray?>(labels.size) { null }
         val doneL = HashSet<Int>()
@@ -508,9 +538,13 @@ object FigureRedraw {
         return (0..n).map { i -> a + (b - a) * (i.toFloat() / n) }
     }
 
+    /** An arrowhead's length: as the teacher drew it when known, else from the line's length. */
+    private fun headSize(s: Prim.Seg, sw: Float, diag: Float): Float =
+        if (s.headLen > 0f) s.headLen.coerceIn(2.5f * sw, max(3f * sw, 0.08f * diag)) else (0.22f * s.length).coerceIn(3f * sw, max(3f * sw, 0.06f * diag))
+
     /** The two barb ends of an arrowhead at [s]'s tip. */
     fun head(s: Prim.Seg, sw: Float, diag: Float): List<XY> {
-        val len = (0.22f * s.length).coerceIn(3f * sw, max(3f * sw, 0.06f * diag))
+        val len = headSize(s, sw, diag)
         val back = kotlin.math.atan2(s.a.y - s.b.y, s.a.x - s.b.x)
         return listOf(-HEAD_SPREAD, HEAD_SPREAD).map { d -> XY(s.b.x + len * cos(back + d), s.b.y + len * sin(back + d)) }
     }
@@ -519,7 +553,7 @@ object FigureRedraw {
         val style = StrokeStyle(colorArgb = NotebookPalette.ink(p.sem), width = sw, dashed = p is Prim.Seg && p.dashed)
         return when (p) {
             is Prim.Seg -> {
-                val headSize = (0.22f * p.length).coerceIn(3f * sw, max(3f * sw, 0.06f * diag))
+                val headSize = headSize(p, sw, diag)
                 when {
                     // A dimension arrow: two arrows from the middle out.
                     p.head && p.tail -> ((p.a + p.b) * 0.5f).let { m -> listOf(VectorShape.Arrow(v(m), v(p.b), headSize, style), VectorShape.Arrow(v(m), v(p.a), headSize, style)) }
@@ -613,6 +647,13 @@ object FigureRedraw {
     /** Long side of the working crop: strokes a few pixels thick, fast to trace. */
     const val WORK_SIDE = 520
     private const val MIN_INK = 40
+    private fun FigureBox.paddedBy(dx: Float, dy: Float) = FigureBox((left - dx).coerceAtLeast(0f), (top - dy).coerceAtLeast(0f), (right + dx).coerceAtMost(1f), (bottom + dy).coerceAtMost(1f))
+
+    /** REQ-001 bench switches (all on in the app). */
+    @JvmField internal var PAD_LONG = true
+    @JvmField internal var LABEL_SNAP = true
+    @JvmField internal var PIXELS_GUARD = true
+    @JvmField internal var PHOTO_FIRST = true
     /** Pixels a dot of a dotted line needs (fewer: noise). */
     private const val MIN_DOT = 3
     /** How far a straight line may bow from its fit, as a share of its length (FigureFit allows 0.05). */
