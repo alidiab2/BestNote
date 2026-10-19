@@ -102,4 +102,31 @@ class ZoomMathTest {
         assertEquals(0f, landing.dx, 0f)
         assertNull(PinchStep.of(emptyMap(), mapOf(1 to (0f to 0f))))
     }
+
+    /** REQ-003: a selection dropped over another page lands on it, at the same spot on screen, at every zoom. */
+    @Test fun dropOverAnotherPageMovesToItsPagePoints() {
+        val mixed = DocumentLayout(listOf(PageSize.A4, PageSize.A4.copy(widthPt = 400f, heightPt = 500f), PageSize.A4), 1600, metrics, 1f)
+        for (l in listOf(layout(0.5f), layout(1f), layout(3f), mixed)) {
+            val h = PageSize.A4.heightPt
+            // Still on its own page (even near its bottom edge): stays.
+            assertNull(ZoomMath.dropTarget(l, 0, 100f, h - 1f))
+            // Below page 0's bottom, inside page 1: lands on page 1 at the same document pixel.
+            val r0 = l.pageRect(0)
+            val r1 = l.pageRect(1)
+            val py = (r1.top - r0.top) / l.scale + 50f
+            val px = (r1.left - r0.left) / l.scale + 30f
+            val drop = ZoomMath.dropTarget(l, 0, px, py)!!
+            assertEquals(1, drop.page)
+            assertEquals(30f, drop.x, 1e-2f)
+            assertEquals(50f, drop.y, 1e-2f)
+            // Dragged up from page 2 into page 1 (negative y on page 2).
+            val r2 = l.pageRect(2)
+            val up = ZoomMath.dropTarget(l, 2, (r1.left - r2.left) / l.scale + 10f, (r1.bottom - r2.top) / l.scale - 20f)!!
+            assertEquals(1, up.page)
+            assertEquals(10f, up.x, 1e-2f)
+            assertEquals(r1.height / l.scale - 20f, up.y, 1e-2f)
+            // In the gap between pages: no target, it stays.
+            assertNull(ZoomMath.dropTarget(l, 0, 100f, (r0.bottom - r0.top) / l.scale + 2f / l.scale))
+        }
+    }
 }
