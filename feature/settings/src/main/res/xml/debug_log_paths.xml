@@ -2,4 +2,8 @@
 <paths>
     <!-- Only the debug-log folder in the cache is shareable. -->
     <cache-path name="debug" path="debug/" />
+    <!-- Request attachments, so a file can be opened in another app. Requests live on external storage, or in
+         internal storage when that is not available. -->
+    <external-files-path name="request_files" path="requests/files/" />
+    <files-path name="request_files_internal" path="requests/files/" />
 </paths>

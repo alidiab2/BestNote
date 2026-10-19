@@ -25,7 +25,7 @@ internal interface SettingsDataModule {
 
     @Binds fun githubSettings(impl: KeystoreGitHubRequestSettings): GitHubRequestSettings
 
-    @Binds fun imageCompressor(impl: AndroidImageCompressor): ImageCompressor
+    @Binds fun attachmentReader(impl: AndroidAttachmentReader): AttachmentReader
 
     companion object {
         @Provides

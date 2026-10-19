@@ -106,11 +106,16 @@ class FakeKeyStore(var key: String? = null, var model: String = "") : SmartBoard
 }
 
 object FakeSharer : app.bestnote.feature.settings.data.FeatureRequestSharer {
-    override suspend fun export(): android.net.Uri = error("not used")
+    override suspend fun export(only: Int?): android.net.Uri = error("not used")
+    override fun uriFor(attachment: app.bestnote.feature.settings.data.Attachment): android.net.Uri = error("not used")
 }
 
-object FakeCompressor : app.bestnote.feature.settings.data.ImageCompressor {
-    override suspend fun compress(uri: android.net.Uri): ByteArray? = byteArrayOf(1)
+/** Reads every uri as a one-byte photo unless told otherwise. */
+class FakeReader : app.bestnote.feature.settings.data.AttachmentReader {
+    var result: app.bestnote.feature.settings.data.ReadResult =
+        app.bestnote.feature.settings.data.ReadResult.Ok(app.bestnote.feature.settings.data.PendingAttachment("p.jpg", "image/jpeg", byteArrayOf(1)))
+
+    override suspend fun read(uri: android.net.Uri) = result
 }
 
 class FakeGitHubSettings(private var token: String? = null, private var repo: String = "me/requests") :
@@ -130,7 +135,10 @@ class FakeGitHubSettings(private var token: String? = null, private var repo: St
 /** Pretends to be GitHub: numbers issues, remembers what was sent and which issues are closed. */
 class FakeSink : app.bestnote.feature.settings.data.RequestSink {
     val submitted = mutableListOf<Pair<app.bestnote.feature.settings.data.FeatureRequest, List<String>>>()
+    val updated = mutableListOf<Pair<app.bestnote.feature.settings.data.FeatureRequest, List<String>>>()
+    val discarded = mutableListOf<Int>()
     val closed = mutableMapOf<Int, Boolean>()
+    val replies = mutableMapOf<Int, List<app.bestnote.feature.settings.data.IssueComment>>()
     var failWith: app.bestnote.feature.settings.data.SyncProblem? = null
 
     private fun maybeFail() {
@@ -139,13 +147,22 @@ class FakeSink : app.bestnote.feature.settings.data.RequestSink {
 
     override suspend fun submit(
         request: app.bestnote.feature.settings.data.FeatureRequest,
-        images: List<Pair<String, ByteArray>>,
+        files: List<Pair<app.bestnote.feature.settings.data.Attachment, ByteArray>>,
     ): app.bestnote.feature.settings.data.SentIssue {
         maybeFail()
-        submitted += request to images.map { it.first }
+        submitted += request to files.map { it.first.file }
         val n = submitted.size
         closed[n] = false
-        return app.bestnote.feature.settings.data.SentIssue(n, "https://github.com/me/requests/issues/$n")
+        return app.bestnote.feature.settings.data.SentIssue(n, "https://github.com/me/requests/issues/$n", files.associate { it.first.file to "https://x/${it.first.file}" })
+    }
+
+    override suspend fun update(
+        request: app.bestnote.feature.settings.data.FeatureRequest,
+        files: List<Pair<app.bestnote.feature.settings.data.Attachment, ByteArray>>,
+    ): Map<String, String> {
+        maybeFail()
+        updated += request to files.map { it.first.file }
+        return files.associate { it.first.file to "https://x/${it.first.file}" }
     }
 
     override suspend fun closedStates(): Map<Int, Boolean> = run { maybeFail(); closed.toMap() }
@@ -153,5 +170,11 @@ class FakeSink : app.bestnote.feature.settings.data.RequestSink {
         maybeFail()
         this.closed[issueNumber] = closed
     }
+    override suspend fun discard(issueNumber: Int) {
+        maybeFail()
+        discarded += issueNumber
+        closed[issueNumber] = true
+    }
+    override suspend fun comments(issueNumber: Int) = run { maybeFail(); replies[issueNumber].orEmpty() }
     override suspend fun check() = maybeFail()
 }
