@@ -86,7 +86,7 @@ class FigureFit(
         private set
 
     /** Paths (with their colour intent) → primitives. [labels]: what the AI read and where (crop pixels). */
-    fun fit(paths: List<Pair<List<XY>, InkSemantic>>, labels: List<Pair<XY, String>>, words: List<FloatArray?> = emptyList()): List<Prim> {
+    fun fit(paths: List<Pair<List<XY>, InkSemantic>>, labels: List<Pair<XY, String>>, words: List<FloatArray?> = emptyList(), dots: List<XY> = emptyList()): List<Prim> {
         labelPlaces = labels.map { it.first }
         var prims = paths.flatMap { (pts, sem) -> fitPath(pts, sem) }
         // A block with its mass written in it first: the spring pushing it must not swallow its sides.
@@ -100,6 +100,7 @@ class FigureFit(
         // Blocks before dashes: a block's side is not a dash of the path beside it.
         prims = blocks(prims, labels)
         prims = dashes(prims)
+        prims = dotted(prims, dots, words)
         // Lines split where others cross them are whole again before arrowheads are looked for.
         prims = merged(prims)
         prims = hatches(prims)
@@ -146,7 +147,10 @@ class FigureFit(
         }
         // A real curve bends steadily and visibly; a straight stroke with a wobble is fitted as lines.
         val bow = pts.maxOf { segDist(it, pts.first(), pts.last()) }
-        if (corners.size >= 4 && turns.all { it < CURVE_TURN_DEG } && turns.sum() > CURVE_TOTAL_DEG && bow > 4 * eps) {
+        // REQ-001: a tight bend of a smooth curve (a graph's valley) turns more than CURVE_TURN_DEG between
+        // the coarse corners, yet it has no corner: over a short stretch of pen it hardly turns at all.
+        val smoothBends = turns.all { it < CURVE_TURN_DEG } || (turns.all { it < SHARP_DEG } && sharpestTurn(pts, max(4f * sw, 2.5f * eps)) < CORNER_LOCAL_DEG)
+        if (corners.size >= 4 && smoothBends && turns.sum() > CURVE_TOTAL_DEG && bow > 4 * eps) {
             return listOf(Prim.Curve(chaikin(rdp(pts, eps * 0.5f), 2), sem, closed))
         }
         // A polyline with sharp corners: each run between corners is a fitted line, corners at their intersections.
@@ -419,6 +423,66 @@ class FigureFit(
     }
 
     /**
+     * REQ-001: a dotted guide (a graph's drop line, drawn as dots too small to be strokes) → one dashed
+     * line: three or more [dots] in a row, evenly spaced, that no fitted stroke already covers.
+     */
+    internal fun dotted(prims: List<Prim>, dots: List<XY>, words: List<FloatArray?> = emptyList()): List<Prim> {
+        if (dots.isEmpty()) return prims
+        val tol = max(2.5f, 1.6f * sw)
+        // Dots drawn a little long are traced as tiny strokes: they are dots of the row too.
+        val tiny = prims.filterIsInstance<Prim.Seg>().filter { !it.head && !it.dashed && !it.hatch && it.length <= max(3f * sw, 0.03f * diag) }
+        val covered = prims.filterIsInstance<Prim.Seg>().filter { it !in tiny }
+        // Not the dots of the written labels ("2" over a guide, the dot of an "i").
+        val written = words.filterNotNull()
+        fun inWord(p: XY) = written.any { w -> p.x in w[0] - sw..w[2] + sw && p.y in w[1] - sw..w[3] + sw }
+        class Dot(val at: XY, val sem: InkSemantic, val stroke: Prim.Seg?)
+        val free = (dots.filter { d -> covered.none { segDist(d, it.a, it.b) < tol } }.map { Dot(it, InkSemantic.Regular, null) } + tiny.map { Dot(it.a.mid(it.b), it.sem, it) })
+            .filter { !inWord(it.at) }
+        if (free.size < 3) return prims
+        val gap = max(4f * sw, 0.06f * diag)
+        val parent = IntArray(free.size) { it }
+        fun find(i: Int): Int { var x = i; while (parent[x] != x) x = parent[x]; return x }
+        for (i in free.indices) for (j in i + 1 until free.size) if (free[i].at.dist(free[j].at) < gap) parent[find(i)] = find(j)
+        val lines = ArrayList<Prim.Seg>()
+        val gone = HashSet<Prim>()
+        for (group in free.indices.groupBy(::find).values) {
+            if (group.size < 3) continue
+            // The longest row of the cluster (a letter's bit or an arrowhead beside it is not in it).
+            var g = emptyList<Dot>()
+            for (i in group) for (j in group) {
+                if (j <= i || free[i].at.dist(free[j].at) < 1f) continue
+                val s = Prim.Seg(free[i].at, free[j].at, InkSemantic.Regular)
+                // Tiny strokes across the row (a letter's bits, an arrowhead) are not its dots.
+                val row = group.map { free[it] }.filter { k ->
+                    lineDist(k.at, s) <= tol && (k.stroke == null || k.stroke.length <= 1.5f * sw || angleDiff(k.stroke.angle, s.angle) <= 30f)
+                }
+                if (row.size > g.size) g = row
+            }
+            if (g.size < 3) continue
+            val l = line(g.map { it.at }.sortedBy { it.x * 10_000 + it.y }, InkSemantic.Regular)
+            val d = (l.b - l.a).unit()
+            // Split where the row has a hole: two guides one above the other are two lines.
+            val runs = ArrayList<MutableList<Dot>>()
+            for (k in g.sortedBy { dot(it.at - l.a, d) }) {
+                val last = runs.lastOrNull()?.last()
+                if (last == null || k.at.dist(last.at) > gap) runs += mutableListOf(k) else runs.last() += k
+            }
+            for (run in runs) {
+                if (run.size < 3) continue
+                val ts = run.map { dot(it.at - l.a, d) }
+                if (ts.last() - ts.first() < max(6f * sw, 0.035f * diag)) continue
+                // Evenly spaced: no hole much wider than the usual step.
+                val steps = ts.zipWithNext { x, y -> y - x }.sorted()
+                if (steps.last() > 2.5f * steps[steps.size / 2] + sw) continue
+                gone += run.mapNotNull { it.stroke }
+                // A dot is too small to tell its colour from the photo: the strokes of the row say it.
+                lines += Prim.Seg(l.a + d * ts.first(), l.a + d * ts.last(), majority(run.map { if (it.stroke != null) it.sem else InkSemantic.Regular }), dashed = true)
+            }
+        }
+        return prims.filter { it !in gone } + lines
+    }
+
+    /**
      * A block: two parallel sides and enough of the other two that the box's outline is mostly ink
      * (a letter written inside may touch it). It must hold a label ("m") or touch a long line (a block
      * on a slope, on the ground), so square letters of a word stay letters. Its sides become one [Prim.Block],
@@ -494,7 +558,8 @@ class FigureFit(
                 }
             }
             // A mass's name ("m", "2m", "M_1") inside, not a value written beside it.
-            fun mass(text: String) = '=' !in text && visibleChars(text) <= 3
+            // REQ-001: a velocity ("\\vec{u}_2") written above a block is no mass.
+            fun mass(text: String) = '=' !in text && "\\vec" !in text && visibleChars(text) <= 3
             val held = labels.filter { (at, _) -> t(at) in lo..hi && u(at) in min(op, oq)..max(op, oq) }
             // Around a value or a word ("0.4 (m)"), the "box" is that writing.
             if (held.any { !mass(it.second) }) continue
@@ -632,7 +697,8 @@ class FigureFit(
                 for (atB in listOf(true, false)) {
                     val end = if (atB) p.b else p.a
                     // A corner of the drawing (the slope meeting the upright) is not a force's end.
-                    if (out.any { o -> o !== p && o is Prim.Seg && !o.dashed && o.length >= 0.12f * diag && angleDiff(o.angle, p.angle) > 20f && min(o.a.dist(end), o.b.dist(end)) < 3 * sw }) continue
+                    // REQ-001: nor is an end on an axis (a graph's level "F" starting at the F axis is no force).
+                    if (out.any { o -> o !== p && o is Prim.Seg && !o.dashed && o.length >= 0.12f * diag && angleDiff(o.angle, p.angle) > 20f && segDist(end, o.a, o.b) < 3 * sw }) continue
                     val other = if (atB) p.a else p.b
                     val d = (end - other).unit()
                     val past = (at.x - end.x) * d.x + (at.y - end.y) * d.y
@@ -884,7 +950,10 @@ class FigureFit(
     /** A length written beside a dimension arrow: "0.4\\,(m)", "5 (m)" (not an angle, a tick's "0", or a value such as "V=10"), or a height or distance's name ("h_B", "d"). */
     private fun isLength(t: String): Boolean {
         val bare = t.replace(" ", "").replace("{", "").replace("}", "")
-        return LENGTH_NAME.matches(bare) || (t.any(Char::isDigit) && !isAngle(t) && '=' !in t && LENGTH_HINT.containsMatchIn(t.replace("\\,", "")))
+        if (LENGTH_NAME.matches(bare)) return true
+        // REQ-001: a mass or a vector with its index ("m_1", "\vec{v}_2") names a thing, it measures nothing.
+        if (SYMBOL.matches(bare.replace("\\vec", ""))) return false
+        return (t.any(Char::isDigit) && !isAngle(t) && '=' !in t && LENGTH_HINT.containsMatchIn(t.replace("\\,", "")))
     }
 
     /** A force or axis name ("N", "F", "f_k", "mg", "T_1", "y"); state names (A, B) and masses (m) are not. */
@@ -1013,6 +1082,30 @@ class FigureFit(
         }
     }
 
+    /**
+     * The sharpest turn (degrees) of [p] over any stretch of [span] pixels of pen: about the full angle at
+     * a drawn corner, small all along a smooth curve (span / radius).
+     */
+    internal fun sharpestTurn(p: List<XY>, span: Float): Float {
+        if (p.size < 3) return 0f
+        val at = FloatArray(p.size)
+        for (i in 1 until p.size) at[i] = at[i - 1] + p[i].dist(p[i - 1])
+        val half = span / 2
+        var worst = 0f
+        var a = 0
+        var b = 0
+        for (i in p.indices) {
+            // a: the last point at least half a span behind; b: the first at least half a span ahead.
+            while (a + 1 < i && at[i] - at[a + 1] >= half) a++
+            if (b < i) b = i
+            while (b < p.lastIndex && at[b] - at[i] < half) b++
+            // Whole stretches only: the ends of the path have no corner to measure.
+            if (at[i] - at[a] < half || at[b] - at[i] < half) continue
+            worst = max(worst, turn(p[a], p[i], p[b]))
+        }
+        return worst
+    }
+
     /** Kasa algebraic circle fit: centre, radius and RMS distance of the points from the circle. */
     private fun circle(p: List<XY>): Triple<XY, Float, Float>? {
         if (p.size < 6) return null
@@ -1062,11 +1155,15 @@ class FigureFit(
         private val DEGREES = Regex("""\d+(\.\d+)?""")
         private val ANGLE_NAMES = listOf("alpha", "beta", "theta", "gamma", "phi", "α", "β", "θ")
         private val NAME = Regex("""(N|F|W|T|R|f|mg|Mg|g|x|y|z|v|a)(_?[a-zA-Z0-9]{1,3})?|F_?[a-zA-Z]+""")
+        /** A symbol with an index: "m_1", "v2", "M_A" (after "\vec" and braces are dropped). */
+        private val SYMBOL = Regex("""\\?[a-zA-Z]+_?[a-zA-Z0-9]{1,3}""")
         private const val MIN_COIL_PIECES = 5
         private const val MERGE_DEG = 7f
         private val DEBUG: Boolean get() = System.getProperty("figure.debug") != null
         private const val CURVE_TURN_DEG = 28f
         private const val CURVE_TOTAL_DEG = 45f
+        /** Most a smooth curve turns over a few stroke widths of pen; a drawn corner turns more. */
+        private const val CORNER_LOCAL_DEG = 35f
         private val SNAP_AXIS = Math.toRadians(7.0).toFloat()
         private val SNAP_REL = Math.toRadians(5.0).toFloat()
 

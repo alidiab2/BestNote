@@ -73,8 +73,11 @@ class InkMask(val width: Int, val height: Int, val ink: BooleanArray) {
     }
 
     companion object {
-        /** The ink of [r]. [window] is the background window side (odd); 0 = from the crop's size. */
-        fun of(r: Raster, window: Int = 0): InkMask {
+        /**
+         * The ink of [r]. [window] is the background window side (odd); 0 = from the crop's size.
+         * [specks] = false keeps the tiny blobs too (the dots of a dotted line, REQ-001).
+         */
+        fun of(r: Raster, window: Int = 0, specks: Boolean = true): InkMask {
             val w = r.width
             val h = r.height
             val luma = r.luma()
@@ -92,6 +95,7 @@ class InkMask(val width: Int, val height: Int, val ink: BooleanArray) {
                 }
             }
             val out = BooleanArray(w * h)
+            val faint = BooleanArray(w * h)
             for (y in 0 until h) {
                 val y0 = max(0, y - half)
                 val y1 = min(h, y + half + 1)
@@ -105,10 +109,40 @@ class InkMask(val width: Int, val height: Int, val ink: BooleanArray) {
                     val c = r.argb[i]
                     val chroma = max(c shr 16 and 0xFF, max(c shr 8 and 0xFF, c and 0xFF)) - min(c shr 16 and 0xFF, min(c shr 8 and 0xFF, c and 0xFF))
                     out[i] = drop > max(MIN_DROP, mean * REL_DROP) || (chroma > COLOUR_CHROMA && drop > COLOUR_DROP)
+                    faint[i] = !out[i] && drop > max(FAINT_DROP, mean * FAINT_REL)
                 }
             }
+            faintLines(faint, w, h, out)
+            if (!specks) return InkMask(w, h, out).closed()
             val minArea = max(MIN_SPECK, (w * h * SPECK_FRACTION).roundToInt())
             return InkMask(w, h, out).closed().withoutSpecks(minArea)
+        }
+
+        /**
+         * REQ-001: a line drawn in light marker (a pale blue level) is too faint for the
+         * ink threshold. Faint pixels count as ink where they make a long thin stroke: shading and noise
+         * are blobs or specks, a line is long for its area.
+         */
+        private fun faintLines(faint: BooleanArray, w: Int, h: Int, out: BooleanArray) {
+            val m = InkMask(w, h, faint)
+            val (label, sizes) = m.components()
+            val n = sizes.size
+            if (n == 0) return
+            val x0 = IntArray(n) { Int.MAX_VALUE }; val y0 = IntArray(n) { Int.MAX_VALUE }
+            val x1 = IntArray(n) { -1 }; val y1 = IntArray(n) { -1 }
+            for (i in label.indices) {
+                val c = label[i]
+                if (c < 0) continue
+                val x = i % w
+                val y = i / w
+                x0[c] = min(x0[c], x); x1[c] = max(x1[c], x); y0[c] = min(y0[c], y); y1[c] = max(y1[c], y)
+            }
+            val long = FAINT_LONG * max(w, h)
+            val keep = BooleanArray(n) { c ->
+                val extent = kotlin.math.hypot((x1[c] - x0[c]).toFloat(), (y1[c] - y0[c]).toFloat())
+                extent >= long && sizes[c] <= FAINT_THIN * extent
+            }
+            for (i in label.indices) if (label[i] >= 0 && keep[label[i]]) out[i] = true
         }
 
         private fun median(v: FloatArray): Float {
@@ -128,6 +162,12 @@ class InkMask(val width: Int, val height: Int, val ink: BooleanArray) {
         private const val COLOUR_CHROMA = 55
         private const val COLOUR_DROP = 8f
         private const val MIN_SPECK = 6
+        private const val FAINT_DROP = 9f
+        private const val FAINT_REL = 0.05f
+        /** A faint stroke is at least this share of the crop's long side... */
+        private const val FAINT_LONG = 0.12f
+        /** ...and has at most this many pixels per pixel of its length (a line a few pixels thick). */
+        private const val FAINT_THIN = 5f
         private const val SPECK_FRACTION = 0.00006f
     }
 }
