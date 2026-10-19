@@ -378,6 +378,10 @@ class SmartBoardViewModel @Inject constructor(
         }
     }
 
+    /** A stable id of a flattened board (its plain JPEG, not the canary-stamped copy that differs on every read). */
+    private fun photoKey(jpeg: ByteArray): String =
+        java.security.MessageDigest.getInstance("SHA-256").digest(jpeg).joinToString("") { "%02x".format(it) }
+
     private fun plainJpeg(bitmap: Bitmap): ByteArray = java.io.ByteArrayOutputStream().also { bitmap.compress(Bitmap.CompressFormat.JPEG, PHOTO_QUALITY, it) }.toByteArray()
 
     // ------------------------------------------------------------ AI-13 · Ask Smart Board
@@ -753,7 +757,13 @@ class SmartBoardViewModel @Inject constructor(
                 }
                 try {
                     // Regenerate reads the photos afresh; a follow-up photo merges into the page's notes.
-                    notes.read(provider, images, effective(), s.language.rtl, if (s.regenerate != null) null else group?.notes) { doc, i ->
+                    // REQ-002: the same board, prompt and model again (language or template switched back, read
+                    // again after going back) comes from memory. Regenerate always asks afresh.
+                    val keys = if (demo || recorded != null || s.regenerate != null) null else withContext(Dispatchers.Default) { sentPhotos.map(::photoKey) }
+                    notes.read(
+                        provider, images, effective(), s.language.rtl, if (s.regenerate != null) null else group?.notes,
+                        imageKeys = keys, cacheTag = "${s.provider.id}|${s.modelId}",
+                    ) { doc, i ->
                         boards.getOrNull(i)?.let { b -> runCatching { figures.resolve(doc, b) }.onFailure { Log.w(TAG, "figures: ${it.javaClass.simpleName}") }.getOrNull() } ?: doc
                     }
                 } finally {

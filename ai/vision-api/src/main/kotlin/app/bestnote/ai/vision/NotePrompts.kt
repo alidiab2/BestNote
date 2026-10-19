@@ -144,13 +144,35 @@ object NotePrompts {
     const val USER = "Board photo. Write the notes as elements."
 
     /**
-     * User turn for a follow-up photo of the same lecture: the page's current elements go along, and
-     * the model returns ONE merged list (new content added, duplicates removed, teaching order).
+     * User turn for a follow-up photo of the same lecture (REQ-002): only a short outline of the notes
+     * so far goes along, and the model returns ONLY what is new on this photo; the app merges it
+     * ([NoteMerge.merge]). Asking for the whole merged list made every further photo re-write all the
+     * notes before it, so the output grew with the square of the photo count.
      */
     fun followUpUser(current: NoteDocument): String =
-        "These notes are already on the page:\n" + NoteWire.encodeForAi(current) +
-            "\nThe photo shows the board later in the same lecture (maybe partly the same). Return ONE merged elements list: " +
-            "keep everything already there (a Diagram with \"ref\" stays exactly as given), add what is new, remove duplicates, re-order by teaching order, only the allowed elements."
+        "Already in the notes (outline, do not repeat any of it):\n" + outline(current) +
+            "\nThe photo shows the board later in the same lecture (maybe partly the same). Return ONLY the elements that are NEW on this photo, " +
+            "in teaching order, only the allowed elements; nothing listed above, no drawing already listed. If nothing is new, return {\"elements\":[]}."
+
+    /** At most [OUTLINE_CHARS] of the notes: one short line per element, so the follow-up prompt stays small whatever the notes' length. */
+    fun outline(doc: NoteDocument): String {
+        val out = StringBuilder()
+        for (b in doc.flatten()) {
+            if (b.element == NoteElement.Columns) continue
+            val gist = listOfNotNull(b.words().takeIf { it.isNotBlank() }, b.math, b.figure?.let { f -> f.spec?.kind ?: f.kind.name.lowercase() })
+                .joinToString(" ").replace(Regex("\\s+"), " ").trim().take(OUTLINE_LINE)
+            val line = "- ${b.element.name}" + (if (gist.isEmpty()) "" else ": $gist") + "\n"
+            if (out.length + line.length > OUTLINE_CHARS) {
+                out.append("- …\n")
+                break
+            }
+            out.append(line)
+        }
+        return out.toString()
+    }
+
+    private const val OUTLINE_LINE = 70
+    private const val OUTLINE_CHARS = 2_400
 
     fun user(request: NotesRequest): String = request.current?.takeIf { !it.isEmpty }?.let(::followUpUser) ?: USER
 

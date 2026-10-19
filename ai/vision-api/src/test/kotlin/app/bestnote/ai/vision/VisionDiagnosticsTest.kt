@@ -17,6 +17,24 @@ class VisionDiagnosticsTest {
     }
 
     @Test
+    fun `token usage of every provider is recorded and added up`() {
+        VisionDiagnostics.resetTotals()
+        VisionDiagnostics.recordResponse("openai", "m", 200, """{"usage":{"prompt_tokens":1200,"completion_tokens":300,"prompt_tokens_details":{"cached_tokens":0}}}""")
+        assertEquals(1200, VisionDiagnostics.latest()!!.promptTokens)
+        assertEquals(300, VisionDiagnostics.latest()!!.completionTokens)
+        // Gemini reports thinking apart; it is billed as output.
+        VisionDiagnostics.recordResponse("gemini", "m", 200, """{"usageMetadata":{"promptTokenCount":1000,"candidatesTokenCount":400,"thoughtsTokenCount":100}}""")
+        assertEquals(500, VisionDiagnostics.latest()!!.completionTokens)
+        VisionDiagnostics.recordResponse("claude", "m", 200, """{"usage":{"input_tokens":800,"cache_creation_input_tokens":5,"output_tokens":200}}""")
+        assertEquals(800, VisionDiagnostics.latest()!!.promptTokens)
+        VisionDiagnostics.recordResponse("openai", "m", 400, """{"error":{"message":"bad"}}""")
+        assertNull(VisionDiagnostics.latest()!!.promptTokens)
+        assertEquals(TokenTotals(calls = 4, promptTokens = 3000, completionTokens = 1000), VisionDiagnostics.totals())
+        val text = VisionDiagnostics.format(VisionDiagnostics.recent()[2])
+        assertTrue(text, text.contains("tokens: prompt=800 completion=200") && text.contains("session: calls=4 prompt=3000 completion=1000"))
+    }
+
+    @Test
     fun `raw bodies are kept only when capture is on`() {
         VisionDiagnostics.recordResponse("gemini", "m", 200, "{\"a\":1}")
         assertNull(VisionDiagnostics.latest()!!.raw)

@@ -94,8 +94,9 @@ class GeminiVisionProvider(
         var schemaField = SchemaField.JsonSchema
         var thinking = Thinking.Level
         var retriedServer = false
+        var budget = config.maxOutputTokens
         while (true) {
-            val body = GeminiRequests.generateContent(system, user, image.bytes, mime, config.temperature, schemaField, config.maxOutputTokens, thinking, schema).toString()
+            val body = GeminiRequests.generateContent(system, user, image.bytes, mime, config.temperature, schemaField, budget, thinking, schema).toString()
             val response = try {
                 transport.post("v1beta/models/$model:generateContent", key, body)
             } catch (e: IOException) {
@@ -105,7 +106,15 @@ class GeminiVisionProvider(
             if (response.code == 200) Canary.noteUsage(response.body, system.length + user.length)
             when {
                 response.code == 200 -> {
-                    val answer = GeminiResponses.answer(response.body)
+                    val answer = try {
+                        GeminiResponses.answer(response.body)
+                    } catch (e: VisionError.Truncated) {
+                        // Nothing written: the budget went to thinking. One retry with more room; a cut-off
+                        // answer WITH text is salvaged by [parse] instead of being sent again.
+                        if (budget >= GeminiConfig.RETRY_OUTPUT_TOKENS) throw e
+                        budget = GeminiConfig.RETRY_OUTPUT_TOKENS
+                        continue
+                    }
                     Canary.verify(answer.text, answer.truncated, image, model)
                     return parse(answer.text, answer.truncated)
                 }

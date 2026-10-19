@@ -56,7 +56,8 @@ class DemoVisionProvider(private val latencyMs: Long = 900) : VisionProvider {
             else -> NoteSamples.arabicCalculus()
         }
         val current = request.current
-        val answer = if (current == null) sample else NoteMerge.merge(current, followUp(current))
+        // REQ-002: a follow-up answers only what the new photo adds; the app merges it.
+        val answer = if (current == null) sample else followUp(current)
         return NoteWire.answer(NoteWire.encode(answer))
     }
 

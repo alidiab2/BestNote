@@ -21,8 +21,14 @@ data class GeminiConfig(
         /** The old hard-wired default; a stored value equal to it is treated as "automatic". */
         const val LEGACY_DEFAULT_MODEL = "gemini-2.5-flash"
 
-        /** Room for a full board plus the model's thinking (2.5 models share this budget). */
-        const val MAX_OUTPUT_TOKENS = 32_768
+        /**
+         * Room for a full board plus low thinking (2.5 models share this budget). REQ-002: was 32,768, which let a
+         * runaway answer bill four times a page; an answer lost entirely to thinking is retried once with 2×.
+         */
+        const val MAX_OUTPUT_TOKENS = 8_192
+
+        /** The one retry after an empty, cut-off answer. */
+        const val RETRY_OUTPUT_TOKENS = 16_384
     }
 }
 

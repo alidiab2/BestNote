@@ -61,7 +61,7 @@ class OpenAiVisionProvider(
         val model = credentials.model().trim().ifEmpty { if (official) OpenAiConfig.DEFAULT_MODEL else throw VisionError.ModelUnavailable("", "no model name set") }
         var format = if (json) ResponseFormat.JsonObject else ResponseFormat.None
         var effort: String? = config.reasoningEffort
-        var thinkingOff = OpenAiConfig.turnsThinkingOff(base)
+        var thinkingOff = OpenAiConfig.turnsThinkingOff(base, model)
         var budget = config.maxTokens
         var retriedServer = false
         var retriedBudget = false
@@ -85,7 +85,6 @@ class OpenAiVisionProvider(
                         budget = (budget * 2).coerceAtMost(MAX_BUDGET)
                     }
                 }
-                thinkingOff && OpenAiResponses.rejectsThinking(response.code, response.body) -> thinkingOff = false
                 thinkingOff && OpenAiResponses.rejectsThinking(response.code, response.body) -> thinkingOff = false
                 effort != null && OpenAiResponses.rejectsReasoningEffort(response.code, response.body) -> effort = null
                 format == ResponseFormat.JsonObject && OpenAiResponses.rejectsResponseFormat(response.code, response.body) -> format = ResponseFormat.None
@@ -113,9 +112,12 @@ class OpenAiVisionProvider(
         val model = credentials.model().trim().ifEmpty { if (official) OpenAiConfig.DEFAULT_MODEL else throw VisionError.ModelUnavailable("", "no model name set") }
         val mime = OpenAiRequests.sniffMime(image.bytes, image.mimeType)
         val provider = if (official) "openai" else "openai-compatible"
-        var format = ResponseFormat.JsonSchema
-        var effort: String? = config.reasoningEffort
-        var thinkingOff = OpenAiConfig.turnsThinkingOff(base)
+        // REQ-002: start with what this server and model accepted last time, not with a request it rejects with a 400.
+        val negotiatedKey = "$base|$model"
+        val known = negotiated[negotiatedKey]
+        var format = known?.format ?: ResponseFormat.JsonSchema
+        var effort: String? = config.reasoningEffort?.takeIf { known?.effort != false }
+        var thinkingOff = OpenAiConfig.turnsThinkingOff(base, model) && known?.thinkingOff != false
         var budget = config.maxTokens
         var retriedServer = false
         var retriedBudget = false
@@ -142,9 +144,12 @@ class OpenAiVisionProvider(
                         budget = (budget * 2).coerceAtMost(MAX_BUDGET)
                         continue
                     }
+                    negotiated[negotiatedKey] = Negotiated(format, effort != null, thinkingOff)
                     Canary.verify(answer.text, answer.truncated, image, model)
+                    // A cut-off answer is salvaged by [parse] (complete elements kept), never sent again.
                     return parse(answer.text, answer.truncated)
                 }
+                thinkingOff && OpenAiResponses.rejectsThinking(response.code, response.body) -> thinkingOff = false
                 effort != null && OpenAiResponses.rejectsReasoningEffort(response.code, response.body) -> effort = null
                 budget > config.maxTokens && OpenAiResponses.rejectsMaxTokens(response.code, response.body) -> budget = config.maxTokens
                 format != ResponseFormat.None && OpenAiResponses.rejectsResponseFormat(response.code, response.body) ->
@@ -166,7 +171,17 @@ class OpenAiVisionProvider(
 
         /** For servers without a schema mode: the element shape, spelled out. */
         const val NOTES_JSON_HINT = "Answer with one JSON object {\"elements\": [{\"e\": element, ...}]} only, no prose and no code fences."
-        private const val MAX_BUDGET = 32_000
+        /** The one retry after an answer lost entirely to thinking gets twice the room, at most this. */
+        private const val MAX_BUDGET = 16_000
+
+        /** What a server accepted for a model: response format, `reasoning_effort`, `thinking: disabled`. */
+        private data class Negotiated(val format: ResponseFormat, val effort: Boolean, val thinkingOff: Boolean)
+
+        /** Per "base URL|model", in memory only (REQ-002: DeepSeek rejected json_schema with a 400 on every board). */
+        private val negotiated = java.util.concurrent.ConcurrentHashMap<String, Negotiated>()
+
+        /** For tests: forget what servers accepted. */
+        internal fun forgetNegotiated() = negotiated.clear()
     }
 }
 

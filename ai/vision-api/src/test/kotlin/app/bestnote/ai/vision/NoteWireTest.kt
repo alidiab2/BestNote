@@ -120,12 +120,20 @@ class NoteWireTest {
         assertFalse(same.contains("user's instruction"))
     }
 
-    @Test fun `follow-up prompt sends the page's elements and asks for one merged list`() {
+    @Test fun `follow-up prompt sends a short outline and asks only for what is new`() {
         val current = NoteDocument(listOf(app.bestnote.engine.layout.NoteBlock(NoteElement.Definition, head = "גבול", text = "x")))
         val user = NotePrompts.user(NotesRequest(classic, current = current))
-        assertTrue(user.contains(NoteWire.encode(current)))
-        assertTrue(user.contains("ONE merged") && user.contains("remove duplicates") && user.contains("teaching order"))
+        assertTrue(user.contains("- Definition: גבול x"))
+        assertTrue(user.contains("ONLY the elements that are NEW"))
+        assertFalse("no merged list asked for", user.contains("merged"))
         assertEquals(NotePrompts.USER, NotePrompts.user(NotesRequest(classic)))
+    }
+
+    @Test fun `follow-up prompt stays small however long the notes are`() {
+        val long = NoteDocument(List(200) { i -> app.bestnote.engine.layout.NoteBlock(NoteElement.Paragraph, text = "paragraph $i " + "word ".repeat(80)) })
+        val user = NotePrompts.user(NotesRequest(classic, current = long))
+        assertTrue("${user.length} chars", user.length < 3_000)
+        assertTrue(NoteWire.encodeForAi(long).length > 50_000)
     }
 
     @Test fun `merge removes a definition photographed twice`() {
@@ -143,8 +151,10 @@ class NoteWireTest {
         assertTrue(doc.flatten().any { it.math?.contains("x^{n-1}") == true })
         val physics = demo.writeNotes(VisionImage(ByteArray(0), "image/jpeg"), NotesRequest(study))
         assertTrue(physics.elements.any { it.element == NoteElement.Columns })
+        // A follow-up answers only what the new photo adds (the app merges it).
         val again = demo.writeNotes(VisionImage(ByteArray(0), "image/jpeg"), NotesRequest(classic, current = doc))
-        assertTrue(again.elements.size > doc.elements.size)
+        assertTrue(again.elements.size < doc.elements.size)
+        assertTrue(NoteMerge.merge(doc, again).elements.size > doc.elements.size)
     }
 
     @Test fun `smart board record keeps groups and accumulates the glossary`() {
