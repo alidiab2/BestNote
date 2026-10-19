@@ -15,8 +15,8 @@ import kotlin.math.sqrt
 sealed interface Prim {
     val sem: InkSemantic
 
-    /** A straight line; [head] = an arrowhead at [b], [tail] = one at [a] too (a dimension arrow); [dashed] = drawn as dashes; [hatch] = a ground/wall hatch mark. */
-    data class Seg(val a: XY, val b: XY, override val sem: InkSemantic, val dashed: Boolean = false, val head: Boolean = false, val tail: Boolean = false, val hatch: Boolean = false) : Prim {
+    /** A straight line; [head] = an arrowhead at [b], [tail] = one at [a] too (a dimension arrow); [dashed] = drawn as dashes; [hatch] = a ground/wall hatch mark; [headLen] = the barbs' length as drawn (0 = from the line's length). */
+    data class Seg(val a: XY, val b: XY, override val sem: InkSemantic, val dashed: Boolean = false, val head: Boolean = false, val tail: Boolean = false, val hatch: Boolean = false, val headLen: Float = 0f) : Prim {
         val length: Float get() = a.dist(b)
         val angle: Float get() = atan2(b.y - a.y, b.x - a.x)
     }
@@ -153,6 +153,20 @@ class FigureFit(
         if (corners.size >= 4 && smoothBends && turns.sum() > CURVE_TOTAL_DEG && bow > 4 * eps) {
             return listOf(Prim.Curve(chaikin(rdp(pts, eps * 0.5f), 2), sem, closed))
         }
+        // REQ-001: a curve with real corners (a graph's curve run into its axis at a junction, a hump drawn
+        // tight): cut at the corners the pen made (sharp over a couple of stroke widths), then each run is a
+        // straight line or a smooth curve, instead of the whole stroke becoming a chain of straight pieces.
+        if (!closed && MIXED_RUNS) {
+            val cuts = cornerIndices(pts, max(2.5f * sw, 5f))
+            val runs = cuts.zipWithNext().map { (i, j) -> pts.subList(i, j + 1) }
+            if (runs.any { curved(it) }) return runs.mapNotNull { r ->
+                when {
+                    curved(r) -> Prim.Curve(chaikin(rdp(r, eps * 0.5f), 2), sem)
+                    r.size >= 2 && r.first().dist(r.last()) >= 1.5f * sw -> line(r, sem)
+                    else -> null
+                }
+            }
+        }
         // A polyline with sharp corners: each run between corners is a fitted line, corners at their intersections.
         val idx = rdpIndices(pts, eps)
         val all = idx.zipWithNext().map { (i, j) -> line(pts.subList(i, j + 1), sem) }
@@ -219,6 +233,7 @@ class FigureFit(
             if (s in used) continue
             val ends = BooleanArray(2)
             val tips = arrayOf<XY?>(null, null)
+            val barbLen = FloatArray(2)
             for ((k, tipAtB) in listOf(true, false).withIndex()) {
                 val tip = if (tipAtB) s.b else s.a
                 val back = ((if (tipAtB) s.a else s.b) - tip).unit()
@@ -236,6 +251,12 @@ class FigureFit(
                 if (barbs.isEmpty() || (twoBarbs && barbs.size < 2)) continue
                 // One barb alone could be a line that only touches the end: it must be short.
                 if (barbs.size == 1 && barbs[0].let { it.second.dist(it.third) } > 0.25f * s.length) continue
+                // REQ-001: a long line (an axis, the ground) needs a real head: barbs on both sides, or one straight
+                // barb (the other merged into the shaft); writing at its end (a word beside the ground) gives
+                // one-sided round scraps.
+                val sides = barbs.map { (_, e0, e1) -> val far = if (e0.dist(tip) < e1.dist(tip)) e1 else e0; kotlin.math.sign(cross(s, far)) }.distinct().size
+                if (TWO_SIDED_HEADS && s.length > 0.35f * diag && sides < 2 && !(barbs.size == 1 && barbs[0].first is Prim.Seg)) continue
+                barbLen[k] = barbs.map { (_, e0, e1) -> e0.dist(e1) }.average().toFloat()
                 used += barbs.map { it.first }
                 ends[k] = true
                 // The head's point is where the barbs meet: the shaft reaches it.
@@ -246,9 +267,10 @@ class FigureFit(
             isShaft += s
             val b = tips[0] ?: s.b
             val a = tips[1] ?: s.a
+            val len = if (HEAD_AS_DRAWN) barbLen.filter { it > 0f }.average().toFloat() else 0f
             result[s] = when {
-                ends[0] -> s.copy(a = a, b = b, head = true, tail = ends[1])
-                else -> Prim.Seg(b, a, s.sem, s.dashed, head = true)
+                ends[0] -> s.copy(a = a, b = b, head = true, tail = ends[1], headLen = len)
+                else -> Prim.Seg(b, a, s.sem, s.dashed, head = true, headLen = len)
             }
         }
         return prims.mapNotNull { p ->
@@ -1086,12 +1108,15 @@ class FigureFit(
      * The sharpest turn (degrees) of [p] over any stretch of [span] pixels of pen: about the full angle at
      * a drawn corner, small all along a smooth curve (span / radius).
      */
-    internal fun sharpestTurn(p: List<XY>, span: Float): Float {
-        if (p.size < 3) return 0f
+    internal fun sharpestTurn(p: List<XY>, span: Float): Float = turnsOver(p, span).maxOrNull() ?: 0f
+
+    /** The turn (degrees) at each point of [p] over [span] pixels of pen around it (0 where the stretch runs off the path's end). */
+    internal fun turnsOver(p: List<XY>, span: Float): FloatArray {
+        val out = FloatArray(p.size)
+        if (p.size < 3) return out
         val at = FloatArray(p.size)
         for (i in 1 until p.size) at[i] = at[i - 1] + p[i].dist(p[i - 1])
         val half = span / 2
-        var worst = 0f
         var a = 0
         var b = 0
         for (i in p.indices) {
@@ -1101,9 +1126,38 @@ class FigureFit(
             while (b < p.lastIndex && at[b] - at[i] < half) b++
             // Whole stretches only: the ends of the path have no corner to measure.
             if (at[i] - at[a] < half || at[b] - at[i] < half) continue
-            worst = max(worst, turn(p[a], p[i], p[b]))
+            out[i] = turn(p[a], p[i], p[b])
         }
-        return worst
+        return out
+    }
+
+    /** First and last index of [p] and its corners between: the sharpest point of each stretch turning more than [CORNER_DEG] over [span]. */
+    internal fun cornerIndices(p: List<XY>, span: Float): List<Int> {
+        val turns = turnsOver(p, span)
+        val at = FloatArray(p.size)
+        for (i in 1 until p.size) at[i] = at[i - 1] + p[i].dist(p[i - 1])
+        val out = arrayListOf(0)
+        var i = 1
+        while (i < p.lastIndex) {
+            if (turns[i] <= CORNER_DEG) { i++; continue }
+            // The stretch above the threshold: its sharpest point is the corner.
+            var j = i
+            var best = i
+            while (j < p.lastIndex && turns[j] > CORNER_DEG) { if (turns[j] > turns[best]) best = j; j++ }
+            if (at[best] - at[out.last()] >= span / 2 && at[p.lastIndex] - at[best] >= span / 2) out += best
+            i = j
+        }
+        out += p.lastIndex
+        return out
+    }
+
+    /** A run between corners that visibly bends (not a straight line drawn by hand). */
+    private fun curved(r: List<XY>): Boolean {
+        if (r.size < 4) return false
+        val len = r.zipWithNext().sumOf { (a, b) -> a.dist(b).toDouble() }.toFloat()
+        if (len < 6 * sw) return false
+        val l = line(r, InkSemantic.Regular)
+        return r.maxOf { lineDist(it, l) } >= max(1.5f * eps, 0.05f * l.length)
     }
 
     /** Kasa algebraic circle fit: centre, radius and RMS distance of the points from the circle. */
@@ -1164,6 +1218,13 @@ class FigureFit(
         private const val CURVE_TOTAL_DEG = 45f
         /** Most a smooth curve turns over a few stroke widths of pen; a drawn corner turns more. */
         private const val CORNER_LOCAL_DEG = 35f
+        /** A corner the pen made: this much turn over a couple of stroke widths. */
+        private const val CORNER_DEG = 50f
+        /** REQ-001 bench switch: mixed line/curve runs (on in the app). */
+        @JvmField internal var MIXED_RUNS = true
+        /** REQ-001 bench switches: arrowheads as long as drawn; long lines need two-sided heads (on in the app). */
+        @JvmField internal var HEAD_AS_DRAWN = true
+        @JvmField internal var TWO_SIDED_HEADS = true
         private val SNAP_AXIS = Math.toRadians(7.0).toFloat()
         private val SNAP_REL = Math.toRadians(5.0).toFloat()
 

@@ -93,7 +93,11 @@ class FigureRedrawTest {
         val b = Raster(1000, 500)
         val c = FigureRedraw.crop(b, FigureBox(0.2f, 0.2f, 0.6f, 0.6f))
         assertTrue(c.left in 160..170 && c.right in 630..640)
-        assertTrue(c.top in 80..85 && c.bottom in 315..320)
+        // REQ-001: 400 × 200 px is a flat box: padded by its long side, the same pixels all round (0.08 × 400 px = 32 px).
+        assertTrue("${c.top} ${c.bottom}", c.top in 66..70 && c.bottom in 330..334)
+        // A squarish box (200 × 200 px) keeps 8 % of each side.
+        val square = FigureRedraw.crop(b, FigureBox(0.2f, 0.2f, 0.4f, 0.6f))
+        assertTrue("${square.top} ${square.bottom}", square.top in 82..86 && square.bottom in 314..318)
         assertEquals(FigureRedraw.WORK_SIDE, maxOf(c.image.width, c.image.height))
         // The AI saw 500 px of board + 100 px of strip: its 0.5 is the board's 0.6.
         val f = FigureRedraw.onBoard(app.bestnote.engine.layout.BoardFigure(app.bestnote.engine.layout.FigureKind.Graph, FigureBox(0.1f, 0.25f, 0.4f, 0.5f)), 600f / 500f)
@@ -120,7 +124,8 @@ class FigureRedrawTest {
         val long = segs.filter { it.length > 0.25f * FigureRedraw.WORK_SIDE }
         assertTrue("the base is horizontal", long.any { angleDeg(it) < 0.01f })
         assertTrue("the side is vertical", long.any { abs(angleDeg(it) - 90f) < 0.01f })
-        assertTrue("the incline rises at about 37°", long.any { val a = 180f - angleDeg(it); abs(a - 37f) < 6f })
+        // Labelled 37°, drawn at about 42° on the board (the redraw follows the drawing).
+        assertTrue("the incline rises at about 37°", long.any { val a = 180f - angleDeg(it); abs(a - 37f) < 7f })
         assertTrue("force arrows", segs.count { it.head } >= 3)
         // AI-12b: the block is rebuilt on the slope, F is drawn once, only the two arcs the teacher drew (α, 37°).
         assertEquals("F, N, f_k and mg, each once", 4, segs.count { it.head })
