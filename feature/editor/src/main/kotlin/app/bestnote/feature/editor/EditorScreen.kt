@@ -251,6 +251,9 @@ class EditorViewModel @Inject constructor(
     private val route = savedStateHandle.toRoute<EditorRoute>()
     val notebookId = NotebookId(route.notebookId)
 
+    /** The editor was opened on a search result (REC-03), which lands on its own page. */
+    internal val fromSearch: Boolean get() = route.pageId != null
+
     /** The language Tidy writes in: the notebook's Smart Board notes language, or the handwriting's own. */
     fun tidyLanguage(): String? = smartBoardStyles.languageFor(notebookId.value).promptName
 
@@ -439,6 +442,10 @@ fun EditorScreen(
     var pageOrigin by remember { mutableStateOf(Offset.Zero) }
     var pageNumber by remember { mutableStateOf(1 to 1) }
     var managerPage by remember { mutableStateOf<Int?>(null) }
+    // REQ-006: the page a fresh canvas reopens on, captured the moment it is created (before the view
+    // can report anything), and whether something else already chose where to land.
+    var pendingRestore by remember { mutableIntStateOf(-1) }
+    var explicitLanding by remember { mutableStateOf(false) }
     val pageInsert = rememberPageInsertFlow(document, viewModel.session) { canvas?.currentPage?.coerceAtLeast(0) ?: 0 }
     SideEffect { pageInsert.onInserted = { first -> canvas?.scrollToPage(first) } }
     var selectionMenu by remember { mutableStateOf<PagedDocumentView.SelectionMenu?>(null) }
@@ -752,6 +759,7 @@ fun EditorScreen(
     val insertedFormat = stringResource(R.string.editor_smart_board_inserted)
     LaunchedEffect(Unit) {
         val insert = takeInsert() ?: return@LaunchedEffect
+        explicitLanding = true
         while (!document.isLoaded) delay(INSERT_POLL_MS)
         val pages = withContext(Dispatchers.Default) {
             insert.pages.map { page -> page.mapNotNull { model -> runCatching { model to InkConversion.toInk(model) }.getOrNull() } }
@@ -787,6 +795,17 @@ fun EditorScreen(
         byPage.keys.firstOrNull()?.let { first -> canvas?.scrollToPage(first) }
         snackbar.currentSnackbarData?.dismiss()
         if (snackbar.showSnackbar(insertedFormat.format(byPage.size), actionLabel = undoText, duration = SnackbarDuration.Long) == SnackbarResult.ActionPerformed) document.undo()
+    }
+
+    // REQ-006: reopening a notebook, or coming back to it from another screen, lands on the page you
+    // were on — unless something else already chose where to land (Smart Board's insert, a search result).
+    LaunchedEffect(canvas) {
+        if (canvas == null || explicitLanding || viewModel.fromSearch) return@LaunchedEffect
+        val page = pendingRestore
+        if (page <= 0) return@LaunchedEffect
+        while (!document.isLoaded) delay(LOAD_POLL_MS)
+        delay(SEARCH_SETTLE_MS) // the pages lay out after the notebook loads
+        canvas?.scrollToPage(page.coerceIn(0, (document.pages.size - 1).coerceAtLeast(0)))
     }
 
     // REC-03: arriving from a search result, jump to the page and mark what matched.
@@ -908,9 +927,13 @@ fun EditorScreen(
                         quickAt = Offset(x, y)
                     }
                     canvas = view
+                    pendingRestore = viewModel.session.restorePage()
                     viewModel.session.attach(view)
                 },
-                onIndicator = { page, count -> pageNumber = page + 1 to count },
+                onIndicator = { page, count ->
+                    viewModel.session.trackPage(page)
+                    pageNumber = page + 1 to count
+                },
                 onIndicatorClick = ::openPages,
                 onPenSeen = ::onPenSeen,
                 topInsetPx = topInsetPx,
