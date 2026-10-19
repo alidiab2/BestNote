@@ -8,7 +8,7 @@ Open-source Android handwriting notes app (Kotlin, Compose, androidx.ink). Read 
 - Tick the task box in the workstream file when the task is done.
 
 ## User requests
-Settings, Requests in the app sends feature requests and bugs (with screenshots) to GitHub issues in `alidiab2/BestNote-requests`. Run `scripts/pull-requests.sh`, read `docs/requests/requests.md` and look at `docs/requests/images/`, then fix the open ones and close with `Fixes alidiab2/BestNote-requests#N`. See `docs/requests/README.md`.
+Settings, Requests in the app sends feature requests and bugs (with files) to GitHub issues in `alidiab2/BestNote-requests`. Run `scripts/pull-requests.sh`, read `docs/requests/requests.md` and look at `docs/requests/files/`, then fix the open ones and close with `Fixes alidiab2/BestNote-requests#N`. See `docs/requests/README.md`.
 
 ## Rules
 - Module dependencies: `app → feature → engine/ai → core`. No `feature` → `feature`. `core:model`, `core:common`, `core:storage`, `engine:recognition`, `engine:layout`, `engine:mathtype`, `ai:vision-api` and `ai:math` stay pure JVM.
