@@ -12,6 +12,7 @@
     <string name="settings_cat_appearance">المظهر</string>
     <string name="settings_cat_storage">التخزين والنسخ الاحتياطي</string>
     <string name="settings_cat_debug">تصحيح الأخطاء</string>
+    <string name="settings_cat_requests">الطلبات</string>
     <string name="settings_cat_about">حول التطبيق</string>
     <string name="settings_sum_stylus_eraser">ضغط الزر: ممحاة</string>
     <string name="settings_sum_stylus_lasso">ضغط الزر: تحديد حر</string>
@@ -21,6 +22,7 @@
     <string name="settings_sum_ai">مفتاحك ومزوّدك</string>
     <string name="settings_sum_storage">المستخدم %1$s</string>
     <string name="settings_sum_debug">سجل للإبلاغ عن الأخطاء</string>
+    <string name="settings_sum_requests">اطلب ميزات واقترح أفكارًا</string>
     <string name="settings_sum_about">الإصدار %1$s</string>
 
     <string name="settings_stylus_desc">كيف يتصرف القلم وزره الجانبي ويدك على الصفحة.</string>
@@ -241,6 +243,46 @@
     <string name="settings_license_ofl">SIL Open Font License 1.1</string>
     <string name="settings_license_apache">Apache License 2.0</string>
     <!-- Debug -->
+    <!-- Requests -->
+    <string name="settings_requests_desc">تفتقد شيئًا أو وجدت مشكلة؟ اكتبها وأرفق لقطات شاشة. تُحفظ الطلبات دائمًا على هذا الجهاز؛ اربط GitHub لإرسالها أيضًا إلى المطوّر.</string>
+    <string name="settings_requests_new_group">طلب جديد</string>
+    <string name="settings_requests_kind_feature">ميزة</string>
+    <string name="settings_requests_kind_improvement">تحسين</string>
+    <string name="settings_requests_kind_bug">خطأ</string>
+    <string name="settings_requests_title_hint">ماذا تريد؟</string>
+    <string name="settings_requests_details_hint">التفاصيل (اختياري)</string>
+    <string name="settings_requests_save">حفظ الطلب</string>
+    <string name="settings_requests_saved">تم حفظ الطلب</string>
+    <string name="settings_requests_open_group">مفتوحة (%1$d)</string>
+    <string name="settings_requests_done_group">منجزة (%1$d)</string>
+    <string name="settings_requests_empty">لا شيء بعد</string>
+    <string name="settings_requests_mark_done">تحديد كمنجز</string>
+    <string name="settings_requests_reopen">إعادة الفتح</string>
+    <string name="settings_requests_delete">حذف الطلب</string>
+    <string name="settings_requests_export_group">تصدير</string>
+    <string name="settings_requests_share">مشاركة كل الطلبات</string>
+    <string name="settings_requests_share_sub">ملف Markdown يمكنك إرساله أو وضعه في المشروع</string>
+    <string name="settings_requests_saved_sent">تم حفظ الطلب وإرساله</string>
+    <string name="settings_requests_saved_not_sent">حُفظ هنا ولم يُرسل بعد، راجع GitHub أدناه</string>
+    <string name="settings_requests_save_send">حفظ وإرسال</string>
+    <string name="settings_requests_add_image">إضافة لقطات شاشة</string>
+    <string name="settings_requests_remove_image">إزالة لقطة الشاشة</string>
+    <string name="settings_requests_github_group">GitHub</string>
+    <string name="settings_requests_github_help">اختياري. أنشئ رمزًا دقيق الصلاحيات على github.com للمستودع أدناه فقط، مع صلاحيتي القراءة والكتابة للمشكلات (Issues) والمحتوى (Contents). يُخزَّن مشفّرًا على هذا الجهاز.</string>
+    <string name="settings_requests_github_repo">المستودع (owner/name)</string>
+    <string name="settings_requests_github_token_field">الرمز</string>
+    <string name="settings_requests_github_connect">اتصال</string>
+    <string name="settings_requests_github_connected">الإرسال إلى %1$s</string>
+    <string name="settings_requests_github_token">الرمز %1$s</string>
+    <string name="settings_requests_connected">تم الاتصال</string>
+    <string name="settings_requests_sync">أرسل الآن</string>
+    <string name="settings_requests_disconnect">قطع الاتصال</string>
+    <string name="settings_requests_sent">أُرسل كمشكلة #%1$d</string>
+    <string name="settings_requests_not_sent">محفوظ على هذا الجهاز فقط</string>
+    <string name="settings_requests_problem_token">رفض GitHub الرمز. تأكد من أن له صلاحية Issues وContents على المستودع.</string>
+    <string name="settings_requests_problem_repo">المستودع غير موجود، أو ليس للرمز صلاحية عليه.</string>
+    <string name="settings_requests_problem_offline">لا يوجد اتصال. سيُرسل عند الضغط على «أرسل الآن» أو عند فتح هذه الشاشة مجددًا.</string>
+    <string name="settings_requests_problem_other">أعاد GitHub خطأ. حاول لاحقًا.</string>
     <string name="settings_debug_desc">أرسل لنا سجلًا عندما يحدث خطأ. تُحذف مفاتيح API قبل أن يغادر أي شيء هذه الشاشة.</string>
     <string name="settings_debug_log_group">سجل التصحيح</string>
     <string name="settings_debug_share">مشاركة سجل التصحيح</string>

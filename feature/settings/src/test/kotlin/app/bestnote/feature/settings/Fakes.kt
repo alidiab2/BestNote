@@ -104,3 +104,54 @@ class FakeKeyStore(var key: String? = null, var model: String = "") : SmartBoard
         return if (draftKey == null && keyOf(kind) == null && kind != AiProviderKind.OpenAiCompatible) KeyTestResult.NoKey else nextResult
     }
 }
+
+object FakeSharer : app.bestnote.feature.settings.data.FeatureRequestSharer {
+    override suspend fun export(): android.net.Uri = error("not used")
+}
+
+object FakeCompressor : app.bestnote.feature.settings.data.ImageCompressor {
+    override suspend fun compress(uri: android.net.Uri): ByteArray? = byteArrayOf(1)
+}
+
+class FakeGitHubSettings(private var token: String? = null, private var repo: String = "me/requests") :
+    app.bestnote.feature.settings.data.GitHubRequestSettings {
+    override suspend fun repo() = repo
+    override suspend fun token() = token
+    override val tokenHint: String? get() = token?.let { "…" + it.takeLast(4) }
+    override suspend fun save(token: String, repo: String) {
+        this.token = token
+        this.repo = repo
+    }
+    override suspend fun clear() {
+        token = null
+    }
+}
+
+/** Pretends to be GitHub: numbers issues, remembers what was sent and which issues are closed. */
+class FakeSink : app.bestnote.feature.settings.data.RequestSink {
+    val submitted = mutableListOf<Pair<app.bestnote.feature.settings.data.FeatureRequest, List<String>>>()
+    val closed = mutableMapOf<Int, Boolean>()
+    var failWith: app.bestnote.feature.settings.data.SyncProblem? = null
+
+    private fun maybeFail() {
+        failWith?.let { throw app.bestnote.feature.settings.data.RequestSyncException(it, "fake") }
+    }
+
+    override suspend fun submit(
+        request: app.bestnote.feature.settings.data.FeatureRequest,
+        images: List<Pair<String, ByteArray>>,
+    ): app.bestnote.feature.settings.data.SentIssue {
+        maybeFail()
+        submitted += request to images.map { it.first }
+        val n = submitted.size
+        closed[n] = false
+        return app.bestnote.feature.settings.data.SentIssue(n, "https://github.com/me/requests/issues/$n")
+    }
+
+    override suspend fun closedStates(): Map<Int, Boolean> = run { maybeFail(); closed.toMap() }
+    override suspend fun setClosed(issueNumber: Int, closed: Boolean) {
+        maybeFail()
+        this.closed[issueNumber] = closed
+    }
+    override suspend fun check() = maybeFail()
+}
