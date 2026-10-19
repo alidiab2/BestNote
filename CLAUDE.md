@@ -7,6 +7,9 @@ Open-source Android handwriting notes app (Kotlin, Compose, androidx.ink). Read 
 - Changing a cross-workstream contract (types in `:core:model`, `StylusEvent`, `NotebookStore`, `PdfDocumentSource`, recognition interfaces, `Motion` tokens) means updating every caller and saying so in the PR.
 - Tick the task box in the workstream file when the task is done.
 
+## User requests
+Settings, Requests in the app sends feature requests and bugs (with screenshots) to GitHub issues in `alidiab2/BestNote-requests`. Run `scripts/pull-requests.sh`, read `docs/requests/requests.md` and look at `docs/requests/images/`, then fix the open ones and close with `Fixes alidiab2/BestNote-requests#N`. See `docs/requests/README.md`.
+
 ## Rules
 - Module dependencies: `app → feature → engine/ai → core`. No `feature` → `feature`. `core:model`, `core:common`, `core:storage`, `engine:recognition`, `engine:layout`, `engine:mathtype`, `ai:vision-api` and `ai:math` stay pure JVM.
 - Smart Board AI: `Prompts.EXPERT_STUDENT` is the foundational persona. Behavior it asks for must also be enforced in `:engine:layout` (see `docs/workstreams/12-smart-board-ai.md`).
