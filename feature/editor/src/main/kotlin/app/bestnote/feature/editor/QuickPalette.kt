@@ -61,7 +61,6 @@ import kotlin.math.sin
 private val PaletteRadius = 124.dp
 private val OuterRing = 92.dp
 private val InnerRing = 50.dp
-private val TipGap = 18.dp
 private val EdgeMargin = 12.dp
 private const val OUTER_SLOTS = 8
 private const val ENTER_SCALE = 0.25f
@@ -77,13 +76,12 @@ private val RingItems: List<RingItem> = PenKind.entries.map { RingItem.Pen(it) }
 
 /**
  * S Pen quick palette (side button clicked while hovering). Springs out of the pen tip at [hover]
- * (root px) to a spot that never covers the tip and flips at screen edges ([QuickPaletteGeometry]).
+ * (root px), centered on it and clamped inside the screen ([QuickPaletteGeometry]).
  * Any touch outside it dismisses it without drawing.
  */
 @Composable
 internal fun QuickPalette(
     hover: Offset,
-    leftHanded: Boolean,
     toolbox: Toolbox,
     onToolbox: (Toolbox) -> Unit,
     onPen: (PenKind) -> Unit,
@@ -112,11 +110,9 @@ internal fun QuickPalette(
         QuickPaletteGeometry.place(
             QuickPaletteGeometry.Point(hover.x, hover.y),
             radius = r,
-            gap = TipGap.toPx(),
             margin = EdgeMargin.toPx(),
             width = size.width.toFloat(),
             height = size.height.toFloat(),
-            leftHanded = leftHanded,
         )
     }
     Box(
