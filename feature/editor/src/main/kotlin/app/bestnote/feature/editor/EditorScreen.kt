@@ -1283,7 +1283,6 @@ fun EditorScreen(
         quickAt?.let { at ->
             QuickPalette(
                 hover = pageOrigin + at,
-                leftHanded = state.leftHanded,
                 toolbox = toolbox,
                 onToolbox = viewModel::updateToolbox,
                 onPen = { viewModel.selectPen(it) },
