@@ -1,7 +1,7 @@
 # Releases and in-app updates (REL-01)
 
-The source repo is private. Builds are published, APK only, to the **public** repo
-`alidiab2/BestNote-releases`. The app reads that repo's releases without a token.
+Builds are published as GitHub releases (APK) on the **public** repo
+`alidiab2/BestNote`. The app reads that repo's releases without a token.
 
 ## Version numbers (built automatically in `app/build.gradle.kts`)
 - `versionCode` = number of commits on `HEAD` (`git rev-list --count HEAD`). It grows with every merge.
@@ -12,7 +12,7 @@ The source repo is private. Builds are published, APK only, to the **public** re
 - Debug `applicationId` stays `app.bestnote.debug`.
 
 ## Release convention (what the updater parses)
-A GitHub release in `BestNote-releases` with:
+A GitHub release in `BestNote` with:
 1. an `.apk` asset (first one is used; `https` URL),
 2. the version code in the **body** as its own line: `versionCode: 123`
    (also accepted: `version code = 123`, `**versionCode:** 123`),

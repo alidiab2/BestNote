@@ -1,7 +1,7 @@
 [
   {"tag_name":"v0.1.150-abc1234","name":"BestNote 0.1.150","draft":false,"prerelease":true,
    "body":"## What's new\n- Faster **ink**\n\nversionCode: 150\n",
-   "assets":[{"name":"BestNote-0.1.150.apk","size":41234567,"browser_download_url":"https://github.com/alidiab2/BestNote-releases/releases/download/v0.1.150-abc1234/BestNote-0.1.150.apk"}]},
+   "assets":[{"name":"BestNote-0.1.150.apk","size":41234567,"browser_download_url":"https://github.com/alidiab2/BestNote/releases/download/v0.1.150-abc1234/BestNote-0.1.150.apk"}]},
   {"tag_name":"v0.1.140-def5678","name":"","draft":false,"prerelease":false,"body":null,
    "assets":[{"name":"app.apk","size":100,"browser_download_url":"https://example.com/app.apk"}]},
   {"tag_name":"v0.1.160-zzz","draft":true,"prerelease":false,"body":"versionCode: 160",

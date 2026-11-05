@@ -5,7 +5,7 @@
 #
 # Usage: scripts/release.sh [--prerelease] [--notes "text" | --notes-file FILE] [--dry-run] [--skip-build]
 set -euo pipefail
-REPO=${BESTNOTE_RELEASES_REPO:-alidiab2/BestNote-releases}
+REPO=${BESTNOTE_RELEASES_REPO:-alidiab2/BestNote}
 export JAVA_HOME=${JAVA_HOME:-/opt/homebrew/opt/openjdk@17}
 cd "$(dirname "$0")/.."
 

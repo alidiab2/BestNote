@@ -41,7 +41,7 @@ class GitHubReleaseSource @Inject constructor(@ApplicationContext private val co
     }
 
     companion object {
-        const val RELEASES_URL = "https://api.github.com/repos/alidiab2/BestNote-releases/releases?per_page=30"
+        const val RELEASES_URL = "https://api.github.com/repos/alidiab2/BestNote/releases?per_page=30"
 
         internal suspend fun fetchFrom(url: String, client: OkHttpClient): List<ReleaseInfo> = withContext(Dispatchers.IO) {
             val request = Request.Builder()
