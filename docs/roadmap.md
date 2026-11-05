@@ -57,7 +57,7 @@ The core loop: open a notebook, write, erase, undo, close, reopen, and everythin
 ## Open decisions
 | # | Decision | Options | Owner | Status |
 |---|---|---|---|---|
-| D1 | License | Apache-2.0 (permissive, easy for contributors) · GPL-3.0 (forks must stay open) | Maintainer | **Open** |
+| D1 | License | Apache-2.0 · GPL-3.0 · MIT | Maintainer | **Decided: MIT** (see `LICENSE`) |
 | D2 | PDF engine for M2 | Android `PdfRenderer` (built-in, limited) · PDFium (BSD, fast, larger APK) · MuPDF (AGPL, best quality, forces AGPL) | WS PDF | Proposed: [ADR-0005](architecture/adr/0005-pdf-engine.md) |
 | D3 | Handwriting recognition | ML Kit Digital Ink (on-device, proprietary, needs Play Services) · open model (e.g. ONNX) | WS Recognition | Proposed: [ADR-0006](architecture/adr/0006-recognition.md) |
 | D5 | Optional cloud AI (Smart Board) | BYOK provider modules outside `foss` · on-device only | Maintainer | Proposed: [ADR-0007](architecture/adr/0007-optional-cloud-ai.md) |

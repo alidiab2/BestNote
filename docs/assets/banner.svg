@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 340" width="1280" height="340" role="img" aria-label="BestNote: a great handwriting notes app for Android students">
+  <rect width="1280" height="340" fill="#14161f"/>
+  <g opacity="0.07" stroke="#ffffff" stroke-width="1">
+    <path d="M0 40H1280M0 80H1280M0 120H1280M0 160H1280M0 200H1280M0 240H1280M0 280H1280M0 320H1280"/>
+    <path d="M40 0V340M80 0V340M120 0V340M160 0V340M200 0V340M240 0V340M280 0V340M320 0V340M360 0V340M400 0V340M440 0V340M480 0V340M520 0V340M560 0V340M600 0V340M640 0V340M680 0V340M720 0V340M760 0V340M800 0V340M840 0V340M880 0V340M920 0V340M960 0V340M1000 0V340M1040 0V340M1080 0V340M1120 0V340M1160 0V340M1200 0V340M1240 0V340"/>
+  </g>
+  <g fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M770 238 C 830 150, 880 120, 930 190 S 1010 280, 1060 190 S 1130 90, 1210 130" stroke="#8fa8ff" stroke-width="7"/>
+    <path d="M770 238 C 830 150, 880 120, 930 190 S 1010 280, 1060 190 S 1130 90, 1210 130" stroke="#c9d5ff" stroke-width="2.5"/>
+    <path d="M790 270 H1190" stroke="#f2b84b" stroke-width="5" opacity="0.9"/>
+  </g>
+  <text x="72" y="170" font-family="Georgia, 'Times New Roman', serif" font-size="96" font-weight="700" fill="#f4f1ea">BestNote</text>
+  <text x="76" y="218" font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" font-size="29" fill="#c9cde0">A great handwriting notes app for Android students.</text>
+  <text x="76" y="262" font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" font-size="21" fill="#8f94ad">Free · Open source · Offline · Built for S Pen and tablets</text>
+</svg>
